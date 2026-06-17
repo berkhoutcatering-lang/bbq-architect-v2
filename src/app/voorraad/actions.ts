@@ -15,36 +15,14 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import {
+    InventoryItemSchema,
+    AdjustStockSchema,
+    type InventoryItemInput,
+    type AdjustStockInput,
+} from '@/lib/schemas/voorraad';
 
-/* ─── Schemas ────────────────────────────────────────────────── */
-
-const InventoryItemSchema = z.object({
-    id: z.coerce.number().int().optional(),
-    naam: z.string().min(1, 'Naam is verplicht').max(200),
-    categorie: z.string().max(100).optional().default(''),
-    current_stock: z.coerce.number().min(0, 'Voorraad kan niet negatief zijn').default(0),
-    min_stock: z.coerce.number().min(0).optional().default(0),
-    par_level: z.coerce.number().min(0).optional().default(0),
-    unit: z.string().max(50).optional().default('stuks'),
-    purchase_price: z.coerce.number().min(0).optional().default(0),
-    supplier: z.string().max(200).optional().default(''),
-    leverancier_id: z.coerce.number().int().nullable().optional(),
-    yield_factor: z.coerce.number().min(0).max(2).optional(),
-    tht: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-    avg_daily: z.coerce.number().min(0).optional(),
-    allergenen: z.array(z.string()).optional().default([]),
-});
-
-const AdjustStockSchema = z.object({
-    inventory_id: z.coerce.number().int().positive(),
-    /* Delta kan negatief zijn (verbruik) of positief (ontvangst). */
-    delta: z.coerce.number(),
-    type: z.enum(['receive', 'usage', 'count', 'waste', 'transfer']),
-    note: z.string().max(500).optional(),
-});
-
-export type InventoryItemInput = z.input<typeof InventoryItemSchema>;
-export type AdjustStockInput = z.input<typeof AdjustStockSchema>;
+export type { InventoryItemInput, AdjustStockInput };
 
 interface ActionResult<T = unknown> {
     data?: T;
