@@ -12,6 +12,31 @@ export function roundMoney(value: number | string | null | undefined): number {
     return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+export function parseMoneyInput(value: number | string | null | undefined): number {
+    if (value == null) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const raw = value.trim().replace(/\s/g, '').replace(/€/g, '');
+    if (!raw) return 0;
+
+    const lastComma = raw.lastIndexOf(',');
+    const lastDot = raw.lastIndexOf('.');
+    if (lastComma >= 0 && lastDot >= 0) {
+        const decimalIndex = Math.max(lastComma, lastDot);
+        const sign = raw.startsWith('-') ? '-' : '';
+        const intPart = raw.slice(sign ? 1 : 0, decimalIndex).replace(/[.,]/g, '');
+        const fracPart = raw.slice(decimalIndex + 1).replace(/[.,]/g, '');
+        const parsed = Number(sign + (intPart || '0') + (fracPart ? '.' + fracPart : ''));
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    const parsed = Number(raw.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function formatMoneyInput(value: number | string | null | undefined): string {
+    return roundMoney(parseMoneyInput(value)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export function roundToDecimals(value: number | string | null | undefined, decimals: number): number {
     const n = Number(value);
     if (!Number.isFinite(n)) return 0;
@@ -20,15 +45,14 @@ export function roundToDecimals(value: number | string | null | undefined, decim
 }
 
 export function priceInclFromExcl(excl: number | string | null | undefined, btw: number | string | null | undefined): number {
-    const exclAmount = Number(excl);
+    const exclAmount = parseMoneyInput(excl);
     const btwRate = Number(btw);
-    if (!Number.isFinite(exclAmount)) return 0;
     if (!Number.isFinite(btwRate)) return exclAmount;
     return roundMoney(exclAmount * (1 + btwRate / 100));
 }
 
 export function priceExclFromIncl(incl: number | string | null | undefined, btw: number | string | null | undefined, decimals = 2): number {
-    const inclAmount = roundMoney(incl);
+    const inclAmount = roundMoney(parseMoneyInput(incl));
     const btwRate = Number(btw);
     if (!Number.isFinite(btwRate) || btwRate <= -100) return inclAmount;
     return roundToDecimals(inclAmount / (1 + btwRate / 100), decimals);

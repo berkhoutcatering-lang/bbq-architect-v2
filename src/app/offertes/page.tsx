@@ -7,7 +7,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { deleteOfferte as deleteOfferteAction } from '@/app/offertes/actions';
-import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer, priceExclFromIncl, priceInclFromExcl, roundMoney } from '@/lib/utils';
+import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer, formatMoneyInput, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, roundMoney } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
@@ -158,6 +158,7 @@ export default function Offertes() {
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [searchQuery, setSearchQuery] = useState('');
     const [priceModeByRow, setPriceModeByRow] = useState<Record<number, 'excl' | 'incl'>>({});
+    const [moneyDraftByCell, setMoneyDraftByCell] = useState<Record<string, string>>({});
     const { errors, validateField, validateAll, clearError, fieldProps } = useFormValidation({
         client_naam: [{ required: 'Vul een klantnaam in' }],
         datum: [{ required: 'Vul een datum in' }],
@@ -234,6 +235,7 @@ export default function Offertes() {
         setShowWizard(false);
         setPrefillFromTemplate(null);
         setPriceModeByRow({});
+        setMoneyDraftByCell({});
         setEditing('new');
         setForm({
             nummer: nummer,
@@ -268,6 +270,7 @@ export default function Offertes() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setPriceModeByRow({});
+        setMoneyDraftByCell({});
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
     }
@@ -310,7 +313,7 @@ export default function Offertes() {
         newOfferte();
     }
 
-    function editOfferte(o: Offerte) { setPriceModeByRow({}); setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
+    function editOfferte(o: Offerte) { setPriceModeByRow({}); setMoneyDraftByCell({}); setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     async function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>): Promise<number | null> {
@@ -538,6 +541,7 @@ export default function Offertes() {
         copy.datum = today();
         copy.geldig_tot = addDays(today(), geldigDagen);
         setPriceModeByRow({});
+        setMoneyDraftByCell({});
         setEditing('new');
         setForm(copy);
         showToast('Offerte gedupliceerd — pas details aan en sla op', 'info');
@@ -592,11 +596,29 @@ export default function Offertes() {
         const items = form!.items.map(function (item, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
         setField('items', items);
     }
-    function updateItemPriceExcl(idx: number, val: number) {
-        setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'excl' as const }); });
-        updateItem(idx, 'prijs', roundMoney(val));
+    function moneyCellKey(idx: number, kind: 'excl' | 'incl') { return idx + ':' + kind; }
+    function moneyCellValue(idx: number, kind: 'excl' | 'incl', fallback: number) {
+        const key = moneyCellKey(idx, kind);
+        return Object.prototype.hasOwnProperty.call(moneyDraftByCell, key) ? moneyDraftByCell[key] : formatMoneyInput(fallback);
     }
-    function updateItemPriceIncl(idx: number, val: number) {
+    function setMoneyCellDraft(idx: number, kind: 'excl' | 'incl', value: string) {
+        const key = moneyCellKey(idx, kind);
+        setMoneyDraftByCell(function (m) { return Object.assign({}, m, { [key]: value }); });
+    }
+    function clearMoneyCellDraft(idx: number, kind: 'excl' | 'incl') {
+        const key = moneyCellKey(idx, kind);
+        setMoneyDraftByCell(function (m) {
+            if (!Object.prototype.hasOwnProperty.call(m, key)) return m;
+            const next = Object.assign({}, m);
+            delete next[key];
+            return next;
+        });
+    }
+    function updateItemPriceExcl(idx: number, val: string) {
+        setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'excl' as const }); });
+        updateItem(idx, 'prijs', roundMoney(parseMoneyInput(val)));
+    }
+    function updateItemPriceIncl(idx: number, val: string) {
         const item = form!.items[idx] || {};
         setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'incl' as const }); });
         updateItem(idx, 'prijs', priceExclFromIncl(val, Number(item.btw) || 0, 6));
@@ -615,6 +637,7 @@ export default function Offertes() {
     }
     function removeItem(idx: number) {
         setField('items', form!.items.filter(function (_, i: number) { return i !== idx; }));
+        setMoneyDraftByCell({});
         setPriceModeByRow(function (m) {
             const next: Record<number, 'excl' | 'incl'> = {};
             Object.keys(m).forEach(function (key) {
@@ -862,8 +885,8 @@ export default function Offertes() {
                                             <tr key={idx}>
                                                 <td><input className="off-cellinput" value={item.desc} placeholder="Omschrijving…" onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
                                                 <td><input className="off-cellinput num" type="number" min="0" step="1" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
-                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItemPriceExcl(idx, parseFloat(e.target.value) || 0); }} /></td>
-                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItemPriceIncl(idx, parseFloat(e.target.value) || 0); }} /></td>
+                                                <td><input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'excl', Number(item.prijs) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'excl', e.target.value); updateItemPriceExcl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'excl'); }} /></td>
+                                                <td><input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'incl', priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0))} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'incl', e.target.value); updateItemPriceIncl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'incl'); }} /></td>
                                                 <td className="r"><OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItemBtw(idx, v); }} /></td>
                                                 <td className="r"><span className="off-linetotal">{fmt((item.qty || 0) * (item.prijs || 0))}</span></td>
                                                 <td><button type="button" className="off-rowdel" onClick={function () { removeItem(idx); }} title="Regel verwijderen" aria-label="Regel verwijderen"><Trash2 size={15} /></button></td>

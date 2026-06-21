@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { priceExclFromIncl, priceInclFromExcl, roundMoney, roundToDecimals } from './utils';
+import { formatMoneyInput, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, roundMoney, roundToDecimals } from './utils';
 
 describe('money helpers', () => {
     it('roundMoney rondt af op centen', () => {
@@ -11,6 +11,23 @@ describe('money helpers', () => {
         expect(roundMoney(null)).toBe(0);
         expect(roundMoney(undefined)).toBe(0);
         expect(roundMoney('geen bedrag')).toBe(0);
+    });
+
+    it('parseMoneyInput leest komma en punt als decimaalteken', () => {
+        expect(parseMoneyInput('38,50')).toBe(38.5);
+        expect(parseMoneyInput('38.50')).toBe(38.5);
+        expect(parseMoneyInput('38,')).toBe(38);
+        expect(parseMoneyInput('38.')).toBe(38);
+    });
+
+    it('parseMoneyInput ondersteunt bedragen met thousand-separators', () => {
+        expect(parseMoneyInput('1.234,56')).toBe(1234.56);
+        expect(parseMoneyInput('1,234.56')).toBe(1234.56);
+    });
+
+    it('formatMoneyInput toont geldbedragen met Nederlandse komma', () => {
+        expect(formatMoneyInput(38.5)).toBe('38,50');
+        expect(formatMoneyInput('38.50')).toBe('38,50');
     });
 
     it('roundToDecimals ondersteunt preciezere interne verkoopprijzen', () => {
