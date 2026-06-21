@@ -17,6 +17,7 @@ import { ChevronLeft } from 'lucide-react';
 import { createServerSupabase } from '@/lib/supabase-server';
 import LiveCostHeader from '../_components/LiveCostHeader';
 import IngredientCostBreakdown from '../_components/IngredientCostBreakdown';
+import GerechtComponentenEditor from '../_components/GerechtComponentenEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,8 @@ export default async function GerechtDetailPage({ params }: PageProps) {
                 gerechtId={String(gerecht.id)}
                 organizationId={orgId}
             />
+
+            <GerechtComponentenEditor gerechtId={String(gerecht.id)} />
 
             <section style={{ marginTop: 32, fontSize: 13, color: 'var(--color-text-muted)' }}>
                 <p>
