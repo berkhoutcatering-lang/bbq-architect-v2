@@ -23,7 +23,7 @@ type NormalizedComponent = {
 type NormalizedMepItem = {
   id: number;
   component_id: number;
-  gerecht_id: number;
+  gerecht_id: string; // UUID
   status: MepStatus;
   started_at: string | null;
   completed_at: string | null;
@@ -34,7 +34,7 @@ type NormalizedMepItem = {
 type ComponentOutput = NormalizedComponent & NormalizedMepItem & { mep_item_id: number };
 
 type GerechtOutput = {
-  id: number;
+  id: string; // UUID
   naam: string;
   foto_url: string | null;
   components: ComponentOutput[];
@@ -48,6 +48,10 @@ function toInteger(value: unknown): number | null {
 function toNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 function dedupeNumbers(values: number[]): number[] {
@@ -83,8 +87,8 @@ function extractNamesFromMenuSelectie(raw: unknown): string[] {
   return names;
 }
 
-/** Naam-matching: exact eerst, dan contains (kortste = meest specifiek) */
-function matchGerechtId(zoekNaam: string, gerechten: { id: number; naam: string }[]): number | null {
+/** Naam-matching: exact eerst, dan contains (kortste = meest specifiek). Returns UUID string. */
+function matchGerechtId(zoekNaam: string, gerechten: { id: string; naam: string }[]): string | null {
   const target = normalizeNaam(zoekNaam);
   if (!target) return null;
 
@@ -162,7 +166,7 @@ function normalizeHaccpPoints(value: unknown): HaccpPoint[] | null {
   return null;
 }
 
-function mepKey(gerechtId: number, componentId: number): string {
+function mepKey(gerechtId: string, componentId: number): string {
   return `${gerechtId}:${componentId}`;
 }
 
@@ -174,11 +178,11 @@ function parseEventIdFromUrl(req: NextRequest): number | null {
 }
 
 /**
- * Resolve gerecht-IDs voor een event — identiek aan bulkSchedule.ts:
+ * Resolve gerecht-UUIDs voor een event — identiek aan bulkSchedule.ts:
  * 1. offerte.menu_selectie (namen) via offertes.event_id
  * 2. Fallback: offerte via events.offerte_id
  * 3. Namen matchen op gerechten.naam (fuzzy)
- * 4. Fallback: events.menu (legacy integer-array)
+ * 4. Fallback: events.menu (legacy integer-array → lookup via id)
  */
 async function resolveGerechtIds(
   supabase: TenantAuthCtx['supabase'],
@@ -186,7 +190,7 @@ async function resolveGerechtIds(
   eventId: number,
   offerte_id: number | null | undefined,
   rawMenu: unknown,
-): Promise<number[]> {
+): Promise<string[]> {
   // 1. Probeer offerte via event_id
   let menuSelectie: unknown = null;
   const { data: viaEventId } = await supabase
@@ -214,23 +218,29 @@ async function resolveGerechtIds(
         .select('id,naam')
         .eq('organization_id', orgId);
 
-      const lookup = (alleGerechten ?? []) as { id: number; naam: string }[];
-      const ids: number[] = [];
+      const lookup = (alleGerechten ?? []) as { id: string; naam: string }[];
+      const ids: string[] = [];
       for (const naam of namen) {
         const id = matchGerechtId(naam, lookup);
         if (id != null) ids.push(id);
       }
-      if (ids.length > 0) return dedupeNumbers(ids);
+      if (ids.length > 0) return dedupeStrings(ids);
     }
   }
 
-  // 2. Fallback: events.menu (legacy integer-array)
+  // 2. Fallback: events.menu (legacy integer-array) — zoek UUIDs via integer-ish waarden
   let menu = rawMenu;
   if (typeof menu === 'string') {
     try { menu = JSON.parse(menu); } catch { return []; }
   }
   if (!Array.isArray(menu) || menu.length === 0) return [];
-  return dedupeNumbers(menu.map(toInteger).filter((v): v is number => v !== null));
+
+  // Legacy menu bevat soms integer IDs — probeer gerechten op te halen via die waarden
+  // (gerechten.id is UUID, dus dit werkt alleen als menu echte UUID-strings bevat)
+  const uuidLike = (menu as unknown[]).filter(v => typeof v === 'string' && v.includes('-'));
+  if (uuidLike.length > 0) return dedupeStrings(uuidLike as string[]);
+
+  return [];
 }
 
 async function fetchMepItems(
@@ -249,7 +259,7 @@ async function fetchMepItems(
   return (data ?? []).map((row: Record<string, unknown>) => {
     const id = toInteger(row.id);
     const componentId = toInteger(row.component_id);
-    const gerechtId = toInteger(row.gerecht_id);
+    const gerechtId = typeof row.gerecht_id === 'string' && row.gerecht_id ? row.gerecht_id : null;
     if (!id || !componentId || !gerechtId) return null;
     return {
       id,
@@ -288,7 +298,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       guests: toNumber(r.guests, 0),
     };
 
-    // Resolve gerechten via offerte.menu_selectie (namen) of events.menu (legacy IDs)
+    // Resolve gerechten via offerte.menu_selectie (namen) of events.menu (legacy)
     const gerechtIds = await resolveGerechtIds(
       supabase,
       orgId,
@@ -307,10 +317,10 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
     if (gerechtenError) return NextResponse.json({ error: 'Gerechten ophalen mislukt.' }, { status: 500 });
 
     const gerechten = (gerechtenData ?? []).map((row: Record<string, unknown>) => {
-      const id = toInteger(row.id);
+      const id = typeof row.id === 'string' && row.id ? row.id : null;
       if (!id) return null;
-      return { id, naam: String(row.naam ?? `Gerecht ${id}`), foto_url: row.foto_url ? String(row.foto_url) : null };
-    }).filter((g): g is { id: number; naam: string; foto_url: string | null } => g !== null);
+      return { id, naam: String(row.naam ?? 'Gerecht'), foto_url: row.foto_url ? String(row.foto_url) : null };
+    }).filter((g): g is { id: string; naam: string; foto_url: string | null } => g !== null);
 
     if (gerechten.length === 0) return NextResponse.json({ event: eventPayload, gerechten: [] });
 
@@ -324,11 +334,11 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
     if (gcError) return NextResponse.json({ error: 'Component-koppelingen ophalen mislukt.' }, { status: 500 });
 
     const gerechtComponents = (gcData ?? []).map((row: Record<string, unknown>) => {
-      const gerechtId = toInteger(row.gerecht_id);
+      const gerechtId = typeof row.gerecht_id === 'string' && row.gerecht_id ? row.gerecht_id : null;
       const componentId = toInteger(row.component_id);
       if (!gerechtId || !componentId) return null;
       return { gerecht_id: gerechtId, component_id: componentId };
-    }).filter((r): r is { gerecht_id: number; component_id: number } => r !== null);
+    }).filter((r): r is { gerecht_id: string; component_id: number } => r !== null);
 
     if (gerechtComponents.length === 0) return NextResponse.json({ event: eventPayload, gerechten: [] });
 
@@ -377,7 +387,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const mepMap = new Map(mepItems.map(m => [mepKey(m.gerecht_id, m.component_id), m]));
     const gerechtMap = new Map(gerechten.map(g => [g.id, g]));
-    const gcPerGerecht = new Map<number, { gerecht_id: number; component_id: number }[]>();
+    const gcPerGerecht = new Map<string, { gerecht_id: string; component_id: number }[]>();
     for (const r of gerechtComponents) {
       const list = gcPerGerecht.get(r.gerecht_id) ?? [];
       list.push(r);
@@ -386,7 +396,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const resultaatGerechten: GerechtOutput[] = gerechtIds
       .map(gid => gerechtMap.get(gid))
-      .filter((g): g is { id: number; naam: string; foto_url: string | null } => Boolean(g))
+      .filter((g): g is { id: string; naam: string; foto_url: string | null } => Boolean(g))
       .map(gerecht => {
         const pairs = gcPerGerecht.get(gerecht.id) ?? [];
         const components: ComponentOutput[] = pairs.map(pair => {
