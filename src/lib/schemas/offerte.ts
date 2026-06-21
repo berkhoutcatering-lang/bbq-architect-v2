@@ -35,7 +35,8 @@ import { z } from 'zod';
 export const OfferteItemSchema = z.object({
   beschrijving: z.string().max(500),
   qty: z.coerce.number().nonnegative(),
-  prijs: z.coerce.number().nonnegative(),
+  /* Prijs mag negatief zijn voor expliciete kortingsregels. */
+  prijs: z.coerce.number(),
   /* Optionele BTW-categorie-hint voor downstream factuur-generatie.
      De daadwerkelijke rate komt uit BTW_RULES_2026 lookup. */
   btw_category: z.enum([

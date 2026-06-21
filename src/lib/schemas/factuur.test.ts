@@ -152,9 +152,9 @@ describe('FactuurItemSchema', () => {
         expect(result.success).toBe(false);
     });
 
-    it('weigert negatieve prijs', () => {
+    it('accepteert negatieve prijs voor aparte kortingsregels', () => {
         const result = FactuurItemSchema.safeParse({ prijs: -10 });
-        expect(result.success).toBe(false);
+        expect(result.success).toBe(true);
     });
 
     it('weigert btw boven 100%', () => {

@@ -39,7 +39,8 @@ export type FactuurStatus = (typeof FACTUUR_STATUSES)[number];
 export const FactuurItemSchema = z.object({
     desc: z.string().max(500).optional().default(''),
     qty: z.coerce.number().nonnegative().default(0),
-    prijs: z.coerce.number().nonnegative().default(0),
+    /* Prijs mag negatief zijn voor aparte kortingsregels op de factuur. */
+    prijs: z.coerce.number().default(0),
     btw: z.coerce.number().min(0).max(100).optional().default(21),
 });
 

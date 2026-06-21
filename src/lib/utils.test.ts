@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoneyInput, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, roundMoney, roundToDecimals } from './utils';
+import { calcLineTotals, discountBaseExcl, recalculateDiscountLines, formatMoneyInput, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, roundMoney, roundToDecimals } from './utils';
 
 describe('money helpers', () => {
     it('roundMoney rondt af op centen', () => {
@@ -77,5 +77,30 @@ describe('money helpers', () => {
 
         expect(excl).toBe(28.92562);
         expect(priceInclFromExcl(excl, 21)).toBe(35);
+    });
+
+    it('rekent een euro-korting als aparte negatieve regel', () => {
+        const items = recalculateDiscountLines([
+            { desc: 'BBQ menu', qty: 2, prijs: 50, btw: 9 },
+            { desc: 'Korting', qty: 1, prijs: 0, btw: 0, type: 'discount', discount_type: 'amount', discount_value: '12,50' },
+        ]);
+
+        expect(items[1].prijs).toBe(-12.5);
+        expect(calcLineTotals(items).subtotaal).toBe(87.5);
+        expect(calcLineTotals(items).btw).toBe(9);
+        expect(calcLineTotals(items).totaal).toBe(96.5);
+    });
+
+    it('rekent een procent-korting over normale regels exclusief btw', () => {
+        const items = recalculateDiscountLines([
+            { desc: 'BBQ menu', qty: 4, prijs: 25, btw: 9 },
+            { desc: 'Staffelkorting', qty: 1, prijs: 0, btw: 0, type: 'discount', discount_type: 'percent', discount_value: 10 },
+        ]);
+
+        expect(discountBaseExcl(items)).toBe(100);
+        expect(items[1].prijs).toBe(-10);
+        expect(calcLineTotals(items).subtotaal).toBe(90);
+        expect(calcLineTotals(items).btw).toBe(9);
+        expect(calcLineTotals(items).totaal).toBe(99);
     });
 });

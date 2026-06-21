@@ -58,6 +58,40 @@ export function priceExclFromIncl(incl: number | string | null | undefined, btw:
     return roundToDecimals(inclAmount / (1 + btwRate / 100), decimals);
 }
 
+export function isDiscountLine(item: unknown): boolean {
+    return !!item && typeof item === 'object' && (item as Record<string, unknown>).type === 'discount';
+}
+
+export function discountBaseExcl(items: Array<Record<string, unknown>> | null | undefined): number {
+    return roundMoney((items || []).reduce(function (sum, item) {
+        if (isDiscountLine(item)) return sum;
+        return sum + (parseMoneyInput(item.qty as string | number | null | undefined) || 0) * parseMoneyInput(item.prijs as string | number | null | undefined);
+    }, 0));
+}
+
+export function discountAmountFromLine(item: Record<string, unknown>, baseExcl: number): number {
+    const value = Math.abs(parseMoneyInput(item.discount_value as string | number | null | undefined));
+    if (item.discount_type === 'percent') {
+        return roundMoney(baseExcl * Math.min(value, 100) / 100);
+    }
+    return roundMoney(value);
+}
+
+export function recalculateDiscountLines<T extends Record<string, unknown>>(items: T[] | null | undefined): T[] {
+    const list = Array.isArray(items) ? items : [];
+    const baseExcl = discountBaseExcl(list);
+    return list.map(function (item) {
+        if (!isDiscountLine(item)) return item;
+        const amount = discountAmountFromLine(item, baseExcl);
+        return Object.assign({}, item, {
+            desc: item.desc || 'Korting',
+            qty: 1,
+            prijs: -amount,
+            btw: 0,
+        });
+    });
+}
+
 // HTML escape
 export function escH(s: string | null | undefined): string {
     if (!s) return '';
@@ -95,6 +129,7 @@ export function addDays(dateStr: string, days: number): string {
 export function calcLineTotals(items: (FactuurItem | OfferteItem)[] | null | undefined): LineTotals {
     let rawItems = items;
     if (typeof rawItems === 'string') { try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; } }
+    rawItems = recalculateDiscountLines((rawItems || []) as Array<Record<string, unknown>>) as (FactuurItem | OfferteItem)[];
     let subtotaal = 0;
     (rawItems || []).forEach(function (item: any) {
         subtotaal += (parseFloat(item.qty) || 0) * (parseFloat(item.prijs) || 0);

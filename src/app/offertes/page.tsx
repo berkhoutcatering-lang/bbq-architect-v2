@@ -7,7 +7,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { deleteOfferte as deleteOfferteAction } from '@/app/offertes/actions';
-import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer, formatMoneyInput, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, roundMoney } from '@/lib/utils';
+import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer, discountBaseExcl, formatMoneyInput, isDiscountLine, parseMoneyInput, priceExclFromIncl, priceInclFromExcl, recalculateDiscountLines, roundMoney } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
@@ -315,6 +315,9 @@ export default function Offertes() {
 
     function editOfferte(o: Offerte) { setPriceModeByRow({}); setMoneyDraftByCell({}); setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
+    function setItems(items: Array<Record<string, any>>) {
+        setField('items', recalculateDiscountLines(items));
+    }
 
     async function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>): Promise<number | null> {
         if (!quoteId) return null;
@@ -497,31 +500,32 @@ export default function Offertes() {
         if (!validateOfferte()) return;
 
         try {
+            const formToSave = Object.assign({}, form, { items: recalculateDiscountLines(form!.items || []) });
             let quoteId: number | string | null = null;
 
             if (editing === 'new') {
-                const insertedRow: any = await insert(form!);
+                const insertedRow: any = await insert(formToSave);
                 showToast('Offerte aangemaakt', 'success');
 
                 quoteId = insertedRow && insertedRow.id ? insertedRow.id : null;
                 if (!quoteId) {
-                    const lookup: any = await supabase.from('offertes').select('id').eq('nummer', form!.nummer).order('id', { ascending: false }).limit(1);
+                    const lookup: any = await supabase.from('offertes').select('id').eq('nummer', formToSave.nummer).order('id', { ascending: false }).limit(1);
                     if (lookup.data && lookup.data.length > 0) {
                         quoteId = lookup.data[0].id;
                     }
                 }
             } else {
-                const { id, created_at, ...rest } = form!;
+                const { id, created_at, ...rest } = formToSave;
                 await update(editing as number, rest);
                 showToast('Offerte bijgewerkt', 'success');
                 quoteId = editing as number;
             }
 
             // Sync to event and get event_id back
-            const eventId = quoteId ? await syncQuoteToEvent(quoteId, form!) : null;
+            const eventId = quoteId ? await syncQuoteToEvent(quoteId, formToSave) : null;
 
             // Trigger acceptance workflow if status warrants it
-            await triggerWorkflowIfAccepted(eventId, form!);
+            await triggerWorkflowIfAccepted(eventId, formToSave);
 
             setEditing(null); setForm(null);
         } catch (err) {
@@ -577,7 +581,7 @@ export default function Offertes() {
             client_adres: form!.client_adres,
             datum: today(),
             vervaldatum: addDays(today(), betaaltermijn),
-            items: form!.items
+            items: recalculateDiscountLines(form!.items || [])
         };
         await facturen.insert(factuurData);
         const { id, created_at, ...rest } = Object.assign({}, form, { status: 'geaccepteerd' as const });
@@ -591,10 +595,29 @@ export default function Offertes() {
         setEditing(null); setForm(null);
     }
 
-    function addItem() { setField('items', (form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
+    function addItem() { setItems((form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
+    function addDiscountItem() {
+        setItems((form!.items || []).concat([{ desc: 'Korting', qty: 1, prijs: 0, btw: 0, type: 'discount', discount_type: 'amount', discount_value: 0 }]));
+    }
     function updateItem(idx: number, key: string, val: any) {
         const items = form!.items.map(function (item, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
-        setField('items', items);
+        setItems(items);
+    }
+    function updateDiscountKind(idx: number, kind: 'amount' | 'percent') {
+        const item = form!.items[idx] || {};
+        const base = discountBaseExcl(form!.items || []);
+        const currentAmount = Math.abs(Number(item.prijs) || 0);
+        const nextValue = kind === 'percent' ? (base > 0 ? roundMoney(currentAmount / base * 100) : 0) : currentAmount;
+        const items = form!.items.map(function (it, i: number) {
+            return i === idx ? Object.assign({}, it, { discount_type: kind, discount_value: nextValue, btw: 0, qty: 1 }) : it;
+        });
+        setItems(items);
+    }
+    function updateDiscountValue(idx: number, val: string) {
+        const items = form!.items.map(function (item, i: number) {
+            return i === idx ? Object.assign({}, item, { discount_value: Math.abs(parseMoneyInput(val)), qty: 1, btw: 0 }) : item;
+        });
+        setItems(items);
     }
     function moneyCellKey(idx: number, kind: 'excl' | 'incl') { return idx + ':' + kind; }
     function moneyCellValue(idx: number, kind: 'excl' | 'incl', fallback: number) {
@@ -630,13 +653,13 @@ export default function Offertes() {
             const items = form!.items.map(function (it, i: number) {
                 return i === idx ? Object.assign({}, it, { btw: nextBtw, prijs: priceExclFromIncl(incl, nextBtw, 6) }) : it;
             });
-            setField('items', items);
+            setItems(items);
             return;
         }
         updateItem(idx, 'btw', nextBtw);
     }
     function removeItem(idx: number) {
-        setField('items', form!.items.filter(function (_, i: number) { return i !== idx; }));
+        setItems(form!.items.filter(function (_, i: number) { return i !== idx; }));
         setMoneyDraftByCell({});
         setPriceModeByRow(function (m) {
             const next: Record<number, 'excl' | 'incl'> = {};
@@ -650,9 +673,10 @@ export default function Offertes() {
     }
 
     function downloadOfferte() {
-        const totals = calcLineTotals(form!.items);
+        const normalizedForm = Object.assign({}, form, { items: recalculateDiscountLines(form!.items || []) });
+        const totals = calcLineTotals(normalizedForm.items);
         const branding = buildBrandingConfig(settings);
-        generatePDF({ type: 'offerte', form: form, settings: settings, totals: totals, branding: branding, orgId: orgId || undefined });
+        generatePDF({ type: 'offerte', form: normalizedForm, settings: settings, totals: totals, branding: branding, orgId: orgId || undefined });
     }
     if (editing !== null && form) {
         const totals = calcLineTotals(form.items);
@@ -660,7 +684,8 @@ export default function Offertes() {
         /* BTW gegroepeerd per tarief — voor de totalen-weergave. Grand total
            blijft calcLineTotals.totaal zodat PDF/portaal exact gelijk lopen. */
         const btwGroups: Record<number, number> = {};
-        (form.items || []).forEach(function (it: { qty?: number; prijs?: number; btw?: number }) {
+        (form.items || []).forEach(function (it: { qty?: number; prijs?: number; btw?: number; type?: string }) {
+            if (isDiscountLine(it)) return;
             const rate = Number(it.btw) || 0;
             btwGroups[rate] = (btwGroups[rate] || 0) + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * rate / 100;
         });
@@ -881,13 +906,26 @@ export default function Offertes() {
                                 </thead>
                                 <tbody>
                                     {(form.items || []).map(function (item, idx: number) {
+                                        const isDiscount = isDiscountLine(item);
                                         return (
-                                            <tr key={idx}>
+                                            <tr key={idx} className={isDiscount ? 'off-discount-row' : undefined}>
                                                 <td><input className="off-cellinput" value={item.desc} placeholder="Omschrijving…" onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
-                                                <td><input className="off-cellinput num" type="number" min="0" step="1" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
-                                                <td><input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'excl', Number(item.prijs) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'excl', e.target.value); updateItemPriceExcl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'excl'); }} /></td>
-                                                <td><input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'incl', priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0))} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'incl', e.target.value); updateItemPriceIncl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'incl'); }} /></td>
-                                                <td className="r"><OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItemBtw(idx, v); }} /></td>
+                                                <td>{isDiscount ? <span className="off-discount-pill">Korting</span> : <input className="off-cellinput num" type="number" min="0" step="1" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} />}</td>
+                                                <td>
+                                                    {isDiscount ? (
+                                                        <div className="off-discount-input">
+                                                            <select value={item.discount_type || 'amount'} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { updateDiscountKind(idx, e.target.value === 'percent' ? 'percent' : 'amount'); }} aria-label="Korting type">
+                                                                <option value="amount">€</option>
+                                                                <option value="percent">%</option>
+                                                            </select>
+                                                            <input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'excl', Number(item.discount_value) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'excl', e.target.value); updateDiscountValue(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'excl'); }} />
+                                                        </div>
+                                                    ) : (
+                                                        <input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'excl', Number(item.prijs) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'excl', e.target.value); updateItemPriceExcl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'excl'); }} />
+                                                    )}
+                                                </td>
+                                                <td>{isDiscount ? <span className="off-discount-muted">Aparte regel</span> : <input className="off-cellinput num" type="text" inputMode="decimal" value={moneyCellValue(idx, 'incl', priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0))} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setMoneyCellDraft(idx, 'incl', e.target.value); updateItemPriceIncl(idx, e.target.value); }} onBlur={function () { clearMoneyCellDraft(idx, 'incl'); }} />}</td>
+                                                <td className="r">{isDiscount ? <span className="off-discount-muted">0%</span> : <OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItemBtw(idx, v); }} />}</td>
                                                 <td className="r"><span className="off-linetotal">{fmt((item.qty || 0) * (item.prijs || 0))}</span></td>
                                                 <td><button type="button" className="off-rowdel" onClick={function () { removeItem(idx); }} title="Regel verwijderen" aria-label="Regel verwijderen"><Trash2 size={15} /></button></td>
                                             </tr>
@@ -896,7 +934,10 @@ export default function Offertes() {
                                 </tbody>
                             </table>
                         </div>
-                        <button type="button" className="off-addrow" onClick={addItem}><Plus size={15} /> Regel</button>
+                        <div className="off-row-actions">
+                            <button type="button" className="off-addrow" onClick={addItem}><Plus size={15} /> Regel</button>
+                            <button type="button" className="off-addrow off-adddiscount" onClick={addDiscountItem}><Plus size={15} /> Korting</button>
+                        </div>
                         <div className="off-totals">
                             <div className="row"><span className="lab">Subtotaal (excl. btw)</span><span className="val">{fmt(totals.subtotaal)}</span></div>
                             {btwRates.map(function (rate) { return <div className="row" key={rate}><span className="lab">BTW {rate}%</span><span className="val">{fmt(btwGroups[rate])}</span></div>; })}

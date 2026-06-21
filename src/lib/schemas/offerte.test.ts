@@ -204,13 +204,13 @@ describe('OfferteItemSchema', () => {
         expect(result.success).toBe(false);
     });
 
-    it('weigert negatieve prijs', () => {
+    it('accepteert negatieve prijs voor kortingsregels', () => {
         const result = OfferteItemSchema.safeParse({
-            beschrijving: 'Test',
+            beschrijving: 'Korting trouwe klant',
             qty: 1,
             prijs: -5,
         });
-        expect(result.success).toBe(false);
+        expect(result.success).toBe(true);
     });
 
     it('weigert ongeldige btw_category', () => {

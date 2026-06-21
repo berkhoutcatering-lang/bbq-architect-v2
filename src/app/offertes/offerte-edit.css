@@ -116,6 +116,9 @@
 .off-page .off-table th.r, .off-page .off-table td.r { text-align: right; }
 .off-page .off-table td { padding: 2px 4px; border-top: 1px solid var(--border); vertical-align: middle; }
 .off-page .off-table tbody tr:first-child td { border-top: none; }
+.off-page .off-table .off-discount-row td {
+  background: color-mix(in srgb, var(--brand-gold) 5%, transparent);
+}
 .off-page .off-cellinput {
   width: 100%; background: transparent; border: 1px solid transparent; border-radius: 8px;
   color: var(--text); font: 400 13.5px var(--font-sans); padding: 9px 8px; outline: none;
@@ -146,17 +149,37 @@
 }
 .off-page .off-btw-item:hover { background: var(--hover); }
 .off-page .off-linetotal { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; padding-right: 10px; white-space: nowrap; }
+.off-page .off-discount-pill {
+  display: inline-flex; justify-content: flex-end; width: 100%;
+  font: 700 10px/1.2 var(--font-sans); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent-gold-text); padding: 9px 8px; white-space: nowrap;
+}
+.off-page .off-discount-muted {
+  display: inline-flex; justify-content: flex-end; width: 100%;
+  color: var(--muted); font-size: 12px; padding: 9px 8px; white-space: nowrap;
+}
+.off-page .off-discount-input {
+  display: grid; grid-template-columns: 44px 1fr; gap: 4px; align-items: center;
+}
+.off-page .off-discount-input select {
+  width: 44px; min-height: 36px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font: 700 13px var(--font-mono);
+  padding: 0 6px; outline: none;
+}
+[data-theme-mode="light"] .off-page .off-discount-input select { background: #fff; }
 .off-page .off-rowdel {
   width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; cursor: pointer;
   color: var(--muted-weak); display: inline-flex; align-items: center; justify-content: center; transition: all .12s;
 }
 .off-page .off-rowdel:hover { background: rgba(239,68,68,.12); color: var(--red); }
+.off-page .off-row-actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
 .off-page .off-addrow {
-  margin-top: var(--space-3); display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
   background: transparent; border: 1px dashed var(--border-strong); border-radius: var(--radius-md);
   color: var(--muted); font: 600 13px var(--font-sans); padding: 9px 14px; min-height: 40px; transition: all .15s;
 }
 .off-page .off-addrow:hover { color: var(--text); border-color: var(--accent-gold-text); }
+.off-page .off-adddiscount { color: var(--accent-gold-text); border-color: color-mix(in srgb, var(--brand-gold) 38%, transparent); }
 
 /* ── Totals block ──────────────────────────────────────────────────────── */
 .off-page .off-totals { margin: var(--space-5) 0 0 auto; width: min(360px, 100%); display: flex; flex-direction: column; gap: 9px; }
