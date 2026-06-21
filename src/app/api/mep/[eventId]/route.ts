@@ -346,7 +346,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const { data: componentData, error: componentError } = await supabase
       .from('components')
-      .select('id,name,description,type,base_quantity,base_unit,preparation_steps,allergens,haccp_points,flavor_tags')
+      .select('id,name,description,type,base_quantity,base_unit,preparation_steps,flavor_tags')
       .eq('organization_id', orgId)
       .in('id', componentIds);
 
