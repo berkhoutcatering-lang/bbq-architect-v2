@@ -110,8 +110,8 @@ export default function GerechtenBouwEditor({
     try {
       const res = await fetch('/api/components', { method: 'GET' });
       if (!res.ok) throw new Error(`Kon componentenlijst niet laden (${res.status})`);
-      const data = (await res.json()) as { items?: ComponentOption[] };
-      setOptions(Array.isArray(data.items) ? data.items : []);
+      const data = (await res.json()) as { components?: ComponentOption[] };
+      setOptions(Array.isArray(data.components) ? data.components : []);
     } catch {
       setOptions([]);
     } finally {
