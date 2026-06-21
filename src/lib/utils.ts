@@ -6,6 +6,26 @@ export function fmt(n: number | null | undefined): string {
     return '\u20ac ' + Number(n).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+export function roundMoney(value: number | string | null | undefined): number {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+export function priceInclFromExcl(excl: number | string | null | undefined, btw: number | string | null | undefined): number {
+    const exclAmount = roundMoney(excl);
+    const btwRate = Number(btw);
+    if (!Number.isFinite(btwRate)) return exclAmount;
+    return roundMoney(exclAmount * (1 + btwRate / 100));
+}
+
+export function priceExclFromIncl(incl: number | string | null | undefined, btw: number | string | null | undefined): number {
+    const inclAmount = roundMoney(incl);
+    const btwRate = Number(btw);
+    if (!Number.isFinite(btwRate) || btwRate <= -100) return inclAmount;
+    return roundMoney(inclAmount / (1 + btwRate / 100));
+}
+
 // HTML escape
 export function escH(s: string | null | undefined): string {
     if (!s) return '';

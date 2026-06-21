@@ -7,7 +7,7 @@ import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { deleteOfferte as deleteOfferteAction } from '@/app/offertes/actions';
-import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer } from '@/lib/utils';
+import { fmt, fmtNl, calcLineTotals, today, addDays, genNummer, nextNummer, priceExclFromIncl, priceInclFromExcl, roundMoney } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
@@ -157,6 +157,7 @@ export default function Offertes() {
     const [sortField, setSortField] = useState<string>('datum');
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
     const [searchQuery, setSearchQuery] = useState('');
+    const [priceModeByRow, setPriceModeByRow] = useState<Record<number, 'excl' | 'incl'>>({});
     const { errors, validateField, validateAll, clearError, fieldProps } = useFormValidation({
         client_naam: [{ required: 'Vul een klantnaam in' }],
         datum: [{ required: 'Vul een datum in' }],
@@ -232,6 +233,7 @@ export default function Offertes() {
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         setShowWizard(false);
         setPrefillFromTemplate(null);
+        setPriceModeByRow({});
         setEditing('new');
         setForm({
             nummer: nummer,
@@ -265,6 +267,7 @@ export default function Offertes() {
     function newOfferte() {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
+        setPriceModeByRow({});
         setEditing('new');
         setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
     }
@@ -307,7 +310,7 @@ export default function Offertes() {
         newOfferte();
     }
 
-    function editOfferte(o: Offerte) { setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
+    function editOfferte(o: Offerte) { setPriceModeByRow({}); setEditing(o.id); setForm(JSON.parse(JSON.stringify(o))); }
     function setField(key: string, val: any) { setForm(Object.assign({}, form, { [key]: val })); }
 
     async function syncQuoteToEvent(quoteId: number | string, quoteData: Record<string, any>): Promise<number | null> {
@@ -534,6 +537,7 @@ export default function Offertes() {
         copy.status = 'concept';
         copy.datum = today();
         copy.geldig_tot = addDays(today(), geldigDagen);
+        setPriceModeByRow({});
         setEditing('new');
         setForm(copy);
         showToast('Offerte gedupliceerd — pas details aan en sla op', 'info');
@@ -588,7 +592,39 @@ export default function Offertes() {
         const items = form!.items.map(function (item, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
         setField('items', items);
     }
-    function removeItem(idx: number) { setField('items', form!.items.filter(function (_, i: number) { return i !== idx; })); }
+    function updateItemPriceExcl(idx: number, val: number) {
+        setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'excl' as const }); });
+        updateItem(idx, 'prijs', roundMoney(val));
+    }
+    function updateItemPriceIncl(idx: number, val: number) {
+        const item = form!.items[idx] || {};
+        setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'incl' as const }); });
+        updateItem(idx, 'prijs', priceExclFromIncl(val, Number(item.btw) || 0));
+    }
+    function updateItemBtw(idx: number, nextBtw: number) {
+        const item = form!.items[idx] || {};
+        if (priceModeByRow[idx] === 'incl') {
+            const incl = priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0);
+            const items = form!.items.map(function (it, i: number) {
+                return i === idx ? Object.assign({}, it, { btw: nextBtw, prijs: priceExclFromIncl(incl, nextBtw) }) : it;
+            });
+            setField('items', items);
+            return;
+        }
+        updateItem(idx, 'btw', nextBtw);
+    }
+    function removeItem(idx: number) {
+        setField('items', form!.items.filter(function (_, i: number) { return i !== idx; }));
+        setPriceModeByRow(function (m) {
+            const next: Record<number, 'excl' | 'incl'> = {};
+            Object.keys(m).forEach(function (key) {
+                const n = Number(key);
+                if (n < idx) next[n] = m[n];
+                if (n > idx) next[n - 1] = m[n];
+            });
+            return next;
+        });
+    }
 
     function downloadOfferte() {
         const totals = calcLineTotals(form!.items);
@@ -807,15 +843,16 @@ export default function Offertes() {
                         <div className="off-table-wrap">
                             <table className="off-table">
                                 <colgroup>
-                                    <col /><col style={{ width: 78 }} /><col style={{ width: 118 }} /><col style={{ width: 92 }} /><col style={{ width: 116 }} /><col style={{ width: 40 }} />
+                                    <col /><col style={{ width: 78 }} /><col style={{ width: 118 }} /><col style={{ width: 118 }} /><col style={{ width: 92 }} /><col style={{ width: 122 }} /><col style={{ width: 40 }} />
                                 </colgroup>
                                 <thead>
                                     <tr>
                                         <th>Omschrijving</th>
                                         <th className="r">Aantal</th>
-                                        <th className="r">Prijs €</th>
+                                        <th className="r">Excl. btw</th>
+                                        <th className="r">Incl. btw</th>
                                         <th className="r">BTW</th>
-                                        <th className="r">Totaal</th>
+                                        <th className="r">Totaal excl.</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -825,8 +862,9 @@ export default function Offertes() {
                                             <tr key={idx}>
                                                 <td><input className="off-cellinput" value={item.desc} placeholder="Omschrijving…" onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'desc', e.target.value); }} /></td>
                                                 <td><input className="off-cellinput num" type="number" min="0" step="1" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
-                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
-                                                <td className="r"><OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItem(idx, 'btw', v); }} /></td>
+                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItemPriceExcl(idx, parseFloat(e.target.value) || 0); }} /></td>
+                                                <td><input className="off-cellinput num" type="number" min="0" step="0.01" value={priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0)} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItemPriceIncl(idx, parseFloat(e.target.value) || 0); }} /></td>
+                                                <td className="r"><OffBtwSelect value={Number(item.btw) || 0} onChange={function (v) { updateItemBtw(idx, v); }} /></td>
                                                 <td className="r"><span className="off-linetotal">{fmt((item.qty || 0) * (item.prijs || 0))}</span></td>
                                                 <td><button type="button" className="off-rowdel" onClick={function () { removeItem(idx); }} title="Regel verwijderen" aria-label="Regel verwijderen"><Trash2 size={15} /></button></td>
                                             </tr>
