@@ -32,6 +32,7 @@ import { MRViewToggle, MRSearchBar, MRButton, MRFilterPill } from '@/components/
 import { MRLibraryView } from '@/components/menu/library-views';
 import { useCmdKShortcut } from '@/components/menu/MenuCommandPalette';
 import { type AllergenRow } from '@/components/menu/AllergenConfirmModal';
+import GerechtenBouwEditor from '@/components/menu/GerechtenBouwEditor';
 
 /* Lazy-loaded heavy widgets — wizards, modals, drawers, command palette.
    Elke chunk laadt pas wanneer de bijbehorende UI voor het eerst opent.
@@ -1218,23 +1219,36 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </>)}
 
                                 {editTab === 'bouw' && (<>
-                            <div className="field">
-                                <label>Ingrediënten</label>
-                                <div className="tag-input-container">
-                                    <div className="tag-list">
-                                        {(form.ingredienten || []).map(function (tag: string, idx: number) {
-                                            return (
-                                                <span key={idx} className="ingredient-tag">
-                                                    {tag}
-                                                    <button type="button" className="tag-remove" onClick={function () { removeArrayItem('ingredienten', idx); }}>×</button>
-                                                </span>
-                                            );
-                                        })}
+                            <div style={{ display: 'grid', gap: 12 }}>
+                                {editing && editing !== 'new' ? (
+                                    <GerechtenBouwEditor gerechtId={String(editing)} />
+                                ) : (
+                                    <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13, border: '1px dashed var(--border)', borderRadius: 10 }}>
+                                        Sla het gerecht eerst op om componenten te koppelen.
                                     </div>
-                                    <input className="tag-input" value={tagInput} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setTagInput(e.target.value); }}
-                                        onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { handleTagKeyDown('ingredienten', tagInput, setTagInput, e); }}
-                                        placeholder="Typ ingrediënt + Enter" />
-                                </div>
+                                )}
+                                <details>
+                                    <summary style={{ cursor: 'pointer', color: 'var(--muted)', fontSize: 12, userSelect: 'none' }}>
+                                        Legacy ingrediënten (tekst-tags)
+                                    </summary>
+                                    <div className="field" style={{ marginTop: 8 }}>
+                                        <div className="tag-input-container">
+                                            <div className="tag-list">
+                                                {(form.ingredienten || []).map(function (tag: string, idx: number) {
+                                                    return (
+                                                        <span key={idx} className="ingredient-tag">
+                                                            {tag}
+                                                            <button type="button" className="tag-remove" onClick={function () { removeArrayItem('ingredienten', idx); }}>×</button>
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                            <input className="tag-input" value={tagInput} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setTagInput(e.target.value); }}
+                                                onKeyDown={function (e: React.KeyboardEvent<HTMLInputElement>) { handleTagKeyDown('ingredienten', tagInput, setTagInput, e); }}
+                                                placeholder="Typ ingrediënt + Enter" />
+                                        </div>
+                                    </div>
+                                </details>
                             </div>
                                 </>)}
 

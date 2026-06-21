@@ -23,6 +23,7 @@ import {
     fmtEuro, getGangKey, getGangLabel, getGerechtStatus, getMargin, marginTone,
 } from '../helpers';
 import BeschrijvingBlocksView from './BeschrijvingBlocksView';
+import GerechtenBouwEditor from '@/components/menu/GerechtenBouwEditor';
 
 export type DetailTab = 'wat' | 'bouw' | 'compliance' | 'service';
 
@@ -333,47 +334,10 @@ function TabWat({ gerecht, margin, tone, cost, price, gangLabel, status }: {
 
 /* ── Tab: Bouw — componenten lijst ─────────────────────── */
 function TabBouw({ gerecht, cost, price }: { gerecht: Gerecht; cost: number; price: number }) {
-    const items = gerecht.ingredienten ?? [];
     return (
         <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <MREyebrow>Componenten ({items.length})</MREyebrow>
-                <MRButton variant="ghost" icon={<Plus size={13} />} sm>Component toevoegen</MRButton>
-            </div>
-            {items.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13, background: 'var(--bg-subtle)', borderRadius: 10, border: '1px dashed var(--border)' }}>
-                    Nog geen componenten gekoppeld.
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {items.map((c, i) => (
-                        <div
-                            key={i}
-                            style={{
-                                display: 'flex', alignItems: 'center', gap: 12,
-                                padding: '10px 14px', background: 'var(--bg-subtle)',
-                                border: '1px solid var(--border)', borderRadius: 10,
-                            }}
-                        >
-                            <div style={{
-                                width: 30, height: 30, borderRadius: 7,
-                                background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                                <Layers size={14} color="var(--brand-gold, #c4a35a)" />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 13, fontWeight: 500 }}>{c.naam}</div>
-                                {(c.qty || c.hoeveelheid) && (
-                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                        {c.qty ?? c.hoeveelheid} {c.unit ?? c.eenheid ?? ''}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            <MREyebrow style={{ marginBottom: 12 }}>Componenten</MREyebrow>
+            <GerechtenBouwEditor gerechtId={String(gerecht.id)} readOnly />
             <div style={{
                 marginTop: 16, padding: 14,
                 background: 'rgba(255,191,0,.04)', border: '1px solid rgba(255,191,0,.15)', borderRadius: 10,
