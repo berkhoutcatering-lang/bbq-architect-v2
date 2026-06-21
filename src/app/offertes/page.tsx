@@ -599,14 +599,14 @@ export default function Offertes() {
     function updateItemPriceIncl(idx: number, val: number) {
         const item = form!.items[idx] || {};
         setPriceModeByRow(function (m) { return Object.assign({}, m, { [idx]: 'incl' as const }); });
-        updateItem(idx, 'prijs', priceExclFromIncl(val, Number(item.btw) || 0));
+        updateItem(idx, 'prijs', priceExclFromIncl(val, Number(item.btw) || 0, 6));
     }
     function updateItemBtw(idx: number, nextBtw: number) {
         const item = form!.items[idx] || {};
         if (priceModeByRow[idx] === 'incl') {
             const incl = priceInclFromExcl(Number(item.prijs) || 0, Number(item.btw) || 0);
             const items = form!.items.map(function (it, i: number) {
-                return i === idx ? Object.assign({}, it, { btw: nextBtw, prijs: priceExclFromIncl(incl, nextBtw) }) : it;
+                return i === idx ? Object.assign({}, it, { btw: nextBtw, prijs: priceExclFromIncl(incl, nextBtw, 6) }) : it;
             });
             setField('items', items);
             return;

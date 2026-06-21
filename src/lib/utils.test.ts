@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { priceExclFromIncl, priceInclFromExcl, roundMoney } from './utils';
+import { priceExclFromIncl, priceInclFromExcl, roundMoney, roundToDecimals } from './utils';
 
 describe('money helpers', () => {
     it('roundMoney rondt af op centen', () => {
@@ -11,6 +11,10 @@ describe('money helpers', () => {
         expect(roundMoney(null)).toBe(0);
         expect(roundMoney(undefined)).toBe(0);
         expect(roundMoney('geen bedrag')).toBe(0);
+    });
+
+    it('roundToDecimals ondersteunt preciezere interne verkoopprijzen', () => {
+        expect(roundToDecimals(28.9256198347, 6)).toBe(28.92562);
     });
 
     it('rekent exclusief naar inclusief btw voor 9%, 21% en 0%', () => {
@@ -42,12 +46,19 @@ describe('money helpers', () => {
         const incl = 35;
         const qty = 43;
         const btw = 9;
-        const excl = priceExclFromIncl(incl, btw);
+        const excl = priceExclFromIncl(incl, btw, 6);
         const subtotal = roundMoney(qty * excl);
         const btwAmount = roundMoney(subtotal * (btw / 100));
 
-        expect(excl).toBe(32.11);
+        expect(excl).toBe(32.110092);
         expect(priceInclFromExcl(excl, btw)).toBe(35);
         expect(roundMoney(subtotal + btwAmount)).toBe(1505);
+    });
+
+    it('houdt 35,00 inclusief op 21% vast zonder terug te springen naar 35,01', () => {
+        const excl = priceExclFromIncl(35, 21, 6);
+
+        expect(excl).toBe(28.92562);
+        expect(priceInclFromExcl(excl, 21)).toBe(35);
     });
 });

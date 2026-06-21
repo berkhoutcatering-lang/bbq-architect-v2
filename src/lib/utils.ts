@@ -12,18 +12,26 @@ export function roundMoney(value: number | string | null | undefined): number {
     return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+export function roundToDecimals(value: number | string | null | undefined, decimals: number): number {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    const factor = Math.pow(10, decimals);
+    return Math.round((n + Number.EPSILON) * factor) / factor;
+}
+
 export function priceInclFromExcl(excl: number | string | null | undefined, btw: number | string | null | undefined): number {
-    const exclAmount = roundMoney(excl);
+    const exclAmount = Number(excl);
     const btwRate = Number(btw);
+    if (!Number.isFinite(exclAmount)) return 0;
     if (!Number.isFinite(btwRate)) return exclAmount;
     return roundMoney(exclAmount * (1 + btwRate / 100));
 }
 
-export function priceExclFromIncl(incl: number | string | null | undefined, btw: number | string | null | undefined): number {
+export function priceExclFromIncl(incl: number | string | null | undefined, btw: number | string | null | undefined, decimals = 2): number {
     const inclAmount = roundMoney(incl);
     const btwRate = Number(btw);
     if (!Number.isFinite(btwRate) || btwRate <= -100) return inclAmount;
-    return roundMoney(inclAmount / (1 + btwRate / 100));
+    return roundToDecimals(inclAmount / (1 + btwRate / 100), decimals);
 }
 
 // HTML escape
