@@ -4,15 +4,8 @@ import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 export const dynamic = 'force-dynamic';
 
 type MepStatus = 'todo' | 'bezig' | 'klaar';
-
 type AllergeneItem = { allergen_code: string };
-
-type HaccpPoint = {
-  type: string;
-  threshold_value?: number;
-  threshold_unit?: string;
-  note?: string;
-};
+type HaccpPoint = { type: string; threshold_value?: number; threshold_unit?: string; note?: string };
 
 type NormalizedComponent = {
   id: number;
@@ -61,22 +54,54 @@ function dedupeNumbers(values: number[]): number[] {
   return [...new Set(values)];
 }
 
-function parseMenuIds(menu: unknown): number[] {
-  if (!menu) return [];
-  if (Array.isArray(menu)) {
-    return dedupeNumbers(menu.map(toInteger).filter((v): v is number => v !== null));
+function normalizeNaam(s: string): string {
+  return s.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Extract gerecht-namen uit menu_selectie (zelfde shapes als bulkSchedule.ts) */
+function extractNamesFromMenuSelectie(raw: unknown): string[] {
+  let ms = raw;
+  if (typeof ms === 'string') {
+    try { ms = JSON.parse(ms); } catch { return []; }
   }
-  if (typeof menu === 'string') {
-    const trimmed = menu.trim();
-    if (!trimmed) return [];
-    try {
-      return parseMenuIds(JSON.parse(trimmed));
-    } catch {
-      const raw = trimmed.startsWith('{') ? trimmed.slice(1, -1) : trimmed;
-      return dedupeNumbers(raw.split(',').map(s => toInteger(s.trim())).filter((v): v is number => v !== null));
+  if (!ms || typeof ms !== 'object') return [];
+
+  const flat: unknown[] = Array.isArray(ms)
+    ? ms
+    : Object.values(ms as Record<string, unknown>).flatMap(v => Array.isArray(v) ? v : [v]);
+
+  const names: string[] = [];
+  for (const item of flat) {
+    if (typeof item === 'string' && item.trim()) {
+      names.push(item.trim());
+    } else if (item && typeof item === 'object') {
+      const it = item as Record<string, unknown>;
+      const naam = it.gerecht_naam ?? it.naam;
+      if (typeof naam === 'string' && naam.trim()) names.push(naam.trim());
     }
   }
-  return [];
+  return names;
+}
+
+/** Naam-matching: exact eerst, dan contains (kortste = meest specifiek) */
+function matchGerechtId(zoekNaam: string, gerechten: { id: number; naam: string }[]): number | null {
+  const target = normalizeNaam(zoekNaam);
+  if (!target) return null;
+
+  const kandidaten = gerechten.map(g => ({ id: g.id, naam: normalizeNaam(g.naam) })).filter(g => g.naam);
+
+  // exact
+  const exact = kandidaten.find(g => g.naam === target);
+  if (exact) return exact.id;
+
+  // enkelvoud (strip trailing s)
+  const singular = target.endsWith('s') && target.length > 4 ? target.slice(0, -1) : null;
+
+  // contains match — kortste gerecht-naam wint (meest specifiek)
+  const matches = kandidaten.filter(g => g.naam.includes(target) || (singular && g.naam.includes(singular)));
+  if (matches.length > 0) return matches.sort((a, b) => a.naam.length - b.naam.length)[0].id;
+
+  return null;
 }
 
 function normalizeStringArray(value: unknown): string[] | null {
@@ -101,7 +126,7 @@ function normalizeAllergens(value: unknown): AllergeneItem[] | null {
       if (typeof entry === 'string') return entry.trim().toUpperCase() ? { allergen_code: entry.trim().toUpperCase() } : null;
       if (entry && typeof entry === 'object') {
         const r = entry as Record<string, unknown>;
-        const code = (r.allergen_code ?? r.code);
+        const code = r.allergen_code ?? r.code;
         return typeof code === 'string' && code.trim() ? { allergen_code: code.trim().toUpperCase() } : null;
       }
       return null;
@@ -148,10 +173,70 @@ function parseEventIdFromUrl(req: NextRequest): number | null {
   return toInteger(segments[mepIndex + 1]);
 }
 
+/**
+ * Resolve gerecht-IDs voor een event — identiek aan bulkSchedule.ts:
+ * 1. offerte.menu_selectie (namen) via offertes.event_id
+ * 2. Fallback: offerte via events.offerte_id
+ * 3. Namen matchen op gerechten.naam (fuzzy)
+ * 4. Fallback: events.menu (legacy integer-array)
+ */
+async function resolveGerechtIds(
+  supabase: TenantAuthCtx['supabase'],
+  orgId: string,
+  eventId: number,
+  offerte_id: number | null | undefined,
+  rawMenu: unknown,
+): Promise<number[]> {
+  // 1. Probeer offerte via event_id
+  let menuSelectie: unknown = null;
+  const { data: viaEventId } = await supabase
+    .from('offertes')
+    .select('id,menu_selectie')
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (viaEventId?.menu_selectie) {
+    menuSelectie = viaEventId.menu_selectie;
+  } else if (offerte_id != null) {
+    const { data: viaOfferteId } = await supabase
+      .from('offertes')
+      .select('id,menu_selectie')
+      .eq('id', offerte_id)
+      .maybeSingle();
+    menuSelectie = viaOfferteId?.menu_selectie ?? null;
+  }
+
+  if (menuSelectie) {
+    const namen = extractNamesFromMenuSelectie(menuSelectie);
+    if (namen.length > 0) {
+      const { data: alleGerechten } = await supabase
+        .from('gerechten')
+        .select('id,naam')
+        .eq('organization_id', orgId);
+
+      const lookup = (alleGerechten ?? []) as { id: number; naam: string }[];
+      const ids: number[] = [];
+      for (const naam of namen) {
+        const id = matchGerechtId(naam, lookup);
+        if (id != null) ids.push(id);
+      }
+      if (ids.length > 0) return dedupeNumbers(ids);
+    }
+  }
+
+  // 2. Fallback: events.menu (legacy integer-array)
+  let menu = rawMenu;
+  if (typeof menu === 'string') {
+    try { menu = JSON.parse(menu); } catch { return []; }
+  }
+  if (!Array.isArray(menu) || menu.length === 0) return [];
+  return dedupeNumbers(menu.map(toInteger).filter((v): v is number => v !== null));
+}
+
 async function fetchMepItems(
   supabase: TenantAuthCtx['supabase'],
   orgId: string,
-  eventId: number
+  eventId: number,
 ): Promise<NormalizedMepItem[]> {
   const { data, error } = await supabase
     .from('mep_items')
@@ -187,7 +272,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const { data: eventRow, error: eventError } = await supabase
       .from('events')
-      .select('id,name,date,guests,menu')
+      .select('id,name,date,guests,menu,offerte_id')
       .eq('id', eventId)
       .eq('organization_id', orgId)
       .maybeSingle();
@@ -203,13 +288,21 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       guests: toNumber(r.guests, 0),
     };
 
-    const menuIds = parseMenuIds(r.menu);
-    if (menuIds.length === 0) return NextResponse.json({ event: eventPayload, gerechten: [] });
+    // Resolve gerechten via offerte.menu_selectie (namen) of events.menu (legacy IDs)
+    const gerechtIds = await resolveGerechtIds(
+      supabase,
+      orgId,
+      eventId,
+      r.offerte_id != null ? toInteger(r.offerte_id) : null,
+      r.menu,
+    );
+
+    if (gerechtIds.length === 0) return NextResponse.json({ event: eventPayload, gerechten: [] });
 
     const { data: gerechtenData, error: gerechtenError } = await supabase
       .from('gerechten')
       .select('id,naam,foto_url')
-      .in('id', menuIds);
+      .in('id', gerechtIds);
 
     if (gerechtenError) return NextResponse.json({ error: 'Gerechten ophalen mislukt.' }, { status: 500 });
 
@@ -291,7 +384,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       gcPerGerecht.set(r.gerecht_id, list);
     }
 
-    const resultaatGerechten: GerechtOutput[] = menuIds
+    const resultaatGerechten: GerechtOutput[] = gerechtIds
       .map(gid => gerechtMap.get(gid))
       .filter((g): g is { id: number; naam: string; foto_url: string | null } => Boolean(g))
       .map(gerecht => {
