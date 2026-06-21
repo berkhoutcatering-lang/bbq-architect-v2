@@ -1,16 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
+import { createServiceSupabase } from '@/lib/supabase-server';
 import { DEFAULT_TEMPLATES } from '@/lib/templateDefaults';
+import { withTenantAuth } from '@/lib/withTenantAuth';
 
 // GET — List templates (by type + org, includes global defaults)
-export async function GET(request: NextRequest) {
-  const authSb = await createServerSupabase();
-  const { data: { user } } = await authSb.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
-
+export const GET = withTenantAuth(async function GET(request: NextRequest, ctx) {
   const documentType = request.nextUrl.searchParams.get('type');
-  const orgId = request.nextUrl.searchParams.get('orgId');
 
   const sb = createServiceSupabase();
 
@@ -21,23 +16,17 @@ export async function GET(request: NextRequest) {
   }
 
   // Get both org-specific and global templates
-  if (orgId) {
-    query = query.or('organization_id.eq.' + orgId + ',organization_id.is.null');
-  }
+  query = query.or('organization_id.eq.' + ctx.orgId + ',organization_id.is.null');
 
   const { data: templates, error } = await query.order('updated_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ templates: templates || [] });
-}
+});
 
 // POST — Create a new template (or seed defaults)
-export async function POST(request: NextRequest) {
-  const authSb = await createServerSupabase();
-  const { data: { user } } = await authSb.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
-
+export const POST = withTenantAuth(async function POST(request: NextRequest, ctx) {
   const body = await request.json();
 
   // Bulk update brand colours on selected templates' page_settings.brandColors override.
@@ -46,12 +35,11 @@ export async function POST(request: NextRequest) {
   // - brandColors null → clear the override on the selected templates (revert to org default)
   if (body.action === 'update_brand_colors') {
     const sb = createServiceSupabase();
-    const orgId = body.organizationId || null;
     const ids: string[] | undefined = Array.isArray(body.templateIds) ? body.templateIds : undefined;
     const brandColors: { primary?: string; accent?: string } | null = body.brandColors ?? null;
 
     let q = sb.from('pdf_templates').select('id, page_settings').eq('is_active', true);
-    if (orgId) q = q.eq('organization_id', orgId); else q = q.is('organization_id', null);
+    q = q.eq('organization_id', ctx.orgId);
     if (ids && ids.length > 0) q = q.in('id', ids);
     const { data: rows, error: fetchErr } = await q;
     if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 });
@@ -78,24 +66,16 @@ export async function POST(request: NextRequest) {
   // Seed defaults action
   if (body.action === 'seed_defaults') {
     const sb = createServiceSupabase();
-    const orgId = body.organizationId || null;
     const results: string[] = [];
 
     for (const [docType, config] of Object.entries(DEFAULT_TEMPLATES)) {
-      // Check if default already exists
-      let existsQuery = sb
+      const { data: existing } = await sb
         .from('pdf_templates')
         .select('id')
         .eq('document_type', docType)
-        .eq('is_default', true);
-
-      if (orgId) {
-        existsQuery = existsQuery.eq('organization_id', orgId);
-      } else {
-        existsQuery = existsQuery.is('organization_id', null);
-      }
-
-      const { data: existing } = await existsQuery.limit(1);
+        .eq('is_default', true)
+        .eq('organization_id', ctx.orgId)
+        .limit(1);
 
       if (existing && existing.length > 0) {
         results.push(docType + ': al aanwezig');
@@ -103,13 +83,13 @@ export async function POST(request: NextRequest) {
       }
 
       await sb.from('pdf_templates').insert({
-        organization_id: orgId,
+        organization_id: ctx.orgId,
         document_type: docType,
         name: config.name,
         blocks: config.blocks,
         page_settings: config.pageSettings,
         is_default: true,
-        created_by: user.id,
+        created_by: ctx.userId,
       });
 
       results.push(docType + ': aangemaakt');
@@ -119,7 +99,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Regular create
-  const { documentType, name, blocks, pageSettings, organizationId, isDefault } = body;
+  const { documentType, name, blocks, pageSettings, isDefault } = body;
 
   if (!documentType) return NextResponse.json({ error: 'documentType is verplicht' }, { status: 400 });
 
@@ -127,19 +107,12 @@ export async function POST(request: NextRequest) {
 
   // If setting as default, unset any existing default for this type+org
   if (isDefault) {
-    let unsetQuery = sb
+    await sb
       .from('pdf_templates')
       .update({ is_default: false })
       .eq('document_type', documentType)
-      .eq('is_default', true);
-
-    if (organizationId) {
-      unsetQuery = unsetQuery.eq('organization_id', organizationId);
-    } else {
-      unsetQuery = unsetQuery.is('organization_id', null);
-    }
-
-    await unsetQuery;
+      .eq('is_default', true)
+      .eq('organization_id', ctx.orgId);
   }
 
   const defaultConfig = DEFAULT_TEMPLATES[documentType];
@@ -147,13 +120,13 @@ export async function POST(request: NextRequest) {
   const { data: template, error } = await sb
     .from('pdf_templates')
     .insert({
-      organization_id: organizationId || null,
+      organization_id: ctx.orgId,
       document_type: documentType,
       name: name || defaultConfig?.name || 'Template',
       blocks: blocks || defaultConfig?.blocks || [],
       page_settings: pageSettings || defaultConfig?.pageSettings || {},
       is_default: isDefault ?? false,
-      created_by: user.id,
+      created_by: ctx.userId,
     })
     .select()
     .single();
@@ -161,4 +134,4 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ template });
-}
+});

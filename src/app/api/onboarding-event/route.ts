@@ -1,20 +1,14 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-server';
+import { createServiceSupabase } from '@/lib/supabase-server';
+import { withTenantAuth } from '@/lib/withTenantAuth';
 
 // POST — Log an onboarding milestone
-export async function POST(request: NextRequest) {
-  const authSb = await createServerSupabase();
-  const { data: { user } } = await authSb.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
-  }
-
+export const POST = withTenantAuth(async function POST(request: NextRequest, ctx) {
   const body = await request.json();
-  const { milestone, organizationId, metadata } = body;
+  const { milestone, metadata } = body;
 
-  if (!milestone || !organizationId) {
-    return NextResponse.json({ error: 'milestone en organizationId zijn verplicht' }, { status: 400 });
+  if (!milestone) {
+    return NextResponse.json({ error: 'milestone is verplicht' }, { status: 400 });
   }
 
   const sb = createServiceSupabase();
@@ -23,7 +17,7 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await sb
     .from('onboarding_events')
     .select('id')
-    .eq('organization_id', organizationId)
+    .eq('organization_id', ctx.orgId)
     .eq('milestone', milestone)
     .limit(1);
 
@@ -32,35 +26,23 @@ export async function POST(request: NextRequest) {
   }
 
   await sb.from('onboarding_events').insert({
-    organization_id: organizationId,
-    user_id: user.id,
+    organization_id: ctx.orgId,
+    user_id: ctx.userId,
     milestone,
     metadata: metadata || {},
   });
 
   return NextResponse.json({ success: true, alreadyLogged: false });
-}
+});
 
 // GET — Fetch onboarding milestones for an org
-export async function GET(request: NextRequest) {
-  const authSb = await createServerSupabase();
-  const { data: { user } } = await authSb.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
-  }
-
-  const orgId = request.nextUrl.searchParams.get('orgId');
-  if (!orgId) {
-    return NextResponse.json({ error: 'orgId parameter is verplicht' }, { status: 400 });
-  }
-
+export const GET = withTenantAuth(async function GET(_request: NextRequest, ctx) {
   const sb = createServiceSupabase();
 
   const { data: events } = await sb
     .from('onboarding_events')
     .select('*')
-    .eq('organization_id', orgId)
+    .eq('organization_id', ctx.orgId)
     .order('created_at');
 
   const allMilestones = [
@@ -82,7 +64,7 @@ export async function GET(request: NextRequest) {
     const firstValueMilestones = ['first_recipe', 'first_event', 'first_offerte'];
     const firstValue = events.find(e => firstValueMilestones.includes(e.milestone));
     if (firstValue) {
-      const { data: org } = await sb.from('organizations').select('created_at').eq('id', orgId).single();
+      const { data: org } = await sb.from('organizations').select('created_at').eq('id', ctx.orgId).single();
       if (org) {
         ttfvMinutes = Math.round((new Date(firstValue.created_at).getTime() - new Date(org.created_at).getTime()) / 60000);
       }
@@ -96,4 +78,4 @@ export async function GET(request: NextRequest) {
     progress,
     ttfvMinutes,
   });
-}
+});

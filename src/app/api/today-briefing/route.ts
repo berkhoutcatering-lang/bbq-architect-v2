@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import type { BriefingCandidate } from '@/lib/today-briefing-rules';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { enforceAiCap } from '@/lib/aiCostCap';
+import { withTenantAuth } from '@/lib/withTenantAuth';
 
 /**
  * AI-briefing endpoint voor /Vandaag.
@@ -124,13 +124,13 @@ function fallbackBullets(candidates: BriefingCandidate[]): AiBriefingBullet[] {
   }));
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withTenantAuth(async function POST(req: NextRequest, auth) {
   try {
     const body = await req.json();
     const candidates: BriefingCandidate[] = Array.isArray(body?.candidates) ? body.candidates : [];
     const firstName: string = typeof body?.firstName === 'string' ? body.firstName : '';
     const time: string = typeof body?.time === 'string' ? body.time : '';
-    const organizationId: string | null = typeof body?.organizationId === 'string' ? body.organizationId : null;
+    const organizationId = auth.orgId;
 
     if (candidates.length === 0) {
       return NextResponse.json({
@@ -178,10 +178,8 @@ export async function POST(req: NextRequest) {
     ].filter(Boolean).join('\n');
 
     // AI hard-cap: Haiku tekst met caching ≈ €0.01 per briefing.
-    if (organizationId) {
-      const capRes = await enforceAiCap(organizationId, 0.01);
-      if (capRes) return capRes;
-    }
+    const capRes = await enforceAiCap(organizationId, 0.01);
+    if (capRes) return capRes;
 
     /* Prompt-caching op de system prompt — TTL 5 min, dus herhaalde calls
        binnen die window kosten alleen de delta van de user-message. */
@@ -202,27 +200,26 @@ export async function POST(req: NextRequest) {
 
     /* Log usage incl. cache-tokens — Pillar #5 (Systeem) cost-transparantie.
        Fire-and-forget; failures blokkeren de response niet. */
-    if (organizationId) {
-      const u: any = resp.usage || {};
-      const model = (resp as any).model || 'claude-haiku-4-5-20251001';
-      void logAiUsageServer({
-        organization_id: organizationId,
-        action_type: 'other',
+    const u: any = resp.usage || {};
+    const model = (resp as any).model || 'claude-haiku-4-5-20251001';
+    void logAiUsageServer({
+      organization_id: organizationId,
+      user_id: auth.userId,
+      action_type: 'other',
+      model,
+      tokens_input: u.input_tokens ?? 0,
+      tokens_output: u.output_tokens ?? 0,
+      tokens_cache_read: u.cache_read_input_tokens ?? 0,
+      tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
+      cost_eur_cents: estimateAiCostCents({
         model,
         tokens_input: u.input_tokens ?? 0,
         tokens_output: u.output_tokens ?? 0,
         tokens_cache_read: u.cache_read_input_tokens ?? 0,
         tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
-        cost_eur_cents: estimateAiCostCents({
-          model,
-          tokens_input: u.input_tokens ?? 0,
-          tokens_output: u.output_tokens ?? 0,
-          tokens_cache_read: u.cache_read_input_tokens ?? 0,
-          tokens_cache_creation: u.cache_creation_input_tokens ?? 0,
-        }),
-        metadata: { feature: 'today_briefing', candidates_count: candidates.length },
-      });
-    }
+      }),
+      metadata: { feature: 'today_briefing', candidates_count: candidates.length },
+    });
 
     const toolBlock = (resp.content as any[]).find((b: any) => b.type === 'tool_use');
     const out = toolBlock?.input as { bullets?: AiBriefingBullet[] } | undefined;
@@ -278,4 +275,4 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ bullets: [], generatedAt: new Date().toISOString(), fallback: true }, { status: 200 });
     }
   }
-}
+});

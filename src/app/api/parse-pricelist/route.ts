@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createServerSupabase } from '@/lib/supabase-server';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { enforceAiCap } from '@/lib/aiCostCap';
+import { withTenantAuth } from '@/lib/withTenantAuth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -234,37 +233,25 @@ async function runChunkedTextCalls(
     });
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withTenantAuth(async function POST(req: NextRequest, auth) {
     const t0 = Date.now();
     try {
         const apiKey = process.env.ANTHROPIC_API_KEY;
         if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY ontbreekt' }, { status: 500 });
 
-        /* Auth + rate-limit (max 20 parses/min per user — beschermt tegen runaway bakje-loops) */
-        const supabase = await createServerSupabase();
-        const { data: { user } } = await supabase.auth.getUser();
-        let orgId: string | null = null;
-        let userId: string | null = null;
-        if (user) {
-            userId = user.id;
-            const { data: memberData } = await supabase
-                .from('organization_members').select('organization_id')
-                .eq('user_id', user.id).eq('status', 'active').limit(1);
-            orgId = memberData?.[0]?.organization_id || null;
-
-            const rl = checkRateLimit(`parse-pricelist:${user.id}`, 20);
-            if (!rl.allowed) {
-                return NextResponse.json({
-                    error: `Rate limit: max 20 parses per minuut. Probeer over ${rl.resetInSeconds}s opnieuw.`,
-                }, { status: 429 });
-            }
-
-            // AI hard-cap: Sonnet vision batch-25 ≈ €0.20 per pricelist-PDF.
-            if (orgId) {
-                const capRes = await enforceAiCap(orgId, 0.20);
-                if (capRes) return capRes;
-            }
+        /* Auth + rate-limit (max 20 parses/min per user — beschermt tegen runaway bakje-loops). */
+        const orgId = auth.orgId;
+        const userId = auth.userId;
+        const rl = checkRateLimit(`parse-pricelist:${userId}`, 20);
+        if (!rl.allowed) {
+            return NextResponse.json({
+                error: `Rate limit: max 20 parses per minuut. Probeer over ${rl.resetInSeconds}s opnieuw.`,
+            }, { status: 429 });
         }
+
+        // AI hard-cap: Sonnet vision batch-25 ≈ €0.20 per pricelist-PDF.
+        const capRes = await enforceAiCap(orgId, 0.20);
+        if (capRes) return capRes;
 
         const body = await req.json();
         const { pdfBase64, pdfUrl, imageBase64, textContent, model: modelChoice } = body as {
@@ -274,6 +261,12 @@ export async function POST(req: NextRequest) {
             textContent?: string;
             model?: 'haiku' | 'sonnet' | 'opus';
         };
+
+        if (pdfUrl) {
+            return NextResponse.json({
+                error: 'pdfUrl wordt niet meer ondersteund. Upload het bestand eerst naar BBQ Architect en stuur pdfBase64 of textContent mee.',
+            }, { status: 400 });
+        }
 
         if (!pdfBase64 && !pdfUrl && !imageBase64 && !textContent) {
             return NextResponse.json({ error: 'Geen input meegegeven' }, { status: 400 });
@@ -307,16 +300,7 @@ export async function POST(req: NextRequest) {
         /* VISION-MODE (via URL of base64) */
         const contentBlocks: Anthropic.Messages.ContentBlockParam[] = [];
 
-        if (pdfUrl) {
-            const r = await fetch(pdfUrl);
-            if (!r.ok) return NextResponse.json({ error: 'Kon PDF niet downloaden (' + r.status + ')' }, { status: 502 });
-            const arrayBuf = await r.arrayBuffer();
-            const base64 = Buffer.from(arrayBuf).toString('base64');
-            contentBlocks.push({
-                type: 'document',
-                source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-            } as any);
-        } else if (pdfBase64) {
+        if (pdfBase64) {
             const parsed = pdfBase64.startsWith('data:') ? parseDataUrl(pdfBase64) : { mediaType: 'application/pdf', data: pdfBase64 };
             contentBlocks.push({
                 type: 'document',
@@ -341,4 +325,4 @@ export async function POST(req: NextRequest) {
         const detail = e?.error?.error?.message || e?.message || 'Onbekende fout';
         return NextResponse.json({ error: detail, apiStatus: e?.status }, { status: e?.status || 500 });
     }
-}
+});
