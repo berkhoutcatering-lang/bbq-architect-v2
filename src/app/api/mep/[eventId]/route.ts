@@ -123,49 +123,6 @@ function normalizeStringArray(value: unknown): string[] | null {
   return null;
 }
 
-function normalizeAllergens(value: unknown): AllergeneItem[] | null {
-  if (!value) return null;
-  if (Array.isArray(value)) {
-    const list = value.map(entry => {
-      if (typeof entry === 'string') return entry.trim().toUpperCase() ? { allergen_code: entry.trim().toUpperCase() } : null;
-      if (entry && typeof entry === 'object') {
-        const r = entry as Record<string, unknown>;
-        const code = r.allergen_code ?? r.code;
-        return typeof code === 'string' && code.trim() ? { allergen_code: code.trim().toUpperCase() } : null;
-      }
-      return null;
-    }).filter((e): e is AllergeneItem => e !== null);
-    return list.length > 0 ? list : null;
-  }
-  if (typeof value === 'string') {
-    try { return normalizeAllergens(JSON.parse(value)); } catch { /* ignore */ }
-  }
-  return null;
-}
-
-function normalizeHaccpPoints(value: unknown): HaccpPoint[] | null {
-  if (!value) return null;
-  if (typeof value === 'string') {
-    try { return normalizeHaccpPoints(JSON.parse(value)); } catch { return null; }
-  }
-  if (Array.isArray(value)) {
-    const points = value.map(entry => {
-      if (!entry || typeof entry !== 'object') return null;
-      const r = entry as Record<string, unknown>;
-      const type = r.type ?? r.label ?? r.name;
-      if (typeof type !== 'string' || !type.trim()) return null;
-      const p: HaccpPoint = { type: type.trim() };
-      const tv = Number(r.threshold_value ?? r.threshold ?? r.value);
-      if (Number.isFinite(tv)) p.threshold_value = tv;
-      if (typeof r.threshold_unit === 'string' && r.threshold_unit.trim()) p.threshold_unit = r.threshold_unit.trim();
-      if (typeof r.note === 'string' && r.note.trim()) p.note = r.note.trim();
-      return p;
-    }).filter((p): p is HaccpPoint => p !== null);
-    return points.length > 0 ? points : null;
-  }
-  return null;
-}
-
 function mepKey(gerechtId: string, componentId: number): string {
   return `${gerechtId}:${componentId}`;
 }
@@ -328,17 +285,25 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const { data: gcData, error: gcError } = await supabase
       .from('gerecht_components')
-      .select('gerecht_id,component_id')
+      .select('gerecht_id,component_id,quantity_used,unit')
       .in('gerecht_id', geldigeIds);
 
     if (gcError) return NextResponse.json({ error: 'Component-koppelingen ophalen mislukt.' }, { status: 500 });
 
-    const gerechtComponents = (gcData ?? []).map((row: Record<string, unknown>) => {
+    type GcPair = { gerecht_id: string; component_id: number; quantity_used: number; unit: string };
+    const gerechtComponents = (gcData ?? []).map((row: Record<string, unknown>): GcPair | null => {
       const gerechtId = typeof row.gerecht_id === 'string' && row.gerecht_id ? row.gerecht_id : null;
       const componentId = toInteger(row.component_id);
       if (!gerechtId || !componentId) return null;
-      return { gerecht_id: gerechtId, component_id: componentId };
-    }).filter((r): r is { gerecht_id: string; component_id: number } => r !== null);
+      // quantity_used = hoeveel het gerecht van deze component gebruikt per portie (×gasten = te maken)
+      const qu = Number(row.quantity_used);
+      return {
+        gerecht_id: gerechtId,
+        component_id: componentId,
+        quantity_used: Number.isFinite(qu) && qu > 0 ? qu : NaN,
+        unit: typeof row.unit === 'string' && row.unit.trim() ? row.unit.trim() : '',
+      };
+    }).filter((r): r is GcPair => r !== null);
 
     if (gerechtComponents.length === 0) return NextResponse.json({ event: eventPayload, gerechten: [] });
 
@@ -352,6 +317,37 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     if (componentError) return NextResponse.json({ error: 'Componenten ophalen mislukt.' }, { status: 500 });
 
+    // Allergenen + HACCP komen uit aparte tabellen (niet uit components zelf)
+    const [{ data: allergRows }, { data: haccpRows }] = await Promise.all([
+      supabase.from('component_allergens').select('component_id,allergen_code').eq('organization_id', orgId).in('component_id', componentIds),
+      supabase.from('component_haccp_points').select('component_id,type,threshold_value,threshold_unit,note').eq('organization_id', orgId).in('component_id', componentIds),
+    ]);
+
+    const allergPerComponent = new Map<number, AllergeneItem[]>();
+    for (const row of (allergRows ?? []) as Record<string, unknown>[]) {
+      const cid = toInteger(row.component_id);
+      const code = typeof row.allergen_code === 'string' ? row.allergen_code.trim().toUpperCase() : '';
+      if (!cid || !code) continue;
+      const list = allergPerComponent.get(cid) ?? [];
+      list.push({ allergen_code: code });
+      allergPerComponent.set(cid, list);
+    }
+
+    const haccpPerComponent = new Map<number, HaccpPoint[]>();
+    for (const row of (haccpRows ?? []) as Record<string, unknown>[]) {
+      const cid = toInteger(row.component_id);
+      const type = typeof row.type === 'string' ? row.type.trim() : '';
+      if (!cid || !type) continue;
+      const p: HaccpPoint = { type };
+      const tv = Number(row.threshold_value);
+      if (Number.isFinite(tv)) p.threshold_value = tv;
+      if (typeof row.threshold_unit === 'string' && row.threshold_unit.trim()) p.threshold_unit = row.threshold_unit.trim();
+      if (typeof row.note === 'string' && row.note.trim()) p.note = row.note.trim();
+      const list = haccpPerComponent.get(cid) ?? [];
+      list.push(p);
+      haccpPerComponent.set(cid, list);
+    }
+
     const componentMap = new Map<number, NormalizedComponent>();
     for (const row of (componentData ?? []) as Record<string, unknown>[]) {
       const id = toInteger(row.id);
@@ -364,8 +360,8 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
         base_quantity: toNumber(row.base_quantity, 0),
         base_unit: String(row.base_unit ?? 'stuks'),
         preparation_steps: normalizeStringArray(row.preparation_steps),
-        allergens: normalizeAllergens(row.allergens),
-        haccp_points: normalizeHaccpPoints(row.haccp_points),
+        allergens: allergPerComponent.get(id) ?? null,
+        haccp_points: haccpPerComponent.get(id) ?? null,
         flavor_tags: normalizeStringArray(row.flavor_tags),
       });
     }
@@ -387,7 +383,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const mepMap = new Map(mepItems.map(m => [mepKey(m.gerecht_id, m.component_id), m]));
     const gerechtMap = new Map(gerechten.map(g => [g.id, g]));
-    const gcPerGerecht = new Map<string, { gerecht_id: string; component_id: number }[]>();
+    const gcPerGerecht = new Map<string, GcPair[]>();
     for (const r of gerechtComponents) {
       const list = gcPerGerecht.get(r.gerecht_id) ?? [];
       list.push(r);
@@ -403,7 +399,10 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
           const comp = componentMap.get(pair.component_id);
           const mep = mepMap.get(mepKey(pair.gerecht_id, pair.component_id));
           if (!comp || !mep) return null;
-          return { ...comp, ...mep, mep_item_id: mep.id };
+          // Te maken = quantity_used (per portie) × gasten — niet de component-basisbatch.
+          const base_quantity = Number.isFinite(pair.quantity_used) ? pair.quantity_used : comp.base_quantity;
+          const base_unit = pair.unit || comp.base_unit;
+          return { ...comp, base_quantity, base_unit, ...mep, mep_item_id: mep.id };
         }).filter((c): c is ComponentOutput => c !== null);
         return { ...gerecht, components };
       })

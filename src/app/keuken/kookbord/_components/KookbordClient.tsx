@@ -1,10 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Flame, Calendar, Check, ChefHat } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import MepGerechtGroep from './MepGerechtGroep';
 import MepItemSheet from './MepItemSheet';
 import MepTopBar from './MepTopBar';
+import { MEP_CSS } from './mep-ui';
 
 export type MepStatus = 'todo' | 'bezig' | 'klaar';
 
@@ -28,7 +31,7 @@ export interface MepComponentItem {
 }
 
 export interface MepGerecht {
-  id: number;
+  id: string;
   naam: string;
   foto_url: string | null;
   components: MepComponentItem[];
@@ -86,6 +89,12 @@ function patchFromRow(row: Record<string, unknown>): Partial<MepComponentItem> {
   return patch;
 }
 
+const bannerFmt = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' });
+function fmtDate(d: string): string {
+  const dt = d ? new Date(`${d}T00:00:00`) : null;
+  return dt && !Number.isNaN(dt.getTime()) ? bannerFmt.format(dt) : '';
+}
+
 export default function KookbordClient() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
@@ -93,6 +102,7 @@ export default function KookbordClient() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MepComponentItem | null>(null);
+  const [selectedGerechtNaam, setSelectedGerechtNaam] = useState('');
   const [sheetOpen, setSheetOpen] = useState(false);
   const [fout, setFout] = useState('');
   const [melding, setMelding] = useState('');
@@ -283,13 +293,26 @@ export default function KookbordClient() {
     [mepData]
   );
 
+  const guests = mepData?.event.guests ?? 0;
+  const showSkeleton = loadingEvents || loading;
+  const showEmptyEvents = !loadingEvents && !loading && events.length === 0;
+  const showEmptyMenu = !loadingEvents && !loading && events.length > 0 && !!mepData && zichtbareGerechten.length === 0;
+  const showBoard = !loadingEvents && !loading && zichtbareGerechten.length > 0;
+  const allesKlaar = progress.total > 0 && progress.done === progress.total;
+
+  const openItem = (item: MepComponentItem, gerechtNaam: string) => {
+    setSelectedItem(item);
+    setSelectedGerechtNaam(gerechtNaam);
+    setSheetOpen(true);
+  };
+
   return (
-    <div className="flex h-screen flex-col bg-gray-950 text-white">
+    <div style={{ height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(150% 120% at 50% -20%, #161518 0%, #0d0d0f 55%, #0a0a0c 100%)', fontFamily: "'DM Sans',sans-serif", color: '#f8f8f8', overflow: 'hidden', position: 'relative' }}>
+      <style>{MEP_CSS}</style>
+
       {melding ? (
-        <div className="pointer-events-none fixed inset-x-0 top-3 z-50 px-3">
-          <div className="mx-auto max-w-xl rounded-lg bg-gray-800 px-4 py-3 text-center text-sm shadow-lg">
-            {melding}
-          </div>
+        <div style={{ position: 'fixed', left: 0, right: 0, top: 14, zIndex: 60, display: 'flex', justifyContent: 'center', pointerEvents: 'none', padding: '0 16px' }}>
+          <div style={{ background: 'rgba(16,16,18,.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(130,130,130,.2)', borderRadius: 12, padding: '10px 18px', fontSize: 13, color: '#e6e6e6', boxShadow: '0 10px 34px rgba(0,0,0,.5)' }}>{melding}</div>
         </div>
       ) : null}
 
@@ -302,52 +325,92 @@ export default function KookbordClient() {
         resetting={resetting}
       />
 
-      <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {fout ? (
-          <div className="rounded-xl border border-red-700 bg-red-950 px-4 py-3 text-sm text-red-200">{fout}</div>
-        ) : null}
+      <main className="mep-sc" style={{ flex: 1, overflowY: 'auto', padding: '26px 24px 96px' }}>
+        <div style={{ maxWidth: 1380, margin: '0 auto' }}>
+          {fout ? (
+            <div style={{ marginBottom: 18, borderRadius: 12, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', padding: '14px 18px', fontSize: 13.5, color: '#f1b0b0' }}>{fout}</div>
+          ) : null}
 
-        {loadingEvents ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-300">
-            Aankomende events laden...
-          </div>
-        ) : null}
+          {showSkeleton ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                <div style={{ width: 180, height: 20, borderRadius: 6, background: 'linear-gradient(90deg,rgba(40,40,46,.5) 25%,rgba(64,64,72,.65) 37%,rgba(40,40,46,.5) 63%)', backgroundSize: '800px 100%', animation: 'mepShimmer 1.25s linear infinite' }} />
+                <div style={{ flex: 1, height: 1, background: 'rgba(130,130,130,.1)' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))', gap: 16, marginBottom: 34 }}>
+                {[1, 2, 3].map(i => <div key={i} style={{ height: 214, borderRadius: 14, background: 'linear-gradient(90deg,rgba(34,34,40,.5) 25%,rgba(52,52,60,.6) 37%,rgba(34,34,40,.5) 63%)', backgroundSize: '900px 100%', animation: 'mepShimmer 1.3s linear infinite', border: '1px solid rgba(130,130,130,.1)' }} />)}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+                <div style={{ width: 140, height: 20, borderRadius: 6, background: 'linear-gradient(90deg,rgba(40,40,46,.5) 25%,rgba(64,64,72,.65) 37%,rgba(40,40,46,.5) 63%)', backgroundSize: '800px 100%', animation: 'mepShimmer 1.25s linear infinite' }} />
+                <div style={{ flex: 1, height: 1, background: 'rgba(130,130,130,.1)' }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))', gap: 16 }}>
+                {[1, 2, 3].map(i => <div key={i} style={{ height: 214, borderRadius: 14, background: 'linear-gradient(90deg,rgba(34,34,40,.5) 25%,rgba(52,52,60,.6) 37%,rgba(34,34,40,.5) 63%)', backgroundSize: '900px 100%', animation: 'mepShimmer 1.3s linear infinite', border: '1px solid rgba(130,130,130,.1)' }} />)}
+              </div>
+            </div>
+          ) : null}
 
-        {!loadingEvents && events.length === 0 ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-300">
-            Geen aankomende events in de komende 14 dagen
-          </div>
-        ) : null}
+          {showEmptyEvents ? (
+            <div style={{ minHeight: '62vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 40, animation: 'mepRise .35s ease' }}>
+              <div style={{ width: 96, height: 96, borderRadius: 24, background: 'radial-gradient(120% 120% at 50% 25%, rgba(196,163,90,.14), rgba(28,28,32,.6))', border: '1px solid rgba(196,163,90,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22, boxShadow: '0 12px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)' }}>
+                <Flame size={38} color="rgba(216,184,99,.7)" strokeWidth={1.6} />
+              </div>
+              <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Geen aankomend event</h2>
+              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#949494', maxWidth: 400, margin: '0 0 22px' }}>Zodra een offerte bevestigd is, verschijnt hier automatisch je mise-en-place — opgesplitst per gerecht en per component.</p>
+              <Link href="/agenda" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 46, padding: '0 20px', borderRadius: 11, background: 'rgba(130,130,130,.08)', border: '1px solid rgba(130,130,130,.2)', color: '#cfcfcf', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                <Calendar size={16} color="#cfcfcf" strokeWidth={2} /><span>Bekijk de agenda</span>
+              </Link>
+            </div>
+          ) : null}
 
-        {!loadingEvents && events.length > 0 && loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-gray-800" />)}
-          </div>
-        ) : null}
+          {showEmptyMenu ? (
+            <div style={{ minHeight: '62vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 40, animation: 'mepRise .35s ease' }}>
+              <div style={{ width: 96, height: 96, borderRadius: 24, background: 'radial-gradient(120% 120% at 50% 25%, rgba(196,163,90,.14), rgba(28,28,32,.6))', border: '1px solid rgba(196,163,90,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22, boxShadow: '0 12px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)' }}>
+                <ChefHat size={38} color="rgba(216,184,99,.7)" strokeWidth={1.6} />
+              </div>
+              <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Nog geen componenten</h2>
+              <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#949494', maxWidth: 420, margin: '0 0 22px' }}>De gerechten van dit event hebben nog geen onderdelen. Koppel componenten aan een gerecht, dan verschijnen ze hier als MEP-kaarten.</p>
+              <Link href="/gerechten" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 46, padding: '0 20px', borderRadius: 11, background: 'rgba(130,130,130,.08)', border: '1px solid rgba(130,130,130,.2)', color: '#cfcfcf', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
+                <ChefHat size={16} color="#cfcfcf" strokeWidth={2} /><span>Naar gerechten</span>
+              </Link>
+            </div>
+          ) : null}
 
-        {!loadingEvents && events.length > 0 && !loading && mepData && zichtbareGerechten.length === 0 ? (
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 text-center text-gray-300">
-            Geen menu gepland voor dit event — voeg gerechten toe via de offerteflow
-          </div>
-        ) : null}
+          {showBoard ? (
+            <div>
+              {allesKlaar ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '18px 22px', marginBottom: 26, borderRadius: 15, background: 'linear-gradient(180deg,rgba(34,197,94,.12),rgba(26,26,30,.7))', border: '1px solid rgba(34,197,94,.3)', boxShadow: '0 10px 34px rgba(34,197,94,.1),inset 0 1px 0 rgba(255,255,255,.04)', animation: 'mepRise .4s ease' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(34,197,94,.16)', border: '1px solid rgba(34,197,94,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: '0 0 auto' }}>
+                    <Check size={24} color="#74e29a" strokeWidth={2.6} />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 500, fontSize: 19, letterSpacing: '-.01em', color: '#f3f3f3' }}>Alles MEP klaar</span>
+                    <span style={{ fontSize: 13.5, color: '#9fb8a6' }}>{progress.done} van de {progress.total} componenten gereed — klaar voor uitgifte, van het vuur.</span>
+                  </div>
+                  <span style={{ flex: 1 }} />
+                  {mepData ? <span style={{ fontSize: 13, color: '#8b8b8f', fontWeight: 500, letterSpacing: '.02em' }}>{mepData.event.name} · {fmtDate(mepData.event.date)} · {mepData.event.guests} pers</span> : null}
+                </div>
+              ) : null}
 
-        {!loadingEvents && events.length > 0 && !loading &&
-          zichtbareGerechten.map(gerecht => (
-            <MepGerechtGroep
-              key={gerecht.id}
-              gerecht={gerecht}
-              guests={mepData?.event.guests ?? 0}
-              onItemTap={item => { setSelectedItem(item); setSheetOpen(true); }}
-              onStatusToggle={handleStatusToggle}
-            />
-          ))
-        }
-      </div>
+              {zichtbareGerechten.map(gerecht => (
+                <MepGerechtGroep
+                  key={gerecht.id}
+                  gerecht={gerecht}
+                  guests={guests}
+                  onItemTap={openItem}
+                  onStatusToggle={handleStatusToggle}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </main>
 
       <MepItemSheet
         open={sheetOpen}
         item={selectedItem}
-        guests={mepData?.event.guests ?? 0}
+        guests={guests}
+        gerecht={selectedGerechtNaam}
         onClose={() => setSheetOpen(false)}
         onStatusChange={handleStatusToggle}
         onSaveNotes={handleSaveNotes}
