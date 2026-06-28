@@ -61,6 +61,7 @@ export const OFFERTE_BLOCKS: TemplateBlock[] = [
   { id: bid(), type: 'logo', variant: 'light', maxWidth: 60, maxHeight: 25, alignment: 'center' },
   { id: bid(), type: 'divider', style: 'solid', color: 'brand_primary', thickness: 1 },
   { id: bid(), type: 'text', content: '{{bedrijf_adres}} | {{bedrijf_telefoon}} | {{bedrijf_email}}', fontSize: 7, fontWeight: 'normal', fontStyle: 'normal', color: '#999999', alignment: 'center', lineHeight: 1.4 },
+  { id: bid(), type: 'text', content: 'KvK: {{kvk}} | BTW: {{btw_nr}} | IBAN: {{iban}}', fontSize: 7, fontWeight: 'normal', fontStyle: 'normal', color: '#999999', alignment: 'center', lineHeight: 1.4 },
   { id: bid(), type: 'spacer', height: 8 },
   { id: bid(), type: 'document_badge', text: 'O F F E R T E', backgroundColor: 'brand_primary', textColor: '#ffffff', fontSize: 14 },
   { id: bid(), type: 'spacer', height: 6 },
