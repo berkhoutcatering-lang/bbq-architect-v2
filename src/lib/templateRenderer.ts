@@ -27,18 +27,37 @@ function hexToRgb(hex: string): [number, number, number] {
 
 function loadImageAsBase64(src: string): Promise<{ data: string; w: number; h: number } | null> {
   return new Promise(function (resolve) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = function () {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      resolve({ data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height });
-    };
-    img.onerror = function () { resolve(null); };
-    img.src = src;
+    function drawToResult(img: HTMLImageElement): { data: string; w: number; h: number } | null {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0);
+        return { data: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height };
+      } catch { return null; }
+    }
+    // Fallback: classic <img> + crossOrigin (used only if fetch fails)
+    function viaCrossOrigin() {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () { resolve(drawToResult(img)); };
+      img.onerror = function () { resolve(null); };
+      img.src = src;
+    }
+    // Preferred: fetch → blob → object URL. Avoids the CORS cache-poisoning that
+    // makes logos intermittently disappear (a cached no-CORS <img> response taints
+    // the canvas). A blob/object URL is same-origin, so toDataURL always works.
+    fetch(src, { mode: 'cors', cache: 'reload' })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+      .then(function (blob) {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = function () { const res = drawToResult(img); URL.revokeObjectURL(url); res ? resolve(res) : viaCrossOrigin(); };
+        img.onerror = function () { URL.revokeObjectURL(url); viaCrossOrigin(); };
+        img.src = url;
+      })
+      .catch(function () { viaCrossOrigin(); });
   });
 }
 
