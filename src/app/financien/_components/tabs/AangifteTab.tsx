@@ -313,6 +313,15 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                     >
                         <Download size={14} /> Download JSON
                     </button>
+                    <a
+                        data-testid="aangifte-download-xaf"
+                        href={`/api/financien/auditfile?year=${period.year}`}
+                        className="btn btn-ghost"
+                        style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+                        title={`Auditfile (XAF 4.0) van heel ${period.year} — leest in bij Exact, SnelStart, Twinfield, AFAS`}
+                    >
+                        <FileText size={14} /> Auditfile {period.year}
+                    </a>
                 </div>
                 {generated && (
                     <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(34,197,94,.06)', border: '1px solid rgba(34,197,94,.2)', borderRadius: 8, fontSize: 12, color: 'var(--green)' }}>
