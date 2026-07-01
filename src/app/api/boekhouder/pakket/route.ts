@@ -272,10 +272,14 @@ export async function POST(req: NextRequest) {
       const items = Array.isArray(f.items) ? f.items : [];
       let netto = 0, btw9 = 0, btw21 = 0;
       items.forEach((it: any) => {
-        const lineTotal = (Number(it.aantal) || 0) * (Number(it.prijs) || 0);
-        const pct = Number(it.btw_pct) || 21;
-        const btwAmount = lineTotal * pct / (100 + pct);
-        netto += lineTotal - btwAmount;
+        // Factuur-items: qty/btw/prijs (fallback aantal/btw_pct). prijs is EXCL BTW.
+        const qty = Number(it.qty ?? it.aantal) || 0;
+        const prijs = Number(it.prijs) || 0;
+        const nettoLine = qty * prijs;
+        const rawPct = Number(it.btw ?? it.btw_pct);
+        const pct = Number.isFinite(rawPct) ? rawPct : 21;
+        const btwAmount = pct > 0 ? nettoLine * pct / 100 : 0;
+        netto += nettoLine;
         if (pct === 9) btw9 += btwAmount;
         else if (pct === 21) btw21 += btwAmount;
       });
