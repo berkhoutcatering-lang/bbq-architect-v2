@@ -3,8 +3,8 @@
    Q-deadline-countdown + voorbereiding-checklist + BTW-concept generator.
    Geen AI in de loop — bedragen komen uit financeAnalytics.computeBtwAangifte(). */
 
-import { useMemo, useState } from 'react';
-import { Calendar, CheckCircle2, Circle, Download, ShieldCheck, FileText, AlertTriangle } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Calendar, CheckCircle2, Circle, Download, ShieldCheck, FileText, AlertTriangle, Lock, Unlock, History } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import { fmt } from '@/lib/utils';
 import {
@@ -21,6 +21,17 @@ interface Props {
     bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string; ai_classify_status?: string }>;
 }
 
+interface VastgezetteAangifte {
+    id: string;
+    jaar: number;
+    kwartaal: number;
+    periode_start: string;
+    periode_eind: string;
+    saldo: number;
+    meta?: { facturen_count?: number; bonnen_count?: number; open_issues?: number };
+    vastgezet_at: string;
+}
+
 export default function AangifteTab({ facturen, bonnen }: Props) {
     const period = useMemo(() => currentQuarterPeriod(), []);
     const rubrieken = useMemo(() => computeBtwAangifte(facturen, bonnen, period), [facturen, bonnen, period]);
@@ -32,6 +43,59 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
     const errorCount = checks.filter(c => c.severity === 'error').length;
     const warnCount = checks.filter(c => c.severity === 'warning').length;
     const allOk = errorCount === 0 && warnCount === 0;
+
+    /* Historie: vastgezette kwartalen. */
+    const [historie, setHistorie] = useState<VastgezetteAangifte[]>([]);
+    const [locking, setLocking] = useState(false);
+
+    const laadHistorie = useCallback(async () => {
+        try {
+            const res = await fetch('/api/financien/btw-aangifte', { credentials: 'include' });
+            if (res.ok) {
+                const body = await res.json();
+                setHistorie(body.aangiftes || []);
+            }
+        } catch (e) { console.error('[aangifte] historie laden faalde', e); }
+    }, []);
+
+    useEffect(() => { laadHistorie(); }, [laadHistorie]);
+
+    const huidigVastgezet = historie.find(h => h.jaar === period.year && h.kwartaal === period.quarter) || null;
+
+    async function vastzetten() {
+        if (errorCount > 0) return; /* niet vastzetten met openstaande fouten */
+        setLocking(true);
+        try {
+            const res = await fetch('/api/financien/btw-aangifte', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ year: period.year, quarter: period.quarter }),
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || `HTTP ${res.status}`);
+            }
+            await laadHistorie();
+        } catch (e) {
+            console.error('[aangifte] vastzetten faalde', e);
+        } finally { setLocking(false); }
+    }
+
+    async function ontgrendel(id: string) {
+        setLocking(true);
+        try {
+            await fetch('/api/financien/btw-aangifte', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ id }),
+            });
+            await laadHistorie();
+        } catch (e) {
+            console.error('[aangifte] ontgrendelen faalde', e);
+        } finally { setLocking(false); }
+    }
 
     async function generateConcept() {
         setGenerating(true);
@@ -256,6 +320,96 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                     </div>
                 )}
             </div>
+
+            {/* Vastzetten / vergrendeld-status */}
+            <div style={{ marginTop: 16, padding: '18px 22px', background: huidigVastgezet ? 'rgba(34,197,94,.05)' : 'var(--bg)', border: `1px solid ${huidigVastgezet ? 'rgba(34,197,94,.25)' : 'var(--border)'}`, borderRadius: 14 }}>
+                {huidigVastgezet ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 11, background: 'rgba(34,197,94,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Lock size={18} color="var(--green)" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700 }}>Q{period.quarter} {period.year} is vastgezet</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                                Vastgezet op {new Date(huidigVastgezet.vastgezet_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })}. De cijfers zijn bevroren en veranderen niet meer mee.
+                            </div>
+                        </div>
+                        <button
+                            data-testid="aangifte-ontgrendel-huidig"
+                            onClick={() => ontgrendel(huidigVastgezet.id)}
+                            disabled={locking}
+                            className="btn btn-ghost"
+                            style={{ minHeight: 40, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: locking ? 0.6 : 1 }}
+                        >
+                            <Unlock size={14} /> Ontgrendelen
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>Kwartaal vastzetten</div>
+                            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                {errorCount > 0
+                                    ? `Los eerst de ${errorCount} fout${errorCount > 1 ? 'en' : ''} bij "Klopt het?" op — dan kun je vastzetten.`
+                                    : 'Bevriest de cijfers van dit kwartaal als momentopname, zodat je aangifte terugvindbaar blijft en niet meer verandert.'}
+                            </div>
+                        </div>
+                        <button
+                            data-testid="aangifte-vastzetten-btn"
+                            onClick={vastzetten}
+                            disabled={locking || errorCount > 0}
+                            className="btn btn-brand"
+                            style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', gap: 6, opacity: (locking || errorCount > 0) ? 0.5 : 1 }}
+                        >
+                            <Lock size={14} /> {locking ? 'Vastzetten…' : 'Vastzetten'}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {/* Historie — vastgezette kwartalen */}
+            {historie.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                <MetallicCard hover={false}>
+                    <div className="panel-head">
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <History size={13} style={{ color: 'var(--brand)' }} /> Vastgezette aangiftes
+                        </h3>
+                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{historie.length}</span>
+                    </div>
+                    <div className="tbl-wrap">
+                        <table className="tbl" data-testid="aangifte-historie">
+                            <tbody>
+                                {historie.map(h => (
+                                    <tr key={h.id}>
+                                        <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>Q{h.kwartaal} {h.jaar}</td>
+                                        <td style={{ color: 'var(--muted)', fontSize: 12 }}>{h.periode_start} — {h.periode_eind}</td>
+                                        <td style={{ color: 'var(--muted)', fontSize: 12 }}>
+                                            {new Date(h.vastgezet_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            {h.meta?.open_issues ? <span style={{ color: 'var(--amber)', marginLeft: 8 }}>⚠ {h.meta.open_issues} openstaand</span> : null}
+                                        </td>
+                                        <td style={{ textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: h.saldo >= 0 ? 'var(--brand)' : 'var(--green)' }}>
+                                            {h.saldo >= 0 ? fmt(h.saldo) : '+' + fmt(Math.abs(h.saldo))}
+                                        </td>
+                                        <td style={{ textAlign: 'right', width: 44 }}>
+                                            <button
+                                                onClick={() => ontgrendel(h.id)}
+                                                disabled={locking}
+                                                title="Ontgrendelen"
+                                                className="btn btn-ghost"
+                                                style={{ padding: '4px 8px', minHeight: 30 }}
+                                            >
+                                                <Unlock size={12} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </MetallicCard>
+                </div>
+            )}
 
             {/* Permanent disclaimer */}
             <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', background: 'rgba(244,114,182,.06)', border: '1px solid rgba(244,114,182,.18)', borderRadius: 10 }}>

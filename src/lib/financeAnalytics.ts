@@ -361,6 +361,15 @@ export function currentQuarterPeriod(today: Date = new Date()): BtwAangiftePerio
     else if (m <= 9) { quarter = 3; }                      /* aug-okt = Q3 */
     else { quarter = 4; }                                  /* nov-dec = Q4 */
 
+    return quarterPeriod(year, quarter, today);
+}
+
+/**
+ * Bouwt de periode-info voor een EXPLICIET jaar+kwartaal (voor historie /
+ * vastgezette aangiftes). currentQuarterPeriod() bepaalt eerst wélk kwartaal
+ * en delegeert hierheen.
+ */
+export function quarterPeriod(year: number, quarter: 1 | 2 | 3 | 4, today: Date = new Date()): BtwAangiftePeriod {
     const startMonth = (quarter - 1) * 3;
     /* UTC builders — voorkomt off-by-one bij local-TZ ↔ ISO conversie. */
     const start_date = new Date(Date.UTC(year, startMonth, 1)).toISOString().slice(0, 10);
