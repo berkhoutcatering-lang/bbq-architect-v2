@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
       .from('facturen')
       .select('id, nummer, datum, client_naam, status, items, rgs_code, locked_at')
       .eq('organization_id', orgId)
+      // Boekhouder-weergave: alleen uitgereikte facturen. Concept = klad (geen
+      // geboekte omzet) en geannuleerd tellen niet mee — sluit aan op de aangifte.
+      .not('status', 'in', '("concept","geannuleerd")')
       .order('datum', { ascending: false })
       .limit(500);
 

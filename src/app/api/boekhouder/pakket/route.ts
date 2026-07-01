@@ -188,11 +188,13 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Haal verkoop-facturen op (status verzonden of betaald)
+    // Haal verkoop-facturen op — alleen uitgereikt (concept/geannuleerd tellen
+    // niet mee als geboekte omzet, sluit aan op de aangifte).
     const { data: facturen } = await supabase
       .from('facturen')
       .select('id, nummer, datum, client_naam, items, rgs_code, status')
       .eq('organization_id', orgId)
+      .not('status', 'in', '("concept","geannuleerd")')
       .gte('datum', start)
       .lt('datum', nextMonth);
 
