@@ -28,15 +28,22 @@ function resolveVersion() {
 
 const sw = readFileSync(SW_PATH, 'utf8');
 const version = resolveVersion().slice(0, 12);
+const pattern = /const CACHE_VERSION = '[^']*';/;
+
+if (!pattern.test(sw)) {
+  console.warn(
+    `[inject-sw-version] CACHE_VERSION pattern niet gevonden in ${SW_PATH} — sw.js niet aangepast`,
+  );
+  process.exit(0);
+}
+
 const next = sw.replace(
-  /const CACHE_VERSION = '[^']*';/,
+  pattern,
   `const CACHE_VERSION = '${version}';`,
 );
 
 if (next === sw) {
-  console.warn(
-    `[inject-sw-version] CACHE_VERSION pattern niet gevonden in ${SW_PATH} — sw.js niet aangepast`,
-  );
+  console.log(`[inject-sw-version] ${SW_PATH} CACHE_VERSION al up-to-date (${version})`);
   process.exit(0);
 }
 

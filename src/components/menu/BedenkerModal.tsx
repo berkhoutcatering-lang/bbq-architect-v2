@@ -132,6 +132,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
     const [prompt, setPrompt] = useState('');
     const [thinking, setThinking] = useState(false);
     const [result, setResult] = useState<BedenkerResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     /* Reset bij open */
     useEffect(() => {
@@ -147,7 +148,6 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
 
     if (!open) return null;
 
-    const [error, setError] = useState<string | null>(null);
     const handleGenerate = async () => {
         if (mode !== 'voorraad' && prompt.trim().length === 0) return;
         setThinking(true);

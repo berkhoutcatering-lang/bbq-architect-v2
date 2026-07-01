@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { AlertTriangle, RotateCw, Home } from 'lucide-react';
 
 interface ErrorProps {
@@ -123,7 +124,7 @@ export default function GlobalError({ error, reset }: ErrorProps) {
           >
             <RotateCw size={14} /> Probeer opnieuw
           </button>
-          <a
+          <Link
             href="/"
             style={{
               padding: '10px 20px',
@@ -140,7 +141,7 @@ export default function GlobalError({ error, reset }: ErrorProps) {
             }}
           >
             <Home size={14} /> Naar dashboard
-          </a>
+          </Link>
         </div>
       </div>
     </div>
