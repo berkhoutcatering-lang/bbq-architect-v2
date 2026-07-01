@@ -23,6 +23,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
+import { computeResultatenrekening } from '@/lib/financeAnalytics';
 import FinanceSummaryStrip from './FinanceSummaryStrip';
 import KostenAnomalieDonut from './sections/KostenAnomalieDonut';
 import MarktPulseWidget from './MarktPulseWidget';
@@ -331,6 +332,12 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
         };
     }, [facturen, events, bonnen, leveranciers]);
 
+    /* Resultatenrekening (echte W&V): gefactureerde omzet excl BTW − kosten excl BTW. */
+    const resultaat = useMemo(
+        () => computeResultatenrekening(facturen as any, bonnen as any, selectedYear),
+        [facturen, bonnen, selectedYear],
+    );
+
     const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
     const currentMonthData = forecast.months.find((m: any) => String(m.monthNum).padStart(2, '0') === currentMonthStr) || { omzet: 0, foodcost: 0, laborHours: 0, laborCost: 0, nettoWinst: 0, margePct: 0, offerteCount: 0 };
     const maxOmzet = Math.max(...forecast.months.map((m: any) => m.omzet), 1000);
@@ -374,7 +381,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
             <PageHeader
                 title="Financiën"
                 description={tab === 'dashboard' ? `Live Profit & Loss Dashboard over ${selectedYear}` : `Boekhouding · ${TAB_LABELS[tab]}`}
-                actions={tab === 'dashboard' ? (
+                actions={(tab === 'dashboard' || tab === 'wv') ? (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         <button onClick={() => setSelectedYear(selectedYear - 1)} className="btn btn-ghost btn-sm" aria-label="Vorig jaar" style={{ minWidth: 44 }}><ChevronLeft size={14} /></button>
                         <span style={{ fontWeight: 700, fontSize: 14, fontVariantNumeric: 'tabular-nums', minWidth: 48, textAlign: 'center' }}>{selectedYear}</span>
@@ -531,6 +538,50 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
             {/* ── WINST & VERLIES: realisatie uit facturen ── */}
             {tab === 'wv' && (
                 <PageSection>
+                    {/* Resultatenrekening — omzet minus kosten = wat je écht overhoudt */}
+                    <MetallicCard hover={false}>
+                        <div className="panel-head">
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Calculator size={12} style={{ color: 'var(--brand)' }} /> Resultatenrekening {selectedYear}
+                            </h3>
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>excl. BTW</span>
+                        </div>
+                        <div style={{ padding: '4px 18px 18px' }}>
+                            {/* Omzet */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                                <span style={{ fontSize: 14, fontWeight: 600 }}>Omzet <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {resultaat.omzet_facturen} facturen</span></span>
+                                <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--green)' }}>{fmt(resultaat.omzet)}</span>
+                            </div>
+                            {/* Kosten per categorie */}
+                            {resultaat.kosten_per_categorie.length === 0 ? (
+                                <div style={{ padding: '12px 0', fontSize: 12, color: 'var(--muted)', borderBottom: '1px solid var(--border)' }}>Nog geen kosten geboekt in {selectedYear}.</div>
+                            ) : (
+                                resultaat.kosten_per_categorie.map(c => (
+                                    <div key={c.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0 9px 16px', borderBottom: '1px solid var(--border)' }}>
+                                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{c.label}</span>
+                                        <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums', color: 'var(--red)' }}>−{fmt(c.bedrag)}</span>
+                                    </div>
+                                ))
+                            )}
+                            {/* Totale kosten */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                                <span style={{ fontSize: 14, fontWeight: 600 }}>Totale kosten <span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 12 }}>· {resultaat.kosten_bonnen} bonnen</span></span>
+                                <span style={{ fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'var(--red)' }}>−{fmt(resultaat.kosten_totaal)}</span>
+                            </div>
+                            {/* Resultaat */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0 4px', marginTop: 4 }}>
+                                <span style={{ fontSize: 16, fontWeight: 800 }}>Resultaat</span>
+                                <span style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: resultaat.marge_pct >= 30 ? 'var(--green)' : resultaat.marge_pct >= 0 ? 'var(--brand)' : 'var(--red)' }}>{resultaat.marge_pct.toFixed(1)}% marge</span>
+                                    <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: resultaat.resultaat >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(resultaat.resultaat)}</span>
+                                </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
+                                Omzet = gefactureerd (concept telt niet mee). Kosten = verwerkte inkoopbonnen. Beide excl. BTW — dat is een aparte post die via de BTW-aangifte loopt.
+                            </div>
+                        </div>
+                    </MetallicCard>
+
                     <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
                         <div className="stat-card">
                             <div className="stat-icon" style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)' }}><Euro size={14} /></div>

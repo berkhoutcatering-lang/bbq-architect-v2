@@ -565,3 +565,70 @@ export function computeBoekhoudChecks(
 
     return checks;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Resultatenrekening (Winst & Verlies) — omzet minus kosten = wat je écht
+ * overhoudt. Alle bedragen EXCLUSIEF BTW (BTW is geen omzet/kost, dat is een
+ * doorlopende post naar de Belastingdienst).
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface Resultatenrekening {
+    omzet: number;                 /* excl. BTW, gefactureerd (concept telt niet mee) */
+    kosten_totaal: number;         /* excl. BTW */
+    resultaat: number;             /* omzet - kosten (+ = winst, - = verlies) */
+    marge_pct: number;
+    kosten_per_categorie: Array<{ label: string; bedrag: number }>;
+    omzet_facturen: number;
+    kosten_bonnen: number;
+}
+
+export function computeResultatenrekening(
+    facturen: FactuurMin[],
+    bonnen: Array<BonMin & {
+        netto_bedrag?: number | string | null;
+        btw_laag_bedrag?: number | string | null;
+        btw_hoog_bedrag?: number | string | null;
+        rgs_category_label?: string | null;
+        categorie?: string | null;
+    }>,
+    year: number,
+): Resultatenrekening {
+    const y = String(year);
+
+    /* Omzet excl. BTW uit gefactureerde omzet (niet-concept). prijs is excl. BTW. */
+    let omzet = 0;
+    let omzet_facturen = 0;
+    for (const f of facturen) {
+        if (!f.datum || !f.datum.startsWith(y)) continue;
+        if (f.status === 'concept' || f.status === 'geannuleerd') continue;
+        let heeftRegel = false;
+        for (const it of f.items || []) {
+            omzet += (Number(it.qty) || 0) * (Number(it.prijs) || 0);
+            heeftRegel = true;
+        }
+        if (heeftRegel) omzet_facturen++;
+    }
+
+    /* Kosten excl. BTW uit bonnen, gegroepeerd op RGS-categorie. */
+    const catMap = new Map<string, number>();
+    let kosten_bonnen = 0;
+    for (const b of bonnen) {
+        if (!b.datum || !b.datum.startsWith(y)) continue;
+        const netto = b.netto_bedrag != null && b.netto_bedrag !== ''
+            ? Number(b.netto_bedrag)
+            : (Number(b.totaal_bedrag) || 0) - (Number(b.btw_laag_bedrag) || 0) - (Number(b.btw_hoog_bedrag) || 0);
+        const label = b.rgs_category_label || b.categorie || 'Overige kosten';
+        catMap.set(label, (catMap.get(label) || 0) + netto);
+        kosten_bonnen++;
+    }
+    const kosten_per_categorie = [...catMap.entries()]
+        .map(([label, bedrag]) => ({ label, bedrag: Math.round(bedrag * 100) / 100 }))
+        .sort((a, b) => b.bedrag - a.bedrag);
+    const kosten_totaal = Math.round(kosten_per_categorie.reduce((s, c) => s + c.bedrag, 0) * 100) / 100;
+
+    omzet = Math.round(omzet * 100) / 100;
+    const resultaat = Math.round((omzet - kosten_totaal) * 100) / 100;
+    const marge_pct = omzet > 0 ? Math.round((resultaat / omzet) * 1000) / 10 : 0;
+
+    return { omzet, kosten_totaal, resultaat, marge_pct, kosten_per_categorie, omzet_facturen, kosten_bonnen };
+}

@@ -6,6 +6,7 @@ import {
     currentQuarterPeriod,
     computeBtwAangifte,
     computeBoekhoudChecks,
+    computeResultatenrekening,
 } from './financeAnalytics';
 
 const TODAY = new Date('2026-05-27T12:00:00Z');
@@ -231,5 +232,44 @@ describe('computeBoekhoudChecks', () => {
             period,
         );
         expect(checks.every(c => c.severity === 'ok')).toBe(true);
+    });
+});
+
+describe('computeResultatenrekening', () => {
+    it('omzet excl BTW - kosten = resultaat, met marge', () => {
+        const r = computeResultatenrekening(
+            [
+                { status: 'betaald', datum: '2026-04-13', items: [{ qty: 10, prijs: 100, btw: 9 }] }, // 1000 omzet
+                { status: 'concept', datum: '2026-05-01', items: [{ qty: 5, prijs: 100, btw: 9 }] },  // telt NIET (concept)
+            ],
+            [
+                { datum: '2026-04-02', netto_bedrag: 300, rgs_category_label: 'Inkoop vlees' },
+                { datum: '2026-04-20', netto_bedrag: 100, rgs_category_label: 'Brandstof' },
+            ],
+            2026,
+        );
+        expect(r.omzet).toBe(1000);
+        expect(r.kosten_totaal).toBe(400);
+        expect(r.resultaat).toBe(600);
+        expect(r.marge_pct).toBe(60);
+        expect(r.kosten_per_categorie[0]).toEqual({ label: 'Inkoop vlees', bedrag: 300 });
+    });
+
+    it('netto uit totaal-btw als netto_bedrag ontbreekt', () => {
+        const r = computeResultatenrekening(
+            [],
+            [{ datum: '2026-04-02', totaal_bedrag: 121, btw_hoog_bedrag: 21, categorie: 'Overig' }],
+            2026,
+        );
+        expect(r.kosten_totaal).toBe(100);
+    });
+
+    it('filtert op jaar', () => {
+        const r = computeResultatenrekening(
+            [{ status: 'betaald', datum: '2025-12-31', items: [{ qty: 1, prijs: 500, btw: 9 }] }],
+            [],
+            2026,
+        );
+        expect(r.omzet).toBe(0);
     });
 });
