@@ -5,10 +5,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus, CalendarCheck,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 import BonAddSheet from './_components/BonAddSheet';
+import AfsluitenTab from './_components/AfsluitenTab';
 import { useToast } from '@/components/Toast';
 
 /**
@@ -23,7 +24,7 @@ import { useToast } from '@/components/Toast';
  *   4. Twijfel         — filtered queue van flagged items
  */
 
-type Tab = 'stapel' | 'verkoop' | 'pakket' | 'twijfel' | 'archief';
+type Tab = 'stapel' | 'verkoop' | 'pakket' | 'afsluiten' | 'twijfel' | 'archief';
 type StatusFilter = 'alle' | 'pending' | 'auto' | 'twijfel';
 
 interface Row {
@@ -286,6 +287,9 @@ export default function BoekhouderPage() {
         <button role="tab" aria-selected={tab === 'pakket'} className={'bh-tab' + (tab === 'pakket' ? ' bh-tab--active' : '')} onClick={() => setTab('pakket')}>
           <FileText size={14} /> Boekhouder-pakket
         </button>
+        <button role="tab" aria-selected={tab === 'afsluiten'} className={'bh-tab' + (tab === 'afsluiten' ? ' bh-tab--active' : '')} onClick={() => setTab('afsluiten')}>
+          <CalendarCheck size={14} /> Afsluiten & aangifte
+        </button>
         <button role="tab" aria-selected={tab === 'twijfel'} className={'bh-tab' + (tab === 'twijfel' ? ' bh-tab--active' : '')} onClick={() => setTab('twijfel')}>
           <AlertCircle size={14} /> Twijfel <span className="bh-tab__count">{twijfelRows.length}</span>
         </button>
@@ -297,6 +301,8 @@ export default function BoekhouderPage() {
       {/* TAB CONTENT */}
       {tab === 'archief' ? (
         <ArchiefTab />
+      ) : tab === 'afsluiten' ? (
+        <AfsluitenTab />
       ) : tab === 'verkoop' ? (
         <VerkoopTab month={month} rangeMode={rangeMode} />
       ) : tab === 'pakket' ? (
