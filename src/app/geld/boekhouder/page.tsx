@@ -298,7 +298,7 @@ export default function BoekhouderPage() {
       {tab === 'archief' ? (
         <ArchiefTab />
       ) : tab === 'verkoop' ? (
-        <VerkoopTab month={month} />
+        <VerkoopTab month={month} rangeMode={rangeMode} />
       ) : tab === 'pakket' ? (
         <PakketTab month={month} counts={counts} rows={rows} />
       ) : (
@@ -987,7 +987,7 @@ interface VerkoopRow {
   locked_at: string | null;
 }
 
-function VerkoopTab({ month }: { month: string }) {
+function VerkoopTab({ month, rangeMode }: { month: string; rangeMode: 'last3' | 'month' }) {
   const [rows, setRows] = useState<VerkoopRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [salesCodes, setSalesCodes] = useState<Array<{ code: string; label: string }>>([]);
@@ -995,14 +995,17 @@ function VerkoopTab({ month }: { month: string }) {
   const fetchData = useCallback(async function () {
     setLoading(true);
     try {
-      const r = await fetch(`/api/boekhouder/facturen?month=${month}`, { credentials: 'include' });
+      /* 'Maand' → precieze maand; anders (overzicht) → alle facturen zodat een
+         betaalde factuur van een eerdere maand altijd zichtbaar blijft. */
+      const scope = rangeMode === 'month' ? `month=${month}` : 'range=all';
+      const r = await fetch(`/api/boekhouder/facturen?${scope}`, { credentials: 'include' });
       if (r.ok) {
         const j = await r.json();
         setRows(j.rows || []);
         setSalesCodes(j.sales_codes || []);
       }
     } finally { setLoading(false); }
-  }, [month]);
+  }, [month, rangeMode]);
 
   useEffect(function () { fetchData(); }, [fetchData]);
 
@@ -1027,7 +1030,7 @@ function VerkoopTab({ month }: { month: string }) {
   }, [rows]);
 
   if (loading) return <div className="bh-empty">Verkoop-facturen laden…</div>;
-  if (rows.length === 0) return <div className="bh-empty">Geen verkoop-facturen voor {month}.</div>;
+  if (rows.length === 0) return <div className="bh-empty">{rangeMode === 'month' ? `Geen verkoop-facturen voor ${month}.` : 'Nog geen verkoop-facturen.'}</div>;
 
   return (
     <>

@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
 
     const monthParam = req.nextUrl.searchParams.get('month');
+    const rangeParam = req.nextUrl.searchParams.get('range'); // 'all' | 'last3'
 
     let query = supabase
       .from('facturen')
@@ -39,6 +40,12 @@ export async function GET(req: NextRequest) {
       .order('datum', { ascending: false })
       .limit(500);
 
+    /* Scope-keuze:
+       - range=all (default overzicht) → geen datumfilter, alle facturen zichtbaar.
+         Voorkomt dat een betaalde factuur van 2 maanden terug "verdwijnt" zodra
+         je een nieuwe maand ingaat — dat is precies waar Sam op vastliep.
+       - month=YYYY-MM → precieze maand voor het boekhouder-pakket (BTW-aangifte).
+       - range=last3 → laatste 3 maanden inclusief huidige. */
     if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
       const [yyyy, mm] = monthParam.split('-');
       const start = `${yyyy}-${mm}-01`;
@@ -46,7 +53,13 @@ export async function GET(req: NextRequest) {
         ? `${Number(yyyy) + 1}-01-01`
         : `${yyyy}-${String(Number(mm) + 1).padStart(2, '0')}-01`;
       query = query.gte('datum', start).lt('datum', nextMonth);
+    } else if (rangeParam === 'last3') {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`;
+      query = query.gte('datum', startStr);
     }
+    // range=all of niks → geen datumfilter (toon alles)
 
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
