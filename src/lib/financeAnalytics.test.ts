@@ -7,6 +7,7 @@ import {
     computeBtwAangifte,
     computeBoekhoudChecks,
     computeResultatenrekening,
+    computeBalans,
 } from './financeAnalytics';
 
 const TODAY = new Date('2026-05-27T12:00:00Z');
@@ -271,5 +272,42 @@ describe('computeResultatenrekening', () => {
             2026,
         );
         expect(r.omzet).toBe(0);
+    });
+});
+
+describe('computeBalans', () => {
+    it('debiteuren = open verstuurde facturen incl BTW', () => {
+        const b = computeBalans(
+            [
+                { status: 'verzonden', datum: '2026-04-13', items: [{ qty: 10, prijs: 100, btw: 9 }] }, // 1090 incl
+                { status: 'betaald', datum: '2026-04-14', items: [{ qty: 10, prijs: 100, btw: 9 }] },   // betaald → geen debiteur
+                { status: 'concept', datum: '2026-04-15', items: [{ qty: 10, prijs: 100, btw: 9 }] },   // concept → niet
+            ],
+            [],
+            2026,
+        );
+        expect(b.debiteuren).toBe(1090);
+        expect(b.debiteuren_count).toBe(1);
+    });
+
+    it('BTW-vordering als voorbelasting groter is dan verschuldigd', () => {
+        const b = computeBalans(
+            [{ status: 'betaald', datum: '2026-04-13', items: [{ qty: 1, prijs: 100, btw: 9 }] }], // verschuldigd 9
+            [{ datum: '2026-04-02', btw_hoog_bedrag: 100 }],                                          // voorbelasting 100
+            2026,
+        );
+        expect(b.btw_vordering).toBe(91);
+        expect(b.btw_schuld).toBe(0);
+    });
+
+    it('netto = debiteuren + btw_vordering - schuld', () => {
+        const b = computeBalans(
+            [{ status: 'verzonden', datum: '2026-04-13', items: [{ qty: 1, prijs: 1000, btw: 21 }] }], // debiteur 1210, verschuldigd 210
+            [],
+            2026,
+        );
+        expect(b.debiteuren).toBe(1210);
+        expect(b.btw_schuld).toBe(210);
+        expect(b.netto).toBe(1000);
     });
 });

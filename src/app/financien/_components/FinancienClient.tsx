@@ -23,7 +23,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import TransportBlock from '@/components/TransportBlock';
 import type { Offerte, Gerecht, InventoryItem, TimeLog, Factuur, Event as DbEvent, Bon } from '@/types';
 import { calcDishCostPP } from '@/lib/costCalculations';
-import { computeResultatenrekening } from '@/lib/financeAnalytics';
+import { computeResultatenrekening, computeBalans } from '@/lib/financeAnalytics';
 import FinanceSummaryStrip from './FinanceSummaryStrip';
 import KostenAnomalieDonut from './sections/KostenAnomalieDonut';
 import MarktPulseWidget from './MarktPulseWidget';
@@ -339,6 +339,10 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
         () => computeResultatenrekening(facturen as any, bonnen as any, selectedYear),
         [facturen, bonnen, selectedYear],
     );
+    const balans = useMemo(
+        () => computeBalans(facturen as any, bonnen as any, selectedYear),
+        [facturen, bonnen, selectedYear],
+    );
 
     const currentMonthStr = String(new Date().getMonth() + 1).padStart(2, '0');
     const currentMonthData = forecast.months.find((m: any) => String(m.monthNum).padStart(2, '0') === currentMonthStr) || { omzet: 0, foodcost: 0, laborHours: 0, laborCost: 0, nettoWinst: 0, margePct: 0, offerteCount: 0 };
@@ -583,6 +587,55 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                             </div>
                         </div>
                     </MetallicCard>
+
+                    {/* Balans / vermogenspositie — wat heb je nog tegoed vs te betalen */}
+                    <div style={{ marginTop: 16 }}>
+                        <MetallicCard hover={false}>
+                            <div className="panel-head">
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <Coins size={12} style={{ color: 'var(--brand)' }} /> Vermogenspositie {selectedYear}
+                                </h3>
+                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>momentopname</span>
+                            </div>
+                            <div style={{ padding: '4px 18px 18px', display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 24 }}>
+                                {/* Bezittingen */}
+                                <div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '.03em', paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>Nog te ontvangen</div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>Debiteuren <span style={{ fontSize: 11 }}>· {balans.debiteuren_count} open facturen</span></span>
+                                        <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{fmt(balans.debiteuren)}</span>
+                                    </div>
+                                    {balans.btw_vordering > 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                            <span style={{ fontSize: 13, color: 'var(--muted)' }}>BTW terug te vorderen</span>
+                                            <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{fmt(balans.btw_vordering)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {/* Schulden */}
+                                <div>
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)', textTransform: 'uppercase', letterSpacing: '.03em', paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>Nog te betalen</div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                        <span style={{ fontSize: 13, color: 'var(--muted)' }}>Crediteuren</span>
+                                        <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{fmt(balans.crediteuren)}</span>
+                                    </div>
+                                    {balans.btw_schuld > 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                                            <span style={{ fontSize: 13, color: 'var(--muted)' }}>BTW af te dragen</span>
+                                            <span style={{ fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>{fmt(balans.btw_schuld)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--border)', background: 'rgba(255,191,0,.03)' }}>
+                                <span style={{ fontSize: 14, fontWeight: 800 }}>Netto positie</span>
+                                <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: balans.netto >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(balans.netto)}</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 18px 16px', lineHeight: 1.5 }}>
+                                Dit is je werkkapitaal-positie: openstaande facturen + BTW-positie. Een volledige formele balans (met bank, kas en eigen vermogen) hoort bij de jaarafsluiting en vraagt beginbalansen.
+                            </div>
+                        </MetallicCard>
+                    </div>
 
                     <div className="stat-grid mb-24" style={{ marginTop: 16 }}>
                         <div className="stat-card">

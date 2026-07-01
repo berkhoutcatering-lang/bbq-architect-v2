@@ -632,3 +632,53 @@ export function computeResultatenrekening(
 
     return { omzet, kosten_totaal, resultaat, marge_pct, kosten_per_categorie, omzet_facturen, kosten_bonnen };
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Vermogenspositie ("balans light") — wat heb je nog tegoed vs wat moet je
+ * nog betalen, plus je BTW-positie. Momentopname; geen formele balans met
+ * bank/kas/eigen vermogen (dat vereist beginbalansen — jaarafsluiting/boekhouder).
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export interface Balans {
+    debiteuren: number;         /* open facturen incl. BTW (nog te ontvangen) */
+    debiteuren_count: number;
+    crediteuren: number;        /* nog te betalen inkoop (meestal 0 — bonnen zijn kwitanties) */
+    btw_vordering: number;      /* van Belastingdienst terug te vorderen */
+    btw_schuld: number;         /* aan Belastingdienst af te dragen */
+    netto: number;              /* debiteuren + btw_vordering - crediteuren - btw_schuld */
+}
+
+const OPEN_ISSUED = new Set(['verzonden', 'verlopen', 'vervallen']);
+
+export function computeBalans(
+    facturen: FactuurMin[],
+    bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string }>,
+    year: number,
+): Balans {
+    /* Debiteuren = verstuurde-maar-onbetaalde facturen, incl. BTW. */
+    let debiteuren = 0, debiteuren_count = 0;
+    for (const f of facturen) {
+        if (!OPEN_ISSUED.has(f.status || '')) continue;
+        let incl = 0, heeft = false;
+        for (const it of f.items || []) {
+            incl += (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (1 + (Number(it.btw) || 0) / 100);
+            heeft = true;
+        }
+        if (heeft) { debiteuren += incl; debiteuren_count++; }
+    }
+    debiteuren = Math.round(debiteuren * 100) / 100;
+
+    /* BTW-positie over het boekjaar (verschuldigd - voorbelasting). */
+    const yearPeriod: BtwAangiftePeriod = {
+        year, quarter: 1, start_date: `${year}-01-01`, end_date: `${year}-12-31`,
+        deadline: `${year}-12-31`, days_until_deadline: 0, is_open: true,
+    };
+    const btw = computeBtwAangifte(facturen, bonnen, yearPeriod);
+    const btw_schuld = btw.saldo > 0 ? Math.round(btw.saldo * 100) / 100 : 0;
+    const btw_vordering = btw.saldo < 0 ? Math.round(-btw.saldo * 100) / 100 : 0;
+
+    const crediteuren = 0; /* bonnen zijn betaalde kwitanties → geen openstaande schuld */
+    const netto = Math.round((debiteuren + btw_vordering - crediteuren - btw_schuld) * 100) / 100;
+
+    return { debiteuren, debiteuren_count, crediteuren, btw_vordering, btw_schuld, netto };
+}
