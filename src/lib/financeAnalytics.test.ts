@@ -5,6 +5,7 @@ import {
     computeCashflow,
     currentQuarterPeriod,
     computeBtwAangifte,
+    computeBoekhoudChecks,
 } from './financeAnalytics';
 
 const TODAY = new Date('2026-05-27T12:00:00Z');
@@ -160,5 +161,75 @@ describe('computeBtwAangifte', () => {
             period,
         );
         expect(r.saldo).toBe(189); // 210 - 21
+    });
+});
+
+describe('computeBoekhoudChecks', () => {
+    const period = currentQuarterPeriod(new Date('2026-05-27'));
+    const find = (checks: ReturnType<typeof computeBoekhoudChecks>, id: string) =>
+        checks.find(c => c.id === id)!;
+
+    it('flag factuur met 0% BTW én een bedrag (verkeerd-tarief-risico)', () => {
+        const checks = computeBoekhoudChecks(
+            [{ nummer: 'F1', status: 'betaald', datum: '2026-04-13', items: [{ qty: 37, prijs: 42.25, btw: 0 }] }],
+            [], period,
+        );
+        const c = find(checks, 'nul_btw');
+        expect(c.severity).toBe('error');
+        expect(c.count).toBe(1);
+        expect(c.refs).toContain('F1');
+    });
+
+    it('0%-regel zonder bedrag telt NIET als fout', () => {
+        const checks = computeBoekhoudChecks(
+            [{ nummer: 'F1', status: 'concept', datum: '2026-04-13', items: [{ qty: 0, prijs: 0, btw: 0 }] }],
+            [], period,
+        );
+        expect(find(checks, 'nul_btw').severity).toBe('ok');
+    });
+
+    it('flag dubbele factuurnummers (jaarbreed, ook buiten periode)', () => {
+        const checks = computeBoekhoudChecks(
+            [
+                { nummer: 'F2026-004', status: 'concept', datum: '2026-03-05', items: [] },
+                { nummer: 'F2026-004', status: 'concept', datum: '2026-03-05', items: [] },
+            ],
+            [], period,
+        );
+        const c = find(checks, 'dubbele_nummers');
+        expect(c.severity).toBe('error');
+        expect(c.refs).toEqual(['F2026-004']);
+    });
+
+    it('flag concept-facturen in de periode', () => {
+        const checks = computeBoekhoudChecks(
+            [{ nummer: 'F1', status: 'concept', datum: '2026-04-13', items: [{ qty: 1, prijs: 100, btw: 9 }] }],
+            [], period,
+        );
+        expect(find(checks, 'concept_facturen').count).toBe(1);
+    });
+
+    it('flag niet-geclassificeerde bonnen', () => {
+        const checks = computeBoekhoudChecks(
+            [],
+            [
+                { datum: '2026-04-10', btw_laag_bedrag: 9, rgs_code: 'WKprIng', ai_classify_status: 'verified' },
+                { datum: '2026-04-11', btw_hoog_bedrag: 5, ai_classify_status: 'twijfel' },
+                { datum: '2026-04-12', btw_hoog_bedrag: 5, rgs_code: null },
+            ],
+            period,
+        );
+        const c = find(checks, 'bonnen_classificatie');
+        expect(c.severity).toBe('warning');
+        expect(c.count).toBe(2);
+    });
+
+    it('schone boekhouding → alles ok', () => {
+        const checks = computeBoekhoudChecks(
+            [{ nummer: 'F1', status: 'betaald', datum: '2026-04-13', items: [{ qty: 1, prijs: 100, btw: 9 }] }],
+            [{ datum: '2026-04-10', btw_laag_bedrag: 9, rgs_code: 'WKprIng', ai_classify_status: 'verified' }],
+            period,
+        );
+        expect(checks.every(c => c.severity === 'ok')).toBe(true);
     });
 });

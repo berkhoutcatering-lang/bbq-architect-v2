@@ -10,6 +10,7 @@ import { fmt } from '@/lib/utils';
 import {
     currentQuarterPeriod,
     computeBtwAangifte,
+    computeBoekhoudChecks,
     type FactuurMin,
     type BonMin,
     type BtwAangifteRubrieken,
@@ -20,71 +21,17 @@ interface Props {
     bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string; ai_classify_status?: string }>;
 }
 
-interface ChecklistItem {
-    id: string;
-    label: string;
-    detail: string;
-    done: boolean;
-    severity: 'info' | 'warning';
-}
-
 export default function AangifteTab({ facturen, bonnen }: Props) {
     const period = useMemo(() => currentQuarterPeriod(), []);
     const rubrieken = useMemo(() => computeBtwAangifte(facturen, bonnen, period), [facturen, bonnen, period]);
     const [generating, setGenerating] = useState(false);
     const [generated, setGenerated] = useState<BtwAangifteRubrieken | null>(null);
 
-    /* Voorbereiding-checklist */
-    const checklist = useMemo<ChecklistItem[]>(() => {
-        const periodFacturen = facturen.filter(f => f.datum && f.datum >= period.start_date && f.datum <= period.end_date);
-        const periodBonnen = bonnen.filter(b => b.datum && b.datum >= period.start_date && b.datum <= period.end_date);
-
-        const conceptFacturen = periodFacturen.filter(f => f.status === 'concept').length;
-        const twijfelBonnen = periodBonnen.filter(b => b.ai_classify_status === 'twijfel' || b.ai_classify_status === 'pending').length;
-        const kiaBonnen = periodBonnen.filter(b => b.rgs_code === 'WAfsInv').length;
-        const totaalVoorbel = rubrieken.rubriek_5b;
-
-        return [
-            {
-                id: 'bonnen_classified',
-                label: 'Alle bonnen geclassificeerd',
-                detail: twijfelBonnen === 0
-                    ? `${periodBonnen.length} bonnen volledig verwerkt`
-                    : `${twijfelBonnen} bonnen in twijfel-stapel — eerst categoriseren`,
-                done: twijfelBonnen === 0,
-                severity: twijfelBonnen > 5 ? 'warning' : 'info',
-            },
-            {
-                id: 'facturen_sent',
-                label: 'Alle facturen verzonden',
-                detail: conceptFacturen === 0
-                    ? `${periodFacturen.length} facturen verzonden`
-                    : `${conceptFacturen} facturen nog in concept — versturen of annuleren`,
-                done: conceptFacturen === 0,
-                severity: conceptFacturen > 0 ? 'warning' : 'info',
-            },
-            {
-                id: 'voorbel_anomaly',
-                label: 'Voorbelasting check',
-                detail: totaalVoorbel > 50
-                    ? `Voorbelasting ${fmt(totaalVoorbel)} — boekhouder verifieert proportie`
-                    : 'Voorbelasting te laag voor anomalie-check',
-                done: totaalVoorbel > 0,
-                severity: 'info',
-            },
-            {
-                id: 'kia_linked',
-                label: 'KIA-bonnen gekoppeld',
-                detail: kiaBonnen > 0
-                    ? `${kiaBonnen} investerings-bonnen herkend (rgs_code WAfsInv)`
-                    : 'Geen WAfsInv-bonnen in periode — geen KIA-claim',
-                done: true, /* KIA is geen blocker voor BTW-aangifte */
-                severity: 'info',
-            },
-        ];
-    }, [facturen, bonnen, rubrieken, period]);
-
-    const allDone = checklist.every(c => c.done);
+    /* "Klopt het?"-controle — vangt fouten vóór de aangifte de deur uit gaat. */
+    const checks = useMemo(() => computeBoekhoudChecks(facturen, bonnen, period), [facturen, bonnen, period]);
+    const errorCount = checks.filter(c => c.severity === 'error').length;
+    const warnCount = checks.filter(c => c.severity === 'warning').length;
+    const allOk = errorCount === 0 && warnCount === 0;
 
     async function generateConcept() {
         setGenerating(true);
@@ -172,46 +119,60 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                 </div>
             </div>
 
-            {/* Two-column: checklist + rubrieken */}
+            {/* Two-column: "Klopt het?"-controle + rubrieken */}
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.2fr)', gap: 16 }}>
-                {/* Checklist */}
+                {/* Klopt het?-controle */}
                 <MetallicCard hover={false}>
                     <div className="panel-head">
-                        <h3>Voorbereiding</h3>
-                        <span style={{ fontSize: 12, color: allDone ? 'var(--green)' : 'var(--muted)' }}>
-                            {checklist.filter(c => c.done).length}/{checklist.length} klaar
+                        <h3>Klopt het?</h3>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: errorCount ? 'var(--red)' : warnCount ? 'var(--amber)' : 'var(--green)' }}>
+                            {allOk ? 'Alles in orde' : errorCount ? `${errorCount} te fixen` : `${warnCount} om te checken`}
                         </span>
                     </div>
                     <div style={{ padding: 4 }}>
-                        {checklist.map(item => (
-                            <div
-                                key={item.id}
-                                data-testid={`aangifte-checklist-${item.id}`}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'flex-start',
-                                    gap: 12,
-                                    padding: '12px 16px',
-                                    borderBottom: '1px solid var(--border)',
-                                }}
-                            >
-                                {item.done
-                                    ? <CheckCircle2 size={18} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} />
-                                    : <Circle size={18} color={item.severity === 'warning' ? 'var(--amber)' : 'var(--muted-weak, #888)'} style={{ flexShrink: 0, marginTop: 1 }} />
-                                }
-                                <div style={{ flex: 1 }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, color: item.done ? 'var(--muted)' : 'var(--text)' }}>
-                                        {item.label}
+                        {checks.map(item => {
+                            const isOk = item.severity === 'ok';
+                            const isError = item.severity === 'error';
+                            const tone = isError ? 'var(--red)' : 'var(--amber)';
+                            return (
+                                <div
+                                    key={item.id}
+                                    data-testid={`aangifte-check-${item.id}`}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 12,
+                                        padding: '12px 16px',
+                                        borderBottom: '1px solid var(--border)',
+                                    }}
+                                >
+                                    {isOk
+                                        ? <CheckCircle2 size={18} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} />
+                                        : <Circle size={18} color={tone} style={{ flexShrink: 0, marginTop: 1 }} />
+                                    }
+                                    <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, color: isOk ? 'var(--muted)' : 'var(--text)' }}>
+                                            {item.label}
+                                        </div>
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                            {item.detail}
+                                        </div>
+                                        {!isOk && item.refs && item.refs.length > 0 && (
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                                                {item.refs.map(ref => (
+                                                    <span key={ref} style={{ fontSize: 10, fontWeight: 600, color: tone, background: 'rgba(130,130,130,.08)', border: `1px solid ${tone}`, padding: '1px 7px', borderRadius: 999, fontVariantNumeric: 'tabular-nums' }}>
+                                                        {ref}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                                        {item.detail}
-                                    </div>
+                                    {isError && (
+                                        <AlertTriangle size={14} color={tone} style={{ flexShrink: 0, marginTop: 2 }} />
+                                    )}
                                 </div>
-                                {item.severity === 'warning' && !item.done && (
-                                    <AlertTriangle size={14} color="var(--amber)" style={{ flexShrink: 0, marginTop: 2 }} />
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </MetallicCard>
 

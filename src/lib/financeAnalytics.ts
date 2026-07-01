@@ -455,3 +455,104 @@ export function computeBtwAangifte(
 
     return r;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * "Klopt het?"-controle — de ingebouwde boekhouder die fouten vangt vóór
+ * de aangifte de deur uit gaat. Pure functie, geen AI: puur data-checks.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type CheckSeverity = 'error' | 'warning' | 'ok';
+
+export interface BoekhoudCheck {
+    id: string;
+    /** 'error' = moet je fixen (kloppendheid/wettelijk); 'warning' = controleer; 'ok' = goed. */
+    severity: CheckSeverity;
+    label: string;
+    detail: string;
+    /** Aantal probleemgevallen (0 = ok). */
+    count: number;
+    /** Verwijzingen (factuurnummers e.d.) zodat de gebruiker weet WÁT hij moet checken. */
+    refs?: string[];
+}
+
+/**
+ * Scant facturen + bonnen op de klassieke boekhoud-fouten die een aangifte
+ * scheeftrekken. Bewust géén tarief-gok: 0%-BTW wordt geflagd, niet
+ * automatisch "gecorrigeerd" (BTW-tarief bepalen is mensenwerk).
+ */
+export function computeBoekhoudChecks(
+    facturen: FactuurMin[],
+    bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string; ai_classify_status?: string }>,
+    period: BtwAangiftePeriod,
+): BoekhoudCheck[] {
+    const inPeriode = (d?: string | null) => !!d && d >= period.start_date && d <= period.end_date;
+    const periodFacturen = facturen.filter(f => inPeriode(f.datum));
+    const periodBonnen = bonnen.filter(b => inPeriode(b.datum));
+    const nr = (f: FactuurMin) => f.nummer || String(f.id ?? '?');
+    const checks: BoekhoudCheck[] = [];
+
+    /* 1. Factuur met 0% BTW terwijl er een bedrag op staat — verkeerd-tarief-risico. */
+    const nulBtw = periodFacturen.filter(f =>
+        (f.items || []).some(it =>
+            (Number(it.btw) || 0) === 0 && (Number(it.qty) || 0) * (Number(it.prijs) || 0) !== 0,
+        ),
+    );
+    checks.push({
+        id: 'nul_btw',
+        severity: nulBtw.length ? 'error' : 'ok',
+        label: 'BTW-tarief op elke factuur',
+        detail: nulBtw.length
+            ? `${nulBtw.length} factuur(en) met 0% BTW terwijl er wél een bedrag op staat — controleer of dit 9% (eten) of 21% (drank/verhuur) moet zijn`
+            : 'Elke factuur met een bedrag heeft een BTW-tarief',
+        count: nulBtw.length,
+        refs: nulBtw.map(nr),
+    });
+
+    /* 2. Dubbele factuurnummers — wettelijk moeten nummers uniek zijn (jaarbreed). */
+    const perNummer = new Map<string, number>();
+    for (const f of facturen) {
+        if (!f.nummer) continue;
+        perNummer.set(f.nummer, (perNummer.get(f.nummer) || 0) + 1);
+    }
+    const dubbel = [...perNummer.entries()].filter(([, n]) => n > 1).map(([k]) => k);
+    checks.push({
+        id: 'dubbele_nummers',
+        severity: dubbel.length ? 'error' : 'ok',
+        label: 'Unieke factuurnummers',
+        detail: dubbel.length
+            ? `${dubbel.length} factuurnummer(s) komen dubbel voor — wettelijk moet elk nummer uniek zijn`
+            : 'Alle factuurnummers zijn uniek',
+        count: dubbel.length,
+        refs: dubbel,
+    });
+
+    /* 3. Concept-facturen in de periode — tellen NIET mee tot ze verzonden zijn. */
+    const concepten = periodFacturen.filter(f => f.status === 'concept');
+    checks.push({
+        id: 'concept_facturen',
+        severity: concepten.length ? 'warning' : 'ok',
+        label: 'Alle facturen verzonden',
+        detail: concepten.length
+            ? `${concepten.length} concept-factuur(en) in dit kwartaal — deze tellen NIET mee in je aangifte tot je ze verstuurt`
+            : 'Geen openstaande concepten in dit kwartaal',
+        count: concepten.length,
+        refs: concepten.map(nr),
+    });
+
+    /* 4. Niet (zeker) geclassificeerde bonnen — kan de voorbelasting beïnvloeden. */
+    const teClassificeren = periodBonnen.filter(b => {
+        const s = b.ai_classify_status;
+        return s === 'pending' || s === 'twijfel' || !b.rgs_code;
+    });
+    checks.push({
+        id: 'bonnen_classificatie',
+        severity: teClassificeren.length ? 'warning' : 'ok',
+        label: 'Alle bonnen geclassificeerd',
+        detail: teClassificeren.length
+            ? `${teClassificeren.length} bon(nen) nog niet (zeker) gecategoriseerd — controleer voordat je de voorbelasting vertrouwt`
+            : `Alle ${periodBonnen.length} bonnen in dit kwartaal zijn verwerkt`,
+        count: teClassificeren.length,
+    });
+
+    return checks;
+}
