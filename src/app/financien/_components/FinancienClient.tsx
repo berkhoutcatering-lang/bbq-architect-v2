@@ -30,24 +30,26 @@ import MarktPulseWidget from './MarktPulseWidget';
 import KiaScenarioModal from '@/components/finance-copilot/KiaScenarioModal';
 import CashflowTab from './tabs/CashflowTab';
 import AangifteTab from './tabs/AangifteTab';
+import BankTab from './tabs/BankTab';
 import AgingPanel from './sections/AgingPanel';
 import ConcentrationBanner from './sections/ConcentrationBanner';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
-type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'aangifte' | 'cashflow' | 'clients';
+type Tab = 'dashboard' | 'wv' | 'uitgaven' | 'btw' | 'aangifte' | 'bank' | 'cashflow' | 'clients';
 const TAB_LABELS: Record<Tab, string> = {
     dashboard: 'Dashboard',
     wv: 'Winst & Verlies',
     uitgaven: 'Uitgaven',
     btw: 'BTW',
     aangifte: 'Aangifte',
+    bank: 'Bank',
     cashflow: 'Cashflow',
     clients: 'Top Klanten',
 };
-const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'cashflow', 'clients'];
+const TAB_ORDER: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'bank', 'cashflow', 'clients'];
 
-const VALID_TABS: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'cashflow', 'clients'];
+const VALID_TABS: Tab[] = ['dashboard', 'wv', 'uitgaven', 'btw', 'aangifte', 'bank', 'cashflow', 'clients'];
 function parseTab(value: string | null): Tab {
     if (value && (VALID_TABS as string[]).includes(value)) return value as Tab;
     return 'dashboard';
@@ -800,6 +802,13 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
             {tab === 'aangifte' && (
                 <PageSection>
                     <AangifteTab facturen={facturen as any} bonnen={bonnen as any} />
+                </PageSection>
+            )}
+
+            {/* ── BANK: afschrift-import + afletteren tegen facturen ── */}
+            {tab === 'bank' && (
+                <PageSection>
+                    <BankTab />
                 </PageSection>
             )}
 
