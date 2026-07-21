@@ -57,6 +57,11 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {orders.map((o) => {
                     const open = o.lines.filter((l) => (l.qty_received ?? 0) < l.qty_ordered).length;
+                    /* Te laat: leverwindow (bijna) verstreken en nog niet ontvangen (fix #5). */
+                    const daysToWindow = o.window_end
+                        ? Math.ceil((new Date(o.window_end + 'T00:00:00').getTime() - Date.now()) / 86400000)
+                        : null;
+                    const overdue = daysToWindow != null && daysToWindow <= 2;
                     return (
                         <div
                             key={o.id}
@@ -66,13 +71,20 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
                                 justifyContent: 'space-between',
                                 gap: 12,
                                 background: 'var(--card)',
-                                border: '1px solid var(--border)',
+                                border: `1px solid ${overdue ? 'rgba(239,68,68,.35)' : 'var(--border)'}`,
                                 borderRadius: 12,
                                 padding: '12px 16px',
                             }}
                         >
                             <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, fontSize: 14 }}>{o.leverancier_naam}</div>
+                                <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    {o.leverancier_naam}
+                                    {overdue && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.12)', color: 'var(--red, #ef4444)', border: '1px solid rgba(239,68,68,.3)' }}>
+                                            te laat
+                                        </span>
+                                    )}
+                                </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                                     {o.sent_at ? `verstuurd ${fmtDate(o.sent_at)} · ` : ''}
                                     {o.lines.length} regel{o.lines.length === 1 ? '' : 's'}

@@ -65,6 +65,7 @@ export default function DashboardPage() {
   const kl = useSupabase<Klant>('klanten', []);
   const bnn = useSupabase<Bon>('bonnen', []);
   const lev = useSupabase<Leverancier>('leveranciers', []);
+  const cio = useSupabase<{ id: string; status: string; window_end: string | null; leverancier_id: number | null; sent_at: string | null }>('concept_inkoop_orders', []);
   const crs = useSupabase<DbCourse>('courses', []);
   const ealg = useSupabase<DbEventAllergy>('event_allergies', []);
   const ma = useSupabase<MargeAlert>('marge_alerts', []);
@@ -80,6 +81,7 @@ export default function DashboardPage() {
   const klanten: Klant[] = kl.data || [];
   const bonnen: Bon[] = bnn.data || [];
   const leveranciers: Leverancier[] = lev.data || [];
+  const conceptOrders = cio.data || [];
   const courses: DbCourse[] = crs.data || [];
   const eventAllergies: DbEventAllergy[] = ealg.data || [];
   const margeAlerts: MargeAlert[] = (ma.data || []).filter((a) => a.status === 'open');
@@ -530,6 +532,27 @@ export default function DashboardPage() {
       title: `Bestellen voor ${bestelEvents.length} ${bestelEvents.length === 1 ? 'event' : 'events'}`,
       detail: `${first.name || first.client_naam || 'event'} ${dagLabel} (${first.guests || 0} gasten) — je bestellijst staat klaar.`,
       cta: 'Open bestellijst',
+      href: '/inkoop',
+    });
+  }
+
+  /* Besteld maar (nog) niet geleverd (fix #5): orders die verstuurd zijn — status
+     'sent' betekent nog niet volledig ontvangen (markOrderReceived flipt naar
+     'received') — terwijl hun leverwindow al (bijna) verstreken is. Veiligheidsnet:
+     "je verwacht spullen voor een event dat eraan komt, maar het is nog niet binnen." */
+  const overdueOrders = conceptOrders.filter((o) => {
+    if (o.status !== 'sent' || !o.window_end) return false;
+    const daysToWindow = Math.ceil((new Date(o.window_end).getTime() - new Date(today).getTime()) / 86400000);
+    return daysToWindow <= 2;
+  });
+  if (overdueOrders.length > 0) {
+    attentionItems.push({
+      id: 'att-onderweg-laat',
+      severity: 'high',
+      icon: 'alert-triangle',
+      title: `${plural(overdueOrders.length, 'bestelling', 'bestellingen')} nog niet geleverd`,
+      detail: 'Verstuurd, maar nog niet (volledig) ontvangen terwijl het event eraan komt — check bij de leverancier.',
+      cta: 'Naar ontvangst',
       href: '/inkoop',
     });
   }
