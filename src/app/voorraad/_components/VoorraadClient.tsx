@@ -1608,7 +1608,7 @@ function AddItemModal({ onClose, onSave, leveranciers }: { onClose: () => void; 
     const [aiResult, setAiResult] = useState<any>(null);
     const [form, setForm] = useState<any>({
         naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, par_level: 0,
-        unit: 'kg', purchase_price: 0, supplier: '', leverancier_id: null, order_pack_qty: null, tht: '', avg_daily: 0,
+        unit: 'kg', purchase_price: 0, supplier: '', leverancier_id: null, order_pack_qty: null, derving_pct: null, tht: '', avg_daily: 0,
     });
 
     async function aiAssist() {
@@ -1764,6 +1764,11 @@ function AddItemModal({ onClose, onSave, leveranciers }: { onClose: () => void; 
                                     onChange={e => setForm({ ...form, order_pack_qty: e.target.value ? parseFloat(e.target.value) : null })}
                                     placeholder={`bv. 100 — leeg = geen afronding`} style={inputStyle} />
                             </Field>
+                            <Field label="Extra marge / derving (%)">
+                                <input type="number" step="1" min="0" max="100" value={form.derving_pct ?? ''}
+                                    onChange={e => setForm({ ...form, derving_pct: e.target.value ? parseFloat(e.target.value) : null })}
+                                    placeholder={`leeg = standaard 10%`} style={inputStyle} />
+                            </Field>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                 <Field label="THT (optioneel)">
                                     <input type="date" value={form.tht || ''} onChange={e => setForm({ ...form, tht: e.target.value })} style={inputStyle} />
@@ -1878,6 +1883,11 @@ function EditItemView({ editForm, setEditForm, editing, recepten, leveranciers, 
                         <input type="number" step="1" min="0" value={editForm.order_pack_qty ?? ''}
                             onChange={e => setField('order_pack_qty', e.target.value ? parseFloat(e.target.value) : null)}
                             placeholder="bv. 100 — leeg = geen afronding" style={inputStyle} />
+                    </Field>
+                    <Field label="Extra marge / derving (%)">
+                        <input type="number" step="1" min="0" max="100" value={editForm.derving_pct ?? ''}
+                            onChange={e => setField('derving_pct', e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="leeg = standaard 10%" style={inputStyle} />
                     </Field>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <Field label="THT (optioneel)">
