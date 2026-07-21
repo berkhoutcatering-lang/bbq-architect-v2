@@ -13,8 +13,8 @@ import {
     Printer, PieChart, Clock, CheckCircle, HelpCircle,
     ChevronRight, Link as LinkIcon, History, Info,
     ClipboardCheck, Leaf, Fish, Beef, Milk, Flame, CupSoda,
-    ChefHat, CalendarClock, Activity, Store, LineChart, Mail, Copy,
-    Download, Zap, Edit3, ScanLine, Carrot, Croissant, ListChecks,
+    ChefHat, CalendarClock, Activity, Store, LineChart,
+    Zap, Edit3, ScanLine, Carrot, Croissant, ListChecks,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import type { InventoryItem, Recept, StockMovement } from '@/types';
@@ -251,7 +251,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
     const showToast = useToast();
     const showConfirm = useConfirm();
 
-    const [view, setView] = useState<'overzicht' | 'tellen' | 'inkooplijst'>('overzicht');
+    const [view, setView] = useState<'overzicht' | 'tellen'>('overzicht');
     const [filter, setFilter] = useState<string>('Alles');
     const [search, setSearch] = useState('');
     const [scannerOpen, setScannerOpen] = useState(false);
@@ -525,14 +525,6 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         />;
     }
 
-    if (view === 'inkooplijst') {
-        return <InkooplijstView
-            inventory={inventory}
-            onClose={() => setView('overzicht')}
-            onExport={exportPDF}
-        />;
-    }
-
     return (
         <RequireTier feature="voorraad">
             <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
@@ -578,7 +570,6 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                             expiring={expiringSoon}
                             inventory={inventory}
                             onOpenItem={setSelectedId}
-                            onOpenBuyList={() => setView('inkooplijst')}
                             onAdjust={quickAdjust}
                         />
 
@@ -729,7 +720,6 @@ function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
 
     const quickActions = [
         { label: 'Wat is bijna op?', q: 'Welke producten zijn deze week bijna op?' },
-        { label: 'Maak bestellijst', q: 'Genereer een bestellijst per leverancier voor alles onder par-level.' },
         { label: 'Wat bederft eerst?', q: 'Welke producten moet ik als eerste gebruiken op basis van THT?' },
         { label: 'Dure langzaamlopers?', q: 'Welke dure items hebben lage omloopsnelheid?' },
     ];
@@ -816,19 +806,7 @@ function AIAssistantBar({ inventory }: { inventory: InventoryItem[] }) {
 /* ═══════════════════════════════════════════════════════════════════
    ACTION PANEL — 3 cards (under-par, THT, AI bestelvoorstel)
    ═══════════════════════════════════════════════════════════════════ */
-function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList, onAdjust }: { lowStock: InventoryItem[]; expiring: InventoryItem[]; inventory: InventoryItem[]; onOpenItem: (id: number) => void; onOpenBuyList: () => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
-    /* AI bundel-voorstel: groepeer onder-par per leverancier */
-    const bySupplier: Record<string, { id: string; name: string; color: string; items: InventoryItem[]; total: number }> = {};
-    lowStock.forEach(p => {
-        const sup = p.supplier || 'Onbekend';
-        if (!bySupplier[sup]) bySupplier[sup] = { id: sup, name: sup, color: supplierColor(sup), items: [], total: 0 };
-        const need = Math.max(0, Number(p.par_level || p.min_stock || 0) - Number(p.current_stock || 0));
-        bySupplier[sup].items.push(p);
-        bySupplier[sup].total += need * Number(p.purchase_price || 0);
-    });
-    const supplierList = Object.values(bySupplier).sort((a, b) => b.items.length - a.items.length);
-    const topSupplier = supplierList[0];
-
+function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onAdjust }: { lowStock: InventoryItem[]; expiring: InventoryItem[]; inventory: InventoryItem[]; onOpenItem: (id: number) => void; onAdjust: (item: InventoryItem, amount: number) => void }) {
     void inventory;  /* placeholder voor future use */
 
     return (
@@ -937,43 +915,28 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onOpenBuyList,
                 </div>
             </MetalCard>
 
-            {/* Card 3 — AI bestelvoorstel */}
+            {/* Card 3 — Bestellen leeft op /inkoop (één bron van waarheid, event-gedreven) */}
             <MetalCard style={{ position: 'relative', overflow: 'hidden', borderColor: `${GOLD}4D` }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: `${GOLD}10` }}>
                     <div style={{ width: 32, height: 32, borderRadius: 8, background: `${GOLD}26`, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${GOLD}4D` }}>
-                        <Sparkles size={15} style={{ color: GOLD }} />
+                        <ShoppingCart size={15} style={{ color: GOLD }} />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>AI bestelvoorstel</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Gebundeld per leverancier — bespaar leveringen</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Bestellen</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Event-gedreven bestellijst per leverancier</div>
                     </div>
-                    <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 9, fontWeight: 700, letterSpacing: '.1em', background: `${GOLD}26`, color: GOLD, border: `1px solid ${GOLD}4D` }}>KLAAR</span>
                 </div>
                 <div style={{ padding: 14 }}>
-                    {topSupplier ? (
-                        <>
-                            <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 12 }}>
-                                <strong style={{ color: 'var(--text)' }}>{topSupplier.items.length} item(s) bij {topSupplier.name}</strong>. Samen bestellen = één levering i.p.v. meerdere runs.
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
-                                {supplierList.slice(0, 4).map(s => (
-                                    <div key={s.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', gap: 10, alignItems: 'center', padding: '6px 0' }}>
-                                        <div style={{ width: 6, height: 6, borderRadius: 1, background: s.color }} />
-                                        <div style={{ fontSize: 12, fontWeight: 500 }}>{s.name}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.items.length} items</div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(s.total)}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            <BtnPrimary icon={ShoppingCart} right={ArrowUpRight} onClick={onOpenBuyList} style={{ width: '100%', justifyContent: 'center' }}>Open inkooplijst</BtnPrimary>
-                        </>
-                    ) : (
-                        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-                            <CheckCircle size={24} style={{ color: 'var(--green)', marginBottom: 8 }} />
-                            <div>Geen bestelling nodig.</div>
-                        </div>
-                    )}
+                    <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 14 }}>
+                        Je bestellijst wordt automatisch berekend uit je geplande events (gasten × recept) en gebundeld per vaste leverancier — inclusief 10% marge en wat al onderweg is.
+                        {lowStock.length > 0
+                            ? <> <strong style={{ color: 'var(--text)' }}>{lowStock.length} item(s)</strong> staan onder par; die tellen alleen mee als ze in een event vallen.</>
+                            : ' Alles op peil.'}
+                    </div>
+                    <a href="/inkoop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '11px 14px', borderRadius: 8, background: `${GOLD}26`, color: GOLD, fontWeight: 600, fontSize: 13, textDecoration: 'none', border: `1px solid ${GOLD}4D` }}>
+                        <ShoppingCart size={14} /> Open bestellijst <ArrowUpRight size={14} />
+                    </a>
                 </div>
             </MetalCard>
         </div>
@@ -2026,127 +1989,6 @@ function CountMode({ inventory, byCategory, onSetStock, onClose }: { inventory: 
             <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
                 <BtnPrimary icon={CheckCircle} onClick={onClose}>Telling afsluiten ({counted.size})</BtnPrimary>
             </div>
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   INKOOPLIJST VIEW — gebundeld per leverancier
-   ═══════════════════════════════════════════════════════════════════ */
-function InkooplijstView({ inventory, onClose, onExport }: { inventory: InventoryItem[]; onClose: () => void; onExport: () => void }) {
-    const lowStock = inventory.filter(i => ['out', 'low'].includes(stockStatus(i).key));
-    const bySupplier: Record<string, { name: string; color: string; items: { item: InventoryItem; qty: number; lineTotal: number }[]; total: number }> = {};
-    lowStock.forEach(i => {
-        const sup = i.supplier || 'Onbekend';
-        if (!bySupplier[sup]) bySupplier[sup] = { name: sup, color: supplierColor(sup), items: [], total: 0 };
-        const need = Math.max(0, Number(i.par_level || i.min_stock || 0) - Number(i.current_stock || 0));
-        const lineTotal = need * Number(i.purchase_price || 0);
-        bySupplier[sup].items.push({ item: i, qty: need, lineTotal });
-        bySupplier[sup].total += lineTotal;
-    });
-    const supplierList = Object.values(bySupplier);
-    const [active, setActive] = useState<string>(supplierList[0]?.name || '');
-    const grandTotal = supplierList.reduce((s, sup) => s + sup.total, 0);
-
-    const activeSup = supplierList.find(s => s.name === active);
-
-    function copyAsText() {
-        if (!activeSup) return;
-        const text = `Inkooplijst voor ${activeSup.name}\n\n` + activeSup.items.map(it => `- ${it.item.naam}: ${it.qty} ${it.item.unit} (${fmt(it.lineTotal)})`).join('\n') + `\n\nTotaal: ${fmt(activeSup.total)}`;
-        navigator.clipboard.writeText(text);
-    }
-
-    return (
-        <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-                <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', minHeight: 44, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, touchAction: 'manipulation' }}>
-                    <ArrowLeft size={14} /> Terug
-                </button>
-                <div>
-                    <Eyebrow style={{ color: GOLD }}>Inkooplijst · AI gebundeld</Eyebrow>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>
-                        {lowStock.length} items bij {supplierList.length} leveranciers
-                    </h1>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Totaal: <strong style={{ color: GOLD }}>{fmt(grandTotal)}</strong></div>
-                </div>
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                    <BtnGhost icon={Printer} onClick={onExport}>PDF</BtnGhost>
-                </div>
-            </div>
-
-            {supplierList.length === 0 ? (
-                <MetalCard style={{ padding: 40, textAlign: 'center', color: 'var(--muted)' }}>
-                    <CheckCircle size={32} style={{ color: 'var(--green)', marginBottom: 10 }} />
-                    <div>Geen items om bij te bestellen — alles is op peil.</div>
-                </MetalCard>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16 }}>
-                    <MetalCard>
-                        <div style={{ padding: 8 }}>
-                            {supplierList.map(s => (
-                                <div key={s.name} onClick={() => setActive(s.name)} style={{
-                                    padding: 12, borderRadius: 10, cursor: 'pointer', marginBottom: 4,
-                                    background: active === s.name ? `${s.color}15` : 'transparent',
-                                    border: `1px solid ${active === s.name ? `${s.color}50` : 'transparent'}`,
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                        <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
-                                        <div style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>{s.name}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)' }}>
-                                        <span>{s.items.length} item{s.items.length === 1 ? '' : 's'}</span>
-                                        <span style={{ color: GOLD, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(s.total)}</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </MetalCard>
-
-                    <MetalCard>
-                        {activeSup && (
-                            <>
-                                <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ width: 12, height: 12, borderRadius: 3, background: activeSup.color }} />
-                                    <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 400 }}>{activeSup.name}</div>
-                                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                                        <BtnGhost icon={Mail}>Mail bestelling</BtnGhost>
-                                        <BtnGhost icon={Copy} onClick={copyAsText}>Kopieer</BtnGhost>
-                                        <BtnGhost icon={Download} onClick={onExport}>PDF</BtnGhost>
-                                    </div>
-                                </div>
-                                <div className="tbl-wrap">
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                                        <thead>
-                                            <tr style={{ background: 'rgba(130,130,130,.04)' }}>
-                                                {['Product', 'Aantal', 'Prijs', 'Subtotaal'].map(h => (
-                                                    <th key={h} style={{ padding: '10px 14px', textAlign: h === 'Prijs' || h === 'Subtotaal' ? 'right' : 'left', fontSize: 10, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted-light)', fontWeight: 700 }}>{h}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {activeSup.items.map(({ item, qty, lineTotal }) => (
-                                                <tr key={item.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                                                    <td style={{ padding: '10px 14px' }}>
-                                                        <div style={{ fontWeight: 500 }}>{item.naam}</div>
-                                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>nu: {item.current_stock} / par: {item.par_level || item.min_stock} {item.unit}</div>
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', fontVariantNumeric: 'tabular-nums' }}>{qty} {item.unit}</td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.purchase_price || 0)}</td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{fmt(lineTotal)}</td>
-                                                </tr>
-                                            ))}
-                                            <tr>
-                                                <td colSpan={3} style={{ padding: '14px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--muted)' }}>TOTAAL</td>
-                                                <td style={{ padding: '14px 14px', textAlign: 'right', fontWeight: 700, color: GOLD, fontVariantNumeric: 'tabular-nums', fontSize: 14 }}>{fmt(activeSup.total)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </>
-                        )}
-                    </MetalCard>
-                </div>
-            )}
         </div>
     );
 }

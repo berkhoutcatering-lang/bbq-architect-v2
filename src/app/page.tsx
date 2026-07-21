@@ -549,13 +549,16 @@ export default function DashboardPage() {
     });
   }
   if (lowStockItems.length > 0) {
+    /* Voorraad-signaal, GÉÉN tweede bestel-melding: bestellen is event-gedreven
+       en leeft op /inkoop (att-bestellen). Dit is puur "je bent fysiek laag op X"
+       — een inzicht, niet een order-actie. */
     attentionItems.push({
       id: 'att-stock',
-      severity: lowStockItems.length > 3 ? 'high' : 'medium',
+      severity: 'medium',
       icon: 'alert-triangle',
       title: `${plural(lowStockItems.length, 'item', 'items')} onder minimum`,
-      detail: lowStockItems.slice(0, 3).map((i) => i.naam).join(', '),
-      cta: 'Open bestelling',
+      detail: `${lowStockItems.slice(0, 3).map((i) => i.naam).join(', ')} — tellen of bijwerken.`,
+      cta: 'Bekijk voorraad',
       href: '/voorraad?filter=below_min',
     });
   }
