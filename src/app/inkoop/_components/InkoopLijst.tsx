@@ -38,6 +38,8 @@ import {
     Pencil,
     Printer,
     Repeat2,
+    ChevronDown,
+    ChevronRight,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
@@ -480,6 +482,7 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isPending, startTransition] = useTransition();
     const [showAlt, setShowAlt] = useState(false);
+    const [showWhy, setShowWhy] = useState(false);
 
     useEffect(function () { setQtyDraft(item.qty); }, [item.qty]);
 
@@ -675,6 +678,64 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         ↳ {item.events.map(function (e) {
                             return `${shortDate(e.event_date)} · ${e.event_name}`;
                         }).join('  ·  ')}
+                    </div>
+                )}
+                {/* Waarom dit aantal — volledige opbouw zodat een sceptische operator
+                    het kan narekenen (fix #4). Alle data zit al in de regel. */}
+                <button
+                    type="button"
+                    onClick={() => setShowWhy(function (v) { return !v; })}
+                    style={{ marginTop: 6, background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--muted)', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                >
+                    {showWhy ? <ChevronDown size={12} /> : <ChevronRight size={12} />} waarom dit aantal?
+                </button>
+                {showWhy && (
+                    <div style={{ marginTop: 6, padding: '10px 12px', background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11.5, color: 'var(--muted)' }}>
+                        {item.events.map(function (e) {
+                            return (
+                                <div key={e.event_id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}>
+                                    <span>{shortDate(e.event_date)} · {e.event_name}</span>
+                                    <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(e.qty, item.unit)}</span>
+                                </div>
+                            );
+                        })}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                            <span>events samen</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.reserved_qty, item.unit)}</span>
+                        </div>
+                        {item.derving_pct > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}>
+                                <span>+ {item.derving_pct}% marge (derving)</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.target_qty, item.unit)}</span>
+                            </div>
+                        )}
+                        {item.current_stock > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}>
+                                <span>− al op voorraad</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmtQty(item.current_stock, item.unit)}</span>
+                            </div>
+                        )}
+                        {item.in_flight_qty > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}>
+                                <span>− al onderweg</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>−{fmtQty(item.in_flight_qty, item.unit)}</span>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', borderTop: '1px solid var(--border)', marginTop: 4, fontWeight: 600, color: 'var(--text)' }}>
+                            <span>= tekort</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtQty(item.qty_needed, item.unit)}</span>
+                        </div>
+                        {item.pack_label && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0', color: 'var(--brand, #FFBF00)' }}>
+                                <span>→ afgerond op pak</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{item.pack_label}</span>
+                            </div>
+                        )}
+                        {item.override_applied && (
+                            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
+                                Handmatig aangepast — het bestelde aantal wijkt af van deze berekening.
+                            </div>
+                        )}
                     </div>
                 )}
                 {showAlt && otherSuppliers.length > 0 && (
