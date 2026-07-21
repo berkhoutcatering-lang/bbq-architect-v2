@@ -54,6 +54,7 @@ interface CalendarMeta { id: string; label: string; color: string; Icon: IconCom
 const CALENDARS: CalendarMeta[] = [
     { id: 'events', label: 'Events', color: BRAND, Icon: PartyPopper, synced: true, source: 'lokaal' },
     { id: 'prep', label: 'Prep deadlines', color: GOLD, Icon: ClipboardList, synced: true, source: 'lokaal' },
+    { id: 'bestel', label: 'Bestel-momenten', color: '#f59e0b', Icon: Truck, synced: true, source: 'lokaal' },
     { id: 'personal', label: 'Persoonlijk', color: '#888888', Icon: Clock, synced: true, source: 'lokaal' },
 ];
 
@@ -1100,6 +1101,41 @@ function mapPrepTaskToAgendaEvent(p: PrepTask, eventDateMap: Record<number, stri
     );
 }
 
+/* Bestel-moment (Sam): BESTEL_LEAD_DAYS dagen vóór een event met een menu komt
+   er een agenda-kopje "Bestellen: [event]". Afgeleid van de event-datum, dus het
+   verschuift automatisch mee als het event verschuift — geen aparte opslag/sync. */
+const BESTEL_LEAD_DAYS = 8;
+function mapBestelToAgendaEvent(e: DbEvent): AgendaEvent | null {
+    if (!e.date) return null;
+    const raw = e.date as string;
+    const evDate = new Date(raw.length === 10 ? raw + 'T00:00:00' : raw);
+    if (isNaN(evDate.getTime())) return null;
+    const st = String(e.status || '').toLowerCase();
+    if (st === 'geannuleerd' || st === 'cancelled') return null;
+    const m = (e as DbEvent & { menu?: unknown }).menu;
+    const hasMenu = Array.isArray(m)
+        ? m.length > 0
+        : (!!m && typeof m === 'object' && Object.keys(m as object).length > 0);
+    if (!hasMenu) return null;
+    const bestel = new Date(evDate.getTime() - BESTEL_LEAD_DAYS * 86400000);
+    return ev(
+        'bestel_' + e.id,
+        'bestel',
+        bestel.getDate(),
+        9,
+        1,
+        `Bestellen: ${e.name || 'event'}`,
+        {
+            for: 'evt_' + e.id,
+            kind: 'bestel',
+            color: '#f59e0b',
+            guests: e.guests || 0,
+            dbDate: bestel.toISOString().slice(0, 10),
+            notes: `Bestellijst voor ${e.name || 'event'} (${e.guests || 0} gasten) staat klaar — open Inkoop.`,
+        }
+    );
+}
+
 export default function Agenda() {
     const today = new Date();
     const [viewYear, setViewYear] = useState(today.getFullYear());
@@ -1225,10 +1261,22 @@ export default function Agenda() {
             .map(mapPersonalToAgendaEvent);
     }, [personalRows, monthPrefix]);
 
-    /* Alle events in zichtbare maand: events + prep-taken + persoonlijke afspraken. */
+    /* Bestel-momenten: event − lead-tijd, gefilterd op de zichtbare maand. Uit
+       ALLE events (niet alleen deze maand), want een event begin volgende maand
+       heeft z'n bestel-moment nog deze maand. */
+    const monthBestelEvents = useMemo(() => {
+        const list: AgendaEvent[] = [];
+        for (const e of dbEvents) {
+            const mapped = mapBestelToAgendaEvent(e);
+            if (mapped && mapped.dbDate && mapped.dbDate.startsWith(monthPrefix)) list.push(mapped);
+        }
+        return list;
+    }, [dbEvents, monthPrefix]);
+
+    /* Alle events in zichtbare maand: events + prep-taken + persoonlijke afspraken + bestel-momenten. */
     const allEvents: AgendaEvent[] = useMemo(() => {
-        return [...dbAgendaEvents, ...dbPrepEvents, ...monthPersonalEvents];
-    }, [dbAgendaEvents, dbPrepEvents, monthPersonalEvents]);
+        return [...dbAgendaEvents, ...dbPrepEvents, ...monthPersonalEvents, ...monthBestelEvents];
+    }, [dbAgendaEvents, dbPrepEvents, monthPersonalEvents, monthBestelEvents]);
 
     /* Filter alleEvents → visibleEvents via huidige filterState (cals + status + range).
        MonthGrid, CalendarView en counts werken allemaal op deze gefilterde set. */
