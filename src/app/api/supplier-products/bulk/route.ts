@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { packToBase, type PackUnit } from '@/lib/unitPrice';
+import { autoBindPreferredSuppliers } from '@/lib/dal/supplierBinding';
 
 /* Zelfde heuristiek als de componenten-UI: overduidelijke verpakking/materieel
    krijgt category=non_food zodat kostprijs-statistieken zuiver blijven. */
@@ -138,8 +139,28 @@ export async function POST(req: NextRequest) {
         createdComponents = count ?? compRows.length;
     }
 
+    // Auto-koppel de geïmporteerde producten aan bestaande voorraad-items waar het
+    // ondubbelzinnig is (item nog niet gekoppeld + precies 1 kandidaat). Best-effort.
+    let autoBound = 0;
+    let needsChoice: Array<{ inventory_id: number; naam: string; candidates: number }> = [];
+    if (inserted && inserted.length > 0) {
+        try {
+            const bind = await autoBindPreferredSuppliers(
+                supabase,
+                orgId,
+                inserted.map(sp => ({ id: sp.id as number, name: sp.name as string })),
+            );
+            autoBound = bind.auto_bound;
+            needsChoice = bind.needs_choice;
+        } catch (e) {
+            console.warn('[supplier-products/bulk] auto-bind failed (non-fatal):', e);
+        }
+    }
+
     return NextResponse.json({
         supplier_products_inserted: inserted?.length ?? 0,
         components_inserted: createdComponents,
+        auto_bound: autoBound,
+        needs_choice: needsChoice,
     }, { status: 201 });
 }

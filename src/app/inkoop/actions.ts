@@ -22,6 +22,7 @@ import { setOverride as setOverrideDAL } from '@/lib/dal/orderOverrides';
 import {
     getConceptOrderById,
     markOrderSent,
+    markOrderReceived,
     type OrderItemSnapshot,
 } from '@/lib/dal/inkoopOrders';
 import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
@@ -289,6 +290,37 @@ export async function sendOrderToSupplierAction(input: unknown) {
             send_note: parsed.note,
         });
 
+        // Durable orderregels — bron voor in-flight-verrekening + ontvangst-loop.
+        // Best-effort: faalt dit, dan is de order nog steeds verzonden (snapshot in
+        // concept_inkoop_orders.items blijft de fallback).
+        try {
+            await sb.from('inkoop_order_lines').delete()
+                .eq('concept_order_id', order.id)
+                .eq('organization_id', orgId);
+            const orderLines = bucket.items.map(function (it) {
+                return {
+                    organization_id: orgId,
+                    concept_order_id: order.id,
+                    inventory_id: it.inventory_id,
+                    supplier_product_id: it.supplier_product_id ?? null,
+                    naam: it.naam,
+                    qty_needed: it.qty_needed,
+                    qty_ordered: it.qty_ordered,
+                    qty_received: null,
+                    unit: it.unit,
+                    unit_price_eur: it.unit_price_eur,
+                    btw_pct: determineBtwPct(it.categorie),
+                    categorie: it.categorie ?? null,
+                };
+            });
+            if (orderLines.length > 0) {
+                const { error: lineErr } = await sb.from('inkoop_order_lines').insert(orderLines);
+                if (lineErr) console.warn('[inkoop/send] inkoop_order_lines insert failed (non-fatal):', lineErr.message);
+            }
+        } catch (lineErr) {
+            console.warn('[inkoop/send] inkoop_order_lines write failed (non-fatal):', lineErr);
+        }
+
         // Audit log — best-effort, niet de hele action laten falen als ie stuk gaat.
         try {
             // record_id voor audit_log is bigint, dus we hashen de uuid naar een
@@ -331,6 +363,47 @@ export async function sendOrderToSupplierAction(input: unknown) {
     } catch (e) {
         console.error('[inkoop/sendOrderToSupplier]', e);
         return { ok: false as const, error: e instanceof Error ? e.message : 'Versturen mislukt' };
+    }
+}
+
+// ── receiveOrderAction ────────────────────────────────────────────────
+// Ontvangst boeken: per regel het werkelijk geleverde aantal → voorraad omhoog
+// via de atomaire RPC (stock_movements type='receive'); de order gaat op
+// 'received' zodra alle regels vol binnen zijn. Sluit de ontvangst-loop.
+const receiveSchema = z.object({
+    concept_order_id: z.string().uuid(),
+    lines: z.array(z.object({
+        line_id: z.string().uuid(),
+        qty_received: z.number().nonnegative(),
+        unit_price_eur: z.number().nonnegative().nullable().optional(),
+        reason: z.string().max(300).nullable().optional(),
+    })).min(1),
+});
+
+export async function receiveOrderAction(input: unknown) {
+    try {
+        const parsed = receiveSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+
+        const order = await getConceptOrderById(sb, parsed.concept_order_id);
+        if (!order || order.organization_id !== orgId) throw new Error('Geen toegang tot deze order');
+        if (order.status !== 'sent') throw new Error('Alleen verzonden orders kunnen ontvangen worden');
+
+        await markOrderReceived(sb, orgId, order.id, parsed.lines.map(function (l) {
+            return {
+                line_id: l.line_id,
+                qty_received: l.qty_received,
+                unit_price_eur: l.unit_price_eur ?? null,
+                reason: l.reason ?? null,
+            };
+        }));
+
+        revalidatePath('/inkoop');
+        revalidatePath('/voorraad');
+        return { ok: true as const };
+    } catch (e) {
+        console.error('[inkoop/receiveOrder]', e);
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Ontvangen mislukt' };
     }
 }
 

@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
 
 const ALLOWED_HACCP_TYPES = new Set([
     'kerntemp', 'koeltemp', 'tijd_uit_koeling',
@@ -199,6 +200,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             const { error: insErr } = await supabase.from('component_haccp_points').insert(rows);
             if (insErr) warnings.push(`haccp insert: ${insErr.message}`);
         }
+    }
+
+    // Genormaliseerde ingrediënt-koppeling bijwerken zodra de ingredients-JSONB
+    // is meegestuurd. Best-effort — nooit fataal voor de component-update.
+    if (b.ingredients !== undefined) {
+        const sync = await syncComponentIngredients(supabase, auth.orgId!, componentId, b.ingredients);
+        if (sync.error) warnings.push(`ingrediënt-koppeling: ${sync.error}`);
     }
 
     /* GP-4 cascading recompute — uitvoeren ná component-update zodat we

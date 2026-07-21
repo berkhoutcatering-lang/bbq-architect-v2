@@ -6,23 +6,31 @@
  * op basis van bevestigde events × menu × gerecht-recepten". Dit is de
  * data-laag voor de EventSpine en het bestelvoorstel.
  *
- * Pillar #1 (Event-aware voorraad): elke voorraad-pagina kan zien welke
- * items hoeveel zijn 'gereserveerd' voor welke events.
- * Pillar #2 (BBQ-yields ingebakken): gebruikt `gerechten.ingredient_costs`
- * met `qty_pp` per ingredient (Pulled Pork rauw 0.4 kg/pax, etc.).
+ * Canon (één formule, geen /porties, geen qty_per_guest — geverifieerd: geen
+ * live event draagt qty_per_guest ≠ 1):
+ *     qty_event = qty_per_guest × guests × unitFactor / yield
+ *   waarbij qty_per_guest = ingredient_costs[].qty_pp (primair) of, via het
+ *   component-pad, quantity_used × (ing.quantity / component.base_quantity).
  *
- * Demand wordt server-side berekend — AI bemoeit zich NIET met de getallen,
- * alleen met uitleg / suggesties. Productie-hoeveelheden zijn deterministic.
+ * Demand-buffer (Sam: "× gasten plus altijd 10% derving"):
+ *     reserved_met_derving = reserved × (1 + derving_pct/100)   // per item
+ *     target   = max(reserved_met_derving, par_level)           // par = vloer
+ *     shortfall = max(0, target − current_stock − in_flight)
+ *   in_flight = verzonden-maar-niet-ontvangen orderregels (uit inkoop_order_lines),
+ *   met een guard tegen vergeten/oude 'sent'-orders (P0-1 uit de review).
  *
- * P0-6 (bucket D): wanneer ingredient_costs leeg of ontbreekt, valt de
- * berekening terug op gerecht_components → component_ingredients → inventory.
- * P0-7 (bucket D): naam-matching tussen ingredient en inventory probeert
- * achtereenvolgens (1) exacte norm-match, (2) org_product_aliases per tenant,
- * (3) meat_taxonomy.aliassen als laatste vangnet. Bij geen match: het
- * ingredient wordt geregistreerd in unmatched_ingredients zodat de banner
- * "Onbekende leverancier" 'm kan tonen.
+ * Math is server-side & deterministic — AI bemoeit zich NIET met de getallen.
+ * Naam-matching + derving-constante komen uit de gedeelde inventoryMatch-module.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import {
+  DEFAULT_DERVING_PCT,
+  norm,
+  unitFactor,
+  buildMatchContext,
+  resolveInventory,
+  type MatchContext,
+} from './inventoryMatch';
 
 export interface DemandPerEvent {
   event_id: number;
@@ -41,6 +49,10 @@ export interface InventoryDemandRow {
   min_stock: number;
   par_level: number | null;
   reserved_qty: number;
+  // NIEUW: buffer + onderweg + doel maken de shortfall-berekening transparant.
+  derving_pct: number;
+  in_flight_qty: number;
+  target_qty: number;
   shortfall: number;
   events: DemandPerEvent[];
   leverancier_id: number | null;
@@ -67,20 +79,6 @@ export interface InventoryDemandSummary {
   };
 }
 
-/** Normalize naam voor matching tussen inventory en ingredient_costs. */
-function norm(s: string | undefined | null): string {
-  return String(s || '').replace(/^\s*\[seed\]\s*/i, '').toLowerCase().trim();
-}
-
-/** Unit-factor om ingredient-eenheid (g, ml) te converteren naar inventory-eenheid (kg, L). */
-function unitFactor(ingredientUnit: string | undefined, inventoryUnit: string | undefined): number {
-  const iu = (ingredientUnit || '').toLowerCase();
-  const inv = (inventoryUnit || '').toLowerCase();
-  if (iu === 'g' && inv === 'kg') return 0.001;
-  if (iu === 'ml' && inv === 'l') return 0.001;
-  return 1;
-}
-
 /** Parse de menu-veld van een event naar een vlakke lijst gerecht-namen.
  *  events.menu kan zijn: id-array, menu_selectie-object (gang → string[]),
  *  of een JSON-string. Geeft altijd een gestripte naam-lijst terug. */
@@ -94,7 +92,6 @@ function extractDishNames(menuField: unknown, gerechtenById: Map<string | number
     return m.map(function (x) {
       if (typeof x === 'number') return gerechtenById.get(x) || '';
       if (typeof x === 'string') {
-        // String kan óók een UUID zijn (na unify_gerechten_componenten).
         return gerechtenById.get(x) || x;
       }
       if (x && typeof x === 'object') {
@@ -135,41 +132,6 @@ function parseEventDate(d: string | null | undefined): Date | null {
 
 const DEMAND_STATUSES = ['goedgekeurd', 'in_voorbereiding', 'bevestigd', 'confirmed'];
 
-/** Resolver-context met de drie matching-paden uit P0-7.
- *  Wordt eenmalig opgebouwd per demand-call (cheap als organisatie klein is). */
-interface MatchContext {
-  inventoryByNorm: Map<string, any>;
-  aliasToInventoryId: Map<string, number>;
-  meatTaxonomyAliases: Array<{ alias: string; inventory_id: number }>;
-}
-
-function resolveInventory(rawName: string, ctx: MatchContext): any | null {
-  const n = norm(rawName);
-  if (!n) return null;
-  // 1. Exacte norm-match op inventory.naam.
-  const direct = ctx.inventoryByNorm.get(n);
-  if (direct) return direct;
-  // 2. Per-tenant alias (org_product_aliases).
-  const aliasId = ctx.aliasToInventoryId.get(n);
-  if (aliasId != null) {
-    // master_product_id in alias-tabel is soft-FK naar inventory.id;
-    // val toch nog terug op direct als deze id niet bestaat.
-    for (const inv of ctx.inventoryByNorm.values()) {
-      if (inv.id === aliasId) return inv;
-    }
-  }
-  // 3. meat_taxonomy.aliassen — als de raw_name een synoniem is van een cut,
-  //    en daar één inventory-item van bestaat dat erbij hoort, gebruik die.
-  for (const entry of ctx.meatTaxonomyAliases) {
-    if (entry.alias === n) {
-      for (const inv of ctx.inventoryByNorm.values()) {
-        if (inv.id === entry.inventory_id) return inv;
-      }
-    }
-  }
-  return null;
-}
-
 export async function getInventoryWithDemand(
   supabase: SupabaseClient,
   orgId: string,
@@ -181,7 +143,7 @@ export async function getInventoryWithDemand(
   // 1. Inventory voor deze org.
   const { data: inventoryRaw } = await supabase
     .from('inventory')
-    .select('id, naam, categorie, unit, current_stock, min_stock, par_level, leverancier_id, yield_factor')
+    .select('id, naam, categorie, unit, current_stock, min_stock, par_level, leverancier_id, yield_factor, derving_pct')
     .eq('organization_id', orgId);
   const inventory = inventoryRaw || [];
 
@@ -211,47 +173,18 @@ export async function getInventoryWithDemand(
     gerechtenByNorm.set(norm(g.naam), g);
   });
 
-  const inventoryByNorm = new Map<string, any>();
-  inventory.forEach(function (inv: any) { inventoryByNorm.set(norm(inv.naam), inv); });
-
-  // 4. Alias-tabellen voor P0-7 resolver.
+  // 4. Gedeelde naam-resolver (exact → org_product_aliases → meat_taxonomy).
   const { data: aliasRows } = await supabase
     .from('org_product_aliases')
     .select('alias_normalized, master_product_id')
     .eq('organization_id', orgId);
-  const aliasToInventoryId = new Map<string, number>();
-  (aliasRows || []).forEach(function (a: any) {
-    if (a.alias_normalized && typeof a.master_product_id === 'number') {
-      aliasToInventoryId.set(String(a.alias_normalized).toLowerCase().trim(), a.master_product_id);
-    }
-  });
-
-  // meat_taxonomy is global (geen org_id) — koppel via inventory.cut_taxonomy_id
-  // óf via inventory.naam staat in aliases-array.
   const { data: taxonomyRows } = await supabase
     .from('meat_taxonomy')
     .select('id, aliassen');
-  const meatTaxonomyAliases: Array<{ alias: string; inventory_id: number }> = [];
-  const taxonomyAliasesByTaxId = new Map<number, string[]>();
-  (taxonomyRows || []).forEach(function (t: any) {
-    const arr = Array.isArray(t.aliassen) ? t.aliassen.map((a: string) => String(a).toLowerCase().trim()) : [];
-    if (arr.length > 0) taxonomyAliasesByTaxId.set(t.id, arr);
-  });
-  // Voor elk inventory-item: als z'n naam binnen één van de taxonomy-aliassen
-  // valt, koppel die aliassen aan z'n id.
-  inventory.forEach(function (inv: any) {
-    const invName = norm(inv.naam);
-    taxonomyAliasesByTaxId.forEach(function (aliases, _taxId) {
-      if (aliases.includes(invName)) {
-        aliases.forEach(function (al) { meatTaxonomyAliases.push({ alias: al, inventory_id: inv.id }); });
-      }
-    });
-  });
+  const matchCtx: MatchContext = buildMatchContext(inventory, aliasRows, taxonomyRows);
 
-  const matchCtx: MatchContext = { inventoryByNorm, aliasToInventoryId, meatTaxonomyAliases };
-
-  // 5. Voor de fallback (P0-6) verzamelen we welke gerechten leeg/null
-  //    ingredient_costs hebben en laden gerecht_components voor die set.
+  // 5. Fallback-pad (P0-6): gerecht_components → component_ingredients → inventory,
+  //    alleen voor gerechten zonder ingredient_costs.
   const gerechtenZonderIcosts = gerechten.filter(function (g: any) {
     const ic = g.ingredient_costs;
     if (Array.isArray(ic) && ic.length > 0) return false;
@@ -278,7 +211,6 @@ export async function getInventoryWithDemand(
   if (gerechtenZonderIcosts.length > 0) {
     const gerechtIds = gerechtenZonderIcosts.map(function (g: any) { return g.id; }).filter(Boolean);
 
-    // gerecht_components + components in één hit.
     const { data: gcRows } = await supabase
       .from('gerecht_components')
       .select('gerecht_id, component_id, quantity_used, unit, components!inner(id, base_quantity, base_unit)')
@@ -290,7 +222,6 @@ export async function getInventoryWithDemand(
       if (typeof r.component_id === 'number') componentIds.push(r.component_id);
     });
 
-    // component_ingredients voor die componenten.
     let ciRows: any[] = [];
     if (componentIds.length > 0) {
       const { data: ci } = await supabase
@@ -337,7 +268,6 @@ export async function getInventoryWithDemand(
   const demandMap = new Map<number, DemandPerEvent[]>();
   inventory.forEach(function (inv: any) { demandMap.set(inv.id, []); });
 
-  // Bijhouden welke raw-names géén match kregen — voor "Onbekende leverancier" banner.
   const unmatchedAgg = new Map<string, { unit: string | null; qty_total: number; events: Map<number, DemandPerEvent> }>();
 
   function addDemand(invId: number, event: any, qtyForEvent: number, guests: number) {
@@ -405,22 +335,19 @@ export async function getInventoryWithDemand(
         // Fallback (P0-6): gerecht_components → component_ingredients → inventory.
         const compRows = componentsByGerecht.get(String(g.id)) || [];
         compRows.forEach(function (cr) {
-          // qty_pp_in_component_unit = quantity_used (component-unit per portie).
-          // Voor elk ingredient van het component:
-          //   ingredient_qty_per_portion =
-          //       quantity_used * (ingredient.quantity / component.base_quantity) * unit-conv
           cr.ingredients.forEach(function (ing) {
-            const rawName = ing.inventory_id != null
-              ? null
-              : (ing.fallback_name || null);
+            const rawName = ing.inventory_id != null ? null : (ing.fallback_name || null);
             let inv: any = null;
             if (ing.inventory_id != null) {
-              for (const i of inventoryByNorm.values()) if (i.id === ing.inventory_id) { inv = i; break; }
+              inv = matchCtx.inventoryById.get(ing.inventory_id) || null;
             } else if (rawName) {
               inv = resolveInventory(rawName, matchCtx);
             }
 
-            const ratio = cr.component_base_qty > 0 ? cr.quantity_used / cr.component_base_qty : 0;
+            // quantity_used eerst naar de component-basis-eenheid brengen; anders geeft
+            // "200 g" tegen base_unit 'kg' een factor-1000-fout in de ratio.
+            const usedInBaseUnit = cr.quantity_used * unitFactor(cr.unit, cr.component_base_unit);
+            const ratio = cr.component_base_qty > 0 ? usedInBaseUnit / cr.component_base_qty : 0;
             const ingPerPortionInIngUnit = ing.quantity * ratio;
             const factor = unitFactor(ing.unit, inv?.unit);
             const yld = ing.yield_override != null ? ing.yield_override : (Number(inv?.yield_factor) || 1.0);
@@ -437,12 +364,42 @@ export async function getInventoryWithDemand(
     });
   });
 
-  // 7. Bouw rows.
+  // 7. In-flight: verzonden-maar-niet-ontvangen orderregels per inventory_id.
+  //    Bron = durable inkoop_order_lines (deel-ontvangst = qty_received < qty_ordered).
+  //    Guard (P0-1): negeer vergeten 'sent'-orders waarvan het window ver voorbij is,
+  //    anders zou zo'n order de vraag eeuwig blijven wegdrukken → onderbestelling.
+  const inFlightByInv = new Map<number, number>();
+  try {
+    const { data: openLines } = await supabase
+      .from('inkoop_order_lines')
+      .select('inventory_id, qty_ordered, qty_received, concept_inkoop_orders!inner(status, window_end)')
+      .eq('organization_id', orgId)
+      .eq('concept_inkoop_orders.status', 'sent');
+    const staleBefore = new Date(now.getTime() - 30 * 86400000);
+    (openLines || []).forEach(function (l: any) {
+      if (l.inventory_id == null) return;
+      const parent = Array.isArray(l.concept_inkoop_orders) ? l.concept_inkoop_orders[0] : l.concept_inkoop_orders;
+      const we = parent?.window_end ? new Date(parent.window_end) : null;
+      if (we && !isNaN(we.getTime()) && we < staleBefore) return; // vergeten order → niet aftrekken
+      const open = (Number(l.qty_ordered) || 0) - (Number(l.qty_received) || 0);
+      if (open > 0) inFlightByInv.set(l.inventory_id, (inFlightByInv.get(l.inventory_id) || 0) + open);
+    });
+  } catch {
+    // inkoop_order_lines bestaat mogelijk nog niet (pre-migratie) — dan geen aftrek.
+  }
+
+  // 8. Bouw rows: derving-buffer + par-vloer − voorraad − onderweg.
   const rows: InventoryDemandRow[] = inventory.map(function (inv: any) {
     const eventsForInv = demandMap.get(inv.id) || [];
     const reserved = eventsForInv.reduce(function (s, e) { return s + e.qty; }, 0);
     const stock = Number(inv.current_stock) || 0;
-    const shortfall = Math.max(0, reserved - stock);
+    const par = Number(inv.par_level) || 0;
+    const dervingPct = inv.derving_pct != null ? Number(inv.derving_pct) : DEFAULT_DERVING_PCT;
+    const dervingFactor = 1 + Math.max(0, dervingPct) / 100;
+    const reservedBuffered = reserved * dervingFactor;
+    const inFlight = inFlightByInv.get(inv.id) || 0;
+    const target = Math.max(reservedBuffered, par);
+    const shortfall = Math.max(0, target - stock - inFlight);
     return {
       id: inv.id,
       naam: inv.naam,
@@ -450,8 +407,11 @@ export async function getInventoryWithDemand(
       unit: inv.unit || 'kg',
       current_stock: stock,
       min_stock: Number(inv.min_stock) || 0,
-      par_level: inv.par_level == null ? null : Number(inv.par_level),
+      par_level: inv.par_level == null ? null : par,
       reserved_qty: Math.round(reserved * 1000) / 1000,
+      derving_pct: dervingPct,
+      in_flight_qty: Math.round(inFlight * 1000) / 1000,
+      target_qty: Math.round(target * 1000) / 1000,
       shortfall: Math.round(shortfall * 1000) / 1000,
       events: eventsForInv.sort(function (a, b) { return a.event_date.localeCompare(b.event_date); }),
       leverancier_id: inv.leverancier_id ?? null,
