@@ -30,6 +30,11 @@ const InventoryItemSchema = z.object({
     purchase_price: z.coerce.number().min(0).optional().default(0),
     supplier: z.string().max(200).optional().default(''),
     leverancier_id: z.coerce.number().int().nullable().optional(),
+    /* Besteleenheid: bestel altijd per dit aantal (bv. burgers per 100). Leeg = geen afronding. */
+    order_pack_qty: z.preprocess(
+        (v) => (v === '' || v == null ? null : v),
+        z.coerce.number().positive().nullable(),
+    ).optional(),
     yield_factor: z.coerce.number().min(0).max(2).optional(),
     tht: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     avg_daily: z.coerce.number().min(0).optional(),

@@ -242,6 +242,8 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
     const { data: inventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? [], skipFetch);
     const { data: recepten } = useSupabase<Recept>('recepten', initial?.recepten ?? [], skipFetch);
     const { data: supplierPrices } = useSupabase<any>('supplier_prices', initial?.supplierPrices ?? [], skipFetch);
+    // Altijd client-side ophalen (niet skippen), want leveranciers zit niet in de server-prefetch.
+    const { data: leveranciers } = useSupabase<{ id: number; naam: string }>('leveranciers', [], { skipInitialFetch: false });
     const { data: movements } = useSupabase<StockMovement>('stock_movements', initial?.movements ?? [], skipFetch);
     /* price_history wordt door /api/bon-process gevuld bij elke verwerkte bon —
        voedt de prijs-trend grafiek per item zonder dat user iets handmatig hoeft te doen. */
@@ -509,6 +511,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         return <EditItemView
             editForm={editForm} setEditForm={setEditForm}
             editing={editing} recepten={recepten}
+            leveranciers={leveranciers}
             onSave={saveItem} onDelete={deleteItem}
             onClose={() => { setEditing(null); setEditForm(null); }}
         />;
@@ -625,6 +628,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
 
                 {addOpen && (
                     <AddItemModal
+                        leveranciers={leveranciers}
                         onClose={() => setAddOpen(false)}
                         onSave={async (data: any) => {
                             const result = await upsertInventory(data);
@@ -1643,14 +1647,14 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceH
 /* ═══════════════════════════════════════════════════════════════════
    ADD ITEM MODAL — met AI-assistent tab
    ═══════════════════════════════════════════════════════════════════ */
-function AddItemModal({ onClose, onSave }: { onClose: () => void; onSave: (data: any) => void }) {
+function AddItemModal({ onClose, onSave, leveranciers }: { onClose: () => void; onSave: (data: any) => void; leveranciers: any[] }) {
     const [tab, setTab] = useState<'ai' | 'manual'>('ai');
     const [aiInput, setAiInput] = useState('');
     const [aiBusy, setAiBusy] = useState(false);
     const [aiResult, setAiResult] = useState<any>(null);
     const [form, setForm] = useState<any>({
         naam: '', categorie: 'Vlees', current_stock: 0, min_stock: 0, par_level: 0,
-        unit: 'kg', purchase_price: 0, supplier: '', tht: '', avg_daily: 0,
+        unit: 'kg', purchase_price: 0, supplier: '', leverancier_id: null, order_pack_qty: null, tht: '', avg_daily: 0,
     });
 
     async function aiAssist() {
@@ -1791,9 +1795,21 @@ function AddItemModal({ onClose, onSave }: { onClose: () => void; onSave: (data:
                                     <input type="number" step="0.01" value={form.purchase_price} onChange={e => setForm({ ...form, purchase_price: parseFloat(e.target.value) || 0 })} style={inputStyle} />
                                 </Field>
                                 <Field label="Leverancier">
-                                    <input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} placeholder="Bv. Sligro" style={inputStyle} />
+                                    <select value={form.leverancier_id ?? ''} onChange={e => {
+                                        const id = e.target.value ? Number(e.target.value) : null;
+                                        const lev = (leveranciers || []).find((l: any) => l.id === id);
+                                        setForm({ ...form, leverancier_id: id, supplier: lev ? lev.naam : '' });
+                                    }} style={inputStyle}>
+                                        <option value="">Kies leverancier…</option>
+                                        {(leveranciers || []).map((l: any) => <option key={l.id} value={l.id}>{l.naam}</option>)}
+                                    </select>
                                 </Field>
                             </div>
+                            <Field label="Bestel per (altijd afronden op)">
+                                <input type="number" step="1" min="0" value={form.order_pack_qty ?? ''}
+                                    onChange={e => setForm({ ...form, order_pack_qty: e.target.value ? parseFloat(e.target.value) : null })}
+                                    placeholder={`bv. 100 — leeg = geen afronding`} style={inputStyle} />
+                            </Field>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                 <Field label="THT (optioneel)">
                                     <input type="date" value={form.tht || ''} onChange={e => setForm({ ...form, tht: e.target.value })} style={inputStyle} />
@@ -1833,7 +1849,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 /* ═══════════════════════════════════════════════════════════════════
    EDIT ITEM VIEW — full-page form (uitgebreid met nieuwe velden)
    ═══════════════════════════════════════════════════════════════════ */
-function EditItemView({ editForm, setEditForm, editing, recepten, onSave, onDelete, onClose }: any) {
+function EditItemView({ editForm, setEditForm, editing, recepten, leveranciers, onSave, onDelete, onClose }: any) {
     function setField(k: string, v: any) { setEditForm({ ...editForm, [k]: v }); }
     const stockVal = (editForm.current_stock || 0) * (editForm.purchase_price || 0);
     const isLow = (editForm.current_stock || 0) <= (editForm.min_stock || 0);
@@ -1894,9 +1910,21 @@ function EditItemView({ editForm, setEditForm, editing, recepten, onSave, onDele
                             <input type="number" step="0.01" value={editForm.purchase_price || 0} onChange={e => setField('purchase_price', parseFloat(e.target.value) || 0)} style={inputStyle} />
                         </Field>
                         <Field label="Leverancier">
-                            <input value={editForm.supplier || ''} onChange={e => setField('supplier', e.target.value)} style={inputStyle} />
+                            <select value={editForm.leverancier_id ?? ''} onChange={e => {
+                                const id = e.target.value ? Number(e.target.value) : null;
+                                const lev = (leveranciers || []).find((l: any) => l.id === id);
+                                setEditForm({ ...editForm, leverancier_id: id, supplier: lev ? lev.naam : (editForm.supplier || '') });
+                            }} style={inputStyle}>
+                                <option value="">Kies leverancier…</option>
+                                {(leveranciers || []).map((l: any) => <option key={l.id} value={l.id}>{l.naam}</option>)}
+                            </select>
                         </Field>
                     </div>
+                    <Field label="Bestel per (altijd afronden op)">
+                        <input type="number" step="1" min="0" value={editForm.order_pack_qty ?? ''}
+                            onChange={e => setField('order_pack_qty', e.target.value ? parseFloat(e.target.value) : null)}
+                            placeholder="bv. 100 — leeg = geen afronding" style={inputStyle} />
+                    </Field>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <Field label="THT (optioneel)">
                             <input type="date" value={editForm.tht || ''} onChange={e => setField('tht', e.target.value || null)} style={inputStyle} />
