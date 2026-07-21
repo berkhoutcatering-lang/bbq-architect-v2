@@ -650,9 +650,10 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                             fontWeight: 600,
                             fontVariantNumeric: 'tabular-nums',
                             marginLeft: 'auto',
+                            color: item.price_unknown ? 'var(--muted)' : undefined,
                         }}
                     >
-                        {fmtEur(item.est_total_eur)}
+                        {item.price_unknown ? 'n.t.b.' : fmtEur(item.est_total_eur)}
                     </span>
                 </div>
                 {item.pack_label && (
@@ -723,17 +724,21 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         )}
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', borderTop: '1px solid var(--border)', marginTop: 4, fontWeight: 600, color: 'var(--text)' }}>
                             <span>= tekort</span>
-                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtQty(item.qty_needed, item.unit)}</span>
+                            <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtQty(item.original_qty, item.unit)}</span>
                         </div>
+                        {/* Bij een handmatige qty-override wijkt het bestelde aantal af van
+                            de berekende tekort — toon dat als aparte regel zodat de optelsom
+                            blijft kloppen (i.p.v. '= tekort' met de override te vervuilen). */}
+                        {Math.abs((item.original_qty ?? 0) - item.qty_needed) > 0.001 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0', fontStyle: 'italic' }}>
+                                <span>→ handmatig gezet op</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtQty(item.qty_needed, item.unit)}</span>
+                            </div>
+                        )}
                         {item.pack_label && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0', color: 'var(--brand, #FFBF00)' }}>
                                 <span>→ afgerond op pak</span>
                                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{item.pack_label}</span>
-                            </div>
-                        )}
-                        {item.override_applied && (
-                            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)', fontStyle: 'italic' }}>
-                                Handmatig aangepast — het bestelde aantal wijkt af van deze berekening.
                             </div>
                         )}
                     </div>

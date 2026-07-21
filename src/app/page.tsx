@@ -543,7 +543,10 @@ export default function DashboardPage() {
   const overdueOrders = conceptOrders.filter((o) => {
     if (o.status !== 'sent' || !o.window_end) return false;
     const daysToWindow = Math.ceil((new Date(o.window_end).getTime() - new Date(today).getTime()) / 86400000);
-    return daysToWindow <= 2;
+    /* Ondergrens spiegelt de 30-daagse stale-guard van de demand-motor: een
+       vergeten sent-order (window maanden terug) verdwijnt uit de alert i.p.v.
+       eeuwig rood te blijven — consistent met hoe de vraagberekening 'm negeert. */
+    return daysToWindow <= 2 && daysToWindow >= -30;
   });
   if (overdueOrders.length > 0) {
     attentionItems.push({
@@ -553,7 +556,7 @@ export default function DashboardPage() {
       title: `${plural(overdueOrders.length, 'bestelling', 'bestellingen')} nog niet geleverd`,
       detail: 'Verstuurd, maar nog niet (volledig) ontvangen terwijl het event eraan komt — check bij de leverancier.',
       cta: 'Naar ontvangst',
-      href: '/inkoop',
+      href: '/inkoop#onderweg',
     });
   }
 

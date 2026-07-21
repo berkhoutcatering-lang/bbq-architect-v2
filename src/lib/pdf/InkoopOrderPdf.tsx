@@ -206,7 +206,7 @@ export function InkoopOrderPdf(props: InkoopOrderPdfProps) {
                 {it.unit_price_eur != null ? fmtEur(it.unit_price_eur) + '/' + it.unit : '—'}
               </Text>
               <Text style={[styles.tdRight, { flex: 1 }]}>{it.btw_pct}%</Text>
-              <Text style={[styles.tdRight, { flex: 1, fontWeight: 700 }]}>{fmtEur(it.line_total_eur)}</Text>
+              <Text style={[styles.tdRight, { flex: 1, fontWeight: 700 }]}>{it.unit_price_eur != null ? fmtEur(it.line_total_eur) : 'n.t.b.'}</Text>
             </View>
           );
         })}

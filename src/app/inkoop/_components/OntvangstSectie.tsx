@@ -47,7 +47,7 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
     if (!orders || orders.length === 0) return null;
 
     return (
-        <section style={{ marginTop: 28 }}>
+        <section id="onderweg" style={{ marginTop: 28, scrollMarginTop: 80 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Truck size={18} style={{ color: 'var(--muted)' }} />
                 <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Onderweg</h2>
@@ -57,11 +57,15 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {orders.map((o) => {
                     const open = o.lines.filter((l) => (l.qty_received ?? 0) < l.qty_ordered).length;
-                    /* Te laat: leverwindow (bijna) verstreken en nog niet ontvangen (fix #5). */
+                    /* Leverwindow t.o.v. vandaag: verstreken = 'te laat' (rood), nog
+                       0-2 dagen = 'nog niet binnen' (amber). Zo roept de badge niet
+                       vals 'te laat' terwijl de order nog op tijd is (alarm-moeheid). */
                     const daysToWindow = o.window_end
                         ? Math.ceil((new Date(o.window_end + 'T00:00:00').getTime() - Date.now()) / 86400000)
                         : null;
-                    const overdue = daysToWindow != null && daysToWindow <= 2;
+                    const late = daysToWindow != null && daysToWindow < 0;
+                    const dueSoon = daysToWindow != null && daysToWindow >= 0 && daysToWindow <= 2;
+                    const accent = late ? 'rgba(239,68,68,.35)' : dueSoon ? 'rgba(245,158,11,.35)' : 'var(--border)';
                     return (
                         <div
                             key={o.id}
@@ -71,7 +75,7 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
                                 justifyContent: 'space-between',
                                 gap: 12,
                                 background: 'var(--card)',
-                                border: `1px solid ${overdue ? 'rgba(239,68,68,.35)' : 'var(--border)'}`,
+                                border: `1px solid ${accent}`,
                                 borderRadius: 12,
                                 padding: '12px 16px',
                             }}
@@ -79,9 +83,14 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     {o.leverancier_naam}
-                                    {overdue && (
+                                    {late && (
                                         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.12)', color: 'var(--red, #ef4444)', border: '1px solid rgba(239,68,68,.3)' }}>
                                             te laat
+                                        </span>
+                                    )}
+                                    {dueSoon && (
+                                        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: 'rgba(245,158,11,.12)', color: 'var(--amber, #f59e0b)', border: '1px solid rgba(245,158,11,.3)' }}>
+                                            nog niet binnen
                                         </span>
                                     )}
                                 </div>
