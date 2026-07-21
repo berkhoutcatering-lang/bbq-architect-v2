@@ -496,6 +496,39 @@ export default function DashboardPage() {
   // Pillar 4 Vandaag-hub: elke kaart heeft een query-param zodat de target-page
   // direct focust op het juiste item. Geen losse /conflicts route.
   const attentionItems: AttentionItem[] = [];
+
+  /* Bestel-moment (Sam): 8 dagen vóór een event met een menu herinnert het
+     systeem dat er besteld moet worden — "de administrator die vooruit denkt".
+     Event-datum minus lead-tijd; de bestellijst zelf staat klaar op /inkoop.
+     Live berekend, dus verschuift een event, dan verschuift de melding mee. */
+  const BESTEL_LEAD_DAYS = 8;
+  const bestelEvents = events.filter((e) => {
+    if (!e.date || e.date < today) return false;
+    const st = (e.status as string) || '';
+    if (st === 'geannuleerd' || st === 'cancelled') return false;
+    const daysAway = Math.ceil((new Date(e.date).getTime() - new Date(today).getTime()) / 86400000);
+    if (daysAway > BESTEL_LEAD_DAYS) return false;
+    const m = (e as DbEvent & { menu?: unknown }).menu;
+    const hasMenu = Array.isArray(m)
+      ? m.length > 0
+      : (!!m && typeof m === 'object' && Object.keys(m as object).length > 0);
+    return hasMenu;
+  }).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  if (bestelEvents.length > 0) {
+    const first = bestelEvents[0];
+    const firstDays = Math.max(0, Math.ceil((new Date(first.date).getTime() - new Date(today).getTime()) / 86400000));
+    const dagLabel = firstDays === 0 ? 'vandaag' : firstDays === 1 ? 'morgen' : `over ${firstDays} dagen`;
+    attentionItems.push({
+      id: 'att-bestellen',
+      severity: firstDays <= 4 ? 'high' : 'medium',
+      icon: 'alert-triangle',
+      title: `Bestellen voor ${bestelEvents.length} ${bestelEvents.length === 1 ? 'event' : 'events'}`,
+      detail: `${first.name || first.client_naam || 'event'} ${dagLabel} (${first.guests || 0} gasten) — je bestellijst staat klaar.`,
+      cta: 'Open bestellijst',
+      href: '/inkoop',
+    });
+  }
+
   /* Lead Funnel: aanvragen die op opvolging wachten (nieuw/in_gesprek met
      verlopen follow_up_at, of > 2 dagen oud zonder opvolging). "Mis nooit een lead." */
   const nowMs = Date.now();
