@@ -463,8 +463,8 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         lines.push(`**Voorraad-analyse · ${new Date().toLocaleDateString('nl-NL')}**\n`);
         lines.push(`Je hebt **${totalItems} producten** met een totale waarde van **${fmt(totalValue)}**.`);
         if (lowStock.length > 0) {
-            lines.push(`\n## Urgent — onder par-level`);
-            lines.push(`**${lowStock.length} items** moeten worden bijbesteld. Geschatte inkoop: **${fmt(tekortCost)}**.\n`);
+            lines.push(`\n## Onder je bestelpunt`);
+            lines.push(`**${lowStock.length} items** staan onder par — tel of controleer. Bestellen loopt event-gedreven via **/inkoop**.\n`);
             lowStock.slice(0, 8).forEach(i => {
                 const par = i.par_level || i.min_stock || 0;
                 lines.push(`- **${i.naam}** — ${i.current_stock}/${par} ${i.unit} · ${i.supplier || 'geen lev.'}`);
@@ -479,18 +479,9 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                 lines.push(`- **${i.naam}** — nog ${d} dag(en) · ${i.current_stock} ${i.unit} verwerken`);
             });
         }
-        const bySupplier: Record<string, InventoryItem[]> = {};
-        lowStock.forEach(i => {
-            const sup = i.supplier || 'Onbekend';
-            (bySupplier[sup] ||= []).push(i);
-        });
-        if (Object.keys(bySupplier).length > 0) {
-            lines.push(`\n## Bestel-voorstel (gebundeld)`);
-            Object.entries(bySupplier).forEach(([sup, items]) => {
-                const t = items.reduce((s, i) => s + ((Number(i.par_level || i.min_stock) - Number(i.current_stock)) * Number(i.purchase_price || 0)), 0);
-                lines.push(`- **${sup}** · ${items.length} item(s) · ± ${fmt(t)}`);
-            });
-        }
+        /* GÉÉN par-gedreven 'bestel-voorstel' meer hier — bestellen is event-
+           gedreven en leeft uitsluitend op /inkoop (fix #2). Deze drawer is puur
+           inzicht (par-signaal + THT + waarde). */
         const topValue = [...inventory].sort((a, b) => stockValue(b) - stockValue(a)).slice(0, 3);
         if (topValue.length > 0) {
             lines.push(`\n## Grootste voorraadwaarde`);
@@ -536,7 +527,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                     intro="Real-time voorraadstand: wat heb je liggen, wat staat onder par-level, en wat moet binnen 3 dagen op?"
                     actions={[
                         { lead: 'Tellen of Scannen', text: 'om snel te updaten — handmatig of met je telefooncamera.' },
-                        { lead: 'AI Advies rechtsboven', text: 'stelt bestelhoeveelheden voor op basis van je geplande events.' },
+                        { lead: 'AI Advies rechtsboven', text: 'geeft inzicht in par-signaal, THT en voorraadwaarde. Bestellen loopt via Inkoop.' },
                         { lead: 'Klik op een item', text: 'voor details, alternatieve leveranciers en prijshistorie per kilo.' },
                     ]}
                 />
@@ -679,9 +670,9 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
                     icon={Euro}
                 />
                 <StatTile
-                    label={<Hint tip="Producten waar de huidige voorraad onder of op het bestelpunt staat. Tijd om bij te bestellen.">Onder par-level</Hint>}
+                    label={<Hint tip="Producten waar de huidige voorraad onder of op het bestelpunt staat. Tel of controleer — bestellen is event-gedreven via Inkoop.">Onder par-level</Hint>}
                     value={lowStockCount}
-                    sub={lowStockCount > 0 ? 'actie vereist' : 'alles op peil'}
+                    sub={lowStockCount > 0 ? 'onder bestelpunt' : 'alles op peil'}
                     tone={lowStockCount > 3 ? 'bad' : lowStockCount > 0 ? 'warn' : 'ok'}
                     icon={AlertTriangle}
                 />
@@ -700,8 +691,8 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
                 />
                 <StatTile
                     label="AI-tip"
-                    value={lowStockCount > 0 ? 'Bestel nu' : 'Alles ok'}
-                    sub={lowStockCount > 0 ? 'klik AI Advies' : 'geen actie'}
+                    value={lowStockCount > 0 ? 'Onder peil' : 'Alles ok'}
+                    sub={lowStockCount > 0 ? 'tel of check' : 'geen actie'}
                     tone={lowStockCount > 0 ? 'warn' : 'ok'}
                     icon={Sparkles}
                 />
@@ -819,7 +810,7 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onAdjust }: { 
                     </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>Onder par-level</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{lowStock.length} item(s) moeten worden bijbesteld</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>{lowStock.length} item(s) onder je bestelpunt</div>
                     </div>
                     <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, color: lowStock.length > 0 ? 'var(--red)' : 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{lowStock.length}</div>
                 </div>
