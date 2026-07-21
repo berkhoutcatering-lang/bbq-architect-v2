@@ -110,25 +110,6 @@ export async function getConceptOrderById(
     return (data as ConceptInkoopOrder) ?? null;
 }
 
-/** Concept-orders ophalen voor /inkoop. Default: status=concept én window
- *  startend vandaag/eerder zodat de UI alleen actuele concepts toont. */
-export async function listConceptOrders(
-    sb: SupabaseClient,
-    orgId: string,
-    opts: { statuses?: OrderStatus[]; windowStart?: string } = {},
-): Promise<ConceptInkoopOrder[]> {
-    let q = sb
-        .from('concept_inkoop_orders')
-        .select('*')
-        .eq('organization_id', orgId)
-        .in('status', opts.statuses ?? ['concept']);
-    if (opts.windowStart) q = q.gte('window_start', opts.windowStart);
-    q = q.order('window_start', { ascending: true });
-    const { data, error } = await q;
-    if (error) throw new Error('Orders ophalen mislukt: ' + error.message);
-    return (data as ConceptInkoopOrder[]) ?? [];
-}
-
 /** Snapshot van items + totalen vastleggen en status → sent zetten.
  *  Roep dit aan vanuit sendOrderToSupplier nadat PDF gegenereerd + gemaild is. */
 export async function markOrderSent(
