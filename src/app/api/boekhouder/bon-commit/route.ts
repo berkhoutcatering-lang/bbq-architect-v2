@@ -47,6 +47,28 @@ interface CommitItem {
   add_to_inventory: boolean;
   inventory_id?: number | null;
   create_new_inventory?: boolean;
+  /* Optioneel: categorie + par-niveau voor een NIEUW voorraad-item. Vult de
+     gebruiker (of AI) in het review-scherm; anders vallen we terug op een
+     trefwoord-gok + de gekochte hoeveelheid als start-par. */
+  categorie?: string | null;
+  par_level?: number | null;
+}
+
+/* Deterministische categorie-gok op productnaam — géén AI-rekenwerk, alleen
+   trefwoorden. Zorgt dat een stelling/machine/zak niet als "Overig" binnenkomt.
+   De gebruiker kan 'm altijd overschrijven vanuit /voorraad. */
+function guessCategory(naam: string): string {
+  const n = (naam || '').toLowerCase();
+  if (/folie|vacu[uü]m|\bzak|handschoen|servet|\bbeker|krat|disposable|\btape|snijplank|braadpan|machine|stelling|apparaat|thermometer|weegschaal|\bmes\b|gastronorm|\bgn\b/.test(n)) return 'Materieel';
+  if (/zalm|\bvis\b|garnaal|forel|tonijn|kabeljauw|makreel/.test(n)) return 'Vis';
+  if (/rund|varken|kip|kalf|\blam\b|vlees|worst|\bspek|bavette|picanha|\bribs?\b|pulled|pastrami|burger|hotdog|gehakt|filet|\bdij\b|entrecote|brisket/.test(n)) return 'Vlees';
+  if (/melk|\broom\b|\bkaas|\bboter|yoghurt|\beieren?\b/.test(n)) return 'Zuivel';
+  if (/\bbrood|\bbun\b|broodje|stok\b/.test(n)) return 'Brood';
+  if (/\bsaus|\bmayo|ketchup|mosterd|dressing|marinade|\brub\b|olijfolie|\bolie\b|azijn/.test(n)) return 'Sauzen';
+  if (/\bsla\b|tomaat|\bui\b|paprika|groente|knolselderij|aardappel|wortel|komkommer|champignon/.test(n)) return 'Groenten';
+  if (/\bpeper|\bzout|kruid|specerij|knoflook|piri|paprikapoeder/.test(n)) return 'Kruiden';
+  if (/\bcola|\bfris|\bbier|\bwijn|\bwater\b|\bsap\b|\bdrank/.test(n)) return 'Dranken';
+  return 'Overig';
 }
 
 interface CommitBody {
@@ -177,7 +199,14 @@ export async function POST(req: NextRequest) {
             unit: item.unit || 'stuks',
             purchase_price: item.unit_price,
             leverancier_id: data.leverancier_id ?? null,
-            categorie: cat?.kind === 'kosten' ? 'Overig' : 'Overig',
+            // Echte categorie: door de gebruiker/AI meegegeven, anders trefwoord-gok
+            // (niet meer altijd 'Overig'). Materieel/machines/zakjes vallen nu goed.
+            categorie: (typeof item.categorie === 'string' && item.categorie.trim())
+              ? item.categorie.trim().slice(0, 100)
+              : guessCategory(item.naam),
+            // Par-niveau bij een nieuw item: meegegeven waarde, anders de gekochte
+            // hoeveelheid als start-baseline (gebruiker past 'm aan op /voorraad).
+            par_level: (item.par_level != null && Number(item.par_level) >= 0) ? Number(item.par_level) : qty,
           })
           .select('id')
           .single();

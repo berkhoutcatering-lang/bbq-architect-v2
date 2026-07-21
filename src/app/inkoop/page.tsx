@@ -20,6 +20,7 @@ import PageGuideNote from '@/components/PageGuideNote';
 import { RequireTier } from '@/components/PaywallPrompt';
 import InkoopLijst from './_components/InkoopLijst';
 import OntvangstSectie, { type SentOrder } from './_components/OntvangstSectie';
+import FactuurNaarVoorraadButton from './_components/FactuurNaarVoorraadButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,6 +119,10 @@ export default async function InkoopPage() {
                     title="Inkoop"
                     description={`Bestellen voor de events komende ${summary.totals.window_days} dagen`}
                 />
+
+                <div style={{ margin: '4px 0 14px' }}>
+                    <FactuurNaarVoorraadButton />
+                </div>
 
                 {/* icon-prop bewust niet gezet — Lucide-components mogen niet
                     van een Server Component naar een Client Component (React 19);
