@@ -329,8 +329,15 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
                   </span>
                 )}
               </h3>
-              <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px' }}>
+              <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 8px' }}>
                 AI suggereert welke regels ook in je voorraad horen. Vink uit wat alleen kosten zijn.
+              </p>
+              {/* Guardrail tegen dubbeltellen met de ontvangst-loop (audit): informeer
+                  i.p.v. defaults te wijzigen — auto-uitschakelen zou legitieme scans
+                  stil kunnen onderbestellen (de gevaarlijke richting). */}
+              <p style={{ fontSize: 11, color: 'var(--amber, #f59e0b)', margin: '0 0 10px', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                <AlertCircle size={13} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>Al afgevinkt bij <strong>Inkoop → Onderweg</strong>? Dan staat deze levering al in de voorraad — vink hieronder uit om dubbel bijboeken te voorkomen.</span>
               </p>
 
               <ul className="bh-bon-sheet__item-list">
