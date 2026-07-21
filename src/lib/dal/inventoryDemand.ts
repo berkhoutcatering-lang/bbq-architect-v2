@@ -14,7 +14,8 @@
  *
  * Demand-buffer (Sam: "× gasten plus altijd 10% derving"):
  *     reserved_met_derving = reserved × (1 + derving_pct/100)   // per item
- *     target   = max(reserved_met_derving, par_level)           // par = vloer
+ *     target   = reserved_met_derving                           // keuze A: par is
+ *                GEEN bestel-ondergrens (alleen een signaal op /voorraad)
  *     shortfall = max(0, target − current_stock − in_flight)
  *   in_flight = verzonden-maar-niet-ontvangen orderregels (uit inkoop_order_lines),
  *   met een guard tegen vergeten/oude 'sent'-orders (P0-1 uit de review).
@@ -388,7 +389,7 @@ export async function getInventoryWithDemand(
     // inkoop_order_lines bestaat mogelijk nog niet (pre-migratie) — dan geen aftrek.
   }
 
-  // 8. Bouw rows: derving-buffer + par-vloer − voorraad − onderweg.
+  // 8. Bouw rows: derving-buffer − voorraad − onderweg (par is GEEN ondergrens, keuze A).
   const rows: InventoryDemandRow[] = inventory.map(function (inv: any) {
     const eventsForInv = demandMap.get(inv.id) || [];
     const reserved = eventsForInv.reduce(function (s, e) { return s + e.qty; }, 0);
