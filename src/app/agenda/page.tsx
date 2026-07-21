@@ -1101,11 +1101,12 @@ function mapPrepTaskToAgendaEvent(p: PrepTask, eventDateMap: Record<number, stri
     );
 }
 
-/* Bestel-moment (Sam): BESTEL_LEAD_DAYS dagen vóór een event met een menu komt
-   er een agenda-kopje "Bestellen: [event]". Afgeleid van de event-datum, dus het
-   verschuift automatisch mee als het event verschuift — geen aparte opslag/sync. */
-const BESTEL_LEAD_DAYS = 8;
-function mapBestelToAgendaEvent(e: DbEvent): AgendaEvent | null {
+/* Bestel-moment (Sam): leadDays dagen vóór een event met een menu komt er een
+   agenda-kopje "Bestellen: [event]". Afgeleid van de event-datum, dus het schuift
+   automatisch mee als het event verschuift — geen aparte opslag/sync. leadDays
+   volgt de langste levertijd van je leveranciers (min. 8, fix #3). */
+const DEFAULT_BESTEL_LEAD_DAYS = 8;
+function mapBestelToAgendaEvent(e: DbEvent, leadDays: number = DEFAULT_BESTEL_LEAD_DAYS): AgendaEvent | null {
     if (!e.date) return null;
     const raw = e.date as string;
     const evDate = new Date(raw.length === 10 ? raw + 'T00:00:00' : raw);
@@ -1117,7 +1118,7 @@ function mapBestelToAgendaEvent(e: DbEvent): AgendaEvent | null {
         ? m.length > 0
         : (!!m && typeof m === 'object' && Object.keys(m as object).length > 0);
     if (!hasMenu) return null;
-    const bestel = new Date(evDate.getTime() - BESTEL_LEAD_DAYS * 86400000);
+    const bestel = new Date(evDate.getTime() - leadDays * 86400000);
     return ev(
         'bestel_' + e.id,
         'bestel',
@@ -1211,6 +1212,7 @@ export default function Agenda() {
 
     const { data: dbEvents, error: eventsError, refetch: refetchEvents } = useSupabase<DbEvent>('events', []);
     const { data: prepTasks, error: prepError } = useSupabase<PrepTask>('prep_tasks', []);
+    const { data: leveranciersData } = useSupabase<{ id: number; lead_time_days: number | null }>('leveranciers', []);
     const fetchError = eventsError || prepError;
     const { rows: personalRows, insert: insertPersonal, update: updatePersonal, remove: removePersonal } = useAgendaPersonal();
 
@@ -1264,14 +1266,24 @@ export default function Agenda() {
     /* Bestel-momenten: event − lead-tijd, gefilterd op de zichtbare maand. Uit
        ALLE events (niet alleen deze maand), want een event begin volgende maand
        heeft z'n bestel-moment nog deze maand. */
+    /* Heads-up-venster = langste levertijd van je leveranciers (min. 8), zodat de
+       agenda-melding nooit later komt dan de traagste leverancier nodig heeft. */
+    const bestelLeadDays = useMemo(() => {
+        const mx = (leveranciersData || []).reduce((m, l) => {
+            const v = Number(l.lead_time_days);
+            return Number.isFinite(v) && v > m ? v : m;
+        }, 0);
+        return Math.max(8, mx);
+    }, [leveranciersData]);
+
     const monthBestelEvents = useMemo(() => {
         const list: AgendaEvent[] = [];
         for (const e of dbEvents) {
-            const mapped = mapBestelToAgendaEvent(e);
+            const mapped = mapBestelToAgendaEvent(e, bestelLeadDays);
             if (mapped && mapped.dbDate && mapped.dbDate.startsWith(monthPrefix)) list.push(mapped);
         }
         return list;
-    }, [dbEvents, monthPrefix]);
+    }, [dbEvents, monthPrefix, bestelLeadDays]);
 
     /* Alle events in zichtbare maand: events + prep-taken + persoonlijke afspraken + bestel-momenten. */
     const allEvents: AgendaEvent[] = useMemo(() => {

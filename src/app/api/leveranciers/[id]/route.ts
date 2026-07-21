@@ -82,6 +82,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     if (typeof body?.portal_url === 'string') update.portal_url = body.portal_url.slice(0, 500);
     if (['extension','email_in','csv','manual',null].includes(body?.import_method)) update.import_method = body.import_method;
     if (['sligro','makro','baktotaal','vuurenrook','hanos','bidfood',null].includes(body?.portal_hint)) update.portal_hint = body.portal_hint;
+    /* Levertijd in dagen (fix #3): stuurt de bestel-vóór-deadline op /inkoop.
+       null = wissen; anders clampen op 0–365 en afronden. */
+    if (body?.lead_time_days === null) update.lead_time_days = null;
+    else if (body?.lead_time_days != null && Number.isFinite(Number(body.lead_time_days))) {
+        update.lead_time_days = Math.max(0, Math.min(365, Math.round(Number(body.lead_time_days))));
+    }
 
     if (Object.keys(update).length === 0) return NextResponse.json({ error: 'niets te updaten' }, { status: 400 });
 
