@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
+import { applyStockDelta } from '@/lib/dal/stockMutation';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -220,37 +221,20 @@ export async function POST(req: NextRequest) {
 
       if (!invId) continue;
 
-      // Stock movement (type='receive')
-      const { error: smErr } = await supabase
-        .from('stock_movements')
-        .insert({
-          organization_id: orgId,
-          inventory_id: invId,
-          type: 'receive',
-          qty: qty,
-          unit_price: item.unit_price,
-          bon_id: bonId,
-          by_user_id: user.id,
-          note: `Via bon-toevoegen flow (${item.naam})`,
-        });
-      if (smErr) {
-        itemErrors.push({ naam: item.naam, reason: 'Stock-movement mislukt: ' + smErr.message });
+      // Ontvangst atomair via de gedeelde RPC: current_stock ophogen +
+      // stock_movements-insert (met bon-koppeling) in één transactie (fix #1).
+      const newStock = await applyStockDelta(supabase, orgId, {
+        inventoryId: invId,
+        delta: qty,
+        type: 'receive',
+        unitPrice: item.unit_price,
+        bonId,
+        note: `Via bon-toevoegen flow (${item.naam})`,
+      });
+      if (newStock == null) {
+        itemErrors.push({ naam: item.naam, reason: 'Voorraad-mutatie mislukt' });
         continue;
       }
-
-      // Inventory current_stock ophogen (atomair via RPC zou beter zijn, voor v1 ok via select+update)
-      const { data: invRow } = await supabase
-        .from('inventory')
-        .select('current_stock')
-        .eq('id', invId)
-        .eq('organization_id', orgId)
-        .single();
-      const newStock = (Number(invRow?.current_stock) || 0) + qty;
-      await supabase
-        .from('inventory')
-        .update({ current_stock: newStock })
-        .eq('id', invId)
-        .eq('organization_id', orgId);
 
       // Price history (sync_inventory_last_price-trigger updatet inventory.last_price_eur)
       if (item.unit_price > 0) {
