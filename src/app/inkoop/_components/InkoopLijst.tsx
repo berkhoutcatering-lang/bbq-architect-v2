@@ -273,15 +273,21 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: 
         return dates.sort()[0];
     }, [bucket.items]);
 
+    /* Bestel-vóór-deadline = eerste event − levertijd van DEZE leverancier
+       (fix #3: per-leverancier i.p.v. een globale 8). Val terug op 8 dagen als
+       de leverancier geen lead_time_days heeft. */
+    const DEFAULT_LEAD_DAYS = 8;
     const deadlinePill = useMemo(function () {
         if (!earliestEventDate) return null;
-        const d = new Date(earliestEventDate + 'T00:00:00');
-        const diff = Math.ceil((d.getTime() - Date.now()) / 86400000);
-        if (diff <= 0) return { text: 'vandaag', urgent: true };
-        if (diff <= 2) return { text: `nog ${diff}d`, urgent: true };
-        if (diff <= 7) return { text: `nog ${diff}d`, urgent: false };
-        return { text: d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }), urgent: false };
-    }, [earliestEventDate]);
+        const lead = bucket.lead_time_days ?? DEFAULT_LEAD_DAYS;
+        const orderBy = new Date(earliestEventDate + 'T00:00:00');
+        orderBy.setDate(orderBy.getDate() - lead);
+        const diff = Math.ceil((orderBy.getTime() - Date.now()) / 86400000);
+        if (diff <= 0) return { text: 'nu bestellen', urgent: true };
+        if (diff <= 2) return { text: `over ${diff}d`, urgent: true };
+        if (diff <= 7) return { text: `over ${diff}d`, urgent: false };
+        return { text: orderBy.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }), urgent: false };
+    }, [earliestEventDate, bucket.lead_time_days]);
 
     return (
         <article
@@ -347,7 +353,7 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: 
                                         gap: 4,
                                     }}
                                 >
-                                    <Clock size={11} /> deadline {deadlinePill.text}
+                                    <Clock size={11} /> bestel vóór {deadlinePill.text}
                                 </span>
                             </>
                         )}

@@ -55,6 +55,8 @@ export interface BestelvoorstelLeverancier {
   leverancier_email: string | null;
   leverancier_phone: string | null;
   concept_order_id: string | null;
+  /** Levertijd van deze leverancier in dagen (voor de bestel-vóór-deadline). null = onbekend → val terug op de default-lead. */
+  lead_time_days: number | null;
   items: BestelvoorstelItem[];
   subtotal_eur: number;
   subtotal_incomplete: boolean; // true = er zitten items zonder prijs in deze bucket
@@ -163,15 +165,18 @@ export async function buildBestelvoorstel(
   });
   const supplierIds = Array.from(supplierIdsSet);
 
-  type SupplierMeta = { naam: string; type: string; email: string | null; phone: string | null };
+  type SupplierMeta = { naam: string; type: string; email: string | null; phone: string | null; lead_time_days: number | null };
   const suppliers: Record<number, SupplierMeta> = {};
   if (supplierIds.length > 0) {
     const { data: levRows } = await supabase
       .from('leveranciers')
-      .select('id, naam, type, email, tel')
+      .select('id, naam, type, email, tel, lead_time_days')
       .in('id', supplierIds);
     (levRows || []).forEach(function (l: any) {
-      suppliers[l.id] = { naam: l.naam, type: l.type || 'Overig', email: l.email || null, phone: l.tel || null };
+      suppliers[l.id] = {
+        naam: l.naam, type: l.type || 'Overig', email: l.email || null, phone: l.tel || null,
+        lead_time_days: (l.lead_time_days != null && Number.isFinite(Number(l.lead_time_days))) ? Number(l.lead_time_days) : null,
+      };
     });
   }
 
@@ -190,6 +195,7 @@ export async function buildBestelvoorstel(
         leverancier_email: meta ? meta.email : null,
         leverancier_phone: meta ? meta.phone : null,
         concept_order_id: null,
+        lead_time_days: meta ? meta.lead_time_days : null,
         items: [],
         subtotal_eur: 0,
         subtotal_incomplete: false,

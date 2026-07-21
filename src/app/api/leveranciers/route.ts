@@ -30,7 +30,7 @@ export async function GET() {
 
     const { data, error } = await supabase
         .from('leveranciers')
-        .select('id, naam, type, contact, email, tel, import_method, portal_url, portal_hint, last_sync_at, last_sync_status, products_count, notes, scope_filter, scope_keywords, archived_at, created_at')
+        .select('id, naam, type, contact, email, tel, import_method, portal_url, portal_hint, last_sync_at, last_sync_status, products_count, notes, scope_filter, scope_keywords, lead_time_days, archived_at, created_at')
         .eq('organization_id', orgId)
         .is('archived_at', null)
         .order('naam');

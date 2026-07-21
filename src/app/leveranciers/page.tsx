@@ -18,7 +18,7 @@ import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
 import {
     Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X, History,
-    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText,
+    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText, Clock,
 } from 'lucide-react';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
@@ -42,6 +42,7 @@ interface Leverancier {
     notes: string | null;
     scope_filter: 'alles' | 'food_drinks' | 'custom' | null;
     scope_keywords: string[] | null;
+    lead_time_days: number | null;
     created_at: string;
     pendingMutations?: number;
 }
@@ -242,6 +243,27 @@ function safeHostname(url: string | null | undefined): string | null {
 }
 
 function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leverancier; onArchive: () => void; onRefresh: () => void; onReview: () => void }) {
+    const showToast = useToast();
+    /* Levertijd (fix #3): stuurt de 'bestel vóór'-datum per leverancier op /inkoop.
+       Bewaart op blur; leeg = wissen (dan valt /inkoop terug op 8 dagen). */
+    const [leadEdit, setLeadEdit] = useState<string>(lev.lead_time_days != null ? String(lev.lead_time_days) : '');
+    async function saveLeadTime() {
+        const raw = leadEdit.trim();
+        const val = raw === '' ? null : Math.max(0, Math.min(365, Math.round(Number(raw))));
+        if (raw !== '' && !Number.isFinite(val as number)) { setLeadEdit(lev.lead_time_days != null ? String(lev.lead_time_days) : ''); return; }
+        if ((val ?? null) === (lev.lead_time_days ?? null)) return;  // niets gewijzigd
+        try {
+            const r = await fetch(`/api/leveranciers/${lev.id}`, {
+                method: 'PATCH', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ lead_time_days: val }),
+            });
+            if (!r.ok) throw new Error();
+            showToast(`Levertijd ${lev.naam}: ${val == null ? 'gewist' : val + (val === 1 ? ' dag' : ' dagen')}`, 'success');
+            onRefresh();
+        } catch {
+            showToast('Levertijd opslaan mislukt', 'error');
+        }
+    }
     const isRunning = lev.last_sync_status === 'running';
     const isFailed = lev.last_sync_status === 'failed';
     const hasPending = (lev.pendingMutations ?? 0) > 0;
@@ -340,6 +362,24 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
             </Link>
 
             <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                {/* Levertijd in dagen — stuurt de 'bestel vóór'-deadline op /inkoop (fix #3) */}
+                <div
+                    title="Levertijd in dagen — bepaalt hoe vroeg 'bestel vóór' op /inkoop waarschuwt. Leeg = standaard 8 dagen."
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 8px', height: 34, borderRadius: 8, border: '1px solid var(--border)', color: 'var(--muted)' }}
+                >
+                    <Clock size={12} />
+                    <input
+                        type="number" min={0} max={365}
+                        value={leadEdit}
+                        onChange={(e) => setLeadEdit(e.target.value)}
+                        onBlur={saveLeadTime}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                        placeholder="8"
+                        aria-label={`Levertijd ${lev.naam} in dagen`}
+                        style={{ width: 30, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, textAlign: 'right', outline: 'none', MozAppearance: 'textfield' }}
+                    />
+                    <span style={{ fontSize: 11 }}>d</span>
+                </div>
                 {hasPending && (
                     <button
                         onClick={onReview}

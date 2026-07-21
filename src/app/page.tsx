@@ -497,11 +497,16 @@ export default function DashboardPage() {
   // direct focust op het juiste item. Geen losse /conflicts route.
   const attentionItems: AttentionItem[] = [];
 
-  /* Bestel-moment (Sam): 8 dagen vóór een event met een menu herinnert het
-     systeem dat er besteld moet worden — "de administrator die vooruit denkt".
-     Event-datum minus lead-tijd; de bestellijst zelf staat klaar op /inkoop.
-     Live berekend, dus verschuift een event, dan verschuift de melding mee. */
-  const BESTEL_LEAD_DAYS = 8;
+  /* Bestel-moment (Sam): vóór een event met een menu herinnert het systeem dat
+     er besteld moet worden — "de administrator die vooruit denkt". Het heads-up-
+     venster volgt de langste levertijd van je leveranciers (min. 8 dagen), zodat
+     de melding nooit later komt dan de traagste leverancier nodig heeft. De
+     precieze 'bestel vóór'-datum per leverancier staat op /inkoop (fix #3). */
+  const maxLeadDays = leveranciers.reduce((mx, l) => {
+    const v = Number((l as { lead_time_days?: number | null }).lead_time_days);
+    return Number.isFinite(v) && v > mx ? v : mx;
+  }, 0);
+  const BESTEL_LEAD_DAYS = Math.max(8, maxLeadDays);
   const bestelEvents = events.filter((e) => {
     if (!e.date || e.date < today) return false;
     const st = (e.status as string) || '';
