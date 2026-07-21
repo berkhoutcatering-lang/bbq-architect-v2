@@ -36,6 +36,11 @@ const InventoryItemSchema = z.object({
         (v) => (v === '' || v == null ? null : v),
         z.coerce.number().positive().nullable(),
     ).optional(),
+    /* Extra marge / derving (%) per product op de receptvraag. Leeg = org-default 10%. */
+    derving_pct: z.preprocess(
+        (v) => (v === '' || v == null ? null : v),
+        z.coerce.number().min(0).max(100).nullable(),
+    ).optional(),
     yield_factor: z.coerce.number().min(0).max(2).optional(),
     /* THT écht optioneel: leeg veld ('') → null i.p.v. een regex-fout. Een stelling
        of machine heeft geen houdbaarheidsdatum. */
