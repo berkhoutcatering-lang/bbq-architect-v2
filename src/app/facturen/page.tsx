@@ -127,15 +127,11 @@ export default function Facturen() {
             return;
         }
 
-        /* Bij status-overgang naar verzonden/betaald: server-side inventory-cascade
-           via markFactuurStatus. De upsertFactuur slaat alleen de velden op; de
-           cascade-logica is gescheiden zodat we de drained-lijst kunnen tonen. */
+        /* Bij status-overgang naar verzonden/betaald: zet de status server-side via
+           markFactuurStatus (Zod + re-auth). Verbruik wordt NIET meer hier geboekt —
+           dat hoort bij het event (service-mise + afronden), niet bij factureren. */
         if (result.data?.statusChanged && result.data.id && (form!.status === 'verzonden' || form!.status === 'betaald')) {
-            const statusRes = await markFactuurStatus({ id: result.data.id, new_status: form!.status });
-            if (statusRes.data?.drained?.length) {
-                const summary = statusRes.data.drained.map(d => `${d.naam} ${d.delta}`).join(', ');
-                showToast('📉 Voorraad afgetrokken: ' + summary, 'info');
-            }
+            await markFactuurStatus({ id: result.data.id, new_status: form!.status });
         }
 
         await refetch();

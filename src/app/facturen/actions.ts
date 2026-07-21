@@ -16,7 +16,6 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { applyStockDelta } from '@/lib/dal/stockMutation';
 import {
     FactuurSchema,
     FACTUUR_STATUSES,
@@ -127,22 +126,20 @@ export async function deleteFactuur(id: number | string): Promise<ActionResult<{
     return { data: { ok: true } };
 }
 
-/* ─── markFactuurStatus + server-side inventory-cascade ─────── */
-
-interface DrainedItem {
-    inventory_id: number;
-    naam: string;
-    delta: number;
-    resulting_stock: number;
-}
+/* ─── markFactuurStatus (status-mutatie, server-side) ─────── */
 
 /**
- * Verander factuur-status en doe — bij overgang naar 'verzonden' of
- * 'betaald' — een inventory-cascade voor regels waarvan de description
- * matcht met een inventory.naam. Best-effort: faalt niet als individuele
- * items niet matchen. Audit-trail via stock_movements.
+ * Verander factuur-status server-side (Zod + re-auth).
+ *
+ * Sinds de perfect-pass (2026-07-21) trekt dit GEEN voorraad meer af. Verbruik
+ * is een keuken-/event-gebeurtenis (service-mise + event-afronden via
+ * completeEventConsumption), niet iets dat bij het factureren van de klant
+ * hoort. De oude drain matchte factuurregels via substring op willekeurige
+ * inventory-rijen in de verkeerde eenheid en telde dubbel bovenop de event-
+ * aftrek — een derde, ongecoördineerde schrijver op het getal waar de
+ * bestellijst op leunt. Verwijderd.
  */
-export async function markFactuurStatus(input: unknown): Promise<ActionResult<{ status: string; drained: DrainedItem[] }>> {
+export async function markFactuurStatus(input: unknown): Promise<ActionResult<{ status: string }>> {
     const parsed = StatusMutationSchema.safeParse(input);
     if (!parsed.success) return { error: 'validation' };
 
@@ -151,63 +148,17 @@ export async function markFactuurStatus(input: unknown): Promise<ActionResult<{ 
     if (!user) return { error: 'unauthorized' };
 
     const { data: factuur, error: readErr } = await supabase
-        .from('facturen').select('id, status, items').eq('id', parsed.data.id).single();
+        .from('facturen').select('id, status').eq('id', parsed.data.id).single();
     if (readErr || !factuur) return { error: 'factuur niet gevonden' };
 
-    const oldStatus = factuur.status as string | null;
     const newStatus = parsed.data.new_status;
-
-    if (oldStatus === newStatus) {
-        return { data: { status: newStatus, drained: [] } };
-    }
+    if (factuur.status === newStatus) return { data: { status: newStatus } };
 
     const { error: updateErr } = await supabase
         .from('facturen').update({ status: newStatus }).eq('id', parsed.data.id);
     if (updateErr) return { error: updateErr.message };
 
-    /* Inventory-cascade alleen bij eerste overgang naar verzonden/betaald.
-       Niet bij ongedaan-maken (concept → terug-revert) en niet bij
-       betaald → verlopen e.d. */
-    const shouldDrain = (newStatus === 'verzonden' || newStatus === 'betaald')
-        && (oldStatus === 'concept' || oldStatus === null);
-
-    const drained: DrainedItem[] = [];
-    if (shouldDrain && Array.isArray(factuur.items)) {
-        const { data: mem } = await supabase
-            .from('organization_members')
-            .select('organization_id')
-            .eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
-        const orgId = mem?.organization_id;
-        const { data: inventory } = await supabase
-            .from('inventory').select('id, naam, current_stock');
-
-        for (const lineItem of factuur.items as Array<{ desc?: string; qty?: number }>) {
-            const desc = (lineItem.desc || '').toLowerCase();
-            const qty = Number(lineItem.qty || 0);
-            if (!desc || qty <= 0 || !orgId) continue;
-
-            for (const inv of inventory ?? []) {
-                const naam = (inv.naam || '').toLowerCase();
-                if (!naam || !desc.includes(naam)) continue;
-                /* Factuurregels zijn vrije tekst → substring-match blijft (de
-                   exacte resolver zou hier niets matchen). Maar de mutatie loopt
-                   nu atomair via de gedeelde RPC (fix #1). */
-                const oldStock = Number(inv.current_stock || 0);
-                const newStock = await applyStockDelta(supabase, orgId, {
-                    inventoryId: inv.id,
-                    delta: -qty,
-                    type: 'usage',
-                    note: `Factuur ${parsed.data.id} → ${newStatus}`,
-                });
-                if (newStock == null) break;
-                drained.push({ inventory_id: inv.id, naam: inv.naam, delta: newStock - oldStock, resulting_stock: newStock });
-                break;  /* eén match per regel — voorkomt dubbele aftrek */
-            }
-        }
-    }
-
     revalidatePath('/facturen');
     revalidatePath('/financien');
-    revalidatePath('/voorraad');
-    return { data: { status: newStatus, drained } };
+    return { data: { status: newStatus } };
 }
