@@ -36,7 +36,12 @@ const InventoryItemSchema = z.object({
         z.coerce.number().positive().nullable(),
     ).optional(),
     yield_factor: z.coerce.number().min(0).max(2).optional(),
-    tht: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    /* THT écht optioneel: leeg veld ('') → null i.p.v. een regex-fout. Een stelling
+       of machine heeft geen houdbaarheidsdatum. */
+    tht: z.preprocess(
+        (v) => (v === '' || v == null ? null : v),
+        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    ).optional(),
     avg_daily: z.coerce.number().min(0).optional(),
     allergenen: z.array(z.string()).optional().default([]),
 });
