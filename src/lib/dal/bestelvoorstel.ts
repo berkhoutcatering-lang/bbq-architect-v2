@@ -46,6 +46,13 @@ export interface BestelvoorstelItem {
   categorie: string | null;
   override_applied: boolean;
   original_qty: number;
+  /* Opbouw van het aantal (fix #4: "waarom dit aantal"-uitklap). Alle stappen die
+     samen het tekort vormen — zodat een sceptische operator het kan narekenen. */
+  reserved_qty: number;   // som van de per-event vraag (vóór derving)
+  derving_pct: number;    // buffer-percentage
+  target_qty: number;     // reserved + derving
+  current_stock: number;  // wat er al ligt
+  in_flight_qty: number;  // wat al onderweg is (verzonden, niet ontvangen)
 }
 
 export interface BestelvoorstelLeverancier {
@@ -272,6 +279,11 @@ export async function buildBestelvoorstel(
       categorie: invMeta.categorie ?? r.categorie ?? null,
       override_applied: !!ov && (ov.override_qty != null || ov.override_leverancier_id != null),
       original_qty: originalQty,
+      reserved_qty: r.reserved_qty,
+      derving_pct: r.derving_pct,
+      target_qty: r.target_qty,
+      current_stock: r.current_stock,
+      in_flight_qty: r.in_flight_qty,
     };
 
     const bucket = getBucket(effectiveSupId);
