@@ -398,7 +398,10 @@ export async function getInventoryWithDemand(
     const dervingFactor = 1 + Math.max(0, dervingPct) / 100;
     const reservedBuffered = reserved * dervingFactor;
     const inFlight = inFlightByInv.get(inv.id) || 0;
-    const target = Math.max(reservedBuffered, par);
+    // Optie A (Sam): de bestellijst is PUUR event-gedreven. Par-niveau is GEEN
+    // ondergrens — we bestellen alleen wat de events nodig hebben (+ derving),
+    // niet "alles bijvullen tot par". Par blijft wel op /voorraad zichtbaar.
+    const target = reservedBuffered;
     const shortfall = Math.max(0, target - stock - inFlight);
     return {
       id: inv.id,
