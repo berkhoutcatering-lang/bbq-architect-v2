@@ -218,7 +218,10 @@ export async function POST(req: NextRequest) {
                     action = 'created';
                 }
 
-                /* stock_movement type=receive met unit_price snapshot */
+                /* stock_movement type=receive met unit_price snapshot.
+                   NB (fix #1 follow-up): dit inkoop-pad (geen live UI-caller) draait
+                   nog niet via de atomaire RPC — bon wordt hier pas ná verwerking
+                   aangemaakt, dus bonId is nog niet bekend bij de mutatie. */
                 const { data: mov } = await supabase
                     .from('stock_movements')
                     .insert({

@@ -103,12 +103,13 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
   async function drainInventoryForEvent(event: Record<string, any>) {
     const menuIds: any[] = event.menu || [];
     if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
-    const { data: inventory } = await supabase.from('inventory').select('*');
-    if (!inventory || inventory.length === 0) return;
     const guests = event.guests || 1;
-    const deducted: string[] = [];
-    const lowStock: string[] = [];
 
+    /* Matching (exact → alias → taxonomy), unit-conversie én de atomaire mutatie
+       gebeuren nu server-side via de gedeelde resolver (fix #1) — dezelfde
+       koppeling als de demand-motor, i.p.v. de oude substring + niet-atomaire
+       update die op een andere inventory-rij kon landen. */
+    const lines: Array<{ name: string; qty: number; unit: string | null; note: string }> = [];
     for (const receptId of menuIds) {
       const recept = recepten.find(r => String(r.id) === String(receptId));
       if (!recept) continue;
@@ -119,22 +120,31 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
       const porties = recept.porties || 1;
       const multiplier = guests / porties;
       for (const ing of ingredienten) {
-        const match = inventory.find((inv: any) => ing.naam && inv.naam && inv.naam.toLowerCase().includes(ing.naam.toLowerCase()));
-        if (!match) continue;
         const qty = (parseFloat(ing.hoeveelheid) || 0) * multiplier;
-        let unitFactor = 1;
-        if (ing.eenheid === 'gram' && match.unit === 'kg') unitFactor = 0.001;
-        if (ing.eenheid === 'ml' && match.unit === 'L') unitFactor = 0.001;
-        const deductAmount = qty * unitFactor;
-        const newStock = Math.max(0, (match.current_stock || 0) - deductAmount);
-        await supabase.from('inventory').update({ current_stock: newStock }).eq('id', match.id);
-        match.current_stock = newStock;
-        deducted.push(match.naam + ' -' + deductAmount.toFixed(1) + match.unit);
-        if (newStock < (match.min_stock || 0)) lowStock.push(match.naam);
+        if (!ing.naam || qty <= 0) continue;
+        /* 'gram'/'ml' normaliseren naar de unitFactor-vorm (g/ml). */
+        const unit = ing.eenheid === 'gram' ? 'g' : (ing.eenheid ?? null);
+        lines.push({ name: ing.naam, qty, unit, note: `Event afgerond: ${event.name || event.title || ''}` });
       }
     }
-    if (deducted.length) showToast('📉 Voorraad afgetrokken: ' + deducted.slice(0, 3).join(', ') + (deducted.length > 3 ? ` +${deducted.length - 3}` : ''), 'success');
-    if (lowStock.length) setTimeout(() => showToast('⚠️ VOORRAAD TE LAAG: ' + lowStock.join(', '), 'error'), 1500);
+    if (lines.length === 0) return;
+
+    try {
+      const res = await fetch('/api/inventory/consume', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines }),
+      });
+      if (!res.ok) { showToast('Voorraad-aftrek mislukt — controleer voorraad handmatig', 'error'); return; }
+      const json = await res.json();
+      const results = (json.results || []) as Array<{ matched: boolean; deducted: number; inventory_naam: string | null; unit: string | null; name: string | null }>;
+      const deducted = results.filter(r => r.matched && r.deducted > 0)
+        .map(r => `${r.inventory_naam} -${r.deducted.toFixed(1)}${r.unit || ''}`);
+      const misses = results.filter(r => !r.matched).map(r => r.name).filter(Boolean) as string[];
+      if (deducted.length) showToast('📉 Voorraad afgetrokken: ' + deducted.slice(0, 3).join(', ') + (deducted.length > 3 ? ` +${deducted.length - 3}` : ''), 'success');
+      if (misses.length) setTimeout(() => showToast('⚠️ Niet gekoppeld aan voorraad: ' + misses.slice(0, 3).join(', '), 'error'), 1200);
+    } catch {
+      showToast('Voorraad-aftrek mislukt — controleer voorraad handmatig', 'error');
+    }
   }
 
   function toggleMenu(receptId: number) {

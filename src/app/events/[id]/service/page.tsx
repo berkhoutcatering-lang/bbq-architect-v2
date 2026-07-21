@@ -51,16 +51,10 @@ async function deductCourseFromInventory(
         const totalPortions = course.items.reduce((a, i) => a + (i.count || 0), 0) || 1;
         const fraction = portionsServed / totalPortions;
 
-        const { supabase } = await import('@/lib/supabase');
         const { parseQty, deductFromInventory } = await import('@/lib/inventoryDeduction');
-        const { data: inv, error: invErr } = await supabase
-            .from('inventory')
-            .select('id, naam, current_stock, unit, organization_id');
-        if (invErr) {
-            throw new Error('Voorraad-query mislukt: ' + invErr.message);
-        }
-        if (!inv) return;
 
+        /* Matching + unit-conversie + atomaire mutatie gebeuren nu server-side
+           (fix #1): geef de ruwe naam + qty + eenheid mee, niets voorrekenen. */
         const lines = course.mise
             .map(m => {
                 const parsed = parseQty(m.qty);
@@ -68,12 +62,19 @@ async function deductCourseFromInventory(
                 return {
                     name: m.item,
                     qty: parsed.qty * fraction,
+                    unit: parsed.unit,
                     note: `Service ${eventTitle} · gang #${course.num}: ${course.title}`,
                 };
             })
-            .filter((x): x is { name: string; qty: number; note: string } => x !== null);
+            .filter((x): x is { name: string; qty: number; unit: string | null; note: string } => x !== null);
 
-        await deductFromInventory(lines, inv as any);
+        const { skipped, results } = await deductFromInventory(lines);
+        if (skipped > 0 && onError) {
+            const misses = (results as Array<{ name: string | null; matched: boolean }> | undefined)
+                ?.filter(r => !r.matched).map(r => r.name).filter(Boolean).slice(0, 3).join(', ');
+            onError('Niet alle mise gekoppeld aan voorraad voor gang ' + course.title
+                + (misses ? ' (' + misses + ')' : '') + ' — controleer voorraad handmatig');
+        }
     } catch (e) {
         const msg = e instanceof Error ? e.message : 'onbekende fout';
         console.error('[SERVICE] inventory-deduction failed for ' + course.title + ':', msg);

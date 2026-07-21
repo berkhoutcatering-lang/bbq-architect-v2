@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { setPreferredSupplierProduct } from '@/lib/dal/supplierBinding';
+import { applyStockDelta } from '@/lib/dal/stockMutation';
 
 /* ─── Schemas ────────────────────────────────────────────────── */
 
@@ -180,34 +181,33 @@ export async function adjustStock(input: unknown): Promise<ActionResult<{ result
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'unauthorized' };
 
-    /* Lees huidige stock + reken nieuwe. We doen geen atomic UPDATE met
-       SQL-formule omdat we de exacte resulting_stock willen rapporteren
-       én een floor op 0 willen forceren. Korte race-window acceptabel
-       voor de huidige tenant-grootte. */
-    const { data: item, error: readErr } = await supabase
-        .from('inventory')
-        .select('id, current_stock')
-        .eq('id', parsed.data.inventory_id)
-        .single();
-    if (readErr || !item) return { error: 'item niet gevonden' };
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
 
-    const oldStock = Number(item.current_stock || 0);
-    const newStock = Math.max(0, oldStock + parsed.data.delta);
-
-    const { error: updateErr } = await supabase
-        .from('inventory')
-        .update({ current_stock: newStock })
-        .eq('id', parsed.data.inventory_id);
-    if (updateErr) return { error: updateErr.message };
-
-    /* Best-effort audit-log. Stock_movements heeft zijn eigen RLS. */
-    void supabase.from('stock_movements').insert({
-        inventory_id: parsed.data.inventory_id,
-        type: parsed.data.type,
-        qty: parsed.data.delta,
-        resulting_stock: newStock,
+    /* Atomair via de gedeelde RPC: row-lock update (floor op 0) + movement-insert
+       + tenant-guard in één transactie. 'transfer' bestaat niet in de RPC-whitelist
+       en wordt nergens als waarde gebruikt → mappen op 'adjust'. */
+    const rpcType = parsed.data.type === 'transfer' ? 'adjust' : parsed.data.type;
+    const newStock = await applyStockDelta(supabase, mem.organization_id, {
+        inventoryId: parsed.data.inventory_id,
+        delta: parsed.data.delta,
+        type: rpcType,
         note: parsed.data.note || null,
-    }).then(() => null, () => null);
+    });
+    if (newStock == null) return { error: 'mutatie mislukt' };
+
+    /* Telling stempelt last_count_at (drift-reset-moment). */
+    if (parsed.data.type === 'count') {
+        await supabase.from('inventory')
+            .update({ last_count_at: new Date().toISOString() })
+            .eq('id', parsed.data.inventory_id);
+    }
 
     revalidatePath('/voorraad');
     return { data: { resulting_stock: newStock } };

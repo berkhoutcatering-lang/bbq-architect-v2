@@ -16,6 +16,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { applyStockDelta } from '@/lib/dal/stockMutation';
 import {
     FactuurSchema,
     FACTUUR_STATUSES,
@@ -172,30 +173,34 @@ export async function markFactuurStatus(input: unknown): Promise<ActionResult<{ 
 
     const drained: DrainedItem[] = [];
     if (shouldDrain && Array.isArray(factuur.items)) {
+        const { data: mem } = await supabase
+            .from('organization_members')
+            .select('organization_id')
+            .eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
+        const orgId = mem?.organization_id;
         const { data: inventory } = await supabase
             .from('inventory').select('id, naam, current_stock');
 
         for (const lineItem of factuur.items as Array<{ desc?: string; qty?: number }>) {
             const desc = (lineItem.desc || '').toLowerCase();
             const qty = Number(lineItem.qty || 0);
-            if (!desc || qty <= 0) continue;
+            if (!desc || qty <= 0 || !orgId) continue;
 
             for (const inv of inventory ?? []) {
                 const naam = (inv.naam || '').toLowerCase();
                 if (!naam || !desc.includes(naam)) continue;
-                const newStock = Math.max(0, Number(inv.current_stock || 0) - qty);
-                const delta = newStock - Number(inv.current_stock || 0);
-                await supabase
-                    .from('inventory').update({ current_stock: newStock }).eq('id', inv.id);
-                /* Audit-trail naar stock_movements; best-effort. */
-                void supabase.from('stock_movements').insert({
-                    inventory_id: inv.id,
+                /* Factuurregels zijn vrije tekst → substring-match blijft (de
+                   exacte resolver zou hier niets matchen). Maar de mutatie loopt
+                   nu atomair via de gedeelde RPC (fix #1). */
+                const oldStock = Number(inv.current_stock || 0);
+                const newStock = await applyStockDelta(supabase, orgId, {
+                    inventoryId: inv.id,
+                    delta: -qty,
                     type: 'usage',
-                    qty: delta,
-                    resulting_stock: newStock,
                     note: `Factuur ${parsed.data.id} → ${newStatus}`,
-                }).then(() => null, () => null);
-                drained.push({ inventory_id: inv.id, naam: inv.naam, delta, resulting_stock: newStock });
+                });
+                if (newStock == null) break;
+                drained.push({ inventory_id: inv.id, naam: inv.naam, delta: newStock - oldStock, resulting_stock: newStock });
                 break;  /* eén match per regel — voorkomt dubbele aftrek */
             }
         }

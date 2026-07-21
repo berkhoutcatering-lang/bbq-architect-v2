@@ -27,10 +27,12 @@ export interface InventoryRow {
 export interface DeductionLine {
     /* Direct inventory_id wins — geen matching nodig. */
     inventory_id?: number | string;
-    /* Anders: naam-string voor matching. */
+    /* Anders: naam-string voor de gedeelde resolver (server-side). */
     name?: string;
-    /* Hoeveelheid in inventory-unit (na unit-conversie door caller). */
+    /* Hoeveelheid in `unit` — server rekent om naar de inventory-eenheid. */
     qty: number;
+    /* Eenheid van qty (g/ml/kg/L/stuks…). Nodig voor correcte conversie. */
+    unit?: string | null;
     /* Vrije note voor stock_movements log. */
     note?: string;
     /* Optioneel: 'usage' (default) | 'waste' | 'correction'. */
@@ -91,53 +93,42 @@ export function matchInventory(query: string, inventory: InventoryRow[]): Invent
 }
 
 /**
- * Boek aftrek-lines af tegen inventory.
+ * Boek verbruik-lines af tegen inventory via de server-route /api/inventory/consume.
  *
- * Workflow:
- *  - inventory_id → directe lookup
- *  - else: matchInventory tegen naam
- *  - POST naar /api/_supa/stock-movement met `update_inventory: true` zodat
- *    de DB-trigger ook current_stock bijwerkt
+ * De naam-resolving (exact → alias → meat_taxonomy, dezelfde als de demand-motor)
+ * én unit-conversie én de atomaire mutatie gebeuren nu SERVER-SIDE, zodat vraag en
+ * aftrek op dezelfde inventory_id landen en er geen lost-update-race is (fix #1).
+ * Caller hoeft niet meer om te rekenen: geef qty in de eenheid van `unit` mee.
  *
- * Caller is verantwoordelijk voor unit-conversie (g→kg, ml→L). Deze functie
- * stuurt qty rauw door zoals aangeleverd.
+ * De tweede parameter is niet meer nodig (matching is server-side); hij blijft
+ * optioneel voor achterwaartse compatibiliteit en wordt genegeerd.
  *
- * Returns: aantal lines dat succesvol gepost is (best-effort — geen throw).
+ * Returns: { posted, skipped, results } (best-effort — geen throw).
  */
 export async function deductFromInventory(
     lines: DeductionLine[],
-    inventory: InventoryRow[],
-): Promise<{ posted: number; skipped: number }> {
-    let posted = 0;
-    let skipped = 0;
-
-    for (const line of lines) {
-        try {
-            let row: InventoryRow | undefined | null = null;
-            if (line.inventory_id !== undefined) {
-                row = inventory.find(i => String(i.id) === String(line.inventory_id));
-            } else if (line.name) {
-                row = matchInventory(line.name, inventory);
-            }
-            if (!row) { skipped++; continue; }
-
-            const newStock = Math.max(0, Number(row.current_stock || 0) - line.qty);
-            const res = await fetch('/api/_supa/stock-movement', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    inventory_id: row.id,
-                    type: line.type || 'usage',
-                    qty: -line.qty,
-                    resulting_stock: newStock,
-                    note: line.note || '',
-                    update_inventory: true,
-                }),
-            });
-            if (res.ok) posted++; else skipped++;
-        } catch {
-            skipped++;
-        }
+    _legacyInventory?: InventoryRow[],
+): Promise<{ posted: number; skipped: number; results?: unknown[] }> {
+    const clean = lines.filter(l => Number.isFinite(l.qty) && l.qty > 0);
+    if (clean.length === 0) return { posted: 0, skipped: 0 };
+    try {
+        const res = await fetch('/api/inventory/consume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lines: clean.map(l => ({
+                    inventory_id: l.inventory_id != null ? Number(l.inventory_id) : undefined,
+                    name: l.name,
+                    qty: l.qty,
+                    unit: l.unit ?? null,
+                    note: l.note || '',
+                })),
+            }),
+        });
+        if (!res.ok) return { posted: 0, skipped: clean.length };
+        const json = await res.json();
+        return { posted: json.posted ?? 0, skipped: json.skipped ?? 0, results: json.results };
+    } catch {
+        return { posted: 0, skipped: clean.length };
     }
-    return { posted, skipped };
 }
