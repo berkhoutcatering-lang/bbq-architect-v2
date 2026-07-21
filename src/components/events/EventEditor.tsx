@@ -103,40 +103,17 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
   async function drainInventoryForEvent(event: Record<string, any>) {
     const menuIds: any[] = event.menu || [];
     if (menuIds.length === 0) { showToast('Geen recepten gekoppeld — voorraad niet afgetrokken', 'info'); return; }
-    const guests = event.guests || 1;
 
-    /* Matching (exact → alias → taxonomy), unit-conversie én de atomaire mutatie
-       gebeuren nu server-side via de gedeelde resolver (fix #1) — dezelfde
-       koppeling als de demand-motor, i.p.v. de oude substring + niet-atomaire
-       update die op een andere inventory-rij kon landen. */
-    const lines: Array<{ name: string; qty: number; unit: string | null; note: string }> = [];
-    for (const receptId of menuIds) {
-      const recept = recepten.find(r => String(r.id) === String(receptId));
-      if (!recept) continue;
-      let ingredienten: any[] = (recept.ingredienten as any[]) || [];
-      if (typeof ingredienten === 'string') {
-        try { ingredienten = JSON.parse(ingredienten); } catch { ingredienten = []; }
-      }
-      const porties = recept.porties || 1;
-      const multiplier = guests / porties;
-      for (const ing of ingredienten) {
-        const qty = (parseFloat(ing.hoeveelheid) || 0) * multiplier;
-        if (!ing.naam || qty <= 0) continue;
-        /* 'gram'/'ml' normaliseren naar de unitFactor-vorm (g/ml). */
-        const unit = ing.eenheid === 'gram' ? 'g' : (ing.eenheid ?? null);
-        lines.push({ name: ing.naam, qty, unit, note: `Event afgerond: ${event.name || event.title || ''}` });
-      }
-    }
-    if (lines.length === 0) return;
-
+    /* Verbruik-boeking loopt nu via één idempotente server-action: die claimt het
+       event met een stempel (events.inventory_drained_at) en boekt hooguit één
+       keer, ongeacht of service-mode de mise al aftrok of via welke knop je afrondt
+       (perfect-pass integriteit-fix). */
     try {
-      const res = await fetch('/api/inventory/consume', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines }),
-      });
-      if (!res.ok) { showToast('Voorraad-aftrek mislukt — controleer voorraad handmatig', 'error'); return; }
-      const json = await res.json();
-      const results = (json.results || []) as Array<{ matched: boolean; deducted: number; inventory_naam: string | null; unit: string | null; name: string | null }>;
+      const { completeEventConsumption } = await import('@/app/events/actions');
+      const res = await completeEventConsumption(event.id);
+      if ('error' in res) { showToast('Voorraad-aftrek mislukt — controleer voorraad handmatig', 'error'); return; }
+      if (res.skipped) return;  // al geboekt via service-mode of ander pad — geen dubbele aftrek/toast
+      const results = (res.results || []) as Array<{ matched: boolean; deducted: number; inventory_naam: string | null; unit: string | null; name: string | null }>;
       const deducted = results.filter(r => r.matched && r.deducted > 0)
         .map(r => `${r.inventory_naam} -${r.deducted.toFixed(1)}${r.unit || ''}`);
       const misses = results.filter(r => !r.matched).map(r => r.name).filter(Boolean) as string[];

@@ -107,7 +107,7 @@ export function matchInventory(query: string, inventory: InventoryRow[]): Invent
  */
 export async function deductFromInventory(
     lines: DeductionLine[],
-    _legacyInventory?: InventoryRow[],
+    opts?: { eventId?: number },
 ): Promise<{ posted: number; skipped: number; results?: unknown[] }> {
     const clean = lines.filter(l => Number.isFinite(l.qty) && l.qty > 0);
     if (clean.length === 0) return { posted: 0, skipped: 0 };
@@ -116,6 +116,8 @@ export async function deductFromInventory(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                /* event_id stempelt het event als 'verbruik geboekt' (idempotency). */
+                event_id: opts?.eventId,
                 lines: clean.map(l => ({
                     inventory_id: l.inventory_id != null ? Number(l.inventory_id) : undefined,
                     name: l.name,

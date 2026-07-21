@@ -194,6 +194,13 @@ export default function ReflectiePage() {
         setCompletedAt(now);
         await persist({ completed_at: now, score: score ?? 0 });
         await supabase.from('events').update({ status: 'completed' }).eq('id', eventId);
+        /* Boek het verbruik idempotent (perfect-pass): no-op als service-mode of de
+           EventEditor het al deed, anders wordt hier het hele menu afgeboekt. Zo
+           boekt ook de canonieke reflectie-flow verbruik i.p.v. niets. */
+        try {
+            const { completeEventConsumption } = await import('@/app/events/actions');
+            await completeEventConsumption(eventId);
+        } catch { /* best-effort — reflectie mag niet blokkeren op voorraad */ }
         showToast('Reflectie afgerond — factuur staat klaar op het Overzicht', 'success');
     }
 

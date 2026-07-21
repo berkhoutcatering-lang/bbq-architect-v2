@@ -27,6 +27,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { applyConsumption } from '@/lib/dal/stockMutation';
 
 /* Schema is bewust ruimhartig — legacy events kennen statussen als
    'completed' en 'confirmed' (Engelse vorm) naast de NL-vorm. We
@@ -83,6 +84,74 @@ export async function upsertEvent(input: unknown): Promise<
   revalidatePath('/events');
   if (data?.id) revalidatePath(`/events/${data.id}/hub`);
   return { data: data! };
+}
+
+/* ─── completeEventConsumption ─────────────────────────────────────
+   Boekt het verbruik van een event ÉÉN keer op de voorraad, ongeacht via
+   welke knop het event afgerond wordt (EventEditor, reflectie, service).
+
+   Idempotency via events.inventory_drained_at als slot: één atomaire
+   "update ... where inventory_drained_at is null" claimt het event. Wint deze
+   call de claim (rij terug) → boek het hele menu af. Anders → al geboekt
+   (bijv. service-mode heeft de mise al per gang afgetrokken) → no-op.
+
+   Zo kan verbruik nooit 0× (reflectie boekte voorheen niets) of 2× (serve +
+   afronden) tellen — precies het getal waar de bestellijst op leunt. */
+export async function completeEventConsumption(
+  eventId: number | string,
+): Promise<{ ok: true; skipped?: boolean; drained?: number; results?: unknown[] } | { error: string }> {
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Niet ingelogd' };
+
+  const { data: mem } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle();
+  if (!mem?.organization_id) return { error: 'Geen actieve organisatie' };
+  const orgId = mem.organization_id;
+
+  /* Claim het event met één atomaire update-where-null. */
+  const { data: claimed, error: claimErr } = await supabase
+    .from('events')
+    .update({ inventory_drained_at: new Date().toISOString() })
+    .eq('id', eventId).eq('organization_id', orgId).is('inventory_drained_at', null)
+    .select('id, menu, guests')
+    .maybeSingle();
+  if (claimErr) return { error: claimErr.message };
+  if (!claimed) return { ok: true, skipped: true };  // al geboekt via een ander pad
+
+  const menuIds: unknown[] = Array.isArray(claimed.menu) ? claimed.menu : [];
+  const guests = Number(claimed.guests) || 0;
+  if (menuIds.length === 0 || guests <= 0) return { ok: true, drained: 0 };
+
+  const { data: recepten } = await supabase
+    .from('recepten')
+    .select('id, naam, ingredienten, porties')
+    .eq('organization_id', orgId)
+    .in('id', menuIds as (number | string)[]);
+
+  const lines: Array<{ name: string; qty: number; unit: string | null; note: string }> = [];
+  for (const r of (recepten || []) as Array<{ naam?: string; ingredienten?: unknown; porties?: number }>) {
+    let ingredienten: Array<{ naam?: string; hoeveelheid?: unknown; eenheid?: string }> = [];
+    if (Array.isArray(r.ingredienten)) ingredienten = r.ingredienten as typeof ingredienten;
+    else if (typeof r.ingredienten === 'string') {
+      try { ingredienten = JSON.parse(r.ingredienten); } catch { ingredienten = []; }
+    }
+    const porties = Number(r.porties) || 1;
+    const multiplier = guests / porties;
+    for (const ing of ingredienten) {
+      const qty = (parseFloat(String(ing?.hoeveelheid)) || 0) * multiplier;
+      if (!ing?.naam || qty <= 0) continue;
+      const unit = ing.eenheid === 'gram' ? 'g' : (ing.eenheid ?? null);
+      lines.push({ name: String(ing.naam), qty, unit, note: `Event afgerond: ${r.naam ?? ''}` });
+    }
+  }
+  if (lines.length === 0) return { ok: true, drained: 0 };
+
+  const { results, posted } = await applyConsumption(supabase, orgId, lines, { defaultNote: 'Event afgerond' });
+  revalidatePath('/voorraad');
+  return { ok: true, drained: posted, results };
 }
 
 const DeleteSchema = z.string().uuid();

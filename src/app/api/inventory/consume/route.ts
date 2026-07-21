@@ -25,10 +25,21 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
 
   const lines = (body as { lines?: ConsumeLine[] })?.lines;
   const note = (body as { note?: string })?.note;
+  const eventId = (body as { event_id?: number })?.event_id;
   if (!Array.isArray(lines) || lines.length === 0) {
     return NextResponse.json({ error: 'lines[] verplicht' }, { status: 400 });
   }
 
   const { results, posted, skipped } = await applyConsumption(supabase, orgId, lines, { defaultNote: note ?? null });
+
+  /* Idempotency-stempel: zodra serve-verbruik voor een event geboekt is, markeer
+     het event als 'geboekt' (once) zodat de completed-drain een no-op wordt en er
+     nooit dubbel geteld wordt. */
+  if (eventId != null && Number.isFinite(Number(eventId)) && posted > 0) {
+    await supabase.from('events')
+      .update({ inventory_drained_at: new Date().toISOString() })
+      .eq('id', eventId).eq('organization_id', orgId).is('inventory_drained_at', null);
+  }
+
   return NextResponse.json({ ok: true, posted, skipped, results });
 });

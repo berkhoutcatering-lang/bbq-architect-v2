@@ -45,6 +45,7 @@ async function deductCourseFromInventory(
     portionsServed: number,
     eventTitle: string,
     onError?: (msg: string) => void,
+    eventId?: number,
 ): Promise<void> {
     try {
         if (portionsServed <= 0 || !course.mise || course.mise.length === 0) return;
@@ -68,7 +69,7 @@ async function deductCourseFromInventory(
             })
             .filter((x): x is { name: string; qty: number; unit: string | null; note: string } => x !== null);
 
-        const { skipped, results } = await deductFromInventory(lines);
+        const { skipped, results } = await deductFromInventory(lines, { eventId });
         if (skipped > 0 && onError) {
             const misses = (results as Array<{ name: string | null; matched: boolean }> | undefined)
                 ?.filter(r => !r.matched).map(r => r.name).filter(Boolean).slice(0, 3).join(', ');
@@ -1381,7 +1382,7 @@ export default function ServiceMode() {
                         const alreadyServed = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
                         const newlyServed = totalPortions - alreadyServed;   /* portions die met deze advance "served" worden */
                         if (newlyServed > 0) {
-                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'));
+                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'), urlEventId);
                         }
                     }
                     return { ...c, status: newStatus };
@@ -1405,7 +1406,7 @@ export default function ServiceMode() {
                             if (i.served) return { ...i, served: false, ready: true };
                             if (i.ready) {
                                 /* Item van ready → served: trek dat aandeel af van voorraad */
-                                void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'));
+                                void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'), urlEventId);
                                 return { ...i, served: true };
                             }
                             if (i.inProgress) return { ...i, inProgress: false, ready: true };
@@ -1454,7 +1455,7 @@ export default function ServiceMode() {
                         const alreadyServed = c.items.filter(i => i.served).reduce((a, i) => a + (i.count || 0), 0);
                         const newlyServed = totalPortions - alreadyServed;
                         if (newlyServed > 0) {
-                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'));
+                            void deductCourseFromInventory(c, newlyServed, state.title, (msg) => showToast(msg, 'warning'), urlEventId);
                         }
                         items = c.items.map(i => ({ ...i, served: true, ready: true, inProgress: false }));
                         void persistCourseItems(c.id, items);
@@ -1476,7 +1477,7 @@ export default function ServiceMode() {
                     const items = c.items.map(i => {
                         if (i.id !== item.id) return i;
                         if (status === 'geserveerd') {
-                            if (!i.served) void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'));
+                            if (!i.served) void deductCourseFromInventory(c, i.count || 0, state.title, (msg) => showToast(msg, 'warning'), urlEventId);
                             return { ...i, served: true, ready: true, inProgress: false };
                         }
                         if (status === 'klaar') return { ...i, served: false, ready: true, inProgress: false };
