@@ -126,7 +126,7 @@ export async function buildBestelvoorstel(
   const inventoryIds = shortItems.map(function (r) { return r.id; });
   const { data: invRows } = await supabase
     .from('inventory')
-    .select('id, leverancier_id, last_price_eur, last_price_at, last_price_leverancier_id, purchase_price, categorie, preferred_supplier_product_id')
+    .select('id, leverancier_id, last_price_eur, last_price_at, last_price_leverancier_id, purchase_price, categorie, preferred_supplier_product_id, order_pack_qty')
     .in('id', inventoryIds);
   const invMap = new Map<number, any>();
   (invRows || []).forEach(function (r: any) { invMap.set(r.id, r); });
@@ -218,9 +218,11 @@ export async function buildBestelvoorstel(
     const needed = ov?.override_qty != null ? Number(ov.override_qty) : originalQty;
     if (needed <= 0) return;
 
+    // Besteleenheid op het product (bv. "per 100") wint van de supplier_product-pakmaat.
+    const hasProductPack = invMeta.order_pack_qty != null && Number(invMeta.order_pack_qty) > 0;
     const packed = roundUpToPack(needed, r.unit, {
-      package_size: sp?.package_size ?? null,
-      package_unit: sp?.package_unit ?? null,
+      package_size: hasProductPack ? Number(invMeta.order_pack_qty) : (sp?.package_size ?? null),
+      package_unit: hasProductPack ? r.unit : (sp?.package_unit ?? null),
       moq_packs: null,
     });
 
