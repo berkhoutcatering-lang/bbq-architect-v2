@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
 
 interface AllergenInput {
     allergen_code: string;
@@ -217,6 +218,13 @@ export async function POST(req: NextRequest) {
         }));
         const { error: haccpErr } = await supabase.from('component_haccp_points').insert(rows);
         if (haccpErr) warnings.push(`HACCP: ${haccpErr.message}`);
+    }
+
+    // Genormaliseerde ingrediënt-koppeling (component_ingredients) bijwerken zodat
+    // de bestelmotor het component-pad kan volgen. Best-effort — nooit fataal.
+    if (componentData.ingredients != null) {
+        const sync = await syncComponentIngredients(supabase, membership.organization_id, data.id, componentData.ingredients);
+        if (sync.error) warnings.push(`ingrediënt-koppeling: ${sync.error}`);
     }
 
     return NextResponse.json({

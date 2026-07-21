@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { setPreferredSupplierProduct } from '@/lib/dal/supplierBinding';
 
 /* ─── Schemas ────────────────────────────────────────────────── */
 
@@ -200,4 +201,42 @@ export async function adjustStock(input: unknown): Promise<ActionResult<{ result
 
     revalidatePath('/voorraad');
     return { data: { resulting_stock: newStock } };
+}
+
+/* ─── Vaste leverancier-product koppelen ─────────────────────────
+   Zet (of wist met null) de vaste leverancier van een voorraad-item. De
+   bestelmotor groepeert + rondt hierop af. Org-eigenaarschap van item én
+   supplier_product wordt in de DAL gecheckt. */
+const SetPreferredSupplierSchema = z.object({
+    inventory_id: z.coerce.number().int().positive(),
+    supplier_product_id: z.coerce.number().int().positive().nullable(),
+});
+
+export async function setPreferredSupplierProductAction(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = SetPreferredSupplierSchema.safeParse(input);
+    if (!parsed.success) {
+        return { error: 'validation', fields: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+    }
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'unauthorized' };
+
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    if (!mem?.organization_id) return { error: 'geen actieve organisatie gevonden' };
+
+    try {
+        await setPreferredSupplierProduct(supabase, mem.organization_id, parsed.data.inventory_id, parsed.data.supplier_product_id);
+    } catch (e) {
+        return { error: e instanceof Error ? e.message : 'koppelen mislukt' };
+    }
+
+    revalidatePath('/voorraad');
+    revalidatePath('/inkoop');
+    return { data: { ok: true } };
 }

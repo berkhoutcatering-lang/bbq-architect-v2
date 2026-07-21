@@ -646,6 +646,24 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         {fmtEur(item.est_total_eur)}
                     </span>
                 </div>
+                {item.pack_label && (
+                    <div style={{ marginTop: 5, fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span>nodig {fmtQty(item.qty_needed, item.unit)}</span>
+                        <span style={{ color: 'var(--border)' }}>→</span>
+                        <span
+                            style={{
+                                padding: '1px 7px',
+                                borderRadius: 999,
+                                background: 'rgba(255,255,255,.05)',
+                                border: '1px solid var(--border)',
+                                fontWeight: 600,
+                                color: 'var(--text)',
+                            }}
+                        >
+                            {item.pack_label}
+                        </span>
+                    </div>
+                )}
                 {item.events.length > 0 && (
                     <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
                         ↳ {item.events.map(function (e) {

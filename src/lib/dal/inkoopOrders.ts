@@ -163,6 +163,81 @@ export async function markOrderSent(
     if (error) throw new Error('Order op sent zetten mislukt: ' + error.message);
 }
 
+export interface ReceivedLineInput {
+    line_id: string;
+    qty_received: number;
+    unit_price_eur: number | null;
+    reason?: string | null;
+}
+
+/** Ontvangst boeken: zet qty_received per regel, hoogt de voorraad atomair op
+ *  (increment_inventory_stock → stock_movements type='receive'), en zet de order
+ *  op 'received' zodra ÁLLE regels vol binnen zijn (anders blijft 'ie 'sent' voor
+ *  het openstaande deel — deel-ontvangst). Sluit de ontvangst-loop (beslissing #6). */
+export async function markOrderReceived(
+    sb: SupabaseClient,
+    orgId: string,
+    orderId: string,
+    received: ReceivedLineInput[],
+): Promise<void> {
+    // Bron van waarheid = de persisted regels van DEZE order. We vertrouwen NOOIT
+    // de client-inventory_id, en we hogen op met het VERSCHIL t.o.v. wat al geboekt
+    // was — idempotent bij her-boeken/deel-levering, dus geen dubbeltelling.
+    const { data: existingLines, error: readErr } = await sb
+        .from('inkoop_order_lines')
+        .select('id, inventory_id, qty_ordered, qty_received, unit_price_eur')
+        .eq('concept_order_id', orderId)
+        .eq('organization_id', orgId);
+    if (readErr) throw new Error('Orderregels ophalen mislukt: ' + readErr.message);
+    const lineById = new Map<string, any>((existingLines || []).map(function (l: any) { return [l.id as string, l]; }));
+
+    for (const r of received) {
+        const line = lineById.get(r.line_id);
+        if (!line) continue; // regel hoort niet bij deze order → overslaan (line-ownership)
+
+        const prev = Number(line.qty_received ?? 0);
+        const next = Math.max(0, Number(r.qty_received) || 0);
+        const delta = Math.round((next - prev) * 1000) / 1000;
+
+        const { error: upErr } = await sb
+            .from('inkoop_order_lines')
+            .update({ qty_received: next })
+            .eq('id', r.line_id)
+            .eq('concept_order_id', orderId)
+            .eq('organization_id', orgId);
+        if (upErr) throw new Error('Orderregel bijwerken mislukt: ' + upErr.message);
+
+        if (line.inventory_id != null && delta !== 0) {
+            const { error: rpcErr } = await sb.rpc('increment_inventory_stock', {
+                p_org: orgId,
+                p_inventory_id: line.inventory_id, // uit de persisted regel, niet uit client-input
+                p_delta: delta,
+                p_type: 'receive',
+                p_unit_price: r.unit_price_eur ?? line.unit_price_eur ?? null,
+                p_order_line_id: r.line_id,
+                p_note: r.reason ? `Ontvangst: ${String(r.reason).slice(0, 200)}` : 'Ontvangst inkoop-order',
+            });
+            if (rpcErr) throw new Error('Voorraad ophogen mislukt: ' + rpcErr.message);
+        }
+    }
+
+    // Order pas 'received' als alle regels vol ontvangen zijn (anders deel-ontvangst → 'sent' houden).
+    const { data: lines } = await sb
+        .from('inkoop_order_lines')
+        .select('qty_ordered, qty_received')
+        .eq('concept_order_id', orderId)
+        .eq('organization_id', orgId);
+    const allReceived = (lines || []).length > 0
+        && (lines || []).every(function (l: any) { return Number(l.qty_received ?? 0) >= Number(l.qty_ordered ?? 0); });
+
+    const { error: stErr } = await sb
+        .from('concept_inkoop_orders')
+        .update({ status: allReceived ? 'received' : 'sent' })
+        .eq('id', orderId)
+        .eq('organization_id', orgId);
+    if (stErr) throw new Error('Order-status bijwerken mislukt: ' + stErr.message);
+}
+
 /** Eindigt het bestaan van een concept (UI: "X" op een bucket). */
 export async function cancelConceptOrder(
     sb: SupabaseClient,
