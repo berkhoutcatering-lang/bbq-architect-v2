@@ -14,6 +14,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
 export interface MenuTemplateShallow {
     id: number;
@@ -33,6 +34,7 @@ export interface MenuTemplateGerechtRef {
     gang_slug: string | null;
     kostprijs_pp: number | null;
     verkoopprijs: number | null;
+    total_cost_cents: number | null;   // componenten-rollup (hardste kostprijs-bron)
     foto_url: string | null;
     allergenen: string[] | null;
 }
@@ -101,7 +103,7 @@ export async function getMenuTemplate(
             menu_template_items (
                 id, gerecht_id, gang_slug, volgorde,
                 gerecht:gerechten (
-                    id, naam, gang_slug, kostprijs_pp, verkoopprijs, foto_url, allergenen
+                    id, naam, gang_slug, kostprijs_pp, verkoopprijs, total_cost_cents, foto_url, allergenen
                 )
             )
         `)
@@ -125,6 +127,7 @@ export async function getMenuTemplate(
                 gang_slug: row.gerecht.gang_slug ?? null,
                 kostprijs_pp: row.gerecht.kostprijs_pp != null ? Number(row.gerecht.kostprijs_pp) : null,
                 verkoopprijs: row.gerecht.verkoopprijs != null ? Number(row.gerecht.verkoopprijs) : null,
+                total_cost_cents: row.gerecht.total_cost_cents != null ? Number(row.gerecht.total_cost_cents) : null,
                 foto_url: row.gerecht.foto_url ?? null,
                 allergenen: row.gerecht.allergenen ?? null,
             }
@@ -175,4 +178,79 @@ export function findUnlinkedDishNames(template: MenuTemplateWithItems): Array<{ 
         }
     }
     return unlinked;
+}
+
+/* ── Marge per menukaart (seizoensmenu doorrekenen) ─────────────────────────
+   Rolt kostprijs + marge op per gerecht ÉN voor het hele menu, tegen elk
+   gerecht z'n EIGEN verkoopprijs (nooit een globale gemiddelde-prijs), en
+   markeert wat onder de doel-marge zakt. Kostprijs via effectieveKostprijsPP
+   (componenten-rollup eerst). */
+
+export interface MenuMarginDish {
+    gerecht_id: string;
+    naam: string;
+    gang_slug: string | null;
+    kostPP: number;
+    verkoop: number;
+    margePct: number | null;   // null = geen verkoopprijs ingevuld
+    belowTarget: boolean;
+}
+
+export interface MenuMargins {
+    dishes: MenuMarginDish[];
+    blendedPct: number | null; // geld-gewogen marge over het hele menu
+    target: number;            // doel-marge %
+    missingPrice: string[];    // gerecht-namen zonder verkoopprijs
+}
+
+export async function getMenuTemplateMargins(
+    sb: SupabaseClient,
+    templateId: number,
+    target: number,
+): Promise<MenuMargins> {
+    const { data, error } = await sb
+        .from('menu_template_items')
+        .select(`
+            gerecht_id, gang_slug, volgorde,
+            gerecht:gerechten ( id, naam, gang_slug, verkoopprijs, kostprijs_pp, total_cost_cents )
+        `)
+        .eq('menu_template_id', templateId)
+        .order('gang_slug', { ascending: true })
+        .order('volgorde', { ascending: true });
+    if (error) throw new Error(`getMenuTemplateMargins: ${error.message}`);
+
+    const dishes: MenuMarginDish[] = [];
+    const missingPrice: string[] = [];
+    let sumVerkoop = 0;
+    let sumWinst = 0;
+
+    for (const row of (data ?? []) as any[]) {
+        const g = row.gerecht;
+        if (!g) continue;
+        const kostPP = effectieveKostprijsPP({ total_cost_cents: g.total_cost_cents, kostprijs_pp: g.kostprijs_pp });
+        const verkoop = Number(g.verkoopprijs) || 0;
+        const margePct = verkoop > 0 ? ((verkoop - kostPP) / verkoop) * 100 : null;
+        if (verkoop <= 0) {
+            missingPrice.push(g.naam);
+        } else {
+            sumVerkoop += verkoop;
+            sumWinst += verkoop - kostPP;
+        }
+        dishes.push({
+            gerecht_id: g.id,
+            naam: g.naam,
+            gang_slug: g.gang_slug ?? row.gang_slug ?? null,
+            kostPP,
+            verkoop,
+            margePct,
+            belowTarget: margePct != null && margePct < target,
+        });
+    }
+
+    return {
+        dishes,
+        blendedPct: sumVerkoop > 0 ? (sumWinst / sumVerkoop) * 100 : null,
+        target,
+        missingPrice,
+    };
 }
