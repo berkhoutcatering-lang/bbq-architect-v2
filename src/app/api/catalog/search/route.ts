@@ -83,7 +83,10 @@ export async function GET(req: NextRequest) {
         .eq('organization_id', orgId)
         .in('master_product_id', Array.from(masterById.keys()))
         .eq('actief', true)
-        .order('datum', { ascending: false });
+        /* Nieuwste echte prijs wint; datum NULL mag nooit boven een gedateerde prijs
+           sorteren (Postgres DESC = NULLS FIRST default), id als deterministische tiebreak. */
+        .order('datum', { ascending: false, nullsFirst: false })
+        .order('id', { ascending: false });
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 
     /* Flatten naar één optie per (product × leverancier); nieuwste actieve prijs wint. */

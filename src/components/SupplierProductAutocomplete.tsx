@@ -162,6 +162,12 @@ export default function SupplierProductAutocomplete({
         };
     }, [showList]);
 
+    /* Actieve optie in beeld scrollen bij pijltjes-navigatie. */
+    useEffect(() => {
+        if (!showList || hits.length === 0) return;
+        document.getElementById(`${listboxId}-opt-${active}`)?.scrollIntoView({ block: 'nearest' });
+    }, [active, showList, hits.length, listboxId]);
+
     return (
         <div style={{ position: 'relative', ...style }} className={className}>
             <div style={{ position: 'relative' }}>
@@ -182,6 +188,7 @@ export default function SupplierProductAutocomplete({
                     aria-autocomplete="list"
                     aria-expanded={showList}
                     aria-controls={listboxId}
+                    aria-activedescendant={showList && hits.length > 0 ? `${listboxId}-opt-${active}` : undefined}
                     className="kf-input"
                     style={{ paddingLeft: 26 }}
                 />
@@ -221,6 +228,7 @@ export default function SupplierProductAutocomplete({
                             return (
                                 <div
                                     key={optionKey(h)}
+                                    id={`${listboxId}-opt-${idx}`}
                                     role="option"
                                     aria-selected={isActive}
                                     onMouseEnter={() => setActive(idx)}
