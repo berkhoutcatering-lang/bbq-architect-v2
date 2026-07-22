@@ -25,6 +25,7 @@ import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
 import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
+import { ingredientRowCostCents, resolvePricingFromSupplierPrice } from '@/lib/ingredientPricing';
 
 interface AiProposal {
     name: string;
@@ -205,20 +206,13 @@ function ingredientSumCents(rows: IngredientFormRow[]): number {
    per stuk → €/stuk × aantal. Geeft null als de regel niet (volledig) gekoppeld
    is, zodat de vrij-getikte kostprijs blijft staan. */
 function linkedRowCostCents(row: IngredientFormRow): number | null {
-    if (!row.master_product_id || !row.unit_price || row.unit_price <= 0) return null;
-    const qty = parseDec(row.qty);
-    if (!Number.isFinite(qty) || qty <= 0) return null;
-    if (row.price_basis === 'kg') {
-        /* Kg-prijs: alleen gewicht-eenheden zijn geldig. Een niet-gewicht-eenheid
-           (ml/liter/stuk) mag NOOIT stil als kilo's gerekend worden (1000×-fout) —
-           dan geven we null terug en blijft de handmatige kostprijs staan. */
-        const u = row.unit.trim().toLowerCase();
-        if (u === 'kg') return Math.round(row.unit_price * qty * 100);
-        if (u === 'g') return Math.round(row.unit_price * (qty / 1000) * 100);
-        return null;
-    }
-    // 'stuk' / verpakking: prijs geldt per (verpakkings)eenheid → prijs × aantal.
-    return Math.round(row.unit_price * qty * 100);
+    if (!row.master_product_id) return null;
+    return ingredientRowCostCents({
+        qty: parseDec(row.qty),
+        unit: row.unit,
+        unit_price: row.unit_price,
+        price_basis: row.price_basis,
+    });
 }
 
 function stepsFromJson(value: unknown): string[] {
@@ -1742,22 +1736,7 @@ function IngredientsEditor({
     /* Koos een leverancier-product uit de prijslijst-catalogus. Bepaalt eerlijk
        de rekenwijze (per kg vs per verpakkingseenheid) en het label. */
     function pickHit(idx: number, hit: CatalogSearchHit) {
-        const eenheid = (hit.eenheid || '').trim();
-        const eLow = eenheid.toLowerCase();
-        let basis: 'kg' | 'stuk';
-        let unitPrice: number;
-        let priceUnit: string;
-        if (hit.prijs_per_kg && hit.prijs_per_kg > 0) {
-            basis = 'kg'; unitPrice = hit.prijs_per_kg; priceUnit = 'kg';
-        } else if (hit.prijs_per_stuk && hit.prijs_per_stuk > 0) {
-            basis = 'stuk'; unitPrice = hit.prijs_per_stuk; priceUnit = 'stuk';
-        } else if (eLow === 'kg' || eLow === 'kilo' || eLow === 'kilogram') {
-            /* Exact-match: 'kg' — NIET substring, anders wordt '12kg doos' fout als €/kg gelezen. */
-            basis = 'kg'; unitPrice = hit.prijs; priceUnit = 'kg';
-        } else {
-            /* Generieke verpakking (doos/pak/stuk/'12kg doos'): prijs geldt per die eenheid. */
-            basis = 'stuk'; unitPrice = hit.prijs; priceUnit = eenheid || 'stuk';
-        }
+        const { price_basis: basis, unit_price: unitPrice, price_unit: priceUnit } = resolvePricingFromSupplierPrice(hit);
         onChange(rows.map((r, i) => {
             if (i !== idx) return r;
             const unit = basis === 'kg' ? (r.unit === 'g' || r.unit === 'kg' ? r.unit : 'kg') : priceUnit;

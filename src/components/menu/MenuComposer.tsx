@@ -34,6 +34,7 @@ import {
 const LibrarySidebar = dynamic(() => import('./LibrarySidebar'), { ssr: false });
 const AiSuggestionsSheet = dynamic(() => import('./AiSuggestionsSheet'), { ssr: false });
 const InlinePicker = dynamic(() => import('./InlinePicker'), { ssr: false });
+const MargeDrawer = dynamic(() => import('./MargeDrawer'), { ssr: false });
 import {
     DndContext, KeyboardSensor, PointerSensor, TouchSensor,
     useSensor, useSensors, closestCenter, type DragEndEvent,
@@ -123,6 +124,7 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
     const [dirty, setDirty] = useState(false);
     const [draftRestored, setDraftRestored] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [showMarge, setShowMarge] = useState(false);
     const [mobileExpanded, setMobileExpanded] = useState<Record<string, boolean>>(() => {
         const e: Record<string, boolean> = {};
         gangen.forEach((g, i) => { e[g.slug] = i === 0; });
@@ -407,6 +409,16 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
                         <Trash2 size={14} />
                     </button>
                 )}
+                {templateId && (
+                    <button
+                        type="button"
+                        onClick={() => setShowMarge(true)}
+                        title="Marge per gerecht en voor het hele menu — kloppen de maatjes?"
+                        style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'transparent', color: 'var(--text)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        Marge-check
+                    </button>
+                )}
                 <button
                     type="button"
                     onClick={() => handleSave('use-in-offerte')}
@@ -430,6 +442,10 @@ export default function MenuComposer({ initial, gerechten, gangen }: Props) {
                     {saving ? 'Opslaan…' : dirty ? 'Opslaan' : 'Opgeslagen'}
                 </button>
             </div>
+
+            {showMarge && templateId != null && (
+                <MargeDrawer templateId={templateId} onClose={() => setShowMarge(false)} />
+            )}
 
             {/* ── Draft-restored banner ─────────────────────────────────── */}
             {draftRestored && (

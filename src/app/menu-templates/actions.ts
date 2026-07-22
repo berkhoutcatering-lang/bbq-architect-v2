@@ -27,7 +27,12 @@ import {
     MenuTemplateUpsertSchema,
     ApplyMenuTemplateSchema,
 } from '@/lib/schemas/menu-template';
-import { listMenuTemplatesShallow, type MenuTemplateShallow } from '@/lib/dal/menuTemplates';
+import { listMenuTemplatesShallow, getMenuTemplateMargins, type MenuTemplateShallow, type MenuMargins } from '@/lib/dal/menuTemplates';
+import { refreshRecipePrices, type PriceRefreshReport } from '@/lib/dal/priceRefresh';
+
+/* Default-doel-marge zolang de org er geen eigen heeft ingesteld (of vóór de
+   doel_marge migratie draait). Marge hier = (verkoop − kost) / verkoop. */
+const DEFAULT_DOEL_MARGE = 65;
 
 /* Een 'use server' module mag ALLEEN async functions exporteren (Next.js/
    Turbopack server-actions-loader). De vroegere `export type { ... }` re-export
@@ -259,4 +264,83 @@ export async function listMenuTemplates(): Promise<{ data: MenuTemplateShallow[]
     } catch (e) {
         return { error: (e as Error).message };
     }
+}
+
+/* ── Seizoensmenu doorrekenen ───────────────────────────────────────────── */
+
+/** Resolve de actieve org via membership. RLS scope't reads sowieso, maar
+    settings/refresh hebben het org-id expliciet nodig. */
+async function resolveOrgId(supabase: Awaited<ReturnType<typeof createServerSupabase>>): Promise<string | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: mem } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+    return mem?.organization_id ?? null;
+}
+
+/** Marge per gerecht + het hele menu, tegen de (org-)doel-marge. */
+export async function getMenuMarginsAction(templateId: number): Promise<{ data: MenuMargins } | { error: string }> {
+    const parsed = z.coerce.number().int().positive().safeParse(templateId);
+    if (!parsed.success) return { error: 'Ongeldig menukaart-id' };
+    const supabase = await createServerSupabase();
+    const orgId = await resolveOrgId(supabase);
+    if (!orgId) return { error: 'Geen organisatie' };
+
+    /* Doel-marge defensief lezen: select('*') zodat een ontbrekende kolom (vóór
+       de migratie) geen error geeft — dan valt 'ie terug op de default. */
+    const { data: st } = await supabase.from('settings').select('*').eq('organization_id', orgId).maybeSingle();
+    /* null/undefined (niet gezet, of kolom bestaat nog niet) → default.
+       Een echt opgeslagen getal 0–100 (óók 0) wordt gerespecteerd. */
+    const rawTarget = (st as Record<string, unknown> | null)?.doel_marge_pct;
+    const stored = rawTarget == null ? NaN : Number(rawTarget);
+    const target = Number.isFinite(stored) && stored >= 0 && stored <= 100 ? stored : DEFAULT_DOEL_MARGE;
+
+    try {
+        const data = await getMenuTemplateMargins(supabase, parsed.data, target);
+        return { data };
+    } catch (e) {
+        return { error: (e as Error).message };
+    }
+}
+
+/** Ververs de leverancier-prijzen in de recepten (org-breed of één menukaart). */
+export async function refreshRecipePricesAction(menuTemplateId?: number): Promise<{ data: PriceRefreshReport } | { error: string }> {
+    const supabase = await createServerSupabase();
+    const orgId = await resolveOrgId(supabase);
+    if (!orgId) return { error: 'Geen organisatie' };
+
+    const tplId = menuTemplateId != null
+        ? z.coerce.number().int().positive().safeParse(menuTemplateId)
+        : null;
+    if (tplId && !tplId.success) return { error: 'Ongeldig menukaart-id' };
+
+    try {
+        const data = await refreshRecipePrices(supabase, orgId, tplId ? { menuTemplateId: tplId.data } : {});
+        revalidatePath('/gerechten');
+        revalidatePath('/marges');
+        if (tplId) revalidatePath(`/gerechten/menukaarten/${tplId.data}`);
+        return { data };
+    } catch (e) {
+        return { error: (e as Error).message };
+    }
+}
+
+/** Org-doel-marge instellen (vereist de doel_marge migratie). */
+export async function setDoelMargeAction(pct: number): Promise<{ ok: true } | { error: string }> {
+    const parsed = z.coerce.number().min(0).max(100).safeParse(pct);
+    if (!parsed.success) return { error: 'Doel-marge moet 0–100% zijn' };
+    const supabase = await createServerSupabase();
+    const orgId = await resolveOrgId(supabase);
+    if (!orgId) return { error: 'Geen organisatie' };
+
+    const { error } = await supabase.from('settings').update({ doel_marge_pct: parsed.data }).eq('organization_id', orgId);
+    if (error) return { error: `Opslaan mislukt — draai migratie 20260722140000 (${error.message})` };
+
+    revalidatePath('/gerechten/menukaarten');
+    return { ok: true };
 }
