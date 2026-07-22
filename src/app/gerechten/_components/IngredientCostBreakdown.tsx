@@ -41,7 +41,7 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
              quantity_used,
              unit,
              cost_at_use_cents,
-             components ( id, name, base_quantity, base_unit, base_cost_cents, supplier_product_id )`
+             components ( id, name, base_quantity, base_unit, base_cost_cents, supplier_product_id, type, ingredients )`
         )
         .eq('gerecht_id', gerechtId)
         .eq('organization_id', organizationId);
@@ -71,37 +71,66 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
         );
     }
 
-    /* Per component: vind huidige supplier_price (latest, actief) per master_product_id */
-    const supplierProductIds = gc
-        .map((r: any) => r.components?.supplier_product_id)
-        .filter((v: any) => v !== null && v !== undefined);
+    /* Leverancier per component uit de JUISTE bron:
+       - bought_in → Inkoop-catalogus supplier_products → leveranciers (Catalog B).
+       - prepared  → de gekozen leverancier(s) uit de picker in components.ingredients (Catalog A JSONB).
+       NIET via supplier_prices op supplier_product_id — dat zijn twee losse id-ruimtes
+       (bekende cross-catalog mismatch) en gaf een verkeerde/lege leverancier. */
+    const boughtInSpIds: number[] = gc
+        .map((r: any) => (r.components?.type === 'bought_in' ? r.components?.supplier_product_id : null))
+        .filter((v: any): v is number => typeof v === 'number');
 
-    let supplierPriceMap = new Map<number, { leverancier: string | null; prijs_per_kg: number | null; created_at: string | null }>();
-    if (supplierProductIds.length > 0) {
-        const { data: sp } = await sb
-            .from('supplier_prices')
-            .select('master_product_id, leverancier, prijs_per_kg, prijs, created_at')
-            .in('master_product_id', supplierProductIds)
-            .eq('organization_id', organizationId)
-            .eq('actief', true)
-            .order('created_at', { ascending: false });
+    const supplierById = new Map<number, string | null>();
+    if (boughtInSpIds.length > 0) {
+        const { data: sps } = await sb
+            .from('supplier_products')
+            .select('id, supplier_id')
+            .in('id', Array.from(new Set(boughtInSpIds)))
+            .eq('organization_id', organizationId);
+        const supplierIds = Array.from(new Set((sps ?? []).map((s: any) => s.supplier_id).filter((v: any): v is number => typeof v === 'number')));
+        const levNameById = new Map<number, string>();
+        if (supplierIds.length > 0) {
+            const { data: levs } = await sb
+                .from('leveranciers')
+                .select('id, naam')
+                .in('id', supplierIds)
+                .eq('organization_id', organizationId);
+            for (const l of levs ?? []) levNameById.set((l as any).id, (l as any).naam);
+        }
+        for (const s of sps ?? []) supplierById.set((s as any).id, levNameById.get((s as any).supplier_id) ?? null);
+    }
 
-        for (const row of sp ?? []) {
-            const id = (row as any).master_product_id as number;
-            if (!supplierPriceMap.has(id)) {
-                supplierPriceMap.set(id, {
-                    leverancier: (row as any).leverancier ?? null,
-                    prijs_per_kg: (row as any).prijs_per_kg ?? (row as any).prijs ?? null,
-                    created_at: (row as any).created_at ?? null,
-                });
+    /* Picker-koppelingen uit de ingredients-JSONB (per zelf-bereid component). */
+    function pickerLinks(ingredients: unknown): { leveranciers: string[]; masterIds: number[] } {
+        const leveranciers: string[] = [];
+        const masterIds: number[] = [];
+        if (Array.isArray(ingredients)) {
+            for (const it of ingredients) {
+                if (!it || typeof it !== 'object') continue;
+                const mp = (it as any).master_product_id;
+                const lev = (it as any).leverancier;
+                if (typeof mp === 'number' && !masterIds.includes(mp)) masterIds.push(mp);
+                if (typeof lev === 'string' && lev.trim() && !leveranciers.includes(lev)) leveranciers.push(lev);
             }
         }
+        return { leveranciers, masterIds };
     }
 
     const rows: IngredientRow[] = gc.map((r: any) => {
         const comp = r.components || {};
-        const supplierProductId = comp.supplier_product_id as number | null;
-        const sp = supplierProductId ? supplierPriceMap.get(supplierProductId) : undefined;
+        let leverancier: string | null = null;
+        let masterProductId: number | null = null;
+        if (comp.type === 'bought_in' && typeof comp.supplier_product_id === 'number') {
+            leverancier = supplierById.get(comp.supplier_product_id) ?? null;
+        } else if (comp.type === 'prepared') {
+            const { leveranciers, masterIds } = pickerLinks(comp.ingredients);
+            leverancier = leveranciers.length === 0 ? null
+                : leveranciers.length === 1 ? leveranciers[0]
+                    : `${leveranciers[0]} +${leveranciers.length - 1}`;
+            /* Alleen een écht Catalog-A master_product_id doorgeven aan de
+               substitutie-knop; bij meerdere/geen → null (geen verkeerde match). */
+            masterProductId = masterIds.length === 1 ? masterIds[0] : null;
+        }
         return {
             key: String(r.component_id),
             naam: comp.name ?? 'Onbekend',
@@ -110,10 +139,10 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
             unit: r.unit || comp.base_unit || '-',
             base_cost_cents: Number(comp.base_cost_cents ?? 0),
             cost_at_use_cents: Number(r.cost_at_use_cents ?? 0),
-            master_product_id: supplierProductId,
-            leverancier: sp?.leverancier ?? null,
-            prijs_per_kg: sp?.prijs_per_kg ?? null,
-            last_price_at: sp?.created_at ?? null,
+            master_product_id: masterProductId,
+            leverancier,
+            prijs_per_kg: null,
+            last_price_at: null,
         };
     });
 

@@ -979,7 +979,13 @@ function ComponentEditDrawer({
         if (!Number.isFinite(qty) || qty <= 0) return { ok: false as const, reason: 'Basis-hoeveelheid > 0' };
         const cost = Number(costEuros);
         if (!Number.isFinite(cost) || cost < 0) return { ok: false as const, reason: 'Kostprijs ongeldig' };
-        const baseCostCents = Math.round(cost * 100);
+        let baseCostCents = Math.round(cost * 100);
+        /* Zelf-bereid met lege kostprijs → som van de ingrediënten overnemen
+           (voorkomt de €0-cascade naar gerechten bij vergeten 'Gebruik als kostprijs'). */
+        if (comp?.type === 'prepared' && baseCostCents === 0) {
+            const sumC = ingredientSumCents(ingredients);
+            if (sumC > 0) { baseCostCents = sumC; setCostEuros((sumC / 100).toFixed(2)); }
+        }
         const tags = flavorTags.split(',').map(t => t.trim()).filter(Boolean);
         return { ok: true as const, qty, baseCostCents, tags };
     }
@@ -1373,7 +1379,11 @@ function SupplierImportDrawer({
                         <div className="kf-body">
                             <div className="kf-banner">
                                 <FileText size={14} />
-                                <span>Voor je <strong>vaste assortiment</strong>: een favorietenlijst uit Hanos Shop / Sligro Marktplaats, een prijslijst van je leverancier, of een foto van een productrek. AI extraheert naam, prijs, eenheid en SKU per product en voegt ze toe als <strong>bought_in components</strong>.</span>
+                                <span>Voor je <strong>vaste assortiment</strong>: een favorietenlijst uit Hanos Shop / Sligro Marktplaats, of een foto van een productrek. AI extraheert naam, prijs, eenheid en SKU per product en voegt ze toe als kant-en-klare <strong>componenten</strong> in je bibliotheek.</span>
+                            </div>
+                            <div className="kf-banner">
+                                <ShoppingBag size={14} />
+                                <span>Zoek je in <strong>Zelf bereid → Ingrediënt</strong> je leverancier-prijzen (spareribs van Beef Club, Bidfood…)? Die komen uit je <strong>prijslijsten</strong> — importeer een prijslijst bij <Link href="/leveranciers" className="underline">Leveranciers</Link>. Deze bulk-import vult je componenten­bibliotheek, niet dat zoekvak.</span>
                             </div>
 
                             <div className="kf-banner kf-banner-warn">
@@ -1741,10 +1751,11 @@ function IngredientsEditor({
             basis = 'kg'; unitPrice = hit.prijs_per_kg; priceUnit = 'kg';
         } else if (hit.prijs_per_stuk && hit.prijs_per_stuk > 0) {
             basis = 'stuk'; unitPrice = hit.prijs_per_stuk; priceUnit = 'stuk';
-        } else if (eLow.includes('kg') || eLow === 'kilo') {
+        } else if (eLow === 'kg' || eLow === 'kilo' || eLow === 'kilogram') {
+            /* Exact-match: 'kg' — NIET substring, anders wordt '12kg doos' fout als €/kg gelezen. */
             basis = 'kg'; unitPrice = hit.prijs; priceUnit = 'kg';
         } else {
-            /* Generieke verpakking (doos/pak/stuk): prijs geldt per die eenheid. */
+            /* Generieke verpakking (doos/pak/stuk/'12kg doos'): prijs geldt per die eenheid. */
             basis = 'stuk'; unitPrice = hit.prijs; priceUnit = eenheid || 'stuk';
         }
         onChange(rows.map((r, i) => {
@@ -1950,7 +1961,15 @@ function ReceptuurDrawer({
         if (!name.trim()) { toast('Naam verplicht', 'error'); return; }
         const qty = parseDec(baseQty);
         if (!Number.isFinite(qty) || qty <= 0) { toast('Basis-hoeveelheid > 0', 'error'); return; }
-        const cost = parseDec(costEuros);
+        let cost = parseDec(costEuros);
+        /* Voorkom de €0-cascade: is de kostprijs leeg terwijl er ingrediënt-kosten
+           staan, neem dan de som automatisch over (zoals 'Gebruik als kostprijs'). */
+        const sumC = ingredientSumCents(ingredients);
+        if (sumC > 0 && (!Number.isFinite(cost) || Math.round(cost * 100) === 0)) {
+            cost = sumC / 100;
+            setCostEuros(cost.toFixed(2));
+            toast(`Kostprijs overgenomen van je ingrediënten (€${cost.toFixed(2)})`, 'success');
+        }
         if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig — tip: gebruik de som van je ingrediënten', 'error'); return; }
 
         setSaving(true);
