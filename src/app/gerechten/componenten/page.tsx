@@ -24,6 +24,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
 import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
+import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 
 interface AiProposal {
     name: string;
@@ -127,6 +128,15 @@ interface IngredientFormRow {
     qty: string;
     unit: string;
     cost_euros: string;
+    /* Optionele koppeling aan de prijslijst-catalogus (master_products +
+       supplier_prices). Is deze gezet, dan volgt de kostprijs automatisch uit
+       de gekozen leverancier-prijs × aantal (zie linkedRowCostCents). */
+    master_product_id?: number | null;
+    supplier_price_id?: number | null;
+    leverancier?: string | null;
+    unit_price?: number | null;              // € per kg of per (verpakkings)eenheid
+    price_basis?: 'kg' | 'stuk' | null;      // rekenwijze: 'kg' = per kilo, 'stuk' = per eenheid × aantal
+    price_unit?: string | null;              // eerlijk label/lock-eenheid van de prijs ('kg' | 'stuk' | 'doos' | 'pak' …)
 }
 
 const emptyIngredientRow = (): IngredientFormRow => ({ name: '', qty: '', unit: 'g', cost_euros: '' });
@@ -141,21 +151,45 @@ function ingredientsFromJson(value: unknown): IngredientFormRow[] {
             unit: typeof v.unit === 'string' ? v.unit : '',
             cost_euros: typeof v.cost_cents === 'number' && Number.isFinite(v.cost_cents) && v.cost_cents > 0
                 ? (v.cost_cents / 100).toFixed(2) : '',
+            master_product_id: typeof v.master_product_id === 'number' ? v.master_product_id : null,
+            supplier_price_id: typeof v.supplier_price_id === 'number' ? v.supplier_price_id : null,
+            leverancier: typeof v.leverancier === 'string' ? v.leverancier : null,
+            unit_price: typeof v.unit_price === 'number' && Number.isFinite(v.unit_price) ? v.unit_price : null,
+            price_basis: v.price_basis === 'kg' || v.price_basis === 'stuk' ? v.price_basis : null,
+            price_unit: typeof v.price_unit === 'string' ? v.price_unit : null,
         }));
 }
 
-function rowsToIngredientsJson(rows: IngredientFormRow[]): Array<{ name: string; qty: number; unit: string; cost_cents: number }> {
+type IngredientJson = {
+    name: string; qty: number; unit: string; cost_cents: number;
+    master_product_id?: number; supplier_price_id?: number | null;
+    leverancier?: string | null; unit_price?: number | null;
+    price_basis?: 'kg' | 'stuk' | null; price_unit?: string | null;
+};
+
+function rowsToIngredientsJson(rows: IngredientFormRow[]): IngredientJson[] {
     return rows
         .filter(r => r.name.trim().length > 0)
         .map(r => {
             const qty = parseDec(r.qty);
             const cents = Math.round(parseDec(r.cost_euros) * 100);
-            return {
+            const base: IngredientJson = {
                 name: r.name.trim(),
                 qty: Number.isFinite(qty) && qty > 0 ? qty : 0,
                 unit: r.unit.trim(),
                 cost_cents: Number.isFinite(cents) && cents > 0 ? cents : 0,
             };
+            /* Koppel-velden alleen meesturen als er echt een leverancier-product
+               gekozen is — houdt de JSONB schoon voor vrije-tekst-ingrediënten. */
+            if (r.master_product_id) {
+                base.master_product_id = r.master_product_id;
+                base.supplier_price_id = r.supplier_price_id ?? null;
+                base.leverancier = r.leverancier ?? null;
+                base.unit_price = r.unit_price ?? null;
+                base.price_basis = r.price_basis ?? null;
+                base.price_unit = r.price_unit ?? null;
+            }
+            return base;
         });
 }
 
@@ -164,6 +198,27 @@ function ingredientSumCents(rows: IngredientFormRow[]): number {
         const cents = Math.round(parseDec(r.cost_euros) * 100);
         return s + (Number.isFinite(cents) && cents > 0 ? cents : 0);
     }, 0);
+}
+
+/* Kostprijs van een gekoppelde ingrediëntregel = gekozen leverancier-prijs ×
+   aantal. Puur code-rekenwerk (nooit AI): per kg → €/kg × aantal-in-kg;
+   per stuk → €/stuk × aantal. Geeft null als de regel niet (volledig) gekoppeld
+   is, zodat de vrij-getikte kostprijs blijft staan. */
+function linkedRowCostCents(row: IngredientFormRow): number | null {
+    if (!row.master_product_id || !row.unit_price || row.unit_price <= 0) return null;
+    const qty = parseDec(row.qty);
+    if (!Number.isFinite(qty) || qty <= 0) return null;
+    if (row.price_basis === 'kg') {
+        /* Kg-prijs: alleen gewicht-eenheden zijn geldig. Een niet-gewicht-eenheid
+           (ml/liter/stuk) mag NOOIT stil als kilo's gerekend worden (1000×-fout) —
+           dan geven we null terug en blijft de handmatige kostprijs staan. */
+        const u = row.unit.trim().toLowerCase();
+        if (u === 'kg') return Math.round(row.unit_price * qty * 100);
+        if (u === 'g') return Math.round(row.unit_price * (qty / 1000) * 100);
+        return null;
+    }
+    // 'stuk' / verpakking: prijs geldt per (verpakkings)eenheid → prijs × aantal.
+    return Math.round(row.unit_price * qty * 100);
 }
 
 function stepsFromJson(value: unknown): string[] {
@@ -1653,9 +1708,72 @@ function IngredientsEditor({
     onAdoptSum: (sumCents: number) => void;
 }) {
     const sum = ingredientSumCents(rows);
+    /* Gekoppelde regels zonder aantal leveren geen kostprijs en tellen niet mee. */
+    const anyNeedsQty = rows.some(r => r.master_product_id && !!r.unit_price && linkedRowCostCents(r) == null);
+
     function updateRow(idx: number, patch: Partial<IngredientFormRow>) {
-        onChange(rows.map((r, i) => i === idx ? { ...r, ...patch } : r));
+        onChange(rows.map((r, i) => {
+            if (i !== idx) return r;
+            let next: IngredientFormRow = { ...r, ...patch };
+            /* Handmatig de naam wijzigen op een gekoppelde regel = koppeling losmaken —
+               anders hoort de opgeslagen naam niet meer bij het leverancier-product. */
+            if ('name' in patch && r.master_product_id && patch.name !== r.name) {
+                next = { ...next, master_product_id: null, supplier_price_id: null, leverancier: null, unit_price: null, price_basis: null, price_unit: null };
+            }
+            /* Gekoppelde regel: kostprijs volgt automatisch uit prijs × aantal. */
+            if (next.master_product_id) {
+                const c = linkedRowCostCents(next);
+                if (c != null) next.cost_euros = (c / 100).toFixed(2);
+            }
+            return next;
+        }));
     }
+
+    /* Koos een leverancier-product uit de prijslijst-catalogus. Bepaalt eerlijk
+       de rekenwijze (per kg vs per verpakkingseenheid) en het label. */
+    function pickHit(idx: number, hit: CatalogSearchHit) {
+        const eenheid = (hit.eenheid || '').trim();
+        const eLow = eenheid.toLowerCase();
+        let basis: 'kg' | 'stuk';
+        let unitPrice: number;
+        let priceUnit: string;
+        if (hit.prijs_per_kg && hit.prijs_per_kg > 0) {
+            basis = 'kg'; unitPrice = hit.prijs_per_kg; priceUnit = 'kg';
+        } else if (hit.prijs_per_stuk && hit.prijs_per_stuk > 0) {
+            basis = 'stuk'; unitPrice = hit.prijs_per_stuk; priceUnit = 'stuk';
+        } else if (eLow.includes('kg') || eLow === 'kilo') {
+            basis = 'kg'; unitPrice = hit.prijs; priceUnit = 'kg';
+        } else {
+            /* Generieke verpakking (doos/pak/stuk): prijs geldt per die eenheid. */
+            basis = 'stuk'; unitPrice = hit.prijs; priceUnit = eenheid || 'stuk';
+        }
+        onChange(rows.map((r, i) => {
+            if (i !== idx) return r;
+            const unit = basis === 'kg' ? (r.unit === 'g' || r.unit === 'kg' ? r.unit : 'kg') : priceUnit;
+            const next: IngredientFormRow = {
+                ...r,
+                name: hit.naam,
+                unit,
+                master_product_id: hit.master_product_id,
+                supplier_price_id: hit.supplier_price_id,
+                leverancier: hit.leverancier,
+                unit_price: unitPrice > 0 ? unitPrice : null,
+                price_basis: basis,
+                price_unit: priceUnit,
+            };
+            const c = linkedRowCostCents(next);
+            if (c != null) next.cost_euros = (c / 100).toFixed(2);
+            return next;
+        }));
+    }
+
+    /* Koppeling losmaken → terug naar vrij-getikte naam + prijs. */
+    function unlink(idx: number) {
+        onChange(rows.map((r, i) => i === idx
+            ? { ...r, master_product_id: null, supplier_price_id: null, leverancier: null, unit_price: null, price_basis: null, price_unit: null }
+            : r));
+    }
+
     return (
         <section className="kf-section">
             <div className="kf-section-head">
@@ -1665,26 +1783,76 @@ function IngredientsEditor({
             {rows.length === 0 ? (
                 <div className="kf-empty">
                     <div className="kf-empty-icon"><Boxes size={17} /></div>
-                    <p>Nog geen ingrediënten. Voeg ze toe om de kostprijs op te bouwen.</p>
+                    <p>Nog geen ingrediënten. Tik een naam en kies de leverancier uit je prijslijsten — de kostprijs vult zich vanzelf.</p>
                 </div>
             ) : (
                 <div className="flex flex-col gap-1.5">
                     <div className="grid items-center gap-1.5 px-0.5" style={{ gridTemplateColumns: '1fr 3.5rem 3.5rem 4.5rem 1.75rem', fontSize: 10, fontWeight: 600, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                        <span>Naam</span><span>Aantal</span><span>Eenheid</span><span>Kosten €</span><span></span>
+                        <span>Naam / leverancier</span><span>Aantal</span><span>Eenheid</span><span>Kosten €</span><span></span>
                     </div>
-                    {rows.map((r, idx) => (
-                        <div key={idx} className="grid items-center gap-1.5" style={{ gridTemplateColumns: '1fr 3.5rem 3.5rem 4.5rem 1.75rem' }}>
-                            <input type="text" value={r.name} onChange={(e) => updateRow(idx, { name: e.target.value })} placeholder="bv. Ananas" className="kf-input" />
-                            <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="kf-input" />
-                            <input type="text" value={r.unit} onChange={(e) => updateRow(idx, { unit: e.target.value })} placeholder="g" className="kf-input" />
-                            <input type="text" inputMode="decimal" value={r.cost_euros} onChange={(e) => updateRow(idx, { cost_euros: e.target.value })} placeholder="1,20" className="kf-input" />
-                            <button type="button" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Verwijder ${r.name || 'ingrediënt'}`} className="kf-trash"><Trash2 size={13} /></button>
-                        </div>
-                    ))}
+                    {rows.map((r, idx) => {
+                        const linked = !!r.master_product_id;
+                        const needsQty = linked && !!r.unit_price && linkedRowCostCents(r) == null;
+                        return (
+                            <div key={idx} className="flex flex-col gap-1">
+                                <div className="grid items-center gap-1.5" style={{ gridTemplateColumns: '1fr 3.5rem 3.5rem 4.5rem 1.75rem' }}>
+                                    <SupplierProductAutocomplete
+                                        value={r.name}
+                                        onChange={(naam) => updateRow(idx, { name: naam })}
+                                        onPick={(hit) => pickHit(idx, hit)}
+                                    />
+                                    <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="kf-input" />
+                                    {/* Gekoppeld op kg-prijs: alleen g/kg toegestaan (geen 1000×-fout). Andere koppeling: eenheid vast. */}
+                                    {linked && r.price_basis === 'kg' ? (
+                                        <select value={r.unit === 'g' ? 'g' : 'kg'} onChange={(e) => updateRow(idx, { unit: e.target.value })} className="kf-input" style={{ padding: '7px 4px' }} aria-label="Eenheid">
+                                            <option value="kg">kg</option>
+                                            <option value="g">g</option>
+                                        </select>
+                                    ) : linked ? (
+                                        <input type="text" value={r.unit} readOnly className="kf-input" title="Eenheid van de leverancier-prijs" style={{ opacity: 0.7, cursor: 'not-allowed' }} />
+                                    ) : (
+                                        <input type="text" value={r.unit} onChange={(e) => updateRow(idx, { unit: e.target.value })} placeholder="g" className="kf-input" />
+                                    )}
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={r.cost_euros}
+                                        onChange={(e) => updateRow(idx, { cost_euros: e.target.value })}
+                                        placeholder={linked ? (needsQty ? 'aantal?' : '—') : '1,20'}
+                                        className="kf-input"
+                                        readOnly={linked}
+                                        title={linked ? 'Kostprijs volgt automatisch uit de leverancier-prijs × aantal' : undefined}
+                                        style={linked ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
+                                    />
+                                    <button type="button" onClick={() => onChange(rows.filter((_, i) => i !== idx))} aria-label={`Verwijder ${r.name || 'ingrediënt'}`} className="kf-trash"><Trash2 size={13} /></button>
+                                </div>
+                                {linked && (
+                                    <div className="flex items-center gap-1.5" style={{ fontSize: 11, color: 'var(--muted)', paddingLeft: 2, flexWrap: 'wrap' }}>
+                                        <ShoppingBag size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
+                                        <span>
+                                            <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{r.leverancier || 'leverancier'}</strong>
+                                            {r.unit_price ? <> · €{r.unit_price.toFixed(2)} / {r.price_unit || r.price_basis || 'kg'}</> : null}
+                                        </span>
+                                        {needsQty && <span style={{ color: '#f59e0b', fontWeight: 600 }}>· vul aantal in</span>}
+                                        <button type="button" onClick={() => unlink(idx)} className="kf-add" style={{ marginLeft: 4 }} title="Koppeling losmaken en zelf de prijs invullen">
+                                            <X size={10} /> losmaken
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
                     {sum > 0 && (
-                        <div className="kf-card kf-card-accent flex items-center justify-between" style={{ padding: '8px 12px' }}>
-                            <span style={{ fontSize: 12 }}>Som ingrediënt-kosten: <strong className="font-mono" style={{ color: 'var(--brand)' }}>€{(sum / 100).toFixed(2)}</strong></span>
-                            <button type="button" onClick={() => onAdoptSum(sum)} className="kf-add">Gebruik als kostprijs</button>
+                        <div className="kf-card kf-card-accent" style={{ padding: '8px 12px' }}>
+                            <div className="flex items-center justify-between">
+                                <span style={{ fontSize: 12 }}>Som ingrediënt-kosten: <strong className="font-mono" style={{ color: 'var(--brand)' }}>€{(sum / 100).toFixed(2)}</strong></span>
+                                <button type="button" onClick={() => onAdoptSum(sum)} className="kf-add">Gebruik als kostprijs</button>
+                            </div>
+                            {anyNeedsQty && (
+                                <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                                    Let op: een gekoppeld product heeft nog geen aantal en telt niet mee in dit bedrag.
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
