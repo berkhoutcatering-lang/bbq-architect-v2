@@ -16,6 +16,13 @@ import { inPageExtract } from './inpage-extract.js';
 const LEASE_SECONDS = 120;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Prefix een taak-sleutel met het run-id zodat sleutels per run uniek zijn — de
+ *  unieke DB-index op taken/checkpoints is per organisatie, niet per run. Binnen
+ *  één run is de prefix constant, dus replay (SW-restart) blijft idempotent. */
+function runKeyed(task, runId) {
+    return { ...task, idempotencyKey: `${runId}:${task.idempotencyKey}` };
+}
+
 /** Bouw de adapter-context met geïnjecteerde, credentialed capabilities. */
 function buildAdapterCtx(active, adapter) {
     return {
@@ -205,11 +212,16 @@ async function claimAndExecute({ active, run, adapter, ctx }) {
     const observations = (result.records || []).flatMap((rec) =>
         adapter.normalize({ ...rec, sourceCursor: task.sourceCursor }, ctx));
 
+    // Vervolgtaken óók per run prefixen (zie startRun), anders botsen ze bij een
+    // herhaalde sync met de vorige run. De checkpoint-sleutel (task.idempotencyKey)
+    // is al de opgeslagen, geprefixte sleutel → replay blijft veilig.
+    const nextTasks = (result.nextTasks || []).map((t) => runKeyed(t, run.id));
+
     // Transactioneel checkpoint; idempotency-key = taak-sleutel (replay-veilig).
     const ack = await apiV2.checkpoint(run.id, task.idempotencyKey, {
         taskId: task.id,
         observations,
-        nextTasks: result.nextTasks || [],
+        nextTasks,
         adapterDiagnostics: result.diagnostics || {},
     });
 
@@ -244,8 +256,11 @@ export async function startRun({ supplierId, accountKey, adapterKey, origin, mod
 
     await setActiveRun({ runId: started.runId, supplierId, accountKey, adapterKey: adapter.key, origin, categories: categories || [], taxMode: pf.taxMode || 'ex_vat' });
 
-    // Ontdek de eerste taken en registreer ze (idempotent).
-    const tasks = await adapter.discover(ctx).catch(() => []);
+    // Ontdek de eerste taken en registreer ze (idempotent). Sleutels prefixen met
+    // het run-id: de unieke index op taken/checkpoints is per ORGANISATIE, niet per
+    // run — zonder prefix botst een HERHAALDE sync met de vorige run en krijgt 'ie
+    // 0 taken. De prefix is per run constant, dus replay binnen een run blijft veilig.
+    const tasks = (await adapter.discover(ctx).catch(() => [])).map((t) => runKeyed(t, started.runId));
     if (tasks.length) await apiV2.registerTasks(started.runId, tasks);
 
     return { ok: true, runId: started.runId, resumed: started.resumed, preflight: pf };
