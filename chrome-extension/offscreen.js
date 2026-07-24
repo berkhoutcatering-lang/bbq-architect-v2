@@ -3,7 +3,9 @@
  * gesanitiseerde productvelden terug (nooit ruwe HTML/cookies/headers).
  *
  * Selector-spec (generiek, per adapter):
- *   { productCard, name, link, priceHost, priceAttr, priceText, skuHost, skuAttr, next }
+ *   { productCard, cardBoundary, name, link, priceHost, priceAttr, priceText, skuHost, skuAttr, next }
+ * cardBoundary: als gezet, is productCard een ANKER en wordt de echte kaart
+ *   anchor.closest(cardBoundary) (voor sites waar naam/prijs in losse sub-blokken zitten).
  * Retourneert { records:[{name,priceText,url,sku}], next: <href|null> }.
  */
 
@@ -15,9 +17,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         try {
             const doc = new DOMParser().parseFromString(String(msg.html || ''), 'text/html');
             const sel = msg.selectors || {};
-            const cards = doc.querySelectorAll(sel.productCard || '.product-item');
+            const nodes = doc.querySelectorAll(sel.productCard || '.product-item');
             const records = [];
-            cards.forEach((card) => {
+            const seen = new Set();
+            nodes.forEach((node) => {
+                const card = sel.cardBoundary ? (node.closest(sel.cardBoundary) || node) : node;
+                if (seen.has(card)) return;
+                seen.add(card);
                 const nameEl = card.querySelector(sel.name || '.product-item-link');
                 const name = textOf(nameEl);
                 if (!name) return;

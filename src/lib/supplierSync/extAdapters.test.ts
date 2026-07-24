@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { baktotaalAdapter } from '../../../chrome-extension/adapters/baktotaal.js';
+import { bidfoodAdapter } from '../../../chrome-extension/adapters/bidfood.js';
 import { syntheticAdapter } from '../../../chrome-extension/adapters/synthetic.js';
 import { detectAdapter } from '../../../chrome-extension/adapters/registry.js';
 import { validateObservation } from './observationSchema';
@@ -187,6 +188,72 @@ describe('baktotaal DOM-route — echte Magento-structuur (zakelijk portaal)', (
         expect(pf.ok).toBe(true);
         expect(pf.sample.length).toBe(2);
         expect(pf.taxMode).toBe('ex_vat');
+    });
+});
+
+describe('bidfood DOM-route (ATG/Endeca, server-rendered)', () => {
+    const bctx = { ...ctx, adapterKey: 'bidfood', adapterVersion: '1.0.0' };
+
+    it('registry herkent Bidfood', () => {
+        expect(detectAdapter('https://www.bidfood.nl/webshop/assortiment/vlees')?.key).toBe('bidfood');
+    });
+
+    it('normalize: SKU=data-sku-id, jsessionid gestript uit URL', () => {
+        const [obs] = bidfoodAdapter.normalize({
+            name: 'Kipfilet 5 kg', priceText: '42.00', sku: '125163DJ',
+            url: 'https://www.bidfood.nl/webshop/product/kipfilet-5-kg/_/A-productId-1-125163DJ;jsessionid_jboss=abc.worker10prodwebshop',
+        }, bctx);
+        const v = validateObservation(obs).value!;
+        expect(v.supplierSku).toBe('125163DJ');
+        expect(v.productUrl).toBe('https://www.bidfood.nl/webshop/product/kipfilet-5-kg/_/A-productId-1-125163DJ');
+        expect(v.taxMode).toBe('ex_vat');
+        expect(pricingOf(v).pricePerKg).toBe(8.4); // 42,00 / 5 kg
+    });
+
+    it('normalize: "80 gr per stuk, doosje 10 stuks" → 10 × 80 g → €/kg klopt', () => {
+        const [obs] = bidfoodAdapter.normalize({
+            name: 'Rundercarpaccio 80 gr per stuk, doosje 10 stuks', priceText: '18.40', sku: '125163DJ',
+            url: 'https://www.bidfood.nl/webshop/product/rundercarpaccio/_/A-productId-1-125163DJ',
+        }, bctx);
+        const v = validateObservation(obs).value!;
+        expect(v.packCount).toBe('10');
+        expect(v.contentPerItemQuantity).toBe('80');
+        expect(v.contentPerItemUnit).toBe('g');
+        expect(pricingOf(v).pricePerKg).toBe(23); // 18,40 / 0,8 kg
+    });
+
+    it('onduidelijke verpakking → geen gegokte prijs (naar review)', () => {
+        const [obs] = bidfoodAdapter.normalize({
+            name: 'Rundercarpaccio (vers)', priceText: '18.40', sku: '999DJ',
+            url: 'https://www.bidfood.nl/webshop/product/x/_/A-productId-1-999DJ',
+        }, bctx);
+        const pr = pricingOf(validateObservation(obs).value);
+        expect(pr.ok).toBe(false); // priceBasis unknown → review, nooit auto-geprijsd
+    });
+
+    it('fetchTask: paginering schuift ?No= op met aantal producten', async () => {
+        const domCtx = {
+            ...bctx,
+            fetchText: async () => '<html>ingelogd</html>',
+            parseHtml: async () => ({ records: [
+                { name: 'A 1 kg', priceText: '5.00', sku: 'A1DJ', url: '/webshop/product/a/_/A-productId-1-A1DJ' },
+                { name: 'B 2 kg', priceText: '6.00', sku: 'B1DJ', url: '/webshop/product/b/_/A-productId-1-B1DJ' },
+            ], next: null }),
+        };
+        const r = await bidfoodAdapter.fetchTask(domCtx, { sourceCursor: JSON.stringify({ base: '/webshop/assortiment/vlees/_/N-8o7', No: 0 }) });
+        expect(r.records.length).toBe(2);
+        expect(r.nextTasks[0].sourceUrl).toContain('?No=2');
+    });
+
+    it('preflight: producten zichtbaar maar geen prijzen → PERSONAL_PRICE_NOT_VISIBLE', async () => {
+        const domCtx = {
+            ...bctx,
+            fetchText: async () => '<html>niet ingelogd</html>',
+            parseHtml: async () => ({ records: [{ name: 'A 1 kg', priceText: '', sku: 'A1DJ', url: '/x' }], next: null }),
+        };
+        const pf = await bidfoodAdapter.preflight(domCtx);
+        expect(pf.ok).toBe(false);
+        expect(pf.code).toBe('PERSONAL_PRICE_NOT_VISIBLE');
     });
 });
 
