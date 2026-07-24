@@ -1,29 +1,35 @@
 {
   "manifest_version": 3,
-  "name": "BBQ Architect — Catalogus Scanner",
-  "version": "0.6.4",
-  "description": "Universele catalogus-scanner — JSON-LD, platform-detectie, Claude HTML-analyse en vision. Werkt op elke webshop zonder per-site configuratie. Stuurt producten + prijzen direct naar BBQ Architect.",
+  "name": "BBQ Architect — Leverancierssync",
+  "version": "0.7.0",
+  "minimum_chrome_version": "120",
+  "description": "Hervatbare, herleidbare synchronisatie van leveranciersprijzen naar BBQ Architect. Werkt op de ingelogde leverancierssite; de server bewaakt run, volledigheid en datakwaliteit.",
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting"
+    "alarms",
+    "scripting",
+    "offscreen",
+    "sidePanel",
+    "tabs"
   ],
-  "host_permissions": [
-    "<all_urls>"
+  "optional_host_permissions": [
+    "https://*.baktotaal.nl/*",
+    "https://baktotaal.nl/*",
+    "https://*.makro.nl/*",
+    "https://*.sligro.nl/*",
+    "https://*.hanos.nl/*",
+    "https://*.bidfood.nl/*",
+    "https://*.vuurenrook.nl/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background/sw.js",
+    "type": "module"
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "BBQ Architect — Scan"
+    "default_title": "BBQ Architect — Leverancierssync"
   },
-  "options_page": "options.html",
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["auto-extractor.js", "content.js"],
-      "run_at": "document_idle"
-    }
-  ]
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "options_page": "options.html"
 }

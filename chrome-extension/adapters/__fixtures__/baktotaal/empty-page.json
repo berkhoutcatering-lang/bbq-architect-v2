@@ -1,0 +1,6 @@
+{
+  "result": {
+    "products": [],
+    "pagination": { "page": 4, "pageCount": 3, "pageSize": 5, "total": 12 }
+  }
+}

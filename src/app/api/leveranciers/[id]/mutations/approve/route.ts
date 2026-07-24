@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { dbNormalize } from '@/lib/pricelistMatch';
+import { inferApprovalPriceBasis } from '@/lib/ingredientPricing';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -161,8 +162,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         }
         const eenheid = (m.parsed_eenheid || 'stuks').trim();
         const eenhLower = eenheid.toLowerCase();
-        const prijsPerKg = (eenhLower.includes('kg') || eenhLower === 'kilo') ? m.parsed_prijs : null;
-        const prijsPerStuk = (eenhLower === 'stuks' || eenhLower === 'stuk' || eenhLower.includes('pak')) ? m.parsed_prijs : null;
+        /* Fix: pakhoeveelheden ("doos 5 kg", "2,5 kg", "12 stuks") NIET als
+           per-eenheid prijs wegschrijven — dat corrumpeerde prijs_per_kg. */
+        const { prijs_per_kg: prijsPerKg, prijs_per_stuk: prijsPerStuk } = inferApprovalPriceBasis(eenhLower, m.parsed_prijs);
 
         /* Dedup binnen batch */
         const key = `${m.master_product_id}|${eenhLower}|${m.parsed_prijs}`;

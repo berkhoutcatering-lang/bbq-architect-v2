@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BBQ Architect — Leverancierssync</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header class="hdr">
+    <div class="brand">BBQ Architect</div>
+    <div id="supplier-line" class="supplier">—</div>
+    <div id="meta-line" class="meta"></div>
+  </header>
+
+  <main id="main">
+    <!-- Statusbanner -->
+    <div id="banner" class="banner hidden"></div>
+
+    <!-- not_connected -->
+    <section id="s-not-connected" class="card hidden">
+      <h2>Niet verbonden</h2>
+      <p>Stel eerst de API-URL en extension-key in via de opties.</p>
+      <button id="btn-options" class="secondary">Open opties</button>
+    </section>
+
+    <!-- wrong_site -->
+    <section id="s-wrong-site" class="card hidden">
+      <h2>Andere website</h2>
+      <p id="wrong-site-text">Deze pagina hoort niet bij een gekoppelde leverancier.</p>
+    </section>
+
+    <!-- permission_required -->
+    <section id="s-permission" class="card hidden">
+      <h2>Toegang vereist</h2>
+      <p id="perm-text">Geef BBQ Architect toegang tot deze leverancier om te kunnen synchroniseren.</p>
+      <button id="btn-permission" class="primary">Geef toegang</button>
+    </section>
+
+    <!-- ready / preflight / sample -->
+    <section id="s-ready" class="card hidden">
+      <div class="scope">
+        <label>Wat synchroniseren?</label>
+        <select id="scope">
+          <option value="linked">Gekoppelde producten</option>
+          <option value="favorites">Favorieten / eerder besteld</option>
+          <option value="full">Volledige catalogus</option>
+        </select>
+      </div>
+      <button id="btn-preflight" class="secondary">Controleer eerst 5 producten</button>
+      <div id="sample" class="sample hidden">
+        <h3>Klopt dit?</h3>
+        <table id="sample-table"><tbody></tbody></table>
+      </div>
+      <button id="btn-start" class="primary">Synchroniseer</button>
+    </section>
+
+    <!-- running / paused / partial / completed -->
+    <section id="s-progress" class="card hidden">
+      <div id="run-state" class="run-state"></div>
+      <div class="counters" id="counters"></div>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <div class="actions">
+        <button id="btn-pause" class="secondary">Pauzeer</button>
+        <button id="btn-resume" class="secondary hidden">Hervat</button>
+        <button id="btn-cancel" class="danger">Annuleer</button>
+      </div>
+      <div id="checkpoint-line" class="muted"></div>
+    </section>
+
+    <!-- Geavanceerd -->
+    <details class="advanced">
+      <summary>Geavanceerd</summary>
+      <div class="adv-body">
+        <button id="btn-test" class="secondary">Test verbinding</button>
+        <div id="diag" class="diag"></div>
+      </div>
+    </details>
+  </main>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

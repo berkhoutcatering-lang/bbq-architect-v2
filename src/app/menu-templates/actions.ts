@@ -29,6 +29,7 @@ import {
 } from '@/lib/schemas/menu-template';
 import { listMenuTemplatesShallow, getMenuTemplateMargins, type MenuTemplateShallow, type MenuMargins } from '@/lib/dal/menuTemplates';
 import { refreshRecipePrices, type PriceRefreshReport } from '@/lib/dal/priceRefresh';
+import { refreshBoughtInPrices, type BoughtInRefreshReport } from '@/lib/dal/priceRefreshBoughtIn';
 
 /* Default-doel-marge zolang de org er geen eigen heeft ingesteld (of vóór de
    doel_marge migratie draait). Marge hier = (verkoop − kost) / verkoop. */
@@ -309,7 +310,7 @@ export async function getMenuMarginsAction(templateId: number): Promise<{ data: 
 }
 
 /** Ververs de leverancier-prijzen in de recepten (org-breed of één menukaart). */
-export async function refreshRecipePricesAction(menuTemplateId?: number): Promise<{ data: PriceRefreshReport } | { error: string }> {
+export async function refreshRecipePricesAction(menuTemplateId?: number): Promise<{ data: PriceRefreshReport & { boughtIn?: BoughtInRefreshReport } } | { error: string }> {
     const supabase = await createServerSupabase();
     const orgId = await resolveOrgId(supabase);
     if (!orgId) return { error: 'Geen organisatie' };
@@ -320,11 +321,15 @@ export async function refreshRecipePricesAction(menuTemplateId?: number): Promis
     if (tplId && !tplId.success) return { error: 'Ongeldig menukaart-id' };
 
     try {
-        const data = await refreshRecipePrices(supabase, orgId, tplId ? { menuTemplateId: tplId.data } : {});
+        const scope = tplId ? { menuTemplateId: tplId.data } : {};
+        // Prepared (Catalogus A) én bought-in (Catalogus B, gesynchroniseerd) verversen.
+        const data = await refreshRecipePrices(supabase, orgId, scope);
+        let boughtIn: BoughtInRefreshReport | undefined;
+        try { boughtIn = await refreshBoughtInPrices(supabase, orgId, scope); } catch { /* niet-blokkerend */ }
         revalidatePath('/gerechten');
         revalidatePath('/marges');
         if (tplId) revalidatePath(`/gerechten/menukaarten/${tplId.data}`);
-        return { data };
+        return { data: { ...data, boughtIn } };
     } catch (e) {
         return { error: (e as Error).message };
     }
