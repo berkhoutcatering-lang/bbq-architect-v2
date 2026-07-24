@@ -231,29 +231,69 @@ describe('bidfood DOM-route (ATG/Endeca, server-rendered)', () => {
         expect(pr.ok).toBe(false); // priceBasis unknown → review, nooit auto-geprijsd
     });
 
-    it('fetchTask: paginering schuift ?No= op met aantal producten', async () => {
-        const domCtx = {
-            ...bctx,
-            fetchText: async () => '<html>ingelogd</html>',
-            parseHtml: async () => ({ records: [
-                { name: 'A 1 kg', priceText: '5.00', sku: 'A1DJ', url: '/webshop/product/a/_/A-productId-1-A1DJ' },
-                { name: 'B 2 kg', priceText: '6.00', sku: 'B1DJ', url: '/webshop/product/b/_/A-productId-1-B1DJ' },
-            ], next: null }),
-        };
-        const r = await bidfoodAdapter.fetchTask(domCtx, { sourceCursor: JSON.stringify({ base: '/webshop/assortiment/vlees/_/N-8o7', No: 0 }) });
-        expect(r.records.length).toBe(2);
-        expect(r.nextTasks[0].sourceUrl).toContain('?No=2');
+    it('normalize: "/Kilo"-prijs → priceBasis kg, per kg direct', () => {
+        const [obs] = bidfoodAdapter.normalize({
+            name: 'Entrecote (vers)', priceText: '13,70', priceUnit: 'kilo', sku: 'E1DJ',
+            url: 'https://www.bidfood.nl/webshop/product/e/_/A-productId-1-E1DJ',
+        }, bctx);
+        const v = validateObservation(obs).value!;
+        expect(v.priceBasis).toBe('kg');
+        expect(pricingOf(v).pricePerKg).toBe(13.7);
     });
 
-    it('preflight: producten zichtbaar maar geen prijzen → PERSONAL_PRICE_NOT_VISIBLE', async () => {
-        const domCtx = {
+    it('discover start bij pagina 0 (No=0) en stript de pagineer-parameters', async () => {
+        const dctx = { ...bctx, getTabUrl: async () => 'https://www.bidfood.nl/webshop/assortiment/vlees/_/N-8o7?No=96&Nrpp=96&currentPage=2' };
+        const tasks = await bidfoodAdapter.discover(dctx);
+        expect(tasks.length).toBe(1);
+        const cur = JSON.parse(tasks[0].sourceCursor);
+        expect(cur.No).toBe(0);
+        expect(cur.base).toBe('https://www.bidfood.nl/webshop/assortiment/vlees/_/N-8o7'); // paging weg
+        expect(tasks[0].sourceUrl).toContain('No=0');
+    });
+
+    it('fetchTask leest één pagina (readPage) en zet de volgende pagina uit', async () => {
+        const pageCtx = {
             ...bctx,
-            fetchText: async () => '<html>niet ingelogd</html>',
-            parseHtml: async () => ({ records: [{ name: 'A 1 kg', priceText: '', sku: 'A1DJ', url: '/x' }], next: null }),
+            readPage: async () => ({ records: [
+                { name: 'A 1 kg', priceText: '5,00', priceUnit: '', sku: 'A1DJ', url: '/webshop/product/a/_/A-productId-1-A1DJ' },
+                { name: 'B 2 kg', priceText: '6,00', priceUnit: '', sku: 'B1DJ', url: '/webshop/product/b/_/A-productId-1-B1DJ' },
+            ], total: 5 }),
         };
-        const pf = await bidfoodAdapter.preflight(domCtx);
+        const task = { sourceCursor: JSON.stringify({ No: 0, Nrpp: 96, base: 'https://www.bidfood.nl/webshop/assortiment/vlees/_/N-8o7' }) };
+        const r = await bidfoodAdapter.fetchTask(pageCtx, task);
+        expect(r.records.length).toBe(2);
+        expect(r.nextTasks.length).toBe(1);
+        expect(JSON.parse(r.nextTasks[0].sourceCursor).No).toBe(2); // stapt met werkelijk getoonde aantal
+        expect(r.nextTasks[0].sourceUrl).toContain('No=2');
+        expect(r.diagnostics.method).toBe('url-page');
+    });
+
+    it('fetchTask stopt (geen next-taak) zodra het totaal bereikt is', async () => {
+        const pageCtx = {
+            ...bctx,
+            readPage: async () => ({ records: [
+                { name: 'A 1 kg', priceText: '5,00', priceUnit: '', sku: 'A1DJ', url: '/x' },
+                { name: 'B 2 kg', priceText: '6,00', priceUnit: '', sku: 'B1DJ', url: '/y' },
+            ], total: 2 }),
+        };
+        const task = { sourceCursor: JSON.stringify({ No: 0, Nrpp: 96, base: 'https://www.bidfood.nl/webshop/assortiment/vlees/_/N-8o7' }) };
+        const r = await bidfoodAdapter.fetchTask(pageCtx, task);
+        expect(r.records.length).toBe(2);
+        expect(r.nextTasks).toEqual([]); // 0 + 2 >= totaal(2) → klaar
+    });
+
+    it('preflight (readTab): producten zonder prijs → PERSONAL_PRICE_NOT_VISIBLE', async () => {
+        const tabCtx = { ...bctx, readTab: async () => ({ records: [{ name: 'A 1 kg', priceText: '', priceUnit: '', sku: 'A1DJ', url: '/x' }] }) };
+        const pf = await bidfoodAdapter.preflight(tabCtx);
         expect(pf.ok).toBe(false);
         expect(pf.code).toBe('PERSONAL_PRICE_NOT_VISIBLE');
+    });
+
+    it('preflight (readTab): met prijzen → ok + sample', async () => {
+        const tabCtx = { ...bctx, readTab: async () => ({ records: [{ name: 'Kipfilet 5 kg', priceText: '42,00', priceUnit: '', sku: 'K1DJ', url: 'https://www.bidfood.nl/webshop/product/k/_/A-productId-1-K1DJ' }] }) };
+        const pf = await bidfoodAdapter.preflight(tabCtx);
+        expect(pf.ok).toBe(true);
+        expect(pf.sample.length).toBe(1);
     });
 });
 

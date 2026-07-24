@@ -11,8 +11,10 @@ import { getActiveRun, setActiveRun, clearActiveRun, setLastStatus } from './lib
 import { getAdapter } from '../adapters/registry.js';
 import { decideNextAction } from './runner-core.js';
 import { parseHtmlViaOffscreen } from './offscreen-client.js';
+import { inPageExtract } from './inpage-extract.js';
 
 const LEASE_SECONDS = 120;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Bouw de adapter-context met geïnjecteerde, credentialed capabilities. */
 function buildAdapterCtx(active, adapter) {
@@ -38,6 +40,65 @@ function buildAdapterCtx(active, adapter) {
         },
         async parseHtml(html, selectors) {
             return parseHtmlViaOffscreen(html, selectors);
+        },
+        /* Lees producten uit de LIVE, gerenderde leverancier-tab (voor sites die
+           prijzen via JavaScript renderen, bv. Bidfood). Draait het extractiescript
+           in de ingelogde pagina. */
+        async readTab(config) {
+            const tabs = await chrome.tabs.query({ url: `${active.origin}/*` });
+            const tab = tabs.find((t) => t.active) || tabs[0];
+            if (!tab || !tab.id) return { records: [], error: 'geen open tab voor deze leverancier' };
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: inPageExtract,
+                args: [config || {}],
+            });
+            return (results && results[0] && results[0].result) || { records: [] };
+        },
+        /* Huidige URL van de leverancier-tab (voor URL-gebaseerd bladeren). */
+        async getTabUrl() {
+            const tabs = await chrome.tabs.query({ url: `${active.origin}/*` });
+            const tab = tabs.find((t) => t.active) || tabs[0];
+            return (tab && tab.url) || null;
+        },
+        /* Navigeer de tab naar `url` en wacht tot 'ie klaar is met laden (geen
+           race met de render). Time-out voorkomt vasthangen. */
+        async navigateTab(url, opts = {}) {
+            const timeoutMs = opts.timeoutMs || 15000;
+            const tabs = await chrome.tabs.query({ url: `${active.origin}/*` });
+            const tab = tabs.find((t) => t.active) || tabs[0];
+            if (!tab || !tab.id) return { ok: false };
+            const tabId = tab.id;
+            await chrome.tabs.update(tabId, { url });
+            await new Promise((resolve) => {
+                let settled = false;
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
+                    try { chrome.tabs.onUpdated.removeListener(listener); } catch (e) { /* al weg */ }
+                    clearTimeout(to);
+                    resolve();
+                };
+                const listener = (id, info) => { if (id === tabId && info.status === 'complete') finish(); };
+                const to = setTimeout(finish, timeoutMs);
+                chrome.tabs.onUpdated.addListener(listener);
+            });
+            return { ok: true };
+        },
+        /* Navigeer naar één pagina-URL en lees 'm — met settle + retry tot de
+           JS-gerenderde prijzen er zijn. Voor het per-pagina-takenmodel (elke
+           taak = één pagina = één checkpoint), niet één lange in-taak-crawl. */
+        async readPage(config, url) {
+            if (url) await this.navigateTab(url);
+            let res = { records: [] };
+            for (let t = 0; t < 6; t++) {
+                await sleep(600);
+                res = await this.readTab(config);
+                const recs = (res && res.records) || [];
+                if (recs.some((r) => r && r.priceText)) return res;   // prijzen geladen
+                if (recs.length && t >= 2) return res;                 // items maar (nog) geen prijs → toch terug
+            }
+            return res;
         },
     };
 }
