@@ -136,6 +136,7 @@ function renderProgress(run) {
     $('btn-pause').classList.toggle('hidden', done || paused);
     $('btn-resume').classList.toggle('hidden', !paused);
     $('btn-cancel').classList.toggle('hidden', done);
+    $('btn-restart').classList.toggle('hidden', !done); // afgerond → verse start mogelijk
 
     if (run.status === 'paused_needs_login') banner('warn', 'Log opnieuw in bij de leverancier en klik op Hervat.');
     else if (run.status === 'paused_rate_limited') banner('warn', 'De leverancier limiteert verzoeken. De sync hervat vanzelf.');
@@ -192,21 +193,33 @@ function renderSample(sample) {
     box.classList.remove('hidden');
 }
 
-$('btn-start').addEventListener('click', async () => {
-    $('btn-start').disabled = true;
+async function startSync() {
     banner('info', 'Sync starten…');
     const res = await sendCmd('BBQ_V2_START', {
         payload: { supplierId: current.supplier.id, accountKey: current.accountKey, adapterKey: current.adapter.key, origin: current.origin, mode: scopeMode(), categories: [] },
     });
-    $('btn-start').disabled = false;
     if (!res || res.ok === false) {
         banner('error', res?.code === 'LOGIN_REQUIRED' ? 'Log eerst in bij de leverancier.' : `Kon niet starten (${res?.code || res?.error || 'fout'}).`);
-        return;
+        return false;
     }
     banner('', '');
     startPolling();
     await refreshState(false);
     show('s-progress');
+    return true;
+}
+
+$('btn-start').addEventListener('click', async () => {
+    $('btn-start').disabled = true;
+    await startSync();
+    $('btn-start').disabled = false;
+});
+
+// Verse start vanaf een afgeronde/geannuleerde run (server geeft die nog 5 min terug).
+$('btn-restart').addEventListener('click', async () => {
+    $('btn-restart').disabled = true;
+    await startSync();
+    $('btn-restart').disabled = false;
 });
 
 $('btn-pause').addEventListener('click', async () => { await sendCmd('BBQ_V2_PAUSE', { reason: 'manual' }); refreshState(false); });
