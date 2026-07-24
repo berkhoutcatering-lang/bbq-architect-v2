@@ -4,9 +4,10 @@
 
 import { assertAdapter } from './types.js';
 import { baktotaalAdapter } from './baktotaal.js';
+import { bidfoodAdapter } from './bidfood.js';
 import { syntheticAdapter } from './synthetic.js';
 
-const ADAPTERS = [baktotaalAdapter, syntheticAdapter];
+const ADAPTERS = [baktotaalAdapter, bidfoodAdapter, syntheticAdapter];
 ADAPTERS.forEach(assertAdapter);
 
 export function detectAdapter(url) {

@@ -9,7 +9,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/components/Toast';
-import { ArrowLeft, Search, Package, Loader2, RefreshCw, X, ExternalLink, History } from 'lucide-react';
+import { ArrowLeft, Search, Package, Loader2, RefreshCw, X, ExternalLink, History, Plus } from 'lucide-react';
 
 const BRAND = 'var(--brand, #6B7A3F)';
 
@@ -83,6 +83,25 @@ export default function LeverancierProductenPage() {
     const [sel, setSel] = useState<ProductRow | null>(null);
     const [detail, setDetail] = useState<{ product: Record<string, unknown>; history: PriceHistoryRow[] } | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    const [makingComponent, setMakingComponent] = useState(false);
+
+    const makeComponent = useCallback(async (p: ProductRow) => {
+        setMakingComponent(true);
+        try {
+            const r = await fetch(`/api/leveranciers/${levId}/products/${p.id}`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ action: 'make_component' }),
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d?.error || 'kon ingrediënt niet maken');
+            showToast(d.existed ? 'Ingrediënt bestond al — te gebruiken in gerechten.' : 'Ingrediënt gemaakt — voeg het toe aan een gerecht; de prijs volgt automatisch.', 'success');
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        } finally {
+            setMakingComponent(false);
+        }
+    }, [levId, showToast]);
 
     const openDetail = useCallback(async (p: ProductRow) => {
         setSel(p);
@@ -220,6 +239,16 @@ export default function LeverancierProductenPage() {
                                         <dt className="text-gray-500">Bron</dt><dd className="text-right">{sel.source || '—'}</dd>
                                         <dt className="text-gray-500">Laatst gezien</dt><dd className="text-right text-xs text-gray-500">{fmtDate(sel.last_seen_at)}</dd>
                                     </dl>
+                                    <button
+                                        onClick={() => makeComponent(sel)}
+                                        disabled={makingComponent}
+                                        className="inline-flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg w-full font-medium text-white disabled:opacity-60"
+                                        style={{ background: BRAND }}
+                                        title="Maak er een ingrediënt van dat je in gerechten kunt gebruiken; de kostprijs volgt automatisch deze leveranciersprijs."
+                                    >
+                                        {makingComponent ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                                        Maak ingrediënt
+                                    </button>
                                     {detail && typeof detail.product?.product_url === 'string' && (
                                         <a href={detail.product.product_url as string} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 w-full">
                                             Open bij leverancier <ExternalLink size={14} />
