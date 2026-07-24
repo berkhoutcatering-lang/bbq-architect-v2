@@ -1,0 +1,12 @@
+{
+  "result": {
+    "products": [
+      { "sku": "BT-10001", "name": "Beukenhouten rookmot", "urlKey": "beukenhouten-rookmot-2500", "ean": "8712345678901", "packaging": "Zak 2,5 kg", "priceExVat": 22.50, "listPriceExVat": 22.50, "vatRate": 9, "category": "Rookhout" },
+      { "sku": "BT-10002", "name": "Frisdrank cola", "urlKey": "cola-24x330", "ean": "8710000000024", "packaging": "24 × 330 ml", "priceExVat": 18.96, "listPriceExVat": 18.96, "vatRate": 9, "category": "Dranken" },
+      { "sku": "BT-10003", "name": "Brioche buns", "urlKey": "brioche-buns-12", "ean": null, "packaging": "12 stuks", "priceExVat": 5.04, "listPriceExVat": 5.04, "vatRate": 9, "category": "Brood" },
+      { "sku": "BT-10004", "name": "Bronwater", "urlKey": "bronwater-6x15", "ean": "8710000000156", "packaging": "6 × 1,5 L", "priceExVat": 13.50, "listPriceExVat": 13.50, "vatRate": 9, "category": "Dranken" },
+      { "sku": "BT-10005", "name": "Roomboter", "urlKey": "roomboter-750g", "ean": "8710000007500", "packaging": "750 g", "priceExVat": 8.25, "listPriceExVat": 8.25, "vatRate": 9, "category": "Zuivel" }
+    ],
+    "pagination": { "page": 1, "pageCount": 3, "pageSize": 5, "total": 12 }
+  }
+}

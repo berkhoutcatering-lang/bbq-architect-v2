@@ -34,6 +34,32 @@ export function resolvePricingFromSupplierPrice(
 }
 
 /**
+ * Bepaalt bij GOEDKEURING of de vrije-tekst eenheid ONDUBBELZINNIG een
+ * per-kg / per-stuk prijs betekent — of een PAKHOEVEELHEID (dan is `prijs` de
+ * pakprijs en mag prijs_per_kg/prijs_per_stuk NIET worden ingevuld).
+ *
+ * Fix voor de bevestigde bug: het oude `eenhLower.includes('kg')` zette een
+ * pakprijs ("doos 5 kg", "2,5 kg") als prijs_per_kg weg, waarna de leeskant die
+ * corrupte waarde vertrouwde. Deze helper vangt een getal vóór het gewicht/volume
+ * af (→ verpakking) en zet alleen bij een kale eenheid ("kg", "per kg", "/kg")
+ * de per-kg prijs.
+ */
+export function inferApprovalPriceBasis(
+    eenheid: string | null | undefined,
+    prijs: number,
+): { prijs_per_kg: number | null; prijs_per_stuk: number | null } {
+    const s = (eenheid || '').toLowerCase().trim();
+    // Een getal direct vóór een gewicht/volume-eenheid = pakhoeveelheid, geen per-eenheid prijs.
+    const hasQtyBeforeUnit = /\d\s*(kg|kilo|kilogram|gram|g|ml|liter|ltr|l)\b/.test(s);
+    const isPerKg = !hasQtyBeforeUnit && (s === 'kg' || s === 'kilo' || s === 'kilogram' || /(^|\bper\s*|\/)\s*(kg|kilo)\b/.test(s));
+    const isPerStuk = !/\d/.test(s) && (s === 'stuk' || s === 'stuks' || /(^|\bper\s*)(stuk|stuks)\b/.test(s));
+    return {
+        prijs_per_kg: isPerKg ? prijs : null,
+        prijs_per_stuk: isPerStuk ? prijs : null,
+    };
+}
+
+/**
  * Kostprijs (cents) van een gekoppelde ingrediëntregel = prijs × aantal.
  *   per kg  → alleen g/kg zijn geldig; een niet-gewicht-eenheid (ml/liter/stuk)
  *             geeft null terug (voorkomt de 1000×-fout).

@@ -61,6 +61,27 @@ export function packToBase(
     }
 }
 
+/* Multipack → base. Een doos "24 × 330 ml" of "6 × 1,5 L" heeft een
+   pack_count × content_per_item-structuur die packToBase (één scalaire
+   hoeveelheid) niet kent. Deze helper rekent eerst de totale inhoud uit en
+   normaliseert dan via packToBase, zodat de per-100-conventie exact blijft.
+
+   contentUnit accepteert ook 'piece' (= 'stuk') zodat het aansluit op het
+   leverancierssync-observation-schema. */
+export type ContentPackUnit = PackUnit | 'piece';
+
+export function packToBaseMulti(
+    packPriceCents: number,
+    packCount: number,
+    contentPerItem: number,
+    contentUnit: ContentPackUnit,
+): BaseFields | null {
+    if (!Number.isFinite(packCount) || packCount <= 0) return null;
+    if (!Number.isFinite(contentPerItem) || contentPerItem <= 0) return null;
+    const unit: PackUnit = contentUnit === 'piece' ? 'stuk' : contentUnit;
+    return packToBase(packPriceCents, packCount * contentPerItem, unit);
+}
+
 /* "€12.50 / kg", "€6.80 / liter", "€0.42 / stuk" — de herkenbare
    groothandel-eenheid, los van hoe de base intern opgeslagen is. */
 export function unitPriceLabel(baseCostCents: number, baseQuantity: number, baseUnit: string): string | null {

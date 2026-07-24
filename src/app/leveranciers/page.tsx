@@ -18,7 +18,7 @@ import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
 import {
     Plus, Store, AlertTriangle, Loader2, Trash2, RefreshCw, X, History,
-    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText, Clock,
+    Globe, Mail, Upload, PenTool, ChevronRight, Sparkles, ExternalLink, Chrome, FileText, Clock, Package,
 } from 'lucide-react';
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
@@ -406,6 +406,19 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                     }}
                 >
                     <FileText size={13} /> PDF
+                </Link>
+                <Link
+                    href={`/leveranciers/${lev.id}/producten`}
+                    title="Gesynchroniseerde producten + prijzen per eenheid"
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '8px 12px', borderRadius: 8,
+                        background: 'transparent', color: 'var(--text)',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                        textDecoration: 'none', fontSize: 12, fontWeight: 600,
+                    }}
+                >
+                    <Package size={13} /> Producten
                 </Link>
                 <Link
                     href={`/leveranciers/historie/${lev.id}`}

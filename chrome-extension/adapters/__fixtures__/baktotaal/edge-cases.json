@@ -1,0 +1,10 @@
+{
+  "result": {
+    "products": [
+      { "sku": "BT-20001", "name": "Entrecote (vers)", "urlKey": "entrecote-vers", "ean": null, "packaging": "per kg (vanggewicht)", "priceExVat": 32.95, "listPriceExVat": 32.95, "vatRate": 9, "category": "Vlees" },
+      { "sku": "BT-20002", "name": "BBQ-saus actie", "urlKey": "bbq-saus-actie", "ean": "8710000009990", "packaging": "6 × 1 L", "priceExVat": 15.00, "listPriceExVat": 21.00, "vatRate": 21, "category": "Sauzen" },
+      { "sku": "BT-20003", "name": "Kruidenmix op aanvraag", "urlKey": "kruidenmix", "ean": null, "packaging": "1 kg", "priceExVat": null, "listPriceExVat": null, "vatRate": 9, "category": "Kruiden" }
+    ],
+    "pagination": { "page": 3, "pageCount": 3, "pageSize": 5, "total": 12 }
+  }
+}
