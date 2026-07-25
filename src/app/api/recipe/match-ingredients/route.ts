@@ -65,16 +65,15 @@ function fromSupplierPrice(r: any): CostCandidate | null {
     const name = r.product_naam as string;
     const perKg = Number(r.prijs_per_kg) || 0;
     const perStuk = Number(r.prijs_per_stuk) || 0;
+    // Alléén de genormaliseerde prijs-velden zijn betrouwbaar. De kale `prijs`
+    // + vrije `eenheid` ("doos", "pak", "stuks", "500 gr") is te dubbelzinnig —
+    // een pak-totaal als €/kg of €/stuk lezen geeft een catastrofaal foute
+    // kostprijs. Zonder genormaliseerde prijs → geen kandidaat → eerlijk "geschat".
+    // (66% van de catalogus heeft prijs_per_kg/prijs_per_stuk; ruim genoeg.)
     const base: { base: BaseUnit; perBase: number } | null =
         perKg > 0 ? { base: 'g', perBase: (perKg * 100) / 1000 }
         : perStuk > 0 ? { base: 'stuk', perBase: perStuk * 100 }
-        : (() => {
-            // fallback: kale prijs + eenheid, alleen als de eenheid schoon mapt
-            const conv = toBaseUnit(r.eenheid);
-            const eur = Number(r.prijs) || 0;
-            if (!conv || eur <= 0) return null;
-            return { base: conv.base, perBase: (eur * 100) / conv.factor };
-        })();
+        : null;
     if (!base) return null;
     return {
         source: 'supplier', ref_id: r.id, name,
