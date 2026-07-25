@@ -109,6 +109,42 @@ export async function assignSupplierAction(input: unknown) {
     }
 }
 
+// ── linkSupplierProduct ───────────────────────────────────────────────
+// Koppelt een voorraad-item aan een specifiek leverancier-product
+// (inventory.preferred_supplier_product_id). Daarna kent de bestellijst het
+// product + de web-URL → "Bestel op <leverancier>" wordt een 1-klik-actie, en de
+// pakmaat voor de afronding komt uit dat product.
+const linkSchema = z.object({
+    inventory_id: z.number().int().positive(),
+    supplier_product_id: z.number().int().positive(),
+});
+
+export async function linkSupplierProductAction(input: unknown) {
+    try {
+        const { inventory_id, supplier_product_id } = linkSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+        // Product + voorraad-item moeten bij deze org horen (authz naast RLS).
+        const { data: sp } = await sb
+            .from('supplier_products')
+            .select('id')
+            .eq('id', supplier_product_id)
+            .eq('organization_id', orgId)
+            .maybeSingle();
+        if (!sp) throw new Error('Leverancier-product niet gevonden');
+        const { error } = await sb
+            .from('inventory')
+            .update({ preferred_supplier_product_id: supplier_product_id })
+            .eq('id', inventory_id)
+            .eq('organization_id', orgId);
+        if (error) throw new Error(error.message);
+        revalidatePath('/inkoop');
+        return { ok: true as const };
+    } catch (e) {
+        console.error('[inkoop/linkSupplierProduct]', e);
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Koppelen mislukt' };
+    }
+}
+
 // ── sendOrderToSupplier ───────────────────────────────────────────────
 const sendSchema = z.object({
     concept_order_id: z.string().uuid(),

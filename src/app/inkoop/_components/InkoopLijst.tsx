@@ -41,7 +41,7 @@ import {
     ChevronDown,
     ChevronRight,
     ExternalLink,
-    Search,
+    Link2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -51,6 +51,7 @@ import MissingSupplierBanner from './MissingSupplierBanner';
 import {
     updateOverrideAction,
     sendOrderToSupplierAction,
+    linkSupplierProductAction,
 } from '../actions';
 import type {
     BestelvoorstelSummary,
@@ -486,8 +487,40 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
     const [isPending, startTransition] = useTransition();
     const [showAlt, setShowAlt] = useState(false);
     const [showWhy, setShowWhy] = useState(false);
+    // Koppel-helper: suggesties uit de gesynct catalogus, jij bevestigt.
+    const router = useRouter();
+    const [showLink, setShowLink] = useState(false);
+    const [suggestions, setSuggestions] = useState<any[] | null>(null);
+    const [loadingSug, setLoadingSug] = useState(false);
+    const [linking, setLinking] = useState(false);
 
     useEffect(function () { setQtyDraft(item.qty); }, [item.qty]);
+
+    async function openLink() {
+        const next = !showLink;
+        setShowLink(next);
+        if (!next || suggestions !== null || !bucket.leverancier_id) return;
+        setLoadingSug(true);
+        try {
+            const r = await fetch(`/api/leveranciers/${bucket.leverancier_id}/products?q=${encodeURIComponent(item.naam)}`);
+            const d = await r.json();
+            setSuggestions(((d.products || []) as any[]).slice(0, 6));
+        } catch {
+            setSuggestions([]);
+        } finally {
+            setLoadingSug(false);
+        }
+    }
+
+    async function pickSupplierProduct(spId: number) {
+        setLinking(true);
+        const res = await linkSupplierProductAction({ inventory_id: item.inventory_id, supplier_product_id: spId });
+        setLinking(false);
+        if (!res.ok) { showToast(res.error || 'Koppelen mislukt', 'error'); return; }
+        showToast('Gekoppeld — je kunt dit nu in 1 klik bestellen.', 'success');
+        setShowLink(false);
+        router.refresh();
+    }
 
     function persistQty(nextQty: number) {
         if (!bucket.concept_order_id) {
@@ -706,20 +739,66 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         <ExternalLink size={11} style={{ opacity: 0.7 }} />
                     </a>
                 ) : bucket.leverancier_id != null ? (
-                    <Link
-                        href={`/leveranciers/${bucket.leverancier_id}/producten?q=${encodeURIComponent(item.naam)}`}
-                        title={`Zoek "${item.naam}" in je gesynchroniseerde ${bucket.leverancier_naam}-catalogus`}
+                    <button
+                        type="button"
+                        onClick={openLink}
+                        title={`Koppel "${item.naam}" aan een ${bucket.leverancier_naam}-product → daarna bestel je 't in 1 klik`}
                         style={{
                             marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7,
                             fontSize: 12.5, fontWeight: 600, padding: '7px 13px', borderRadius: 9,
                             background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
-                            color: 'var(--text)', textDecoration: 'none', width: 'fit-content',
+                            color: 'var(--text)', cursor: 'pointer', width: 'fit-content',
                         }}
                     >
-                        <Search size={13} style={{ opacity: 0.8 }} /> Zoek op {firstWord(bucket.leverancier_naam)}
-                        <ChevronRight size={12} style={{ opacity: 0.6 }} />
-                    </Link>
+                        <Link2 size={13} style={{ opacity: 0.8 }} /> Koppel aan {firstWord(bucket.leverancier_naam)}
+                        {showLink ? <ChevronDown size={12} style={{ opacity: 0.6 }} /> : <ChevronRight size={12} style={{ opacity: 0.6 }} />}
+                    </button>
                 ) : null}
+                {showLink && bucket.leverancier_id != null && (
+                    <div style={{ marginTop: 8, padding: 12, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)', borderRadius: 10 }}>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                            Kies het {bucket.leverancier_naam}-product voor <strong style={{ color: 'var(--text)' }}>{item.naam}</strong>:
+                        </div>
+                        {loadingSug ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 12, padding: '6px 0' }}>
+                                <Loader2 size={13} className="animate-spin" /> Suggesties laden…
+                            </div>
+                        ) : suggestions && suggestions.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {suggestions.map(function (s: any) {
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            type="button"
+                                            disabled={linking}
+                                            onClick={() => pickSupplierProduct(s.id)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                                                textAlign: 'left', padding: '8px 10px', borderRadius: 8,
+                                                background: 'var(--card-solid, #1e1e22)', border: '1px solid var(--border)',
+                                                color: 'var(--text)', cursor: linking ? 'default' : 'pointer', fontSize: 12.5,
+                                            }}
+                                        >
+                                            <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                                            <span style={{ flexShrink: 0, fontWeight: 700, color: 'var(--brand, #FFBF00)', fontVariantNumeric: 'tabular-nums' }}>{sugPerUnit(s)}</span>
+                                        </button>
+                                    );
+                                })}
+                                <Link
+                                    href={`/leveranciers/${bucket.leverancier_id}/producten?q=${encodeURIComponent(item.naam)}`}
+                                    style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, textDecoration: 'none', width: 'fit-content' }}
+                                >
+                                    meer in catalogus →
+                                </Link>
+                            </div>
+                        ) : (
+                            <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+                                Geen suggesties gevonden.{' '}
+                                <Link href={`/leveranciers/${bucket.leverancier_id}/producten?q=${encodeURIComponent(item.naam)}`} style={{ color: 'var(--brand, #FFBF00)' }}>Zoek zelf in de catalogus →</Link>
+                            </p>
+                        )}
+                    </div>
+                )}
                 {/* Waarom dit aantal — volledige opbouw zodat een sceptische operator
                     het kan narekenen (fix #4). Alle data zit al in de regel. */}
                 <button
@@ -1080,6 +1159,12 @@ function PdfPreviewModal({
 // ── Formatters ───────────────────────────────────────────────────────
 function fmtEur(n: number): string {
     return (Number(n) || 0).toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' });
+}
+function sugPerUnit(s: { per_kg: number | null; per_liter: number | null; per_piece: number | null }): string {
+    if (s.per_kg != null) return `€${Number(s.per_kg).toFixed(2).replace('.', ',')}/kg`;
+    if (s.per_liter != null) return `€${Number(s.per_liter).toFixed(2).replace('.', ',')}/l`;
+    if (s.per_piece != null) return `€${Number(s.per_piece).toFixed(2).replace('.', ',')}/st`;
+    return '—';
 }
 function fmtQty(n: number, unit: string): string {
     const v = Number(n) || 0;
