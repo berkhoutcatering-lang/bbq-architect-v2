@@ -127,6 +127,13 @@ const STATUS_LABEL_MAP: Record<string, string> = {
   verloren: 'Verloren',
 };
 
+/* Losse label-lookup voor plekken die geen pill willen maar wél het NL-label
+   (bv. de dashboard-eyebrow "VOLGEND EVENT · Bevestigd"). Zelfde bron als de badge. */
+export function statusLabel(status: string | null | undefined): string {
+  if (!status) return '';
+  return STATUS_LABEL_MAP[status] || status;
+}
+
 interface StatusBadgeProps {
   status: string;
   showLabel?: boolean;
