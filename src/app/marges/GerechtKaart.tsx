@@ -52,7 +52,7 @@ export function scoreColor(pct: number): string {
   return '#f87171';
 }
 
-export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selectionMode, isSelected, onToggleSelect }: {
+export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onViewDetails, selectionMode, isSelected, onToggleSelect, menuPrice = 38.5 }: {
   gerecht: GerechtData;
   onMoveToMap: (g: GerechtData) => void;
   geselecteerd: boolean;
@@ -60,10 +60,14 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
   selectionMode: boolean;
   isSelected: (id: number) => boolean;
   onToggleSelect: (id: number) => void;
+  menuPrice?: number;
 }) {
   const gang = getGang(gerecht.gang_slug);
+  // Bijdrage aan de menu-marge: kostprijs afgezet tegen de ECHTE menu-prijs p.p.
+  // (geen hardcoded €45 meer — die komt uit de offertes/menu-prijs).
+  const refPrice = menuPrice > 0 ? menuPrice : 38.5;
   const marge = gerecht.kostprijs_pp
-    ? Math.round((1 - gerecht.kostprijs_pp / 45) * 100)
+    ? Math.round((1 - gerecht.kostprijs_pp / refPrice) * 100)
     : null;
 
   const selected = selectionMode && isSelected(gerecht.id);

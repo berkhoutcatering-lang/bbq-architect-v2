@@ -9,6 +9,7 @@ interface Props {
   gemMarge: number;
   bcgStars: number;
   bcgDogs: number;
+  menuPrice?: number; // echte menu-prijs p.p. (geen hardcoded €45 meer)
 }
 
 function useAnimatedNumber(value: number, duration = 700): number {
@@ -40,6 +41,7 @@ export default function MargesKpiTiles({
   gemMarge,
   bcgStars,
   bcgDogs,
+  menuPrice = 38.5,
 }: Props) {
   const aniTotaal = useAnimatedNumber(totaalGerechten);
   const aniMet = useAnimatedNumber(metKostprijs);
@@ -88,7 +90,7 @@ export default function MargesKpiTiles({
     {
       label: 'Gem. marge',
       value: gemMarge > 0 ? `${Math.round(aniMarge)}%` : '—',
-      sub: 'op €45 menu',
+      sub: `op €${Math.round(menuPrice)} menu`,
       Icon: TrendingUp,
       color: ACCENT,
       valueColor: ACCENT,
