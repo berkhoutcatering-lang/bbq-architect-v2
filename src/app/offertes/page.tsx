@@ -230,6 +230,9 @@ export default function Offertes() {
     function margeColor(pct: number) { return pct > 70 ? 'green' : pct >= 60 ? 'orange' : 'red'; }
     function margeLabel(pct: number) { return pct > 70 ? 'Sterk' : pct >= 60 ? 'Aandacht' : 'Lage marge'; }
     function margeEmoji(pct: number) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
+    /* Zonder foodcost is een marge-% betekenisloos: (omzet − 0)/omzet = 100% zou
+       ten onrechte "Sterk" tonen. Alleen oordelen als er écht een kostprijs is. */
+    function margeCostKnown(m: { foodcostTotaal?: number }) { return (m.foodcostTotaal || 0) > 0; }
 
     /* Sinds 2026-06-02: OfferteMenuPicker vervangt MenuWizard. De picker geeft
        alleen de gerechten-selectie (menu_selectie + template_naam) — een menukaart
@@ -753,8 +756,9 @@ export default function Offertes() {
 
         /* Marge — read-only, NOOIT AI-afgeleid (hard rule). Zelfde calc als de lijst. */
         const marge = calcOfferteMargeData(form);
+        const costKnown = margeCostKnown(marge);
         const margeKey = margeColor(marge.margePct);
-        const margeHex = margeKey === 'green' ? 'var(--green)' : margeKey === 'orange' ? 'var(--amber)' : 'var(--red)';
+        const margeHex = !costKnown ? 'var(--muted)' : margeKey === 'green' ? 'var(--green)' : margeKey === 'orange' ? 'var(--amber)' : 'var(--red)';
 
         /* Menu-lijst afgeleid uit menu_selectie + gangen-volgorde — exact dezelfde
            bron als de canva, PDF en portaal (één pipeline, geen notitie-rommel). */
@@ -1047,14 +1051,14 @@ export default function Offertes() {
                         </div>
                         <div className="off-stats">
                             <div className="off-stat"><span className="lab">Omzet</span><span className="val">{fmt(marge.omzet)}</span><span className="note">excl. btw</span></div>
-                            <div className="off-stat"><span className="lab">Foodcost</span><span className="val">{fmt(marge.foodcostTotaal)}</span><span className="note">{marge.omzet > 0 ? Math.round(marge.foodcostTotaal / marge.omzet * 100) + '% van omzet' : 'kies een menu'}</span></div>
+                            <div className="off-stat"><span className="lab">Foodcost</span><span className="val">{fmt(marge.foodcostTotaal)}</span><span className="note">{!costKnown ? 'nog geen kostprijs' : Math.round(marge.foodcostTotaal / marge.omzet * 100) + '% van omzet'}</span></div>
                             <div className="off-stat"><span className="lab">Vaste kosten</span><span className="val">{fmt(marge.vasteKosten)}</span><span className="note">eenmalig</span></div>
                             <div className="off-stat off-stat-net">
                                 <span className="lab">Netto winst</span>
                                 <span className="val">{fmt(marge.nettoWinst)}</span>
                                 <div className="off-marge">
-                                    <div className="off-marge-track"><div className="off-marge-fill" style={{ width: Math.max(0, Math.min(100, marge.margePct)) + '%', background: margeHex }} /></div>
-                                    <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />Marge {marge.margePct.toFixed(0)}% · {margeLabel(marge.margePct)}</span>
+                                    <div className="off-marge-track"><div className="off-marge-fill" style={{ width: (costKnown ? Math.max(0, Math.min(100, marge.margePct)) : 0) + '%', background: margeHex }} /></div>
+                                    <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />{costKnown ? `Marge ${marge.margePct.toFixed(0)}% · ${margeLabel(marge.margePct)}` : 'Nog geen kostprijs — kies een menu'}</span>
                                 </div>
                             </div>
                         </div>
@@ -1294,7 +1298,9 @@ export default function Offertes() {
                         <div key={o.id} className="ev-row" onClick={function () { editOfferte(o); }}>
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>{o.nummer}
-                                    {hasMenu && m.gasten > 0 && <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {m.margePct.toFixed(0)}%</span>}
+                                    {hasMenu && m.gasten > 0 && (margeCostKnown(m)
+                                        ? <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {m.margePct.toFixed(0)}%</span>
+                                        : <span className="marge-badge marge-badge-sm marge-grey" title="Nog geen kostprijs bekend — voeg gerechten met kostprijs toe">· kostprijs?</span>)}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.client_naam} — {fmtNl(o.datum)}</div>
                                 {o.notitie && (function () {
