@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Active resource: een event/klant/offerte/klantgesprek waar de gebruiker
@@ -91,6 +92,25 @@ export function ActiveResourceProvider({ children }: { children: ReactNode }) {
     try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* noop */ }
     setActiveState(null);
   }, []);
+
+  // Zelfherstel: als de actieve resource intussen verwijderd is (bv. event
+  // gewist), wis de context zodat de pill geen dode link toont. Eén lichte
+  // query per actieve resource; alléén wissen als de rij écht weg is —
+  // niet bij een netwerk-/RLS-fout (dan houden we de context vast).
+  useEffect(() => {
+    if (!active) return;
+    const table =
+      active.kind === 'event' ? 'events'
+      : active.kind === 'klant' ? 'klanten'
+      : active.kind === 'offerte' ? 'offertes'
+      : null;
+    if (!table) return;
+    let cancelled = false;
+    supabase.from(table).select('id').eq('id', active.id).maybeSingle().then(({ data, error }) => {
+      if (!cancelled && !error && data === null) clear();
+    });
+    return () => { cancelled = true; };
+  }, [active, clear]);
 
   return (
     <ActiveResourceContext.Provider value={{ active, setActive, clear }}>

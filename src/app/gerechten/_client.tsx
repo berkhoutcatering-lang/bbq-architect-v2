@@ -19,6 +19,7 @@ import MargeBar from '@/components/chips/MargeBar';
 import { LoadingState } from '@/components/LoadingState';
 import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
+import { formatEur } from '@/lib/format';
 import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
@@ -957,7 +958,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                             {dishCount} gerechten over {Object.keys(sel).length} gangen
                                         </div>
                                         {Number(t.basis_prijs_pp) > 0 && (
-                                            <div className="dish-kostprijs">€{Number(t.basis_prijs_pp).toFixed(2)} p.p.</div>
+                                            <div className="dish-kostprijs">{formatEur(Number(t.basis_prijs_pp))} p.p.</div>
                                         )}
                                         <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                             <button className="btn btn-ghost btn-sm" onClick={function () { editMenuTemplate(t); }} title="Aanpassen">
@@ -1011,7 +1012,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                             <span style={{ fontWeight: 600 }}>{currentGang.naam}</span>
                             <span style={{ color: 'var(--muted)', fontSize: 12, marginLeft: 10 }}>
                                 Min. {currentGang.minimum} selecteren
-                                {(currentGang.extra_prijs_pp ?? 0) > 0 && ' • Extra: +€' + Number(currentGang.extra_prijs_pp).toFixed(2) + ' p.p.'}
+                                {(currentGang.extra_prijs_pp ?? 0) > 0 && ' • Extra: +' + formatEur(Number(currentGang.extra_prijs_pp)) + ' p.p.'}
                             </span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
@@ -1469,7 +1470,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                                     <div className="ingredient-cost-info">
                                                         <span className="ingredient-cost-name">{item.naam}</span>
                                                         {inv ? (
-                                                            <span className="ingredient-cost-linked"><Link size={14} /> €{inv.price.toFixed(2)}/{inv.unit}</span>
+                                                            <span className="ingredient-cost-linked"><Link size={14} /> {formatEur(inv.price)}/{inv.unit}</span>
                                                         ) : isEstimated ? (
                                                             <span style={{
                                                                 display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -1481,7 +1482,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                                                 <Sparkles size={11} /> Geschat
                                                                 {Number.isFinite(estPrice) && estPrice > 0 && (
                                                                     <span style={{ marginLeft: 4, fontWeight: 600, textTransform: 'none', letterSpacing: 'normal' }}>
-                                                                        €{estPrice.toFixed(2)}/{item.unit}
+                                                                        {formatEur(estPrice)}/{item.unit}
                                                                     </span>
                                                                 )}
                                                             </span>
@@ -1494,11 +1495,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                                         {item.yield && item.yield < 1 && <span className="ingredient-cost-chip">yield {(item.yield * 100).toFixed(0)}%</span>}
                                                         {isEstimated && Number.isFinite(estPrice) && estPrice > 0 && (
                                                             <span className={'ingredient-cost-price'} title="Op basis van schatting">
-                                                                ~€{((item.qty_pp || 0) * estPrice / (item.yield || 1)).toFixed(2)}
+                                                                ~{formatEur((item.qty_pp || 0) * estPrice / (item.yield || 1))}
                                                             </span>
                                                         )}
                                                         {!isEstimated && (
-                                                            <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>€{costPP.toFixed(2)}</span>
+                                                            <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>{formatEur(costPP)}</span>
                                                         )}
                                                         {isEstimated && (
                                                             <EstimatedPriceFixButton
@@ -1516,7 +1517,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
                                         <div className="ingredient-cost-total">
                                             <span>Totale Foodcost p.p.</span>
-                                            <span className="ingredient-cost-total-value">€{totalFoodcostPP.toFixed(2)}</span>
+                                            <span className="ingredient-cost-total-value">{formatEur(totalFoodcostPP)}</span>
                                         </div>
 
                                         {/* Hint: foodcost blijft €0 zolang AI-geschatte ingrediënten geen
@@ -1636,7 +1637,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         if (rollupCents <= 0) return null;
                                         return (
                                             <div style={{ fontSize: 11.5, color: 'var(--brand)', marginTop: 4 }}>
-                                                Rolt op uit componenten: €{(rollupCents / 100).toFixed(2)} p.p. — lijsten en analyses gebruiken dát bedrag.
+                                                Rolt op uit componenten: {formatEur(rollupCents / 100)} p.p. — lijsten en analyses gebruiken dát bedrag.
                                             </div>
                                         );
                                     })()}
@@ -2031,10 +2032,15 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                     setBedenkerOpen(false);
                     /* Maak gerecht-form aan met AI-resultaat als basis. */
                     setEditing('new');
+                    /* Neem de door de AI voorgestelde gang over (bv. "Dessert")
+                       i.p.v. altijd de actieve/eerste gang — match op slug of naam. */
+                    const aiGang = String(result.gang ?? '').toLowerCase().trim();
+                    const gangMatch = gangen.find((x) =>
+                        (x.slug ?? '').toLowerCase() === aiGang || (x.naam ?? '').toLowerCase() === aiGang);
                     setForm({
                         naam: result.name,
                         beschrijving: result.desc,
-                        gang_slug: activeGang ?? gangen[0]?.slug,
+                        gang_slug: gangMatch?.slug ?? activeGang ?? gangen[0]?.slug,
                         kostprijs_pp: result.cost,
                         verkoopprijs: result.price,
                         bron: 'ai',
