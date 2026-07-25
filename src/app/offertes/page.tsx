@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { useOrg } from '@/lib/OrgContext';
+import { useActiveResource } from '@/lib/ActiveResourceContext';
 import { mailOfferte } from '@/lib/emailHelper';
 import { logActivationEvent } from '@/lib/activation';
 import { offertesToCsv, downloadCsv } from '@/lib/csvExport';
@@ -140,6 +141,7 @@ export default function Offertes() {
     const { data: inventoryData } = useSupabase<InventoryItem>('inventory', []);
     const { settings } = useSettings();
     const { orgId } = useOrg();
+    const { active } = useActiveResource();
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
@@ -401,6 +403,25 @@ export default function Offertes() {
                 if (!orgId) {
                     showToast('Sync fout: organisatie nog niet geladen — probeer opnieuw', 'error');
                     return null;
+                }
+                // Kwam deze offerte vanuit een event (actieve resource)? Koppel 'm dan
+                // aan DÁT event i.p.v. een duplicaat te maken — mits dat event nog niet
+                // aan een andere offerte hangt. Naam/gasten/prijs van het event laten we
+                // staan: het event is de bron van waarheid. "Eén event, één offerte."
+                if (active && active.kind === 'event') {
+                    const aid = parseInt(String(active.id), 10);
+                    if (!isNaN(aid)) {
+                        const { data: ev } = await supabase.from('events').select('id, offerte_id').eq('id', aid).maybeSingle();
+                        if (ev && (ev.offerte_id == null || ev.offerte_id === qid)) {
+                            const u = await supabase.from('events').update({ offerte_id: qid, status: eventStatus }).eq('id', aid).select();
+                            if (!u.error) {
+                                showToast('📅 Offerte gekoppeld aan je event', 'success');
+                                return aid;
+                            }
+                            console.error('[SYNC] Adopt event FAILED:', u.error.message);
+                            // val terug op een nieuw event hieronder
+                        }
+                    }
                 }
                 payload.offerte_id = qid;
                 payload.type = 'Zakelijk';
