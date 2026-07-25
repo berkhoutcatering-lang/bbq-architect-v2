@@ -5,6 +5,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 import type { Gerecht, Gang } from '@/types';
+import { MENU_PRICE_REF } from '@/lib/menuMargin';
 
 /* ── Gang gradients + icons (per categorie kleur + Lucide icon-naam) ───
    Bucket C: na review-iteratie waar Sam zei "Voorgerecht ↔ Dessert lijken
@@ -106,11 +107,18 @@ export function marginTone(margin: number): { color: string; cssVar: string } {
     return { color: '#f59e0b', cssVar: '#f59e0b' };
 }
 
-/* ── Compute margin uit Gerecht ─────────────────────────────── */
-export function getMargin(gerecht: Pick<Gerecht, 'kostprijs_pp' | 'verkoopprijs' | 'prijs'>): number {
+/* ── Compute margin uit Gerecht ─────────────────────────────────
+   Eigen verkoopprijs als die er is; anders tegen de menu-prijs (menu-niveau,
+   niet een verzonnen prijs). Zo is de marge overal consistent en nooit deel-
+   door-nul. Zie src/lib/menuMargin.ts. */
+export function getMargin(
+    gerecht: Pick<Gerecht, 'kostprijs_pp' | 'verkoopprijs' | 'prijs'>,
+    menuPriceRef: number = MENU_PRICE_REF,
+): number {
     const cost = Number(gerecht.kostprijs_pp ?? 0);
-    const price = Number(gerecht.verkoopprijs ?? gerecht.prijs ?? 0);
-    if (!price || price <= 0) return 0;
+    const own = Number(gerecht.verkoopprijs ?? gerecht.prijs ?? 0);
+    const price = own > 0 ? own : (menuPriceRef > 0 ? menuPriceRef : 0);
+    if (cost <= 0 || price <= 0) return 0;
     return Math.round((1 - cost / price) * 100);
 }
 
