@@ -396,9 +396,16 @@ export default function Offertes() {
                 showToast(msg, 'success');
                 return existing.id;
             } else {
+                // RLS: de events-tabel heeft geen org-default/trigger, dus een insert
+                // MOET organization_id expliciet meesturen (anders schendt 'ie de policy).
+                if (!orgId) {
+                    showToast('Sync fout: organisatie nog niet geladen — probeer opnieuw', 'error');
+                    return null;
+                }
                 payload.offerte_id = qid;
                 payload.type = 'Zakelijk';
                 payload.menu = [];
+                payload.organization_id = orgId;
                 const ins = await supabase.from('events').insert(payload).select();
                 if (ins.error) {
                     console.error('[SYNC] Insert FAILED:', ins.error.message);
