@@ -22,6 +22,7 @@ import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
+import { createComponentFromMatchAction } from '@/app/gerechten/componenten/actions';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
@@ -135,6 +136,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [inspectingGerecht, setInspectingGerecht] = useState<Gerecht | null>(null);
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [bedenkerOpen, setBedenkerOpen] = useState(false);
+    const [savingCompIdx, setSavingCompIdx] = useState<number | null>(null);
     const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
     /* AI-allergeen-detectie bij opslaan: standaard aan, maar Sam wil de keuze.
        aiSaving = spinner-state tijdens de (trage) AI-call. */
@@ -599,7 +601,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 yield: ing.yield ?? 1.0,
                 is_estimated: ing.is_estimated ?? false,
                 estimated_price: ing.estimated_price_eur ?? null,
+                match: ing.match ?? null,   // foto-flow: gekoppelde kostprijs-bron
             })),
+            // Foto-flow met matches → zet de kostprijs zodat marge/lijst meteen rekenen.
+            kostprijs_pp: (data.kostprijs_pp_schatting && data.kostprijs_pp_schatting > 0)
+                ? String(data.kostprijs_pp_schatting.toFixed(2))
+                : f.kostprijs_pp,
             bereidingswijze: data.bereidingswijze || f.bereidingswijze || '',
             allergenen: (data.allergenen && data.allergenen.length) ? data.allergenen : f.allergenen,
             tags: (data.tags && data.tags.length) ? data.tags : f.tags,
@@ -608,6 +615,37 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             ingredienten: (data.ingredient_costs || []).map(i => i.naam),  // legacy field sync
         }));
         showToast(`AI vulde recept in (${meta.matched_count} matched, ${meta.estimated_count} geschat — €${(meta.cost_cents / 100).toFixed(3)})`, 'success');
+    }
+
+    /* "Maak component van dit Bidfood-product" — bewaart een leverancier-match
+       als herbruikbare bought_in-component, zodat het ingrediënt de volgende
+       keer meteen in je bibliotheek staat. De chip flipt daarna naar bibliotheek. */
+    async function makeComponentFromMatch(idx: number) {
+        const item = (form.ingredient_costs || [])[idx];
+        const m = item?.match;
+        if (!m || m.source !== 'supplier' || typeof m.cents_per_base_unit !== 'number') return;
+        setSavingCompIdx(idx);
+        try {
+            const res = await createComponentFromMatchAction({
+                name: m.name,
+                cents_per_base_unit: m.cents_per_base_unit,
+                base_unit: m.base_unit,
+                supplier: m.supplier ?? null,
+            });
+            if ('error' in res) { showToast(res.error, 'error'); return; }
+            setForm((f: any) => {
+                const items = (f.ingredient_costs || []).slice();
+                if (items[idx]?.match) {
+                    items[idx] = { ...items[idx], match: { ...items[idx].match, source: 'component', ref_id: res.data.id, supplier: null } };
+                }
+                return Object.assign({}, f, { ingredient_costs: items });
+            });
+            showToast(`"${m.name}" opgeslagen in je bibliotheek`, 'success');
+        } catch {
+            showToast('Component opslaan mislukt', 'error');
+        } finally {
+            setSavingCompIdx(null);
+        }
     }
 
     async function applyFineTune(tune: FineTune) {
@@ -776,6 +814,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setForm(Object.assign({}, form, { ingredient_costs: items }));
     }
     function calcCostPP(item: any) {
+        // Foto-flow: de matcher heeft de regel-kostprijs al code-afgeleid uit de
+        // echte catalogus-rij (component/voorraad/Bidfood) → gebruik die direct.
+        if (item.match && typeof item.match.line_cost_cents === 'number') {
+            return item.match.line_cost_cents / 100;
+        }
         const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
         const price = inv ? inv.price : 0;
         const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
@@ -1469,7 +1512,26 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                                 <div key={idx} className="ingredient-cost-row">
                                                     <div className="ingredient-cost-info">
                                                         <span className="ingredient-cost-name">{item.naam}</span>
-                                                        {inv ? (
+                                                        {item.match && item.match.line_cost_cents != null ? (
+                                                            <span style={{
+                                                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                                padding: '2px 8px', fontSize: 10, fontWeight: 700,
+                                                                letterSpacing: '.06em', textTransform: 'uppercase',
+                                                                color: '#22c55e', background: 'rgba(34,197,94,.10)',
+                                                                border: '1px solid rgba(34,197,94,.30)', borderRadius: 5,
+                                                            }}>
+                                                                <Link size={12} />
+                                                                {item.match.source === 'supplier'
+                                                                    ? (item.match.supplier || 'Leverancier')
+                                                                    : item.match.source === 'component' ? 'Bibliotheek' : 'Voorraad'}
+                                                                <span style={{ opacity: 0.7, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal' }}>
+                                                                    · {String(item.match.name).length > 24 ? String(item.match.name).slice(0, 24) + '…' : item.match.name}
+                                                                </span>
+                                                                {item.match.confidence === 'laag' && (
+                                                                    <span style={{ color: '#f59e0b', fontWeight: 800 }} title="Lage zekerheid — check de koppeling even">?</span>
+                                                                )}
+                                                            </span>
+                                                        ) : inv ? (
                                                             <span className="ingredient-cost-linked"><Link size={14} /> {formatEur(inv.price)}/{inv.unit}</span>
                                                         ) : isEstimated ? (
                                                             <span style={{
@@ -1500,6 +1562,24 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                                         )}
                                                         {!isEstimated && (
                                                             <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>{formatEur(costPP)}</span>
+                                                        )}
+                                                        {item.match && item.match.source === 'supplier' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={function () { makeComponentFromMatch(idx); }}
+                                                                disabled={savingCompIdx === idx}
+                                                                title="Bewaar dit leverancier-product als herbruikbare component in je bibliotheek"
+                                                                style={{
+                                                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                                                    padding: '2px 8px', fontSize: 10, fontWeight: 700,
+                                                                    color: 'var(--brand)', background: 'transparent',
+                                                                    border: '1px solid var(--brand)', borderRadius: 5,
+                                                                    cursor: savingCompIdx === idx ? 'default' : 'pointer',
+                                                                    opacity: savingCompIdx === idx ? 0.5 : 1,
+                                                                }}
+                                                            >
+                                                                <Plus size={11} /> {savingCompIdx === idx ? 'Bezig…' : 'Bewaar'}
+                                                            </button>
                                                         )}
                                                         {isEstimated && (
                                                             <EstimatedPriceFixButton
