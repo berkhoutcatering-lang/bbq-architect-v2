@@ -5213,6 +5213,13 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   animation: marge-pulse-red 2s ease-in-out infinite;
 }
 
+/* Neutraal — nog geen kostprijs bekend, dus (nog) geen echt marge-oordeel */
+.marge-grey {
+  background: rgba(148, 163, 184, .12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, .25);
+}
+
 @keyframes marge-pulse-red {
 
   0%,
