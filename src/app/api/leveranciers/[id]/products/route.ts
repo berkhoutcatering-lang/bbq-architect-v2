@@ -14,12 +14,15 @@ import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 
 export const runtime = 'nodejs';
 
-export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params;
     const supplierId = Number(id);
     if (!Number.isInteger(supplierId)) {
         return NextResponse.json({ error: 'ongeldige leverancier-id' }, { status: 400 });
     }
+    // Zoekterm (server-side, zodat álle producten doorzocht worden i.p.v. alleen
+    // de eerste 1000). Strip tekens die het PostgREST or()-filter zouden breken.
+    const q = (req.nextUrl.searchParams.get('q') || '').trim().replace(/[,%_()]/g, ' ').trim();
 
     const sb = await createServerSupabase();
     const { data: auth } = await sb.auth.getUser();
@@ -43,16 +46,21 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         .maybeSingle();
     if (!lev) return NextResponse.json({ error: 'leverancier niet gevonden' }, { status: 404 });
 
-    /* Producten (Catalogus B) — expliciete org + supplier filter naast RLS. */
-    const { data: products, error } = await sb
-        .from('supplier_products')
-        .select('id, name, supplier_sku, ean, unit, package_size, package_unit, base_unit, total_base_quantity, price_cents, variable_weight, current_price_id, last_seen_at, last_updated_at, source, source_adapter_key')
-        .eq('organization_id', orgId)
-        .eq('supplier_id', supplierId)
-        .eq('active', true)
-        .order('name', { ascending: true })
-        .limit(2000);
+    /* Producten (Catalogus B) — expliciete org + supplier filter naast RLS.
+       Bij een zoekterm filtert de DB op naam/artikelnr/EAN (alle producten). */
+    const cols = 'id, name, supplier_sku, ean, unit, package_size, package_unit, base_unit, total_base_quantity, price_cents, variable_weight, current_price_id, last_seen_at, last_updated_at, source, source_adapter_key';
+    let query = sb.from('supplier_products').select(cols)
+        .eq('organization_id', orgId).eq('supplier_id', supplierId).eq('active', true);
+    let countQuery = sb.from('supplier_products').select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId).eq('supplier_id', supplierId).eq('active', true);
+    if (q) {
+        const orExpr = `name.ilike.%${q}%,supplier_sku.ilike.%${q}%,ean.ilike.%${q}%`;
+        query = query.or(orExpr);
+        countQuery = countQuery.or(orExpr);
+    }
+    const { data: products, error } = await query.order('name', { ascending: true }).limit(1000);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const { count: totalCount } = await countQuery;
 
     const rows = products ?? [];
 
@@ -111,7 +119,9 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         };
     });
 
-    return NextResponse.json({ leverancier: lev, products: out, count: out.length });
+    // count = totaal dat aan de (zoek)filter voldoet; shown = wat we nu teruggeven
+    // (max 1000). Zo weet de UI of er nog meer is dan getoond.
+    return NextResponse.json({ leverancier: lev, products: out, count: totalCount ?? out.length, shown: out.length });
 }
 
 function numOrNull(v: unknown): number | null {
