@@ -9,12 +9,12 @@ describe('packToBase — gewicht naar per 100 g', () => {
         const b = packToBase(2250, 2.5, 'kg');
         expect(b).toEqual({ base_quantity: 100, base_unit: 'g', base_cost_cents: 90 });
         // 90 cent / 100 g = €9,00 / kg
-        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€9.00 / kg');
+        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€ 9,00 / kg');
     });
     it('750 g voor €8,25 → €11,00 / kg', () => {
         const b = packToBase(825, 750, 'g');
         expect(b!.base_cost_cents).toBe(110); // 110 cent / 100 g
-        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€11.00 / kg');
+        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€ 11,00 / kg');
     });
     it('gram-invoer werkt gelijk aan kg-invoer', () => {
         expect(packToBase(2250, 2500, 'g')).toEqual(packToBase(2250, 2.5, 'kg'));
@@ -25,12 +25,12 @@ describe('packToBase — volume en stuks', () => {
     it('1 liter voor €6,80 → €6,80 / liter', () => {
         const b = packToBase(680, 1, 'liter');
         expect(b).toEqual({ base_quantity: 100, base_unit: 'ml', base_cost_cents: 68 });
-        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€6.80 / liter');
+        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€ 6,80 / liter');
     });
     it('12 stuks voor €5,04 → €0,42 / stuk', () => {
         const b = packToBase(504, 12, 'stuk');
         expect(b).toEqual({ base_quantity: 1, base_unit: 'stuk', base_cost_cents: 42 });
-        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€0.42 / stuk');
+        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€ 0,42 / stuk');
     });
 });
 
@@ -52,7 +52,7 @@ describe('packToBaseMulti — multipacks', () => {
         const b = packToBaseMulti(1350, 6, 1.5, 'liter');
         // totaal 9000 ml → round(1350*100/9000) = 15 cent/100ml = €1,50/L
         expect(b!.base_cost_cents).toBe(15);
-        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€1.50 / liter');
+        expect(unitPriceLabel(b!.base_cost_cents, b!.base_quantity, b!.base_unit)).toBe('€ 1,50 / liter');
     });
     it('2 × 1 kg voor €18,95 → gebruikt de pakprijs, niet het aantal', () => {
         const b = packToBaseMulti(1895, 2, 1, 'kg');
