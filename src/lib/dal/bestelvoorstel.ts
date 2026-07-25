@@ -35,6 +35,7 @@ export interface BestelvoorstelItem {
   pack_unit: string | null;
   rounding_reason: RoundingReason;
   supplier_product_id: number | null;
+  product_url: string | null; // deep-link naar de productpagina bij de leverancier (bestellen in 1 klik)
   unit: string;
   unit_price_eur: number | null;
   price_source: 'last_price' | 'purchase_price' | 'unknown';
@@ -149,7 +150,7 @@ export async function buildBestelvoorstel(
   if (spIds.length > 0) {
     const { data: spRows } = await supabase
       .from('supplier_products')
-      .select('id, supplier_id, package_size, package_unit')
+      .select('id, supplier_id, package_size, package_unit, product_url')
       .eq('organization_id', orgId)
       .in('id', spIds);
     (spRows || []).forEach(function (s: any) { spById.set(s.id, s); });
@@ -266,6 +267,7 @@ export async function buildBestelvoorstel(
       pack_unit: packed.pack_unit,
       rounding_reason: packed.reason,
       supplier_product_id: sp?.id ?? null,
+      product_url: sp?.product_url ?? null,
       unit: r.unit,
       unit_price_eur: priceUnknown ? null : unitPriceEur,
       price_source: priceSource,

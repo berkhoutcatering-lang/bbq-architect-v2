@@ -84,7 +84,13 @@ export default function LeverancierProductenPage() {
     const [shown, setShown] = useState(0);
     const [loading, setLoading] = useState(true);
     const [searching, setSearching] = useState(false);
-    const [q, setQ] = useState('');
+    // Begin-zoekterm uit de URL (?q=…) — client-side, zodat de "Zoek op …"-knop
+    // vanaf de bestellijst meteen de juiste zoekopdracht opent. (Geen useSearchParams
+    // → geen Suspense-vereiste die de build breekt.)
+    const [q, setQ] = useState(() => {
+        if (typeof window === 'undefined') return '';
+        try { return new URLSearchParams(window.location.search).get('q') || ''; } catch { return ''; }
+    });
     const [sel, setSel] = useState<ProductRow | null>(null);
     const [detail, setDetail] = useState<{ product: Record<string, unknown>; history: PriceHistoryRow[] } | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
