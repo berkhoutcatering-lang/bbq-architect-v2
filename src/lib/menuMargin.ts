@@ -24,6 +24,12 @@ export interface MenuMarginResult {
     targetPct: number;
 }
 
+/** Referentie-menuprijs p.p. als een gerecht (nog) geen eigen verkoopprijs heeft.
+ *  Bij een vast menu verkoop je geen losse gerechten; deze basis (Sam's €38,50)
+ *  is de eerlijke noemer voor een per-gerecht marge-signaal — nooit een verzonnen
+ *  kostprijs×factor. Analyse-schermen (BCG/Health) + lijst-tegels gebruiken dit. */
+export const MENU_PRICE_REF = 38.5;
+
 const r2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const r1 = (n: number) => Math.round((n + Number.EPSILON) * 10) / 10;
 

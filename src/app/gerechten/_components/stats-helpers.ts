@@ -1,4 +1,5 @@
 /** Helpers om de stats voor de Gerechten-page hero uit ruwe gerechten-rijen te berekenen. */
+import { MENU_PRICE_REF } from '@/lib/menuMargin';
 
 interface GerechtRow {
   id: number;
@@ -24,23 +25,26 @@ interface GerechtRow {
   ingredient_costs?: unknown;
 }
 
-/** Verkoopprijs lezen: verkoopprijs > prijs > extra > target 65% marge op kostprijs. */
+/** Echte verkoopprijs lezen: verkoopprijs > prijs > extra. GEEN verzonnen prijs
+ *  meer (was kostprijs/0.35 → altijd ~65%); geen eigen prijs → 0 (telt niet mee
+ *  in "gem. verkoop"). Bij een vast menu heeft een gerecht geen eigen prijs. */
 export function schatVerkoop(g: GerechtRow): number {
   if (g.verkoopprijs && g.verkoopprijs > 0) return g.verkoopprijs;
   if (g.prijs && g.prijs > 0) return g.prijs;
   if (g.extra_prijs_pp && g.extra_prijs_pp > 0) return g.extra_prijs_pp;
-  const k = g.kostprijs_pp || 0;
-  if (k <= 0) return 0;
-  return Math.round((k / 0.35) * 2) / 2;
+  return 0;
 }
 
-/** Brutomarge in 0-100 schaal. Lees pre-computed marge_pct als die er is. */
+/** Brutomarge in 0-100 schaal. Pre-computed marge_pct wint; anders tegen de
+ *  eigen verkoopprijs, en zonder eigen prijs tegen de menu-prijs (menu-niveau,
+ *  niet een verzonnen prijs). */
 export function schatMarge(g: GerechtRow): number {
   if (g.marge_pct && g.marge_pct > 0) return g.marge_pct;
-  const v = schatVerkoop(g);
   const k = g.kostprijs_pp || 0;
-  if (v <= 0 || k <= 0) return 0;
-  return ((v - k) / v) * 100;
+  if (k <= 0) return 0;
+  const own = schatVerkoop(g);
+  const ref = own > 0 ? own : MENU_PRICE_REF;
+  return ((ref - k) / ref) * 100;
 }
 
 /** Concept = niet-actief volgens DB-boolean. Status-string blijft fallback. */
