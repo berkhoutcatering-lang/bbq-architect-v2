@@ -269,7 +269,7 @@ export default function MenuEngineering() {
       .map(function (o: any) { return Number(o.basis_prijs_pp); });
     return prices.length > 0
       ? prices.reduce(function (s, p) { return s + p; }, 0) / prices.length
-      : 45;
+      : 38.5;
   }, [offertesData]);
 
   const stats = useMemo(function () {
@@ -318,7 +318,7 @@ export default function MenuEngineering() {
 
     // Average selling price across offertes (for margin calc)
     const prices = offertesData.filter(function (o: any) { return o.basis_prijs_pp && o.basis_prijs_pp > 0; }).map(function (o: any) { return o.basis_prijs_pp; });
-    const avgSellingPrice = prices.length > 0 ? prices.reduce(function (s: number, p: number) { return s + p; }, 0) / prices.length : 45;
+    const avgSellingPrice = prices.length > 0 ? prices.reduce(function (s: number, p: number) { return s + p; }, 0) / prices.length : 38.5;
 
     const dishes: DishAnalysis[] = [];
     fullGerechten.forEach(function (g: any) {
@@ -421,6 +421,7 @@ export default function MenuEngineering() {
         gemMarge={stats.gemMarge}
         bcgStars={bcgStats?.stars || 0}
         bcgDogs={bcgStats?.dogs || 0}
+        menuPrice={avgVerkoopprijs}
       />
 
       {winner && (
@@ -573,6 +574,7 @@ export default function MenuEngineering() {
                 selectionMode={selectionMode}
                 isSelected={(id: number) => selectedIds.includes(id)}
                 onToggleSelect={toggleSelect}
+                menuPrice={avgVerkoopprijs}
               />
             );
           })}
