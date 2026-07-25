@@ -110,7 +110,7 @@ interface ComponentRow {
 const UNITS = ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'];
 
 function formatEuro(cents: number): string {
-    return `€${(cents / 100).toFixed(2)}`;
+    return '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatPerBase(cents: number, qty: number, unit: string): string {
@@ -487,7 +487,7 @@ export default function ComponentenPage() {
                             )}
                             <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-2.5">
                                 <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
-                                    €{(c.base_cost_cents / 100).toFixed(2)}
+                                    {formatEuro(c.base_cost_cents)}
                                 </span>
                                 <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
                                     /{c.base_quantity}{c.base_unit}
@@ -539,7 +539,7 @@ export default function ComponentenPage() {
                     <div className="eh-hero-content">
                         <div className="eh-hero-left">
                             <div>
-                                <div className="eh-hero-eyebrow"><span className="dot"></span>Inspiratie · Laag 1 · Atomair</div>
+                                <div className="eh-hero-eyebrow"><span className="dot"></span>Bouwstenen · de basis onder je gerechten</div>
                                 <h1 className="eh-hero-title">Componenten</h1>
                                 <div className="eh-hero-sub">
                                     <span className="pill">{totalCount} {totalCount === 1 ? 'bouwsteen' : 'bouwstenen'}</span>
@@ -645,7 +645,7 @@ export default function ComponentenPage() {
                         </div>
                         <div className="eh-hero-stat">
                             <div className="l">Gem. kostprijs</div>
-                            <div className="v">€{(avgCostCents / 100).toFixed(2)}</div>
+                            <div className="v">{formatEuro(avgCostCents)}</div>
                             <div className="s">Per basis-eenheid</div>
                         </div>
                     </div>

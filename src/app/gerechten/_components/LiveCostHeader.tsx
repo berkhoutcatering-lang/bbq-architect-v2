@@ -106,7 +106,7 @@ export default async function LiveCostHeader({
                         Kostprijs
                     </div>
                     <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.1 }}>
-                        € {(kostprijsCents / 100).toFixed(2)}
+                        € {(kostprijsCents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted, #94a3b8)', marginTop: 2 }}>
                         per {porties} porties
@@ -119,7 +119,7 @@ export default async function LiveCostHeader({
                         Per portie
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
-                        € {kostPerPortie.toFixed(2)}
+                        € {kostPerPortie.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                 </div>
 

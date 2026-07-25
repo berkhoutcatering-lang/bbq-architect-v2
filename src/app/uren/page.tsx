@@ -106,7 +106,7 @@ export default function UrenPage() {
       status: 'completed',
     } as Partial<TimeLog>).then(function () {
       const dur = shiftDurationMs(log.start_time, new Date().toISOString());
-      const hrs = (dur / 3_600_000).toFixed(1);
+      const hrs = (dur / 3_600_000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       showToast((p?.naam || 'Crew') + ' uitgeklokt — ' + hrs + 'u', 'success');
     }).catch(function (e: unknown) {
       console.error('[uren] uitklokken mislukt:', (e as Error)?.message);
@@ -151,7 +151,7 @@ export default function UrenPage() {
   return (
     <RequireTier feature="crew_uren">
       <div className="mobile-safe-bottom" style={{ animation: 'fadeIn .4s ease-out' }}>
-        <PageHeader title="Workforce & Uren" />
+        <PageHeader title="Team & Uren" />
 
         <PageGuideNote
           id="uren"

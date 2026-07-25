@@ -86,7 +86,7 @@ export function packToBaseMulti(
    groothandel-eenheid, los van hoe de base intern opgeslagen is. */
 export function unitPriceLabel(baseCostCents: number, baseQuantity: number, baseUnit: string): string | null {
     if (!Number.isFinite(baseCostCents) || !Number.isFinite(baseQuantity) || baseQuantity <= 0) return null;
-    const euro = (cents: number) => `€${(cents / 100).toFixed(2)}`;
+    const euro = (cents: number) => '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     switch (baseUnit) {
         case 'g':
             return `${euro((baseCostCents * 1000) / baseQuantity)} / kg`;
