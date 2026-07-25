@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
     const { data: product } = await sb
         .from('supplier_products')
-        .select('id, name, description, supplier_sku, ean, unit, package_size, package_unit, base_unit, total_base_quantity, price_cents, variable_weight, product_url, category, source, source_adapter_key, source_adapter_version, supplier_account_key, last_seen_at, last_updated_at, created_at, current_price_id')
+        .select('id, name, description, supplier_sku, ean, unit, package_size, package_unit, base_unit, total_base_quantity, price_cents, variable_weight, product_url, source, source_adapter_key, source_adapter_version, supplier_account_key, last_seen_at, last_updated_at, created_at, current_price_id')
         .eq('id', spId)
         .eq('supplier_id', supplierId)
         .eq('organization_id', orgId)
