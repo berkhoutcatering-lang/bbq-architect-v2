@@ -27,13 +27,13 @@ interface Chip {
 }
 
 function fmtEur(cents: number): string {
-    return '€' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 export default function SystemHealthStrip({ data }: { data: SystemHealthData }) {
     const chips: Chip[] = [
         {
-            label: 'AI-spend deze maand',
+            label: 'AI-kosten deze maand',
             value: fmtEur(data.aiSpendCentsThisMonth),
             icon: Sparkles,
             href: '/instellingen/ai-usage',

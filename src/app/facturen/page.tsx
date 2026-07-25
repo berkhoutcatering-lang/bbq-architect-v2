@@ -191,7 +191,7 @@ export default function Facturen() {
         return (
             <div className="panel">
                 <div className="panel-head">
-                    <h3>{editing === 'new' ? 'Nieuwe Factuur' : 'Factuur Bewerken'}</h3>
+                    <h3>{editing === 'new' ? 'Nieuwe factuur' : 'Factuur bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}>
                         <ArrowLeft size={14} /> Terug
                     </button>
@@ -401,7 +401,7 @@ export default function Facturen() {
                 title={`Facturen (${filteredFacturen.length}${filteredFacturen.length !== facturen.length ? ' / ' + facturen.length : ''})`}
                 actions={<>
                     <button className="btn btn-ghost btn-sm" onClick={function () { downloadCsv(facturenToCsv(facturen), 'facturen-export.csv'); showToast('CSV gedownload'); }} title="Exporteer als CSV voor boekhouding"><FileSpreadsheet size={14} /> CSV</button>
-                    <button className="btn btn-brand" onClick={newFactuur}><Plus size={14} /> Nieuwe Factuur</button>
+                    <button className="btn btn-brand" onClick={newFactuur}><Plus size={14} /> Nieuwe factuur</button>
                 </>}
             />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>

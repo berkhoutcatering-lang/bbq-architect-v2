@@ -137,7 +137,7 @@ export default function EventSpine({ windowDays = 14 }: { windowDays?: number })
         aria-label="Open voorraad-impact detail"
       >
         <Calendar size={14} aria-hidden />
-        <strong style={{ fontWeight: 600 }}>{summary.events_in_window.length} events</strong>
+        <strong style={{ fontWeight: 600 }}>{summary.events_in_window.length} {summary.events_in_window.length === 1 ? 'event' : 'events'}</strong>
         <span style={{ opacity: 0.8 }}>komende {windowDays}d</span>
         <span className="event-spine__divider" aria-hidden>·</span>
         <Package size={14} aria-hidden />

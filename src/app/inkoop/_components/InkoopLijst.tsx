@@ -289,7 +289,7 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: 
         const orderBy = new Date(earliestEventDate + 'T00:00:00');
         orderBy.setDate(orderBy.getDate() - lead);
         const diff = Math.ceil((orderBy.getTime() - Date.now()) / 86400000);
-        if (diff <= 0) return { text: 'nu bestellen', urgent: true };
+        if (diff <= 0) return { text: 'nu bestellen', urgent: true, imperative: true };
         if (diff <= 2) return { text: `over ${diff}d`, urgent: true };
         if (diff <= 7) return { text: `over ${diff}d`, urgent: false };
         return { text: orderBy.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' }), urgent: false };
@@ -359,7 +359,7 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: 
                                         gap: 4,
                                     }}
                                 >
-                                    <Clock size={11} /> bestel vóór {deadlinePill.text}
+                                    <Clock size={11} /> {deadlinePill.imperative ? deadlinePill.text : `bestel vóór ${deadlinePill.text}`}
                                 </span>
                             </>
                         )}

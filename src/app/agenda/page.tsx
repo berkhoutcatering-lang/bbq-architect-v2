@@ -81,7 +81,7 @@ function MetalCard({ children, style, className }: { children: React.ReactNode; 
 }
 
 const calById = (id: string) => CALENDARS.find(c => c.id === id) || CALENDARS[0];
-const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL');
+const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ═══════════════════════════════════════════════════════════════════
    HERO + KPIs + SYNC

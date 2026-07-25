@@ -216,7 +216,7 @@ function Klanten() {
         return (
             <MetallicCard hover={false}>
                 <div className="panel-head">
-                    <h3>{editing === 'new' ? 'Nieuwe Klant' : 'Klant Bewerken'}</h3>
+                    <h3>{editing === 'new' ? 'Nieuwe klant' : 'Klant bewerken'}</h3>
                     <button className="btn btn-ghost btn-sm" onClick={function () { setEditing(null); setForm(null); }}><ArrowLeft size={14} /> Terug</button>
                 </div>
                 <div className="panel-body">
@@ -410,7 +410,7 @@ function Klanten() {
                         >
                             <MessageSquare size={14} /> Intakegesprek
                         </Link>
-                        <button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe Klant</button>
+                        <button className="btn btn-brand" onClick={newKlant}><Plus size={14} /> Nieuwe klant</button>
                     </div>
                 }
             />
@@ -422,7 +422,7 @@ function Klanten() {
                 actions={[
                     { lead: 'Klik op een klant', text: 'om historie, contactgegevens en gekoppelde events en offertes te zien.' },
                     { lead: 'Filter op type', text: '(Particulier, Zakelijk, Festival, Horeca) of zoek op naam, plaats of e-mail.' },
-                    { lead: 'Top-klanten zie je in /financien', text: '— hier beheer je alleen de gegevens en relatie-historie.' },
+                    { lead: 'Top-klanten zie je onder Geld', text: '— hier beheer je alleen de gegevens en relatie-historie.' },
                 ]}
             />
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>

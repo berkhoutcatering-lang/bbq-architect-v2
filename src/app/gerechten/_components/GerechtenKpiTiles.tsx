@@ -41,7 +41,7 @@ export default function GerechtenKpiTiles({
     },
     {
       label: 'Gem. verkoop',
-      value: gemVerkoop > 0 ? `€${gemVerkoop.toFixed(2)}` : '—',
+      value: gemVerkoop > 0 ? '€ ' + gemVerkoop.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—',
       sub: 'per portie',
       Icon: Tag,
       tone: 'default' as const,
@@ -50,7 +50,7 @@ export default function GerechtenKpiTiles({
     {
       label: 'Gem. brutomarge',
       value: gemMargePct > 0 ? `${Math.round(gemMargePct)}%` : '—',
-      sub: 'over alle gangen',
+      sub: 'op gerechten met prijs',
       Icon: TrendingUp,
       tone: 'green' as const,
       href: null as string | null,

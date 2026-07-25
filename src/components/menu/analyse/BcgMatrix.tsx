@@ -31,10 +31,10 @@ interface QuadDef {
 }
 
 const QUADRANTS: QuadDef[] = [
-    { id: 'stars',  label: 'Stars',        emoji: '⭐', bg: 'rgba(34,197,94,.04)', border: 'rgba(34,197,94,.15)', color: '#22c55e' },
+    { id: 'stars',  label: 'Sterren',      emoji: '⭐', bg: 'rgba(34,197,94,.04)', border: 'rgba(34,197,94,.15)', color: '#22c55e' },
     { id: 'puzzle', label: 'Puzzels',      emoji: '🧩', bg: 'rgba(255,191,0,.04)', border: 'rgba(255,191,0,.15)', color: '#FFBF00' },
     { id: 'plow',   label: 'Ploegpaarden', emoji: '🐴', bg: 'rgba(59,130,246,.04)', border: 'rgba(59,130,246,.15)', color: '#3b82f6' },
-    { id: 'dogs',   label: 'Dogs',         emoji: '🐕', bg: 'rgba(239,68,68,.04)',  border: 'rgba(239,68,68,.15)', color: '#ef4444' },
+    { id: 'dogs',   label: 'Honden',       emoji: '🐕', bg: 'rgba(239,68,68,.04)',  border: 'rgba(239,68,68,.15)', color: '#ef4444' },
 ];
 
 function stableHash(id: string | number): number {
@@ -176,7 +176,7 @@ export function BcgMatrix({ gerechten, popularity }: Props) {
 
             {/* Disclaimer over populariteit-bron */}
             <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
-                Populariteit nu op basis van stabiele id-hash — wordt vervangen door echte order-counts zodra de orders-tabel met gerecht-koppeling beschikbaar is.
+                Populariteit is nu nog een schatting — zodra we per gerecht bestellingen bijhouden, baseren we dit op je echte verkoopcijfers.
             </div>
         </div>
     );
