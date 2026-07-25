@@ -3,6 +3,7 @@
 import React from 'react';
 import { CalendarClock, Calendar, MapPin, Check, ArrowRight } from 'lucide-react';
 import { deriveFaseProgress } from './prep-fases';
+import { statusLabel } from '@/components/StatusBadge';
 
 const MONTHS_NL_SHORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const DAY_NAMES_SHORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -117,7 +118,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
         {event.status ? (
           <>
             <span style={{ width: 4, height: 4, borderRadius: 2, background: 'var(--muted-light)', flexShrink: 0 }} />
-            <span>{event.status}</span>
+            <span>{statusLabel(event.status)}</span>
           </>
         ) : null}
         {event.type ? (
