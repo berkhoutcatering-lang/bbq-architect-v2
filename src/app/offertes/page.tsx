@@ -142,6 +142,19 @@ export default function Offertes() {
     const { settings } = useSettings();
     const { orgId } = useOrg();
     const { active } = useActiveResource();
+    // Actief event → gasten + prijs p.p. ophalen, zodat een offerte die vanuit een
+    // event wordt gemaakt die overneemt (regel + marge kloppen dan meteen). De pill
+    // draagt alleen id + tekst, dus we halen de echte getallen op.
+    const [activeEventData, setActiveEventData] = useState<{ guests: number; ppp: number } | null>(null);
+    useEffect(function () {
+        const aid = active && active.kind === 'event' ? parseInt(String(active.id), 10) : NaN;
+        if (isNaN(aid)) { setActiveEventData(null); return; }
+        let cancelled = false;
+        supabase.from('events').select('guests, ppp').eq('id', aid).maybeSingle().then(function (r) {
+            if (!cancelled && r.data) setActiveEventData({ guests: Number(r.data.guests) || 0, ppp: Number(r.data.ppp) || 0 });
+        });
+        return function () { cancelled = true; };
+    }, [active]);
     const showToast = useToast();
     const showConfirm = useConfirm();
     const [editing, setEditing] = useState<string | number | null>(null);
@@ -239,7 +252,16 @@ export default function Offertes() {
         setPriceModeByRow({});
         setMoneyDraftByCell({});
         setEditing('new');
-        setForm({
+        // Kwam de offerte vanuit een event? Neem gasten + prijs p.p. over — dan
+        // klopt de offerteregel (gasten × prijs) én de marge meteen, i.p.v. €38,50
+        // voor 1 persoon. Anders leeg (cateraar vult zelf in).
+        const g = activeEventData?.guests || 0;
+        const p = activeEventData?.ppp || 0;
+        const fromEvent = g > 0 && p > 0;
+        const basisItem = fromEvent
+            ? { desc: result.template_naam, qty: g, prijs: p, btw: (settings && settings.default_btw) || 21 }
+            : buildBasisItem(result.template_naam);
+        setForm(Object.assign({
             nummer: nummer,
             status: 'concept',
             client_naam: '',
@@ -248,10 +270,12 @@ export default function Offertes() {
             datum: today(),
             geldig_tot: addDays(today(), geldigDagen),
             notitie: result.template_naam,
-            items: [buildBasisItem(result.template_naam)],
+            items: [basisItem],
             menu_selectie: result.menu_selectie,
-        });
-        showToast('Menukaart toegepast! Vul prijs, gasten en klantgegevens aan.', 'info');
+        }, fromEvent ? { aantal_gasten: g, basis_prijs_pp: p } : {}));
+        showToast(fromEvent
+            ? `Menukaart toegepast — ${g} gasten × €${p} p.p. overgenomen van je event.`
+            : 'Menukaart toegepast! Vul prijs, gasten en klantgegevens aan.', 'info');
     }
 
     /* De geünificeerde canva levert menu-keuze + menukaart-styling in één keer.
@@ -274,7 +298,15 @@ export default function Offertes() {
         setPriceModeByRow({});
         setMoneyDraftByCell({});
         setEditing('new');
-        setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '', datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '', items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
+        // Vanuit een event? Neem gasten + prijs p.p. over (zie handleWizardComplete).
+        const g = activeEventData?.guests || 0;
+        const p = activeEventData?.ppp || 0;
+        const fromEvent = g > 0 && p > 0;
+        setForm(Object.assign({
+            nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '',
+            datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '',
+            items: [{ desc: '', qty: fromEvent ? g : 1, prijs: fromEvent ? p : 0, btw: (settings && settings.default_btw) || 21 }],
+        }, fromEvent ? { aantal_gasten: g, basis_prijs_pp: p } : {}));
     }
 
     /* Template-picker logica — "Nieuwe offerte" opent een keuze.
