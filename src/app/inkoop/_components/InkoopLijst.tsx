@@ -40,7 +40,10 @@ import {
     Repeat2,
     ChevronDown,
     ChevronRight,
+    ExternalLink,
+    Search,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import InkoopEmpty from './InkoopEmpty';
@@ -681,6 +684,42 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         }).join('  ·  ')}
                     </div>
                 )}
+                {/* Bestel-in-1-klik. Exact gekoppeld product → open de productpagina bij
+                    de leverancier (boem, bestellen maar). Nog niet gekoppeld → zoek 'm in je
+                    gesynchroniseerde catalogus (daar staat de prijs + een link naar de
+                    leverancier, en je kunt 'm meteen koppelen). */}
+                {item.product_url ? (
+                    <a
+                        href={item.product_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title={`Opent de productpagina bij ${bucket.leverancier_naam} — leg daar ${item.packs ?? Math.max(1, Math.ceil(item.qty))}× in je mandje.`}
+                        style={{
+                            marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7,
+                            fontSize: 12.5, fontWeight: 700, padding: '7px 13px', borderRadius: 9,
+                            background: 'var(--brand-tint-subtle, rgba(255,191,0,.08))',
+                            border: '1px solid var(--brand-tint-border, rgba(255,191,0,.3))',
+                            color: 'var(--brand, #FFBF00)', textDecoration: 'none', width: 'fit-content',
+                        }}
+                    >
+                        <ShoppingCart size={13} /> Bestel {item.packs ?? Math.max(1, Math.ceil(item.qty))}× op {firstWord(bucket.leverancier_naam)}
+                        <ExternalLink size={11} style={{ opacity: 0.7 }} />
+                    </a>
+                ) : bucket.leverancier_id != null ? (
+                    <Link
+                        href={`/leveranciers/${bucket.leverancier_id}/producten?q=${encodeURIComponent(item.naam)}`}
+                        title={`Zoek "${item.naam}" in je gesynchroniseerde ${bucket.leverancier_naam}-catalogus`}
+                        style={{
+                            marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 7,
+                            fontSize: 12.5, fontWeight: 600, padding: '7px 13px', borderRadius: 9,
+                            background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)',
+                            color: 'var(--text)', textDecoration: 'none', width: 'fit-content',
+                        }}
+                    >
+                        <Search size={13} style={{ opacity: 0.8 }} /> Zoek op {firstWord(bucket.leverancier_naam)}
+                        <ChevronRight size={12} style={{ opacity: 0.6 }} />
+                    </Link>
+                ) : null}
                 {/* Waarom dit aantal — volledige opbouw zodat een sceptische operator
                     het kan narekenen (fix #4). Alle data zit al in de regel. */}
                 <button
