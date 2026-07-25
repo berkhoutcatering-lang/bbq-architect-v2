@@ -16,6 +16,18 @@ import { useToast } from '@/components/Toast';
 
 const GOLD = '#c4a35a';
 
+export interface IngredientMatch {
+  source: 'component' | 'inventory' | 'supplier';
+  ref_id: number;
+  name: string;
+  supplier: string | null;
+  master_product_id: number | null;
+  confidence: 'hoog' | 'middel' | 'laag';
+  line_cost_cents: number | null;   // kostprijs p.p. voor deze regel; null = eenheden onvergelijkbaar
+  cents_per_base_unit: number;
+  base_unit: 'g' | 'ml' | 'stuk';
+}
+
 export interface AiFillIngredient {
   naam: string;
   inventory_id: number | null;
@@ -24,6 +36,8 @@ export interface AiFillIngredient {
   yield: number;
   is_estimated: boolean;
   estimated_price_eur: number | null;
+  /** Foto-flow: gekoppelde kostprijs-bron (component / voorraad / Bidfood). */
+  match?: IngredientMatch | null;
 }
 
 export interface AiFillResult {
@@ -106,15 +120,49 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
         }
         const d = body.data || {};
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ingredient_costs: AiFillIngredient[] = (d.ingredienten || []).map((i: any) => ({
-          naam: i.naam,
-          inventory_id: null,
-          qty_pp: typeof i.qty_pp === 'number' ? i.qty_pp : 0,
-          unit: i.eenheid || 'stuks',
-          yield: 1,
-          is_estimated: true,          // vision schat — kostprijs komt later uit voorraad-match
-          estimated_price_eur: null,
-        }));
+        const rawIngredients: any[] = Array.isArray(d.ingredienten) ? d.ingredienten : [];
+
+        /* Match-pass: koppel de vision-ingrediënten aan een echte kostprijs-bron
+           (component / voorraad / Bidfood-catalogus) en leid de kostprijs af uit
+           de echte rij. AI las de foto; deze stap rékent (Golden Pillar #3).
+           Faalt de match → alles blijft "geschat", extractie blijft staan. */
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let matches: any[] = [];
+        let kostprijsCents = 0;
+        let matchedCount = 0;
+        try {
+          const mr = await fetch('/api/recipe/match-ingredients', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ingredients: rawIngredients.map((i) => ({ naam: i.naam, qty_pp: i.qty_pp, eenheid: i.eenheid })),
+            }),
+          });
+          const mb = await mr.json();
+          if (mr.ok && mb.success) {
+            matches = mb.data?.ingredients || [];
+            kostprijsCents = mb.data?.kostprijs_pp_cents || 0;
+            matchedCount = mb.data?.matched_count || 0;
+          }
+        } catch { /* non-blocking */ }
+
+        const ingredient_costs: AiFillIngredient[] = rawIngredients.map((i: any, idx: number) => {
+          const m = matches[idx]?.match || null;
+          const qty = typeof i.qty_pp === 'number' ? i.qty_pp : 0;
+          const hasCost = !!(m && m.line_cost_cents != null);
+          // per-eenheid prijs voor de fallback-weergave (regelkost / aantal)
+          const perUnit = hasCost && qty > 0 ? (m.line_cost_cents / 100) / qty : null;
+          return {
+            naam: i.naam,
+            inventory_id: null,          // match-gedreven; geen losse inventory-koppeling nodig
+            qty_pp: qty,
+            unit: i.eenheid || 'stuks',
+            yield: 1,
+            is_estimated: !hasCost,      // gekoppeld mét prijs → geen schatting meer
+            estimated_price_eur: perUnit,
+            match: m,
+          };
+        });
         const mapped: AiFillResult = {
           naam: name.trim(),
           beschrijving: d.beschrijving || '',
@@ -127,13 +175,13 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
           tags: [],
           wijn_suggestie: d.wijn_suggestie || '',
           service_tip: d.service_tip || '',
-          kostprijs_pp_schatting: 0,   // code rekent uit ingredient × voorraad
+          kostprijs_pp_schatting: kostprijsCents / 100,
           gangcategorie: d.gangcategorie || undefined,  // caller mapt naar gang_slug
         };
         const meta: AiFillMeta = {
           inventory_size: 0,
-          matched_count: 0,
-          estimated_count: ingredient_costs.length,
+          matched_count: matchedCount,
+          estimated_count: Math.max(0, ingredient_costs.length - matchedCount),
           cost_cents: body.usage?.cost_eur_cents ?? 0,
           elapsed_ms: body.usage?.duration_ms ?? 0,
         };

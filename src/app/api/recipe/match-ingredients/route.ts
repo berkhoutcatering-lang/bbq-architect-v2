@@ -144,6 +144,9 @@ export async function POST(req: NextRequest) {
                     // null = eenheden onvergelijkbaar → toon "geschat", geen valse zekerheid
                     line_cost_cents: line,
                     unit_incompatible: line === null,
+                    // voor "maak component van dit product": per-base-eenheid prijs
+                    cents_per_base_unit: best.candidate.centsPerBaseUnit,
+                    base_unit: best.candidate.baseUnit,
                 },
             };
         }));
