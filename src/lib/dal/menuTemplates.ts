@@ -15,6 +15,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
+import { computeMenuMargin, costSharePct, isCostOutlier } from '@/lib/menuMargin';
 
 export interface MenuTemplateShallow {
     id: number;
@@ -181,26 +182,39 @@ export function findUnlinkedDishNames(template: MenuTemplateWithItems): Array<{ 
 }
 
 /* ── Marge per menukaart (seizoensmenu doorrekenen) ─────────────────────────
-   Rolt kostprijs + marge op per gerecht ÉN voor het hele menu, tegen elk
-   gerecht z'n EIGEN verkoopprijs (nooit een globale gemiddelde-prijs), en
-   markeert wat onder de doel-marge zakt. Kostprijs via effectieveKostprijsPP
-   (componenten-rollup eerst). */
+   KANON (2026-07): marge op MENU-NIVEAU. Bij een vast menu (basis_prijs_pp, bv.
+   €38,50 p.p.) verkoop je geen losse gerechten — je verdeelt één prijs. De echte
+   marge = (menu-prijs − som van de gerecht-kostprijzen) / menu-prijs. Per gerecht
+   tonen we de KOSTPRIJS als signaal (uitschieter), niet als los oordeel. De
+   per-gerecht-eigen-prijs velden (verkoop/margePct/blendedPct) blijven als
+   terugval bestaan maar zijn niet meer het hoofdoordeel. Zie src/lib/menuMargin.ts. */
 
 export interface MenuMarginDish {
     gerecht_id: string;
     naam: string;
     gang_slug: string | null;
     kostPP: number;
+    costSharePct: number | null;   // aandeel van dit gerecht in de menu-prijs
+    costOutlier: boolean;          // weegt onevenredig zwaar (signaal, geen oordeel)
+    // Legacy (per-gerecht eigen verkoopprijs) — behouden voor terugval:
     verkoop: number;
-    margePct: number | null;   // null = geen verkoopprijs ingevuld
+    margePct: number | null;       // null = geen eigen verkoopprijs ingevuld
     belowTarget: boolean;
 }
 
 export interface MenuMargins {
     dishes: MenuMarginDish[];
-    blendedPct: number | null; // geld-gewogen marge over het hele menu
-    target: number;            // doel-marge %
-    missingPrice: string[];    // gerecht-namen zonder verkoopprijs
+    // Menu-niveau (kanon): vaste menu-prijs vs som van de gerecht-kostprijzen.
+    menuPricePP: number;
+    hasMenuPrice: boolean;
+    foodcostPP: number;
+    menuMargePct: number | null;
+    foodcostPct: number | null;
+    menuOnTarget: boolean;
+    target: number;                // doel-marge %
+    // Legacy: geld-gewogen per-gerecht marge (terugval).
+    blendedPct: number | null;
+    missingPrice: string[];        // gerecht-namen zonder eigen verkoopprijs
 }
 
 export async function getMenuTemplateMargins(
@@ -208,6 +222,14 @@ export async function getMenuTemplateMargins(
     templateId: number,
     target: number,
 ): Promise<MenuMargins> {
+    // Vaste menu-prijs p.p. (basis_prijs_pp) — hierop rekenen we de menu-marge.
+    const { data: tpl } = await sb
+        .from('menu_templates')
+        .select('basis_prijs_pp')
+        .eq('id', templateId)
+        .maybeSingle();
+    const menuPricePP = Number((tpl as any)?.basis_prijs_pp) || 0;
+
     const { data, error } = await sb
         .from('menu_template_items')
         .select(`
@@ -241,16 +263,26 @@ export async function getMenuTemplateMargins(
             naam: g.naam,
             gang_slug: g.gang_slug ?? row.gang_slug ?? null,
             kostPP,
+            costSharePct: costSharePct(kostPP, menuPricePP),
+            costOutlier: isCostOutlier(kostPP, menuPricePP),
             verkoop,
             margePct,
             belowTarget: margePct != null && margePct < target,
         });
     }
 
+    const menu = computeMenuMargin(dishes.map((d) => d.kostPP), menuPricePP, target);
+
     return {
         dishes,
-        blendedPct: sumVerkoop > 0 ? (sumWinst / sumVerkoop) * 100 : null,
+        menuPricePP,
+        hasMenuPrice: menuPricePP > 0,
+        foodcostPP: menu.foodcostPP,
+        menuMargePct: menu.margePct,
+        foodcostPct: menu.foodcostPct,
+        menuOnTarget: menu.onTarget,
         target,
+        blendedPct: sumVerkoop > 0 ? (sumWinst / sumVerkoop) * 100 : null,
         missingPrice,
     };
 }

@@ -61,9 +61,9 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
         await load();
     }
 
-    const belowCount = margins?.dishes.filter(d => d.belowTarget).length ?? 0;
-    const margeColor = (pct: number | null, below: boolean) =>
-        pct == null ? 'var(--muted)' : below ? 'var(--red, #e5484d)' : 'var(--brand)';
+    const outliers = margins?.dishes.filter(d => d.costOutlier) ?? [];
+    const menuBelow = !!margins && margins.hasMenuPrice && margins.menuMargePct != null && margins.menuMargePct < margins.target;
+    const menuColor = !margins?.hasMenuPrice ? 'var(--muted)' : menuBelow ? 'var(--red, #e5484d)' : 'var(--brand)';
 
     return (
         <>
@@ -87,10 +87,15 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                     <div className="kf-body">
                         <div className="kf-card" style={{ padding: 14, marginBottom: 12 }}>
                             <div className="flex items-center justify-between" style={{ gap: 12 }}>
-                                <div>
+                                <div style={{ minWidth: 0 }}>
                                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>Menu-marge</div>
-                                    <div style={{ fontSize: 28, fontWeight: 700, color: margeColor(margins.blendedPct, margins.blendedPct != null && margins.blendedPct < margins.target) }}>
-                                        {margins.blendedPct == null ? '—' : `${margins.blendedPct.toFixed(0)}%`}
+                                    <div style={{ fontSize: 28, fontWeight: 700, color: menuColor }}>
+                                        {!margins.hasMenuPrice || margins.menuMargePct == null ? '—' : `${margins.menuMargePct.toFixed(0)}%`}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                        {margins.hasMenuPrice
+                                            ? `€${margins.foodcostPP.toFixed(2)} kostprijs op €${margins.menuPricePP.toFixed(2)} p.p.${margins.foodcostPct != null ? ` · food cost ${margins.foodcostPct.toFixed(0)}%` : ''}`
+                                            : 'Stel een menu-prijs (basisprijs p.p.) in om de menu-marge te zien.'}
                                     </div>
                                 </div>
                                 <label style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>
@@ -118,36 +123,44 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                             </button>
                         </div>
 
-                        {belowCount > 0 && (
+                        {menuBelow && (
                             <div className="kf-banner kf-banner-warn" style={{ marginBottom: 10 }}>
                                 <AlertTriangle size={14} />
-                                <span><strong>{belowCount}</strong> gerecht{belowCount === 1 ? '' : 'en'} onder je doel-marge van {margins.target}%.</span>
+                                <span>Menu-marge <strong>{margins.menuMargePct?.toFixed(0)}%</strong> ligt onder je doel van {margins.target}%.</span>
+                            </div>
+                        )}
+                        {!menuBelow && outliers.length > 0 && (
+                            <div className="kf-banner" style={{ marginBottom: 10, color: 'var(--muted)', fontSize: 12 }}>
+                                <span><strong>{outliers.length}</strong> gerecht{outliers.length === 1 ? '' : 'en'} weegt zwaar op dit menu — maar het menu-totaal telt, niet het losse gerecht.</span>
                             </div>
                         )}
 
+                        <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)', margin: '4px 2px 6px' }}>
+                            Kostprijs per gerecht <span style={{ textTransform: 'none', letterSpacing: 0 }}>· signaal</span>
+                        </div>
                         <div className="flex flex-col gap-1">
                             {margins.dishes.map(d => (
                                 <div
                                     key={d.gerecht_id}
                                     className="flex items-center justify-between"
-                                    style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: d.belowTarget ? 'var(--red-bg, rgba(229,72,77,.08))' : 'transparent' }}
+                                    style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: d.costOutlier ? 'var(--amber-bg, rgba(245,158,11,.08))' : 'transparent' }}
                                 >
                                     <div style={{ minWidth: 0 }}>
                                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.naam}</div>
                                         <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                            kost €{d.kostPP.toFixed(2)} · prijs {d.verkoop > 0 ? `€${d.verkoop.toFixed(2)}` : '— n.t.b.'}
+                                            kost €{d.kostPP.toFixed(2)}{d.costSharePct != null ? ` · ${d.costSharePct.toFixed(0)}% van menu` : ''}
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 15, fontWeight: 700, flexShrink: 0, color: margeColor(d.margePct, d.belowTarget) }}>
-                                        {d.margePct == null ? '—' : `${d.margePct.toFixed(0)}%`}
+                                    <div style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, color: d.costOutlier ? 'var(--amber, #f59e0b)' : 'var(--muted)' }}>
+                                        {d.costOutlier ? 'zwaar' : (d.costSharePct != null ? `${d.costSharePct.toFixed(0)}%` : `€${d.kostPP.toFixed(2)}`)}
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        {margins.missingPrice.length > 0 && (
+                        {!margins.hasMenuPrice && margins.dishes.length > 0 && (
                             <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.5 }}>
-                                {margins.missingPrice.length} gerecht(en) zonder verkoopprijs tellen niet mee in de menu-marge — vul een verkoopprijs in op het gerecht.
+                                Zonder menu-prijs kan de menu-marge niet berekend worden — zet de basisprijs p.p. op deze menukaart.
                             </p>
                         )}
                     </div>
