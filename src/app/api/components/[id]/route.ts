@@ -47,10 +47,25 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     if (compRes.error) return NextResponse.json({ error: compRes.error.message }, { status: 500 });
     if (!compRes.data) return NextResponse.json({ error: 'Component niet gevonden' }, { status: 404 });
 
+    /* Gekoppeld aan een leverancier-prijs? Geef de ACTUELE rij mee zodat de
+       editor de badge toont én de kostprijs kan meebewegen met de prijslijst. */
+    let linkedPrice: unknown = null;
+    const spId = (compRes.data as Record<string, unknown>).supplier_price_id as number | null | undefined;
+    if (spId) {
+        const { data: sp } = await supabase
+            .from('supplier_prices')
+            .select('id, leverancier, product_naam, prijs_per_kg, prijs_per_stuk, actief')
+            .eq('id', spId)
+            .eq('organization_id', auth.orgId!)
+            .maybeSingle();
+        linkedPrice = sp ?? null;
+    }
+
     return NextResponse.json({
         component: compRes.data,
         allergens: allRes.data ?? [],
         haccp_points: haccpRes.data ?? [],
+        linked_price: linkedPrice,
     });
 }
 
@@ -102,6 +117,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
        Accepteert string (folder UUID) of null (= "zonder folder"). */
     if (b.folder_id === null || typeof b.folder_id === 'string') {
         updateData.folder_id = b.folder_id;
+    }
+    /* Blijvende koppeling aan een leverancier-prijs (Catalog A). null = ontkoppelen. */
+    if (b.master_product_id === null || (typeof b.master_product_id === 'number' && Number.isInteger(b.master_product_id))) {
+        updateData.master_product_id = b.master_product_id;
+    }
+    if (b.supplier_price_id === null || (typeof b.supplier_price_id === 'number' && Number.isInteger(b.supplier_price_id))) {
+        updateData.supplier_price_id = b.supplier_price_id;
     }
 
     // Optionele nested replace-arrays
