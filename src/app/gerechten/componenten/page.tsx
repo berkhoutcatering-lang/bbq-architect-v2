@@ -99,6 +99,9 @@ interface ComponentRow {
     preparation_steps: unknown;
     flavor_tags: string[] | null;
     supplier_product_id: number | null;
+    /* Blijvende koppeling aan een leverancier-prijs (Catalog A) — migratie 20260725. */
+    master_product_id: number | null;
+    supplier_price_id: number | null;
     ai_suggested: boolean;
     approved_at: string | null;
     created_at: string;
@@ -884,6 +887,41 @@ function ComponentEditDrawer({
     const [steps, setSteps] = useState<string[]>([]);
     const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
     const [haccpRows, setHaccpRows] = useState<HaccpRow[]>([]);
+    /* Blijvende leverancier-koppeling (Catalog A). linkLabel = weergave voor de badge. */
+    const [masterProductId, setMasterProductId] = useState<number | null>(null);
+    const [supplierPriceId, setSupplierPriceId] = useState<number | null>(null);
+    const [linkLabel, setLinkLabel] = useState<{ leverancier: string | null; naam: string; actief: boolean } | null>(null);
+    const [linkSearch, setLinkSearch] = useState('');
+
+    /* Kostprijs afleiden uit een genormaliseerde leverancier-prijs — €/kg → per
+       100 g (zoals de Rekenhulp), €/stuk → per stuk. Puur code-rekenwerk. */
+    function applyLinkedPrice(prijsPerKg: number | null, prijsPerStuk: number | null): boolean {
+        if (prijsPerKg && prijsPerKg > 0) {
+            setBaseQty('100'); setBaseUnit('g'); setCostEuros((prijsPerKg / 10).toFixed(2));
+            return true;
+        }
+        if (prijsPerStuk && prijsPerStuk > 0) {
+            setBaseQty('1'); setBaseUnit('stuk'); setCostEuros(prijsPerStuk.toFixed(2));
+            return true;
+        }
+        return false; // geen genormaliseerde prijs → kostprijs blijft handmatig
+    }
+
+    function onPickLink(hit: CatalogSearchHit) {
+        setMasterProductId(hit.master_product_id);
+        setSupplierPriceId(hit.supplier_price_id);
+        setLinkLabel({ leverancier: hit.leverancier, naam: hit.naam, actief: true });
+        setLinkSearch('');
+        const derived = applyLinkedPrice(hit.prijs_per_kg, hit.prijs_per_stuk);
+        if (!derived) toast('Gekoppeld — deze leverancier heeft geen €/kg of €/stuk, dus vul de kostprijs zelf in', 'info');
+    }
+
+    function unlinkSupplier() {
+        setMasterProductId(null);
+        setSupplierPriceId(null);
+        setLinkLabel(null);
+        // Kostprijs blijft staan; je kunt 'm nu weer handmatig aanpassen.
+    }
 
     async function loadDetail() {
         setLoading(true);
@@ -903,6 +941,16 @@ function ComponentEditDrawer({
             setPackPrice(c.pack_price_cents != null ? (c.pack_price_cents / 100).toFixed(2) : '');
             setPackQty(c.pack_quantity != null ? String(c.pack_quantity) : '');
             setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
+            setMasterProductId(typeof c.master_product_id === 'number' ? c.master_product_id : null);
+            setSupplierPriceId(typeof c.supplier_price_id === 'number' ? c.supplier_price_id : null);
+            const lp = body.linked_price as { leverancier: string | null; product_naam: string; prijs_per_kg: number | null; prijs_per_stuk: number | null; actief: boolean } | null;
+            if (lp) {
+                setLinkLabel({ leverancier: lp.leverancier, naam: lp.product_naam, actief: !!lp.actief });
+                // Beweegt mee: kostprijs opnieuw afleiden uit de ACTUELE leverancier-prijs.
+                applyLinkedPrice(lp.prijs_per_kg, lp.prijs_per_stuk);
+            } else {
+                setLinkLabel(null);
+            }
             setIngredients(ingredientsFromJson(c.ingredients));
             setSteps(stepsFromJson(c.preparation_steps));
             setAllergenCodes(new Set((body.allergens as AllergenRow[] ?? []).map(a => a.allergen_code)));
@@ -998,6 +1046,9 @@ function ComponentEditDrawer({
                 flavor_tags: tags,
                 category,
                 ...packPayload(),
+                /* Blijvende leverancier-koppeling (null = ontkoppeld). */
+                master_product_id: masterProductId,
+                supplier_price_id: supplierPriceId,
                 /* Receptuur alleen meesturen voor zelf-bereide componenten. */
                 ...(comp?.type === 'prepared' ? {
                     ingredients: rowsToIngredientsJson(ingredients),
@@ -1103,9 +1154,33 @@ function ComponentEditDrawer({
                                     <span className="kf-label">Beschrijving</span>
                                     <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="kf-input" />
                                 </label>
-                                {/* Inkoop-items: pak-prijs is de bron, base-velden het berekende
-                                    resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
+                                {/* Blijvende koppeling aan een leverancier-product uit je prijslijst
+                                    (alle leveranciers). Gekoppeld → kostprijs komt uit de catalogus
+                                    en beweegt mee. Alleen zinvol voor inkoop-componenten. */}
                                 {comp?.type === 'bought_in' && (
+                                    <label className="kf-field">
+                                        <span className="kf-label">Koppel aan leverancier-product</span>
+                                        {linkLabel ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(34,197,94,.08)', border: '1px solid rgba(34,197,94,.28)' }}>
+                                                <span style={{ color: '#22c55e', fontWeight: 700, fontSize: 12, whiteSpace: 'nowrap' }}>🔗 {linkLabel.leverancier || 'Leverancier'}</span>
+                                                <span style={{ color: 'var(--muted)', fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{linkLabel.naam}</span>
+                                                {!linkLabel.actief && <span style={{ color: '#f59e0b', fontSize: 11, whiteSpace: 'nowrap' }} title="Deze prijs staat niet meer op actief">verouderd</span>}
+                                                <button type="button" className="kf-add" onClick={unlinkSupplier} title="Koppeling losmaken — kostprijs weer handmatig">Ontkoppel</button>
+                                            </div>
+                                        ) : (
+                                            <SupplierProductAutocomplete
+                                                value={linkSearch}
+                                                onChange={setLinkSearch}
+                                                onPick={onPickLink}
+                                                placeholder="Zoek een product bij al je leveranciers…"
+                                            />
+                                        )}
+                                        <p className="kf-help">Gekoppeld → de kostprijs komt uit je prijslijst en beweegt mee bij een prijswijziging.</p>
+                                    </label>
+                                )}
+                                {/* Inkoop-items zonder koppeling: pak-prijs is de bron, base-velden het
+                                    berekende resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
+                                {comp?.type === 'bought_in' && !linkLabel && (
                                     <PakketRekenhulp priceEuros={packPrice} qty={packQty} unit={packUnit} onApply={applyPack} />
                                 )}
                                 <div className="kf-grid-3">
