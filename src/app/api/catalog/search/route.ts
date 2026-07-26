@@ -20,8 +20,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
+import { trigramSimilarity, fuzzyShingles } from '@/lib/fuzzy';
 
 export const runtime = 'nodejs';
+
+/* Fuzzy-fallback: alleen aanzetten als de gewone (substring) zoek weinig oplevert,
+   zodat een tikfout ("komkomer", "bidfoud") tóch de juiste producten opdiept.
+   THIN = drempel waaronder we fuzzy erbij zoeken; FUZZY_MIN = minimale
+   trigram-similarity (pg_trgm-default 0.3); CAND = max kandidaten om te wegen. */
+const THIN_RESULTS = 6;
+const FUZZY_MIN = 0.3;
+const FUZZY_CANDIDATES = 200;
+
+/* Interne rang-velden — worden vóór verzending gestript. */
+type RankedHit = CatalogSearchHit & { _fuzzy?: boolean; _score?: number };
 
 export interface CatalogSearchHit {
     /* 'price_list' = Catalog A (master_products+supplier_prices, prijslijst-import).
@@ -86,17 +98,51 @@ export async function GET(req: NextRequest) {
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
     const wantSupplierProducts = req.nextUrl.searchParams.get('supplierProducts') === '1';
-    const results: CatalogSearchHit[] = [];
+    const results: RankedHit[] = [];
 
     /* ── Catalog A: prijslijst (master_products + supplier_prices) ── */
-    const masterById = new Map<number, { naam: string; categorie: string | null; standaard_eenheid: string | null }>();
+    type MasterMeta = { naam: string; categorie: string | null; standaard_eenheid: string | null; fuzzy: boolean; score: number };
+    const masterById = new Map<number, MasterMeta>();
     for (const m of (masters || [])) {
         masterById.set(m.id as number, {
             naam: (m.naam as string) ?? '',
             categorie: (m.categorie as string | null) ?? null,
             standaard_eenheid: (m.standaard_eenheid as string | null) ?? null,
+            fuzzy: false,
+            score: 1,
         });
     }
+
+    /* Fuzzy-fallback (Catalog A): weinig exacte treffers → haal kandidaten op die
+       ≥1 trigram met de zoekterm delen en weeg ze met trigram-similarity. */
+    if ((masters?.length ?? 0) < THIN_RESULTS) {
+        const shingles = fuzzyShingles(q);
+        if (shingles.length > 0) {
+            const orFilter = shingles.map((s) => `naam.ilike.%${s}%`).join(',');
+            const { data: cand } = await supabase
+                .from('master_products')
+                .select('id, naam, categorie, standaard_eenheid')
+                .eq('organization_id', orgId)
+                .eq('uit_assortiment', false)
+                .or(orFilter)
+                .limit(FUZZY_CANDIDATES);
+            for (const c of cand || []) {
+                const id = c.id as number;
+                if (masterById.has(id)) continue;
+                const score = trigramSimilarity((c.naam as string) ?? '', q);
+                if (score >= FUZZY_MIN) {
+                    masterById.set(id, {
+                        naam: (c.naam as string) ?? '',
+                        categorie: (c.categorie as string | null) ?? null,
+                        standaard_eenheid: (c.standaard_eenheid as string | null) ?? null,
+                        fuzzy: true,
+                        score,
+                    });
+                }
+            }
+        }
+    }
+
     if (masterById.size > 0) {
         const { data: prices, error: pErr } = await supabase
             .from('supplier_prices')
@@ -128,6 +174,8 @@ export async function GET(req: NextRequest) {
                 prijs_per_kg: p.prijs_per_kg != null ? Number(p.prijs_per_kg) : null,
                 prijs_per_stuk: p.prijs_per_stuk != null ? Number(p.prijs_per_stuk) : null,
                 datum: (p.datum as string | null) ?? null,
+                _fuzzy: m.fuzzy,
+                _score: m.score,
             });
         }
     }
@@ -137,15 +185,47 @@ export async function GET(req: NextRequest) {
        niet in de prijslijst) tóch aan een component gekoppeld worden. Kostprijs
        via supplierProductBaseCost (deterministisch). NOOIT id-join met Catalog A. */
     if (wantSupplierProducts) {
+        type SpRow = {
+            id: number; name: string; supplier_id: number | null; price_cents: number;
+            unit: string | null; package_size: number | null; package_unit: string | null;
+            total_base_quantity: number | null; base_unit: string | null;
+        };
+        const spCols = 'id, name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit';
+
         let spQuery = supabase
             .from('supplier_products')
-            .select('id, name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit')
+            .select(spCols)
             .eq('organization_id', orgId)
             .eq('active', true);
         for (const t of searchTokens) spQuery = spQuery.ilike('name', `%${t}%`);
-        const { data: sps } = await spQuery.limit(30);
-        if (sps && sps.length > 0) {
-            const supIds = Array.from(new Set(sps.map((s) => s.supplier_id).filter(Boolean)));
+        const { data: spsExact } = await spQuery.limit(30);
+
+        const spById = new Map<number, { row: SpRow; fuzzy: boolean; score: number }>();
+        for (const s of (spsExact || []) as SpRow[]) spById.set(s.id, { row: s, fuzzy: false, score: 1 });
+
+        /* Fuzzy-fallback (Catalog B) — zelfde principe als hierboven. */
+        if ((spsExact?.length ?? 0) < THIN_RESULTS) {
+            const shingles = fuzzyShingles(q);
+            if (shingles.length > 0) {
+                const orFilter = shingles.map((s) => `name.ilike.%${s}%`).join(',');
+                const { data: cand } = await supabase
+                    .from('supplier_products')
+                    .select(spCols)
+                    .eq('organization_id', orgId)
+                    .eq('active', true)
+                    .or(orFilter)
+                    .limit(FUZZY_CANDIDATES);
+                for (const s of (cand || []) as SpRow[]) {
+                    if (spById.has(s.id)) continue;
+                    const score = trigramSimilarity(s.name ?? '', q);
+                    if (score >= FUZZY_MIN) spById.set(s.id, { row: s, fuzzy: true, score });
+                }
+            }
+        }
+
+        const sps = Array.from(spById.values());
+        if (sps.length > 0) {
+            const supIds = Array.from(new Set(sps.map((s) => s.row.supplier_id).filter(Boolean)));
             const levMap = new Map<number, string>();
             if (supIds.length > 0) {
                 const { data: levs } = await supabase
@@ -153,40 +233,56 @@ export async function GET(req: NextRequest) {
                     .eq('organization_id', orgId).in('id', supIds as number[]);
                 for (const l of (levs || [])) levMap.set(l.id as number, (l.naam as string) ?? '');
             }
-            for (const s of sps) {
+            for (const { row: s, fuzzy, score } of sps) {
                 const base = supplierProductBaseCost({
-                    price_cents: s.price_cents as number,
-                    unit: s.unit as string | null,
-                    package_size: s.package_size as number | null,
-                    package_unit: s.package_unit as string | null,
-                    total_base_quantity: s.total_base_quantity as number | null,
-                    base_unit: s.base_unit as string | null,
+                    price_cents: s.price_cents,
+                    unit: s.unit,
+                    package_size: s.package_size,
+                    package_unit: s.package_unit,
+                    total_base_quantity: s.total_base_quantity,
+                    base_unit: s.base_unit,
                 });
                 results.push({
                     source: 'supplier_product',
                     master_product_id: 0,
                     supplier_price_id: 0,
-                    supplier_product_id: s.id as number,
-                    naam: s.name as string,
+                    supplier_product_id: s.id,
+                    naam: s.name,
                     categorie: null,
-                    leverancier: (s.supplier_id != null ? levMap.get(s.supplier_id as number) : null) ?? null,
+                    leverancier: (s.supplier_id != null ? levMap.get(s.supplier_id) : null) ?? null,
                     prijs: (Number(s.price_cents) || 0) / 100,
-                    eenheid: (s.unit as string | null) ?? null,
+                    eenheid: s.unit ?? null,
                     prijs_per_kg: null,
                     prijs_per_stuk: null,
                     datum: null,
                     base_cost_cents: base?.base_cost_cents ?? null,
                     base_quantity: base?.base_quantity ?? null,
                     base_unit: base?.base_unit ?? null,
+                    _fuzzy: fuzzy,
+                    _score: score,
                 });
             }
         }
     }
 
-    results.sort((a, b) =>
-        a.naam.localeCompare(b.naam, 'nl') ||
-        (a.leverancier || '').localeCompare(b.leverancier || '', 'nl'),
-    );
+    /* Exacte treffers eerst (alfabetisch), daarna de fuzzy-treffers op aflopende
+       gelijkenis — zo staat wat je écht typte bovenaan en zijn tikfout-suggesties
+       een vangnet eronder. Interne rang-velden strippen we vóór verzending. */
+    results.sort((a, b) => {
+        const fa = a._fuzzy ? 1 : 0;
+        const fb = b._fuzzy ? 1 : 0;
+        if (fa !== fb) return fa - fb;
+        if (fa === 1) {
+            const d = (b._score ?? 0) - (a._score ?? 0);
+            if (Math.abs(d) > 1e-6) return d;
+        }
+        return a.naam.localeCompare(b.naam, 'nl') ||
+            (a.leverancier || '').localeCompare(b.leverancier || '', 'nl');
+    });
 
-    return NextResponse.json({ results: results.slice(0, 50) });
+    const clean: CatalogSearchHit[] = results.slice(0, 50).map(({ _fuzzy, _score, ...hit }) => {
+        void _fuzzy; void _score;
+        return hit;
+    });
+    return NextResponse.json({ results: clean });
 }
