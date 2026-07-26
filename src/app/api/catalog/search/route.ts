@@ -53,6 +53,14 @@ export async function GET(req: NextRequest) {
     const q = raw.replace(/[%_,()*]/g, ' ').replace(/\s+/g, ' ').trim();
     if (q.length < 2) return NextResponse.json({ results: [] });
 
+    /* Zoek per woord (AND), volgorde-onafhankelijk, i.p.v. de hele zin als één
+       substring. Zo vindt "coppa ham" ook "Brasvar Coppa Ham" / "Zwijnscoppaham"
+       en "brasvar coppa" de juiste versie — anders val je bij 2+ woorden in een
+       leeg gat omdat geen product letterlijk "coppa ham" heet. Elk woord ≥2
+       tekens; max 6 om de query begrensd te houden. */
+    const tokens = q.split(' ').filter((t) => t.length >= 2).slice(0, 6);
+    const searchTokens = tokens.length > 0 ? tokens : [q];
+
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
@@ -68,13 +76,13 @@ export async function GET(req: NextRequest) {
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 400 });
 
     /* 1) Matchende producten. RLS scoped + expliciete org-filter (defensief). */
-    const { data: masters, error: mErr } = await supabase
+    let masterQuery = supabase
         .from('master_products')
         .select('id, naam, categorie, standaard_eenheid')
         .eq('organization_id', orgId)
-        .eq('uit_assortiment', false)
-        .ilike('naam', `%${q}%`)
-        .limit(60);
+        .eq('uit_assortiment', false);
+    for (const t of searchTokens) masterQuery = masterQuery.ilike('naam', `%${t}%`);
+    const { data: masters, error: mErr } = await masterQuery.limit(60);
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
     const wantSupplierProducts = req.nextUrl.searchParams.get('supplierProducts') === '1';
@@ -129,13 +137,13 @@ export async function GET(req: NextRequest) {
        niet in de prijslijst) tóch aan een component gekoppeld worden. Kostprijs
        via supplierProductBaseCost (deterministisch). NOOIT id-join met Catalog A. */
     if (wantSupplierProducts) {
-        const { data: sps } = await supabase
+        let spQuery = supabase
             .from('supplier_products')
             .select('id, name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit')
             .eq('organization_id', orgId)
-            .eq('active', true)
-            .ilike('name', `%${q}%`)
-            .limit(30);
+            .eq('active', true);
+        for (const t of searchTokens) spQuery = spQuery.ilike('name', `%${t}%`);
+        const { data: sps } = await spQuery.limit(30);
         if (sps && sps.length > 0) {
             const supIds = Array.from(new Set(sps.map((s) => s.supplier_id).filter(Boolean)));
             const levMap = new Map<number, string>();
