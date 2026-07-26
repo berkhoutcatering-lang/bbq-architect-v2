@@ -13,6 +13,10 @@ export default defineConfig({
         alias: {
             /* Mirror tsconfig.json paths zodat `@/lib/foo` ook in tests werkt. */
             '@': path.resolve(__dirname, 'src'),
+            /* `server-only` is een Next-marker die buiten de Next-build niet
+               bestaat. Zonder deze stub is elke module met die import (alles
+               in lib/server/) onmogelijk te unit-testen. */
+            'server-only': path.resolve(__dirname, 'src/test/server-only-stub.ts'),
         },
     },
 });
