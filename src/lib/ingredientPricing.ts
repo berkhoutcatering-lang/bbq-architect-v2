@@ -33,6 +33,46 @@ export function resolvePricingFromSupplierPrice(
     return { price_basis: 'stuk', unit_price: Number(sp.prijs) || 0, price_unit: eenheid || 'stuk' };
 }
 
+/** Vorm van een gescand bestel-product (Catalog B): kostprijs per basis-eenheid. */
+export interface SupplierProductBaseShape {
+    base_cost_cents?: number | null;
+    base_quantity?: number | null;
+    base_unit?: string | null;   // 'g' | 'ml' | 'stuk'
+}
+
+/**
+ * Zelfde rekenwijze, maar voor een product uit de gescande bestel-catalogus.
+ * Dat levert kostprijs per basis-eenheid (bv. 203 cent per 100 g) i.p.v. een
+ * prijs-per-kg veld, dus reken we terug naar de rekenwijze die de ingrediënt-
+ * regels gebruiken:
+ *
+ *   g   → per kilo   (regel mag in g of kg blijven rekenen)
+ *   ml  → per liter  (als vaste eenheid, net als een verpakking)
+ *   stuk→ per stuk
+ *
+ * Null bij een onbekende of onbruikbare basis-eenheid — dan koppelen we niet
+ * en blijft de kostprijs handmatig, i.p.v. een fout getal.
+ */
+export function resolvePricingFromSupplierProduct(
+    sp: SupplierProductBaseShape,
+): { price_basis: PriceBasis; unit_price: number; price_unit: string } | null {
+    const cents = Number(sp.base_cost_cents);
+    const qty = Number(sp.base_quantity);
+    if (!Number.isFinite(cents) || cents <= 0) return null;
+    if (!Number.isFinite(qty) || qty <= 0) return null;
+
+    /* Euro's per 1 gram / milliliter / stuk. */
+    const perBase = cents / qty / 100;
+    const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
+
+    switch ((sp.base_unit || '').toLowerCase()) {
+        case 'g': return { price_basis: 'kg', unit_price: r4(perBase * 1000), price_unit: 'kg' };
+        case 'ml': return { price_basis: 'stuk', unit_price: r4(perBase * 1000), price_unit: 'liter' };
+        case 'stuk': return { price_basis: 'stuk', unit_price: r4(perBase), price_unit: 'stuk' };
+        default: return null;
+    }
+}
+
 /**
  * Bepaalt bij GOEDKEURING of de vrije-tekst eenheid ONDUBBELZINNIG een
  * per-kg / per-stuk prijs betekent — of een PAKHOEVEELHEID (dan is `prijs` de

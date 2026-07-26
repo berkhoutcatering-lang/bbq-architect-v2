@@ -26,7 +26,11 @@ import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
 import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
-import { ingredientRowCostCents, resolvePricingFromSupplierPrice } from '@/lib/ingredientPricing';
+import {
+    ingredientRowCostCents,
+    resolvePricingFromSupplierPrice,
+    resolvePricingFromSupplierProduct,
+} from '@/lib/ingredientPricing';
 
 interface AiProposal {
     name: string;
@@ -138,11 +142,30 @@ interface IngredientFormRow {
        de gekozen leverancier-prijs × aantal (zie linkedRowCostCents). */
     master_product_id?: number | null;
     supplier_price_id?: number | null;
+    /* Koppeling aan de gescande bestel-catalogus (Catalog B). Een regel is
+       gekoppeld via master_product_id ÓF supplier_product_id — nooit beide. */
+    supplier_product_id?: number | null;
     leverancier?: string | null;
     unit_price?: number | null;              // € per kg of per (verpakkings)eenheid
     price_basis?: 'kg' | 'stuk' | null;      // rekenwijze: 'kg' = per kilo, 'stuk' = per eenheid × aantal
     price_unit?: string | null;              // eerlijk label/lock-eenheid van de prijs ('kg' | 'stuk' | 'doos' | 'pak' …)
 }
+
+/** Is deze regel gekoppeld aan een leverancier-product (welke catalogus dan ook)? */
+function isRowLinked(r: IngredientFormRow): boolean {
+    return !!r.master_product_id || !!r.supplier_product_id;
+}
+
+/** Alle koppel-velden leeg — gebruikt bij ontkoppelen en bij naam-wijziging. */
+const UNLINKED_FIELDS = {
+    master_product_id: null,
+    supplier_price_id: null,
+    supplier_product_id: null,
+    leverancier: null,
+    unit_price: null,
+    price_basis: null,
+    price_unit: null,
+} as const;
 
 const emptyIngredientRow = (): IngredientFormRow => ({ name: '', qty: '', unit: 'g', cost_euros: '' });
 
@@ -158,6 +181,7 @@ function ingredientsFromJson(value: unknown): IngredientFormRow[] {
                 ? (v.cost_cents / 100).toFixed(2) : '',
             master_product_id: typeof v.master_product_id === 'number' ? v.master_product_id : null,
             supplier_price_id: typeof v.supplier_price_id === 'number' ? v.supplier_price_id : null,
+            supplier_product_id: typeof v.supplier_product_id === 'number' ? v.supplier_product_id : null,
             leverancier: typeof v.leverancier === 'string' ? v.leverancier : null,
             unit_price: typeof v.unit_price === 'number' && Number.isFinite(v.unit_price) ? v.unit_price : null,
             price_basis: v.price_basis === 'kg' || v.price_basis === 'stuk' ? v.price_basis : null,
@@ -168,6 +192,7 @@ function ingredientsFromJson(value: unknown): IngredientFormRow[] {
 type IngredientJson = {
     name: string; qty: number; unit: string; cost_cents: number;
     master_product_id?: number; supplier_price_id?: number | null;
+    supplier_product_id?: number | null;
     leverancier?: string | null; unit_price?: number | null;
     price_basis?: 'kg' | 'stuk' | null; price_unit?: string | null;
 };
@@ -186,9 +211,13 @@ function rowsToIngredientsJson(rows: IngredientFormRow[]): IngredientJson[] {
             };
             /* Koppel-velden alleen meesturen als er echt een leverancier-product
                gekozen is — houdt de JSONB schoon voor vrije-tekst-ingrediënten. */
-            if (r.master_product_id) {
-                base.master_product_id = r.master_product_id;
-                base.supplier_price_id = r.supplier_price_id ?? null;
+            if (isRowLinked(r)) {
+                if (r.master_product_id) {
+                    base.master_product_id = r.master_product_id;
+                    base.supplier_price_id = r.supplier_price_id ?? null;
+                } else {
+                    base.supplier_product_id = r.supplier_product_id ?? null;
+                }
                 base.leverancier = r.leverancier ?? null;
                 base.unit_price = r.unit_price ?? null;
                 base.price_basis = r.price_basis ?? null;
@@ -210,7 +239,7 @@ function ingredientSumCents(rows: IngredientFormRow[]): number {
    per stuk → €/stuk × aantal. Geeft null als de regel niet (volledig) gekoppeld
    is, zodat de vrij-getikte kostprijs blijft staan. */
 function linkedRowCostCents(row: IngredientFormRow): number | null {
-    if (!row.master_product_id) return null;
+    if (!isRowLinked(row)) return null;
     return ingredientRowCostCents({
         qty: parseDec(row.qty),
         unit: row.unit,
@@ -1873,7 +1902,7 @@ function IngredientsEditor({
 }) {
     const sum = ingredientSumCents(rows);
     /* Gekoppelde regels zonder aantal leveren geen kostprijs en tellen niet mee. */
-    const anyNeedsQty = rows.some(r => r.master_product_id && !!r.unit_price && linkedRowCostCents(r) == null);
+    const anyNeedsQty = rows.some(r => isRowLinked(r) && !!r.unit_price && linkedRowCostCents(r) == null);
 
     function updateRow(idx: number, patch: Partial<IngredientFormRow>) {
         onChange(rows.map((r, i) => {
@@ -1881,11 +1910,11 @@ function IngredientsEditor({
             let next: IngredientFormRow = { ...r, ...patch };
             /* Handmatig de naam wijzigen op een gekoppelde regel = koppeling losmaken —
                anders hoort de opgeslagen naam niet meer bij het leverancier-product. */
-            if ('name' in patch && r.master_product_id && patch.name !== r.name) {
-                next = { ...next, master_product_id: null, supplier_price_id: null, leverancier: null, unit_price: null, price_basis: null, price_unit: null };
+            if ('name' in patch && isRowLinked(r) && patch.name !== r.name) {
+                next = { ...next, ...UNLINKED_FIELDS };
             }
             /* Gekoppelde regel: kostprijs volgt automatisch uit prijs × aantal. */
-            if (next.master_product_id) {
+            if (isRowLinked(next)) {
                 const c = linkedRowCostCents(next);
                 if (c != null) next.cost_euros = (c / 100).toFixed(2);
             }
@@ -1893,19 +1922,34 @@ function IngredientsEditor({
         }));
     }
 
-    /* Koos een leverancier-product uit de prijslijst-catalogus. Bepaalt eerlijk
-       de rekenwijze (per kg vs per verpakkingseenheid) en het label. */
+    /* Koos een leverancier-product. Kan uit twee catalogi komen: de prijslijst
+       (master_product_id + supplier_price_id) of de gescande bestel-catalogus
+       (supplier_product_id, kostprijs per basis-eenheid). Beide worden hier naar
+       dezelfde rekenwijze teruggebracht; nooit id's van de twee mengen. */
     function pickHit(idx: number, hit: CatalogSearchHit) {
-        const { price_basis: basis, unit_price: unitPrice, price_unit: priceUnit } = resolvePricingFromSupplierPrice(hit);
+        const fromScan = hit.source === 'supplier_product';
+        const pricing = fromScan
+            ? resolvePricingFromSupplierProduct(hit)
+            : resolvePricingFromSupplierPrice(hit);
+
         onChange(rows.map((r, i) => {
             if (i !== idx) return r;
+
+            /* Geen bruikbare rekenwijze (bv. onbekende basis-eenheid): vul alleen
+               de naam en laat de kostprijs handmatig — beter dan fout rekenen. */
+            if (!pricing) {
+                return { ...r, name: hit.naam, ...UNLINKED_FIELDS };
+            }
+
+            const { price_basis: basis, unit_price: unitPrice, price_unit: priceUnit } = pricing;
             const unit = basis === 'kg' ? (r.unit === 'g' || r.unit === 'kg' ? r.unit : 'kg') : priceUnit;
             const next: IngredientFormRow = {
                 ...r,
                 name: hit.naam,
                 unit,
-                master_product_id: hit.master_product_id,
-                supplier_price_id: hit.supplier_price_id,
+                master_product_id: fromScan ? null : hit.master_product_id,
+                supplier_price_id: fromScan ? null : hit.supplier_price_id,
+                supplier_product_id: fromScan ? (hit.supplier_product_id ?? null) : null,
                 leverancier: hit.leverancier,
                 unit_price: unitPrice > 0 ? unitPrice : null,
                 price_basis: basis,
@@ -1919,9 +1963,7 @@ function IngredientsEditor({
 
     /* Koppeling losmaken → terug naar vrij-getikte naam + prijs. */
     function unlink(idx: number) {
-        onChange(rows.map((r, i) => i === idx
-            ? { ...r, master_product_id: null, supplier_price_id: null, leverancier: null, unit_price: null, price_basis: null, price_unit: null }
-            : r));
+        onChange(rows.map((r, i) => i === idx ? { ...r, ...UNLINKED_FIELDS } : r));
     }
 
     return (
@@ -1941,7 +1983,7 @@ function IngredientsEditor({
                         <span>Naam / leverancier</span><span>Aantal</span><span>Eenheid</span><span>Kosten €</span><span></span>
                     </div>
                     {rows.map((r, idx) => {
-                        const linked = !!r.master_product_id;
+                        const linked = isRowLinked(r);
                         const needsQty = linked && !!r.unit_price && linkedRowCostCents(r) == null;
                         return (
                             <div key={idx} className="flex flex-col gap-1">
@@ -1950,6 +1992,7 @@ function IngredientsEditor({
                                         value={r.name}
                                         onChange={(naam) => updateRow(idx, { name: naam })}
                                         onPick={(hit) => pickHit(idx, hit)}
+                                        includeSupplierProducts
                                     />
                                     <input type="text" inputMode="decimal" value={r.qty} onChange={(e) => updateRow(idx, { qty: e.target.value })} placeholder="250" className="kf-input" />
                                     {/* Gekoppeld op kg-prijs: alleen g/kg toegestaan (geen 1000×-fout). Andere koppeling: eenheid vast. */}
@@ -1981,7 +2024,10 @@ function IngredientsEditor({
                                         <ShoppingBag size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
                                         <span>
                                             <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{r.leverancier || 'leverancier'}</strong>
-                                            {r.unit_price ? <> · €{r.unit_price.toFixed(2)} / {r.price_unit || r.price_basis || 'kg'}</> : null}
+                                            {r.unit_price ? <> · {formatEuro(Math.round(r.unit_price * 100))} / {r.price_unit || r.price_basis || 'kg'}</> : null}
+                                            {/* Waar de prijs vandaan komt: prijslijst of gescande bestel-catalogus.
+                                                Scheelt zoeken als een bedrag onverwacht is. */}
+                                            {r.supplier_product_id ? <span style={{ opacity: 0.75 }}> · gescand</span> : null}
                                         </span>
                                         {needsQty && <span style={{ color: '#f59e0b', fontWeight: 600 }}>· vul aantal in</span>}
                                         <button type="button" onClick={() => unlink(idx)} className="kf-add" style={{ marginLeft: 4 }} title="Koppeling losmaken en zelf de prijs invullen">

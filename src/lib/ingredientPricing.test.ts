@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { inferApprovalPriceBasis, resolvePricingFromSupplierPrice, ingredientRowCostCents } from './ingredientPricing';
+import {
+    inferApprovalPriceBasis,
+    resolvePricingFromSupplierPrice,
+    resolvePricingFromSupplierProduct,
+    ingredientRowCostCents,
+} from './ingredientPricing';
 
 describe('inferApprovalPriceBasis — fix voor de .includes("kg")-bug', () => {
     it('pakhoeveelheid "doos 5 kg" → GEEN per-kg prijs (dit was de bug)', () => {
@@ -48,5 +53,34 @@ describe('ingredientRowCostCents', () => {
     });
     it('per stuk', () => {
         expect(ingredientRowCostCents({ qty: 3, unit: 'stuk', unit_price: 0.42, price_basis: 'stuk' })).toBe(126);
+    });
+});
+
+describe('resolvePricingFromSupplierProduct (gescande bestel-catalogus)', () => {
+    it('gram-basis → per kilo (Bidfood coppa: 203 ct per 100 g = €20,30/kg)', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: 203, base_quantity: 100, base_unit: 'g' }))
+            .toEqual({ price_basis: 'kg', unit_price: 20.3, price_unit: 'kg' });
+    });
+    it('ml-basis → per liter als vaste eenheid', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: 82, base_quantity: 100, base_unit: 'ml' }))
+            .toEqual({ price_basis: 'stuk', unit_price: 8.2, price_unit: 'liter' });
+    });
+    it('stuk-basis → per stuk', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: 28, base_quantity: 1, base_unit: 'stuk' }))
+            .toEqual({ price_basis: 'stuk', unit_price: 0.28, price_unit: 'stuk' });
+    });
+    it('onbekende basis-eenheid → null (liever niet koppelen dan fout rekenen)', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: 100, base_quantity: 1, base_unit: 'doos' })).toBeNull();
+    });
+    it('ontbrekende kostprijs → null', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: null, base_quantity: 100, base_unit: 'g' })).toBeNull();
+    });
+    it('hoeveelheid 0 → null (geen deling door nul)', () => {
+        expect(resolvePricingFromSupplierProduct({ base_cost_cents: 203, base_quantity: 0, base_unit: 'g' })).toBeNull();
+    });
+    it('de afgeleide kg-prijs rekent correct door in een regel', () => {
+        const p = resolvePricingFromSupplierProduct({ base_cost_cents: 203, base_quantity: 100, base_unit: 'g' })!;
+        // 150 g coppa à €20,30/kg = €3,05
+        expect(ingredientRowCostCents({ qty: 150, unit: 'g', unit_price: p.unit_price, price_basis: p.price_basis })).toBe(305);
     });
 });
