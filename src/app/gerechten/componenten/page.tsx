@@ -890,6 +890,7 @@ function ComponentEditDrawer({
     /* Blijvende leverancier-koppeling (Catalog A). linkLabel = weergave voor de badge. */
     const [masterProductId, setMasterProductId] = useState<number | null>(null);
     const [supplierPriceId, setSupplierPriceId] = useState<number | null>(null);
+    const [supplierProductId, setSupplierProductId] = useState<number | null>(null);
     const [linkLabel, setLinkLabel] = useState<{ leverancier: string | null; naam: string; actief: boolean } | null>(null);
     const [linkSearch, setLinkSearch] = useState('');
 
@@ -908,17 +909,34 @@ function ComponentEditDrawer({
     }
 
     function onPickLink(hit: CatalogSearchHit) {
-        setMasterProductId(hit.master_product_id);
-        setSupplierPriceId(hit.supplier_price_id);
-        setLinkLabel({ leverancier: hit.leverancier, naam: hit.naam, actief: true });
         setLinkSearch('');
-        const derived = applyLinkedPrice(hit.prijs_per_kg, hit.prijs_per_stuk);
-        if (!derived) toast('Gekoppeld — deze leverancier heeft geen €/kg of €/stuk, dus vul de kostprijs zelf in', 'info');
+        setLinkLabel({ leverancier: hit.leverancier, naam: hit.naam, actief: true });
+        if (hit.source === 'supplier_product' && hit.supplier_product_id) {
+            /* Catalog B (gescande bestel-catalogus, bv. Bidfood) → koppel op supplier_product_id. */
+            setSupplierProductId(hit.supplier_product_id);
+            setMasterProductId(null);
+            setSupplierPriceId(null);
+            if (hit.base_cost_cents != null && hit.base_quantity != null && hit.base_unit) {
+                setBaseQty(String(hit.base_quantity));
+                setBaseUnit(hit.base_unit);
+                setCostEuros((hit.base_cost_cents / 100).toFixed(2));
+            } else {
+                toast('Gekoppeld — geen nette prijs bekend, vul de kostprijs zelf in', 'info');
+            }
+        } else {
+            /* Catalog A (prijslijst) → koppel op master_product_id + supplier_price_id. */
+            setMasterProductId(hit.master_product_id);
+            setSupplierPriceId(hit.supplier_price_id);
+            setSupplierProductId(null);
+            const derived = applyLinkedPrice(hit.prijs_per_kg, hit.prijs_per_stuk);
+            if (!derived) toast('Gekoppeld — deze leverancier heeft geen €/kg of €/stuk, dus vul de kostprijs zelf in', 'info');
+        }
     }
 
     function unlinkSupplier() {
         setMasterProductId(null);
         setSupplierPriceId(null);
+        setSupplierProductId(null);
         setLinkLabel(null);
         // Kostprijs blijft staan; je kunt 'm nu weer handmatig aanpassen.
     }
@@ -943,11 +961,18 @@ function ComponentEditDrawer({
             setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
             setMasterProductId(typeof c.master_product_id === 'number' ? c.master_product_id : null);
             setSupplierPriceId(typeof c.supplier_price_id === 'number' ? c.supplier_price_id : null);
-            const lp = body.linked_price as { leverancier: string | null; product_naam: string; prijs_per_kg: number | null; prijs_per_stuk: number | null; actief: boolean } | null;
+            setSupplierProductId(typeof c.supplier_product_id === 'number' ? c.supplier_product_id : null);
+            const lp = body.linked_price as { source: string; leverancier: string | null; naam: string; actief: boolean; prijs_per_kg?: number | null; prijs_per_stuk?: number | null; base_cost_cents?: number | null; base_quantity?: number | null; base_unit?: string | null } | null;
             if (lp) {
-                setLinkLabel({ leverancier: lp.leverancier, naam: lp.product_naam, actief: !!lp.actief });
+                setLinkLabel({ leverancier: lp.leverancier, naam: lp.naam, actief: !!lp.actief });
                 // Beweegt mee: kostprijs opnieuw afleiden uit de ACTUELE leverancier-prijs.
-                applyLinkedPrice(lp.prijs_per_kg, lp.prijs_per_stuk);
+                if (lp.source === 'supplier_product') {
+                    if (lp.base_cost_cents != null && lp.base_quantity != null && lp.base_unit) {
+                        setBaseQty(String(lp.base_quantity)); setBaseUnit(lp.base_unit); setCostEuros((lp.base_cost_cents / 100).toFixed(2));
+                    }
+                } else {
+                    applyLinkedPrice(lp.prijs_per_kg ?? null, lp.prijs_per_stuk ?? null);
+                }
             } else {
                 setLinkLabel(null);
             }
@@ -1046,9 +1071,11 @@ function ComponentEditDrawer({
                 flavor_tags: tags,
                 category,
                 ...packPayload(),
-                /* Blijvende leverancier-koppeling (null = ontkoppeld). */
+                /* Blijvende leverancier-koppeling (null = ontkoppeld). Catalog A
+                   (master+prijs) OF Catalog B (supplier_product), nooit beide. */
                 master_product_id: masterProductId,
                 supplier_price_id: supplierPriceId,
+                supplier_product_id: supplierProductId,
                 /* Receptuur alleen meesturen voor zelf-bereide componenten. */
                 ...(comp?.type === 'prepared' ? {
                     ingredients: rowsToIngredientsJson(ingredients),
@@ -1172,6 +1199,7 @@ function ComponentEditDrawer({
                                                 value={linkSearch}
                                                 onChange={setLinkSearch}
                                                 onPick={onPickLink}
+                                                includeSupplierProducts
                                                 placeholder="Zoek een product bij al je leveranciers…"
                                             />
                                         )}

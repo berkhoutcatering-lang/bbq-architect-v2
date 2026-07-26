@@ -36,6 +36,9 @@ interface Props {
     autoFocus?: boolean;
     className?: string;
     style?: React.CSSProperties;
+    /* Ook de gescande bestel-catalogus (supplier_products, Catalog B) doorzoeken —
+       bv. voor het koppelen van een inkoop-component aan een Bidfood-product. */
+    includeSupplierProducts?: boolean;
 }
 
 const GOLD = '#c4a35a';
@@ -48,7 +51,9 @@ function priceLabel(h: CatalogSearchHit): string {
 }
 
 function optionKey(h: CatalogSearchHit): string {
-    return `${h.master_product_id}-${h.supplier_price_id}`;
+    return h.source === 'supplier_product'
+        ? `sp-${h.supplier_product_id}`
+        : `mp-${h.master_product_id}-${h.supplier_price_id}`;
 }
 
 export default function SupplierProductAutocomplete({
@@ -60,6 +65,7 @@ export default function SupplierProductAutocomplete({
     autoFocus,
     className,
     style,
+    includeSupplierProducts,
 }: Props) {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
@@ -83,7 +89,7 @@ export default function SupplierProductAutocomplete({
         const seq = ++reqSeq.current;
         const t = setTimeout(async () => {
             try {
-                const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}`, { credentials: 'include' });
+                const res = await fetch(`/api/catalog/search?q=${encodeURIComponent(q)}${includeSupplierProducts ? '&supplierProducts=1' : ''}`, { credentials: 'include' });
                 const body = await res.json().catch(() => ({}));
                 if (seq !== reqSeq.current) return;
                 setHits(Array.isArray(body.results) ? body.results : []);

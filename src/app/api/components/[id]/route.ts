@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
+import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 
 const ALLOWED_HACCP_TYPES = new Set([
     'kerntemp', 'koeltemp', 'tijd_uit_koeling',
@@ -47,18 +48,43 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     if (compRes.error) return NextResponse.json({ error: compRes.error.message }, { status: 500 });
     if (!compRes.data) return NextResponse.json({ error: 'Component niet gevonden' }, { status: 404 });
 
-    /* Gekoppeld aan een leverancier-prijs? Geef de ACTUELE rij mee zodat de
-       editor de badge toont én de kostprijs kan meebewegen met de prijslijst. */
-    let linkedPrice: unknown = null;
-    const spId = (compRes.data as Record<string, unknown>).supplier_price_id as number | null | undefined;
+    /* Gekoppeld aan een leverancier? Geef de ACTUELE rij mee (genormaliseerd)
+       zodat de editor de badge toont én de kostprijs kan meebewegen. Twee bronnen:
+       Catalog A (supplier_prices) of Catalog B (supplier_products). */
+    const compRow = compRes.data as Record<string, unknown>;
+    let linkedPrice: Record<string, unknown> | null = null;
+    const spId = compRow.supplier_price_id as number | null | undefined;
+    const sprodId = compRow.supplier_product_id as number | null | undefined;
     if (spId) {
         const { data: sp } = await supabase
             .from('supplier_prices')
-            .select('id, leverancier, product_naam, prijs_per_kg, prijs_per_stuk, actief')
-            .eq('id', spId)
-            .eq('organization_id', auth.orgId!)
-            .maybeSingle();
-        linkedPrice = sp ?? null;
+            .select('leverancier, product_naam, prijs_per_kg, prijs_per_stuk, actief')
+            .eq('id', spId).eq('organization_id', auth.orgId!).maybeSingle();
+        if (sp) linkedPrice = {
+            source: 'price_list', leverancier: sp.leverancier, naam: sp.product_naam,
+            actief: sp.actief, prijs_per_kg: sp.prijs_per_kg, prijs_per_stuk: sp.prijs_per_stuk,
+        };
+    } else if (sprodId) {
+        const { data: sprod } = await supabase
+            .from('supplier_products')
+            .select('name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit, active')
+            .eq('id', sprodId).eq('organization_id', auth.orgId!).maybeSingle();
+        if (sprod) {
+            const base = supplierProductBaseCost({
+                price_cents: sprod.price_cents as number, unit: sprod.unit as string | null,
+                package_size: sprod.package_size as number | null, package_unit: sprod.package_unit as string | null,
+                total_base_quantity: sprod.total_base_quantity as number | null, base_unit: sprod.base_unit as string | null,
+            });
+            let levNaam: string | null = null;
+            if (sprod.supplier_id != null) {
+                const { data: l } = await supabase.from('leveranciers').select('naam').eq('id', sprod.supplier_id).maybeSingle();
+                levNaam = (l?.naam as string) ?? null;
+            }
+            linkedPrice = {
+                source: 'supplier_product', leverancier: levNaam, naam: sprod.name, actief: sprod.active,
+                base_cost_cents: base?.base_cost_cents ?? null, base_quantity: base?.base_quantity ?? null, base_unit: base?.base_unit ?? null,
+            };
+        }
     }
 
     return NextResponse.json({
@@ -124,6 +150,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     if (b.supplier_price_id === null || (typeof b.supplier_price_id === 'number' && Number.isInteger(b.supplier_price_id))) {
         updateData.supplier_price_id = b.supplier_price_id;
+    }
+    if (b.supplier_product_id === null || (typeof b.supplier_product_id === 'number' && Number.isInteger(b.supplier_product_id))) {
+        updateData.supplier_product_id = b.supplier_product_id;
     }
 
     // Optionele nested replace-arrays
