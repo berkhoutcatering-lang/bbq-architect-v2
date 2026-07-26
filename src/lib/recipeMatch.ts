@@ -89,6 +89,30 @@ export function confidenceFromScore(score: number): 'hoog' | 'middel' | 'laag' {
     return 'laag';
 }
 
+/* ── Staart-match herkennen ───────────────────────────────────────────────
+   Een ingrediënt van één woord dat álleen achteraan in een veel langere naam
+   voorkomt, is meestal een smaak of variant — niet het product zelf:
+
+     "zeezout fijn"  ↔ "Knäckebröd meergranen zeezout"   ← knäckebröd mét zout
+     "roomboter"     ↔ "Bidfood Roomboter ongezouten"    ← wél de boter
+
+   In Nederlandse productnamen staat het hoofdwoord vooraan, hooguit achter een
+   merknaam. Matcht het ingrediënt pas vanaf positie 3, dan is de kandidaat
+   waarschijnlijk iets anders. We gooien 'm niet weg (dat kan een terechte
+   treffer kosten) maar zetten de zekerheid op 'laag', zodat de gebruiker een
+   "?" ziet en zelf kijkt. Beter twijfel tonen dan valse zekerheid. */
+const HEAD_WINDOW = 2;      // hoofdwoord staat op positie 0 of 1 (na een merk)
+const MIN_LONG_NAME = 3;    // pas beoordelen bij namen van 3+ betekenisvolle woorden
+
+export function isTailOnlyMatch(ingredient: string, candidate: string): boolean {
+    const a = tokens(ingredient);
+    const b = tokens(candidate);
+    if (a.length === 0 || b.length < MIN_LONG_NAME) return false;
+    const setA = new Set(a);
+    const firstHit = b.findIndex((t) => setA.has(t));
+    return firstHit >= HEAD_WINDOW;
+}
+
 /* ── Beste match kiezen ───────────────────────────────────────────────────
    Kandidaten worden gescoord; bij gelijke score wint de bron-prioriteit
    (eigen bibliotheek > eigen voorraad > leverancier-catalogus). Onder de
@@ -109,7 +133,12 @@ export function pickBestMatch(
             score > best.score ||
             (score === best.score && SOURCE_RANK[c.source] > SOURCE_RANK[best.candidate.source])
         ) {
-            best = { candidate: c, score, confidence: confidenceFromScore(score) };
+            /* Staart-match → altijd 'laag', ook bij een hoge score. Anders
+               presenteert een knäckebröd-met-zeezout zich als zekere zout-match. */
+            const confidence = isTailOnlyMatch(ingredientName, c.name)
+                ? 'laag'
+                : confidenceFromScore(score);
+            best = { candidate: c, score, confidence };
         }
     }
     return best;

@@ -4,6 +4,7 @@ import {
     nameScore,
     pickBestMatch,
     confidenceFromScore,
+    isTailOnlyMatch,
     toBaseUnit,
     lineCostCents,
     type CostCandidate,
@@ -43,6 +44,25 @@ describe('confidenceFromScore', () => {
         expect(confidenceFromScore(0.9)).toBe('hoog');
         expect(confidenceFromScore(0.6)).toBe('middel');
         expect(confidenceFromScore(0.3)).toBe('laag');
+    });
+});
+
+describe('isTailOnlyMatch — smaak-toevoeging vs het product zelf', () => {
+    it('zeezout achteraan in een knäckebröd = staart-match', () => {
+        // Echt voorval (2026-07-26): "zeezout fijn" matchte hierop met "hoog".
+        expect(isTailOnlyMatch('zeezout fijn', 'Knäckebröd meergranen zeezout')).toBe(true);
+    });
+    it('hoofdwoord achter een merknaam is géén staart-match', () => {
+        expect(isTailOnlyMatch('roomboter', 'Bidfood Roomboter ongezouten 250 g')).toBe(false);
+    });
+    it('hoofdwoord vooraan is géén staart-match', () => {
+        expect(isTailOnlyMatch('pastrami', 'Pastrami plakjes huisgemaakt')).toBe(false);
+    });
+    it('korte namen worden niet beoordeeld', () => {
+        expect(isTailOnlyMatch('tijm', 'verse tijm')).toBe(false);
+    });
+    it('geen enkele overlap → geen staart-match (score vangt dat al af)', () => {
+        expect(isTailOnlyMatch('zalm', 'Knäckebröd meergranen zeezout')).toBe(false);
     });
 });
 
