@@ -592,7 +592,7 @@ export default function ComponentenPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-                    className="mb-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4"
+                    className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-4"
                 >
                     <StatTile
                         label="Bouwstenen"
