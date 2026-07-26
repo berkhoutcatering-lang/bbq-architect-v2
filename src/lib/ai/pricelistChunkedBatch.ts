@@ -22,6 +22,11 @@ import {
     splitPdfBufferIntoChunks,
 } from '@/lib/server/pdfSplitServer';
 import {
+    extractPdfPageLines,
+    formatPageLinesForPrompt,
+    countPriceLikeLines,
+} from '@/lib/server/pdfTextLayer';
+import {
     createChunkRow,
     markUploadStatus,
     getChunkAggregateState,
@@ -68,16 +73,27 @@ export async function enqueueChunkedBatch(args: EnqueueChunkedArgs): Promise<Enq
         chunkIds.push(id);
     }
 
-    /* Build batch items with chunk-meta voor page-range prompt */
-    const items: BatchEnqueueItem[] = chunks.map((c, i) => ({
-        uploadId: chunkIds[i],
-        pdfBase64: c.buffer.toString('base64'),
-        chunkMeta: {
-            pageStart: c.pageStart,
-            pageEnd: c.pageEnd,
-            chunkIndex: c.chunkIndex,
-            chunkTotal: c.chunkTotal,
-        },
+    /* Build batch items with chunk-meta voor page-range prompt.
+       Elk blok krijgt óók de letterlijke tekstlaag van precies zijn pagina's
+       mee (2026-07-26). Zonder dat moest het model een dichte tabel van beeld
+       overtypen en vielen er regels weg — Van Engelandt w20 leverde 584 van de
+       793 prijsregels op. Kost ~5k tokens per blok. Gescande PDFs hebben geen
+       tekstlaag; dan is textLayer null en blijft de beeld-route zoals hij was. */
+    const items: BatchEnqueueItem[] = await Promise.all(chunks.map(async (c, i) => {
+        const pages = await extractPdfPageLines(args.pdfBuffer, c.pageStart, c.pageEnd);
+        return {
+            uploadId: chunkIds[i],
+            pdfBase64: c.buffer.toString('base64'),
+            chunkMeta: {
+                pageStart: c.pageStart,
+                pageEnd: c.pageEnd,
+                chunkIndex: c.chunkIndex,
+                chunkTotal: c.chunkTotal,
+            },
+            textLayer: pages
+                ? { text: formatPageLinesForPrompt(pages), expectedCount: countPriceLikeLines(pages) }
+                : null,
+        };
     }));
 
     const { batchId } = await enqueueBatchExtraction(items);

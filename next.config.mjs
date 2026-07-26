@@ -17,7 +17,10 @@ const nextConfig = {
    * serverExternalPackages laat ze ongebundled als require() draaien op de
    * Node runtime — werkt voor /api routes en server-actions.
    */
-  serverExternalPackages: ['archiver'],
+  /* pdfjs-dist (legacy build) leest server-side de tekstlaag van prijslijst-PDFs.
+     Ongebundeld laten voorkomt dat Turbopack z'n dynamische font/worker-imports
+     probeert te resolven. */
+  serverExternalPackages: ['archiver', 'pdfjs-dist'],
   async headers() {
     return [
       {
