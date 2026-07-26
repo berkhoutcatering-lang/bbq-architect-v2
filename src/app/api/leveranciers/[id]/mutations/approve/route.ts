@@ -202,15 +202,43 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         }
     }
 
-    /* Bulk-insert nieuwe prijzen, met fallback bij duplicate-key */
+    /* Bulk-insert nieuwe prijzen. Bij duplicate-key (23505) NIET negeren —
+       want stap hierboven heeft de bestaande rij net gedeactiveerd. Negeren
+       liet 'm inactief achter → product zonder actieve prijs (de beef-club-bug,
+       2026-07-26). Daarom: op 23505 per rij REACTIVEREN op de natuurlijke sleutel
+       (org+leverancier+master+eenheid+prijs), of alsnog inserten als hij echt
+       nieuw is. Zo eindigt elke goedgekeurde prijs gegarandeerd op actief. */
+    async function reactivateOrInsert(row: any) {
+        const { data: upd, error: updErr } = await supabase
+            .from('supplier_prices')
+            .update({
+                actief: true,
+                datum: row.datum,
+                product_naam: row.product_naam,
+                categorie: row.categorie,
+                prijs_per_kg: row.prijs_per_kg,
+                prijs_per_stuk: row.prijs_per_stuk,
+            })
+            .eq('organization_id', orgId)
+            .eq('leverancier', row.leverancier)
+            .eq('master_product_id', row.master_product_id)
+            .eq('eenheid', row.eenheid)
+            .eq('prijs', row.prijs)
+            .select('id');
+        if (updErr) { errors.push('Reactivate: ' + updErr.message); return; }
+        if (!upd || upd.length === 0) {
+            const { error: insErr } = await supabase.from('supplier_prices').insert(row);
+            if (insErr && insErr.code !== '23505') errors.push('Reactivate-insert: ' + insErr.message);
+        }
+    }
+
     for (let i = 0; i < newPriceRows.length; i += 500) {
         const chunk = newPriceRows.slice(i, i + 500);
         const { error: insErr } = await supabase.from('supplier_prices').insert(chunk);
         if (insErr) {
             if (insErr.code === '23505') {
-                const { error: upErr } = await supabase.from('supplier_prices').upsert(chunk, { ignoreDuplicates: true });
-                if (upErr) errors.push('Bulk insert (dedup): ' + upErr.message);
-                else priceRows += chunk.length;
+                for (const row of chunk) await reactivateOrInsert(row);
+                priceRows += chunk.length;
             } else {
                 errors.push('Bulk insert: ' + insErr.message);
             }
