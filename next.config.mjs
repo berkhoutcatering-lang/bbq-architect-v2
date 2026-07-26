@@ -21,6 +21,15 @@ const nextConfig = {
      Ongebundeld laten voorkomt dat Turbopack z'n dynamische font/worker-imports
      probeert te resolven. */
   serverExternalPackages: ['archiver', 'pdfjs-dist'],
+  /**
+   * pdfjs wordt via een dynamische `import()` van een diep pad geladen; die
+   * ziet de file-tracer niet, waardoor de bestanden buiten de deploy vielen en
+   * de tekstlaag-extractie op productie stilletjes faalde (2026-07-26). Hier
+   * expliciet meenemen zodat de API-routes 'm echt bij zich hebben.
+   */
+  outputFileTracingIncludes: {
+    '/api/**': ['./node_modules/pdfjs-dist/legacy/build/**'],
+  },
   async headers() {
     return [
       {

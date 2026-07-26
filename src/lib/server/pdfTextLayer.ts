@@ -110,10 +110,17 @@ export async function extractPdfPageLines(
         await doc.destroy();
 
         const pageCount = to - from + 1;
-        if (totalChars < MIN_CHARS_PER_PAGE * pageCount) return null;
+        if (totalChars < MIN_CHARS_PER_PAGE * pageCount) {
+            console.warn(`[pdf-textlayer] geen bruikbare tekstlaag (${totalChars} tekens over ${pageCount} pagina's) — waarschijnlijk gescand`);
+            return null;
+        }
         return out;
-    } catch {
-        /* Onleesbaar/encrypted/gescand → laat de aanroeper de beeld-route doen. */
+    } catch (e) {
+        /* Onleesbaar/encrypted/gescand → de aanroeper doet de beeld-route.
+           WEL luid loggen: een stille terugval liet op 2026-07-26 een kapotte
+           uitrol er werkend uitzien (de tekstlaag bereikte het model nooit,
+           zichtbaar aan input_tokens=94). Nooit meer stil falen. */
+        console.error(`[pdf-textlayer] extractie mislukt (${(e as Error)?.name}): ${(e as Error)?.message?.slice(0, 300)}`);
         return null;
     }
 }
