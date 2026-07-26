@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeForFuzzy, trigrams, trigramSimilarity, fuzzyShingles } from './fuzzy';
+import { normalizeForFuzzy, trigrams, trigramSimilarity, tokenSetSimilarity, fuzzyShingles } from './fuzzy';
 
 describe('normalizeForFuzzy', () => {
     it('lowercuts en strippt accenten', () => {
@@ -42,6 +42,33 @@ describe('trigramSimilarity', () => {
     });
     it('lege string → 0', () => {
         expect(trigramSimilarity('', 'kip')).toBe(0);
+    });
+});
+
+describe('tokenSetSimilarity', () => {
+    const FUZZY_MIN = 0.35; // moet gelijk lopen met de route-drempel
+
+    it('korte tikfout matcht het juiste woord in een lange naam', () => {
+        // "copa" vs "Coppa Stagionata, stuk 650 gram" — hele-zin-Jaccard zou hier
+        // zakken; woord-bewust pakt het woord "coppa".
+        const s = tokenSetSimilarity('copa', 'Coppa Stagionata, stuk 650 gram');
+        expect(s).toBeGreaterThan(FUZZY_MIN);
+    });
+    it('komkomer vindt Komkommer, ook in een lange Bidfood-naam', () => {
+        expect(tokenSetSimilarity('komkomer', 'Komkommer julienne 3 mm, bak 1 kg')).toBeGreaterThan(FUZZY_MIN);
+    });
+    it('meerdere getypte woorden: allemaal moeten ergens op lijken', () => {
+        expect(tokenSetSimilarity('brasfar coppa', 'Brasvar varkens coppa BE')).toBeGreaterThan(FUZZY_MIN);
+    });
+    it('een niet-passend woord trekt de score omlaag (zwakste schakel)', () => {
+        // "bidfoud" (leverancier, niet in de productnaam) → onder de drempel.
+        expect(tokenSetSimilarity('bidfoud coppa', 'Coppa Stagionata, stuk 650 gram')).toBeLessThan(FUZZY_MIN);
+    });
+    it('exacte woord-match → 1', () => {
+        expect(tokenSetSimilarity('coppa', 'Coppa Stagionata')).toBe(1);
+    });
+    it('totaal anders → laag', () => {
+        expect(tokenSetSimilarity('ribeye', 'Komkommer julienne')).toBeLessThan(FUZZY_MIN);
     });
 });
 

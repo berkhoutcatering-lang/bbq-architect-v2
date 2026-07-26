@@ -47,6 +47,30 @@ export function trigramSimilarity(a: string, b: string): number {
     return union === 0 ? 0 : inter / union;
 }
 
+/** Woord-bewuste similarity (0..1): elke getypte term wordt vergeleken met het
+ *  béste passende wóórd in de doel-naam; de zwakste schakel telt (alle getypte
+ *  woorden moeten érgens op lijken). Zo verdrinkt een korte tikfout ("copa")
+ *  niet in een lange productnaam ("Coppa Stagionata, stuk 650 gram") — we kijken
+ *  naar het woord "coppa", niet naar de hele zin. Vergelijkbaar met pg_trgm's
+ *  word_similarity. */
+export function tokenSetSimilarity(query: string, target: string): number {
+    const qs = normalizeForFuzzy(query).split(' ').filter(Boolean);
+    const ts = normalizeForFuzzy(target).split(' ').filter(Boolean);
+    if (qs.length === 0 || ts.length === 0) return 0;
+    let weakest = 1;
+    for (const qw of qs) {
+        let best = 0;
+        for (const tw of ts) {
+            const s = trigramSimilarity(qw, tw);
+            if (s > best) best = s;
+            if (best === 1) break;
+        }
+        if (best < weakest) weakest = best;
+        if (weakest === 0) break;
+    }
+    return weakest;
+}
+
 /** Platte 3-teken-shingles (zonder spatie/padding) om DB-kandidaten mee op te
  *  halen via een OR van ilike-substrings. Een product dat één trigram deelt met
  *  de (mogelijk verkeerd gespelde) zoekterm wordt zo kandidaat; de fijn-weging

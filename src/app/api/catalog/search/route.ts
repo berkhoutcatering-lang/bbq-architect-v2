@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
-import { trigramSimilarity, fuzzyShingles } from '@/lib/fuzzy';
+import { tokenSetSimilarity, fuzzyShingles } from '@/lib/fuzzy';
 
 export const runtime = 'nodejs';
 
@@ -29,7 +29,7 @@ export const runtime = 'nodejs';
    THIN = drempel waaronder we fuzzy erbij zoeken; FUZZY_MIN = minimale
    trigram-similarity (pg_trgm-default 0.3); CAND = max kandidaten om te wegen. */
 const THIN_RESULTS = 6;
-const FUZZY_MIN = 0.3;
+const FUZZY_MIN = 0.35;
 const FUZZY_CANDIDATES = 200;
 
 /* Interne rang-velden — worden vóór verzending gestript. */
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
             for (const c of cand || []) {
                 const id = c.id as number;
                 if (masterById.has(id)) continue;
-                const score = trigramSimilarity((c.naam as string) ?? '', q);
+                const score = tokenSetSimilarity(q, (c.naam as string) ?? '');
                 if (score >= FUZZY_MIN) {
                     masterById.set(id, {
                         naam: (c.naam as string) ?? '',
@@ -217,7 +217,7 @@ export async function GET(req: NextRequest) {
                     .limit(FUZZY_CANDIDATES);
                 for (const s of (cand || []) as SpRow[]) {
                     if (spById.has(s.id)) continue;
-                    const score = trigramSimilarity(s.name ?? '', q);
+                    const score = tokenSetSimilarity(q, s.name ?? '');
                     if (score >= FUZZY_MIN) spById.set(s.id, { row: s, fuzzy: true, score });
                 }
             }
