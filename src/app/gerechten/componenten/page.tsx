@@ -3,8 +3,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Boxes, ArrowLeft, Plus, X, Trash2, Sparkles,
+    Boxes, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
     Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
 } from 'lucide-react';
@@ -238,8 +239,9 @@ export default function ComponentenPage() {
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [selectedComponentId, setSelectedComponentId] = useState<number | null>(null);
     const [showImport, setShowImport] = useState(false);
-    /* Eerste drie pills betekenen impliciet category=food; non_food is een eigen chip. */
-    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food'>('all');
+    /* Zelf-bereid/Inkoop zijn food-only; non_food en unused zijn eigen chips.
+       "Alle" toont álles, zodat Alle = Zelf-bereid + Inkoop + Non-food. */
+    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food' | 'unused'>('all');
     const [search, setSearch] = useState('');
 
     /* Twee first-class toevoegen-routes (2026-06-12):
@@ -335,12 +337,17 @@ export default function ComponentenPage() {
             /* Folder-filter: bij currentFolderId=null tonen we ALLE componenten
                (root + sub). Bij specifieke folder tonen we alleen die folder. */
             if (currentFolderId !== null && c.folder_id !== currentFolderId) return false;
-            /* Alle | Zelf-bereid | Inkoop = impliciet food; Non-food eigen chip. */
+            /* "Alle" toont écht alles (food + non-food) zodat de tellingen
+               kloppen: Alle = Zelf-bereid + Inkoop + Non-food. Eerder liet
+               "Alle" non-food weg, waardoor de chip 23 zei en de mappen 29 —
+               verwarrend. Zelf-bereid/Inkoop blijven food-only. */
             if (typeFilter === 'non_food') {
                 if (c.category !== 'non_food') return false;
-            } else {
+            } else if (typeFilter === 'unused') {
+                if ((usage[c.id] ?? 0) > 0) return false;
+            } else if (typeFilter !== 'all') {
                 if (c.category === 'non_food') return false;
-                if (typeFilter !== 'all' && c.type !== typeFilter) return false;
+                if (c.type !== typeFilter) return false;
             }
             if (search.trim().length > 0) {
                 const q = search.trim().toLowerCase();
@@ -350,7 +357,7 @@ export default function ComponentenPage() {
             }
             return true;
         });
-    }, [components, currentFolderId, typeFilter, search]);
+    }, [components, currentFolderId, typeFilter, search, usage]);
 
     /* Counts per folder voor de FolderBar chips. */
     const folderCounts = useMemo(() => {
@@ -387,13 +394,15 @@ export default function ComponentenPage() {
     const nonFoodCount = components.length - foodComponents.length;
     const preparedCount = foodComponents.filter(c => c.type === 'prepared').length;
     const boughtCount = foodComponents.filter(c => c.type === 'bought_in').length;
-    const aiCount = foodComponents.filter(c => c.ai_suggested).length;
     const totalCount = foodComponents.length;
-    const aiProgress = totalCount === 0 ? 0 : aiCount / totalCount;
+    /* Alles inclusief non-food — dit is het getal dat óók de mappen tellen. */
+    const allCount = components.length;
     const avgCostCents = totalCount === 0
         ? 0
         : Math.round(foodComponents.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
-    const circumference = 2 * Math.PI * 86;
+    /* Hoeveel bouwstenen worden nog nergens gebruikt — bruikbaarder signaal dan
+       een AI-percentage: dit is opruimwerk dat geld kan schelen. */
+    const unusedCount = components.filter(c => (usage[c.id] ?? 0) === 0).length;
 
     /* GP-5: render-helper voor het card-grid-gebied (loading/empty/cards).
        Wordt aangeroepen binnen DndContext (mr-comp-layout) of standalone
@@ -447,14 +456,30 @@ export default function ComponentenPage() {
         }
         return (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map(c => (
-                    <DraggableComponentCard key={c.id} componentId={c.id} disabled={!foldersAvailable}>
+                {filtered.map((c, idx) => (
+                    <motion.div
+                        key={c.id}
+                        layout
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                            duration: 0.3,
+                            /* Alleen de eerste rijen krijgen een trapje — daarna
+                               ineens, anders wacht je bij 100 kaarten te lang. */
+                            delay: Math.min(idx, 8) * 0.035,
+                            ease: [0.22, 1, 0.36, 1],
+                        }}
+                        whileHover={{ y: -3 }}
+                    >
+                    <DraggableComponentCard componentId={c.id} disabled={!foldersAvailable}>
                         <button
                             type="button"
                             onClick={() => setSelectedComponentId(c.id)}
-                            className="group relative w-full h-full overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition hover:border-[var(--brand)]/40"
+                            className="group relative w-full h-full overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition-all hover:border-[var(--brand)]/45 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.55)]"
                             style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                         >
+                            {/* Accentlijn die bij hover van links naar rechts invult. */}
+                            <span className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-[var(--brand)] to-transparent transition-transform duration-300 group-hover:scale-x-100" />
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                                     {c.type === 'prepared'
@@ -519,6 +544,7 @@ export default function ComponentenPage() {
                             )}
                         </button>
                     </DraggableComponentCard>
+                    </motion.div>
                 ))}
             </div>
         );
@@ -527,153 +553,67 @@ export default function ComponentenPage() {
     return (
         <div className="redesign-root">
             <div className="main" style={{ padding: '24px 0 40px' }}>
-                <div style={{ marginBottom: 12 }}>
-                    <Link
-                        href="/gerechten"
-                        className="btn btn-ghost btn-sm"
-                        style={{ textDecoration: 'none' }}
-                    >
-                        <ArrowLeft size={14} /> Menu
-                    </Link>
-                </div>
-
-                <div className="eh-hero">
-                    <div className="eh-hero-bg"></div>
-                    <div className="eh-hero-content">
-                        <div className="eh-hero-left">
-                            <div>
-                                <div className="eh-hero-eyebrow"><span className="dot"></span>Bouwstenen · de basis onder je gerechten</div>
-                                <h1 className="eh-hero-title">Componenten</h1>
-                                <div className="eh-hero-sub">
-                                    <span className="pill">{totalCount} {totalCount === 1 ? 'bouwsteen' : 'bouwstenen'}</span>
-                                    <span className="sep">·</span>
-                                    <span>Zelf-bereid + Inkoop in één bibliotheek</span>
-                                    <span className="sep">·</span>
-                                    <span>Auto-propagatie naar gerechten</span>
-                                </div>
-                            </div>
-                            <div className="eh-hero-actions">
-                                {/* Twee first-class routes: zelf bereid (volledige receptuur,
-                                    AI-vulbaar) en kant-en-klaar via foto/screenshot-scan. */}
-                                <button
-                                    type="button"
-                                    onClick={() => setShowReceptuur(true)}
-                                    className="btn btn-primary"
-                                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
-                                >
-                                    <ChefHat size={14} /> Zelf bereid
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowScan(true)}
-                                    className="btn btn-primary"
-                                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
-                                >
-                                    <Camera size={14} /> Scan kant-en-klaar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowImport(true)}
-                                    className="btn btn-ghost"
-                                >
-                                    <Upload size={14} /> Importeer leverancier (bulk)
-                                </button>
-                                {/* S2-deel-2: Bedenker is verhuisd uit de hoofdtabs; deze knop
-                                    is nu de prominente ingang voor de uitgebreide brainstorm-studio
-                                    (vrij / voorraad-gedreven / klant-context modes). */}
-                                <Link
-                                    href="/gerechten?modal=bedenker"
-                                    className="btn btn-ghost"
-                                    style={{ textDecoration: 'none' }}
-                                >
-                                    <Sparkles size={14} /> Bedenker Studio
-                                </Link>
-                            </div>
-                        </div>
-                        <div className="eh-countdown">
-                            <div className="eh-countdown-ring">
-                                <svg viewBox="0 0 200 200">
-                                    <defs>
-                                        <linearGradient id="componentenAiGrad" x1="0" x2="1" y1="0" y2="1">
-                                            <stop offset="0%" stopColor="#FFBF00" />
-                                            <stop offset="60%" stopColor="#ff8c20" />
-                                            <stop offset="100%" stopColor="#ff5010" />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle className="bg-ring" cx="100" cy="100" r="86" />
-                                    <circle className="fg-ring" cx="100" cy="100" r="86"
-                                        stroke="url(#componentenAiGrad)"
-                                        strokeDasharray={circumference}
-                                        strokeDashoffset={circumference * (1 - aiProgress)} />
-                                    {Array.from({ length: 30 }).map((_, i) => {
-                                        const a = (i / 30) * Math.PI * 2;
-                                        const x1 = 100 + Math.cos(a) * 72;
-                                        const y1 = 100 + Math.sin(a) * 72;
-                                        const x2 = 100 + Math.cos(a) * 76;
-                                        const y2 = 100 + Math.sin(a) * 76;
-                                        return <line key={i} className="tick" x1={x1} y1={y1} x2={x2} y2={y2} />;
-                                    })}
-                                </svg>
-                                <div className="eh-countdown-center">
-                                    <div className="eh-countdown-num">{totalCount}</div>
-                                    <div className="eh-countdown-lbl">Componenten</div>
-                                    <div className="eh-countdown-sub">{Math.round(aiProgress * 100)}% via AI</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="eh-hero-stats">
-                        <div className="eh-hero-stat">
-                            <div className="l">Totaal food</div>
-                            <div className="v">{totalCount}</div>
-                            <div className="s">{nonFoodCount > 0 ? `+ ${nonFoodCount} non-food` : 'In bibliotheek'}</div>
-                        </div>
-                        <div className="eh-hero-stat">
-                            <div className="l">Zelf-bereid</div>
-                            <div className="v">{preparedCount}</div>
-                            <div className="s">Met receptuur</div>
-                        </div>
-                        <div className="eh-hero-stat">
-                            <div className="l">Inkoop</div>
-                            <div className="v">{boughtCount}</div>
-                            <div className="s">Leverancier-gekoppeld</div>
-                        </div>
-                        <div className="eh-hero-stat">
-                            <div className="l">AI-suggesties</div>
-                            <div className={`v ${aiCount > 0 ? 'ok' : 'muted'}`}>{aiCount}</div>
-                            <div className="s">{aiCount > 0 ? `${Math.round(aiProgress * 100)}% van bibliotheek` : 'Nog niet gebruikt'}</div>
-                            {totalCount > 0 && (
-                                <div className="bar"><div className="fill" style={{ width: `${aiProgress * 100}%`, background: 'var(--brand)' }}></div></div>
-                            )}
-                        </div>
-                        <div className="eh-hero-stat">
-                            <div className="l">Gem. kostprijs</div>
-                            <div className="v">{formatEuro(avgCostCents)}</div>
-                            <div className="s">Per basis-eenheid</div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Inkoop-helderheid (2026-06-12): de grote lijn in één strip.
-                    Drunk-test: een moe iemand snapt in één zin hoe inkoopprijzen
-                    bij gerechten terechtkomen en waar hij moet zijn. */}
-                <div
-                    className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-[var(--border)] px-4 py-3 text-[12px] text-[var(--muted-light)]"
-                    style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+                {/* ── Kop ──────────────────────────────────────────────────────
+                    Bewust rustig gehouden (2026-07-26): de AI-ring stond op 0%
+                    en zette een lege functie in de spotlight; vier concurrerende
+                    knoppen maakten "iets toevoegen" een keuzeprobleem. Nu: één
+                    titel, één primaire actie met menu, en cijfers die je gebruikt.
+                    De "← Menu"-knop is weg — breadcrumb + tabs doen dat al. */}
+                <motion.header
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                    className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-4"
                 >
-                    <Calculator size={14} className="shrink-0 text-[var(--brand)]" />
-                    <strong style={{ color: 'var(--text)' }}>Zo stroomt je inkoopprijs naar je gerechten:</strong>
-                    <span className="inline-flex items-center gap-1.5">
-                        <span>verpakking bij de groothandel (€62,50 / doos 5 kg)</span>
+                    <div className="min-w-0">
+                        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/25 bg-[var(--brand)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand)]">
+                            <Boxes size={11} /> Bouwstenen
+                        </div>
+                        <h1
+                            className="text-[32px] font-semibold leading-[1.05] tracking-tight sm:text-[38px]"
+                            style={{ color: 'var(--text)' }}
+                        >
+                            Componenten
+                        </h1>
+                        <p className="mt-2 max-w-lg text-[13px] leading-relaxed text-[var(--muted-light)]">
+                            De basis onder je gerechten. Pas hier één inkoopprijs aan en elk
+                            gerecht dat &apos;m gebruikt rekent direct mee.
+                        </p>
+                    </div>
+                    <AddComponentMenu
+                        onZelfBereid={() => setShowReceptuur(true)}
+                        onScan={() => setShowScan(true)}
+                        onImport={() => setShowImport(true)}
+                    />
+                </motion.header>
+
+                {/* ── Cijfers ── vier tegels die je echt gebruikt. */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
+                    className="mb-4 grid grid-cols-2 gap-2.5 lg:grid-cols-4"
+                >
+                    <StatTile
+                        label="Bouwstenen"
+                        value={String(allCount)}
+                        hint={nonFoodCount > 0 ? `${totalCount} food · ${nonFoodCount} non-food` : 'In je bibliotheek'}
+                    />
+                    <StatTile label="Zelf-bereid" value={String(preparedCount)} hint="Met eigen receptuur" />
+                    <StatTile label="Inkoop" value={String(boughtCount)} hint="Kant-en-klaar ingekocht" />
+                    <StatTile label="Gem. kostprijs" value={formatEuro(avgCostCents)} hint="Per basis-eenheid" accent />
+                </motion.div>
+
+                {/* Eén regel die de kern uitlegt — de rest stond dubbel in de
+                    drawers zelf. */}
+                <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[12px] text-[var(--muted-light)]">
+                    <Calculator size={13} className="shrink-0 text-[var(--brand)]" />
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <span>€62,50 / doos 5 kg</span>
                         <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
-                        <span>eenheidsprijs (€12,50 / kg)</span>
+                        <span>€12,50 / kg</span>
                         <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
-                        <span>gerecht-kostprijs (200 g = €2,50)</span>
-                    </span>
-                    <span className="basis-full text-[11px] text-[var(--muted)]">
-                        Prijs gewijzigd bij je slager? Klik de bouwsteen aan, pas de pak-prijs aan en
-                        elk gerecht dat &apos;m gebruikt rekent direct mee. Nieuw product? Scan een screenshot
-                        of foto met <strong>Scan kant-en-klaar</strong>.
+                        <span style={{ color: 'var(--text)' }}>200 g in een gerecht = €2,50</span>
                     </span>
                 </div>
 
@@ -688,63 +628,90 @@ export default function ComponentenPage() {
                     </div>
                 )}
 
-                {/* Glass Filter Pill Bar — search + filter in één object */}
-                <div className="filter-bar">
-                    <div className="filter-bar-pills">
-                        <button
-                            type="button"
-                            onClick={() => setTypeFilter('all')}
-                            className={`filter-bar-pill ${typeFilter === 'all' ? 'is-active' : ''}`}
-                        >
-                            Alle <span className="count">{totalCount}</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setTypeFilter('prepared')}
-                            className={`filter-bar-pill ${typeFilter === 'prepared' ? 'is-active' : ''}`}
-                        >
-                            <Package size={12} /> Zelf-bereid <span className="count">{preparedCount}</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setTypeFilter('bought_in')}
-                            className={`filter-bar-pill ${typeFilter === 'bought_in' ? 'is-active' : ''}`}
-                        >
-                            <ShoppingBag size={12} /> Inkoop <span className="count">{boughtCount}</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setTypeFilter('non_food')}
-                            className={`filter-bar-pill ${typeFilter === 'non_food' ? 'is-active' : ''}`}
-                        >
-                            <Boxes size={12} /> Non-food <span className="count">{nonFoodCount}</span>
-                        </button>
+                {/* ── Filters + zoeken ──────────────────────────────────────────
+                    Segmented control met meebewegende markering. "Alle" telt nu
+                    álles (= zelf-bereid + inkoop + non-food), zodat dit getal
+                    gelijk loopt met de mappen links. "Ongebruikt" verving de
+                    AI-tegel: dat is opruimwerk dat je wél iets oplevert. */}
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
+                        {([
+                            { key: 'all', label: 'Alle', icon: null, count: allCount },
+                            { key: 'prepared', label: 'Zelf-bereid', icon: <Package size={12} />, count: preparedCount },
+                            { key: 'bought_in', label: 'Inkoop', icon: <ShoppingBag size={12} />, count: boughtCount },
+                            { key: 'non_food', label: 'Non-food', icon: <Boxes size={12} />, count: nonFoodCount },
+                            { key: 'unused', label: 'Ongebruikt', icon: null, count: unusedCount },
+                        ] as const).map(f => {
+                            const active = typeFilter === f.key;
+                            return (
+                                <button
+                                    key={f.key}
+                                    type="button"
+                                    onClick={() => setTypeFilter(f.key)}
+                                    aria-pressed={active}
+                                    className="relative rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors"
+                                    style={{ color: active ? 'var(--brand)' : 'var(--muted-light)' }}
+                                >
+                                    {active && (
+                                        <motion.span
+                                            layoutId="comp-filter-active"
+                                            className="absolute inset-0 rounded-lg bg-[var(--brand)]/12 ring-1 ring-inset ring-[var(--brand)]/30"
+                                            transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                                        />
+                                    )}
+                                    <span className="relative z-10 inline-flex items-center gap-1.5 whitespace-nowrap">
+                                        {f.icon}
+                                        {f.label}
+                                        <span
+                                            className="rounded px-1 text-[10px] font-semibold tabular-nums"
+                                            style={{
+                                                background: active ? 'var(--brand)' : 'var(--bg)',
+                                                color: active ? '#0a0a0c' : 'var(--muted)',
+                                            }}
+                                        >
+                                            {f.count}
+                                        </span>
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
-                    <div className="filter-bar-sep" aria-hidden></div>
-                    <div className="filter-bar-search">
-                        <Search size={14} className="search-icon" />
+
+                    <div className="relative min-w-[220px] flex-1">
+                        <Search
+                            size={14}
+                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+                        />
                         <input
                             type="search"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Zoek component…"
                             id="component-search"
+                            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] py-2.5 pl-9 pr-24 text-[13px] outline-none transition focus:border-[var(--brand)]/50"
+                            style={{ color: 'var(--text)' }}
                         />
-                        {search.length > 0 ? (
-                            <>
-                                <span className="result-count">{filtered.length} van {components.length}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setSearch('')}
-                                    aria-label="Wis zoekopdracht"
-                                    className="clear-btn"
-                                >
-                                    <X size={11} />
-                                </button>
-                            </>
-                        ) : (
-                            <span className="shortcut-hint">⌘ K</span>
-                        )}
+                        <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                            {search.length > 0 ? (
+                                <>
+                                    <span className="text-[11px] tabular-nums text-[var(--muted)]">
+                                        {filtered.length}/{components.length}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearch('')}
+                                        aria-label="Wis zoekopdracht"
+                                        className="rounded p-1 text-[var(--muted)] transition hover:bg-[var(--bg)] hover:text-[var(--text)]"
+                                    >
+                                        <X size={11} />
+                                    </button>
+                                </>
+                            ) : (
+                                <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">
+                                    ⌘ K
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -832,15 +799,6 @@ export default function ComponentenPage() {
                 />
             )}
 
-                <div className="kf-banner" style={{ marginTop: 18 }}>
-                    <Sparkles size={14} />
-                    <span>
-                        AI suggereert, jij bevestigt. Bij <strong>Zelf bereid</strong> vult AI op verzoek de hele
-                        receptuur (ingrediënten, stappen, allergenen, HACCP) — alles blijft aanpasbaar. Bij{' '}
-                        <strong>Scan kant-en-klaar</strong> leest AI je foto of screenshot. Niets wordt opgeslagen
-                        tot jij bevestigt.
-                    </span>
-                </div>
             </div>
 
             <FolderModal
@@ -850,6 +808,105 @@ export default function ComponentenPage() {
                 onClose={() => { setFolderModalOpen(false); setFolderEditing(null); }}
                 onSaved={() => { refetchFolders(); }}
             />
+        </div>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Kleine bouwstenen voor de kop: cijfer-tegel + één toevoeg-menu.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function StatTile({ label, value, hint, accent }: {
+    label: string; value: string; hint: string; accent?: boolean;
+}) {
+    return (
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
+            <div
+                className="mt-1.5 font-mono text-[24px] font-semibold leading-none tabular-nums"
+                style={{ color: accent ? 'var(--brand)' : 'var(--text)' }}
+            >
+                {value}
+            </div>
+            <div className="mt-1.5 text-[11px] leading-tight text-[var(--muted)]">{hint}</div>
+        </div>
+    );
+}
+
+/* Eén primaire knop i.p.v. vier concurrerende: de drie manieren om een
+   bouwsteen toe te voegen zitten eronder, mét uitleg wanneer je welke pakt. */
+function AddComponentMenu({ onZelfBereid, onScan, onImport }: {
+    onZelfBereid: () => void; onScan: () => void; onImport: () => void;
+}) {
+    const [open, setOpen] = useState(false);
+    const wrapRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        function onDoc(e: MouseEvent) {
+            if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+        }
+        function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false); }
+        document.addEventListener('mousedown', onDoc);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDoc);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    const items = [
+        { icon: <ChefHat size={15} />, title: 'Zelf bereid', desc: 'Eigen receptuur: ingrediënten, stappen, allergenen', run: onZelfBereid },
+        { icon: <Camera size={15} />, title: 'Scan kant-en-klaar', desc: 'Foto of screenshot van één product', run: onScan },
+        { icon: <Upload size={15} />, title: 'Prijslijst importeren', desc: 'Veel producten tegelijk uit één bestand', run: onImport },
+    ];
+
+    return (
+        <div ref={wrapRef} className="relative shrink-0">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition hover:opacity-90"
+                style={{ background: 'var(--brand)', color: '#0a0a0c' }}
+            >
+                <Plus size={15} /> Nieuwe bouwsteen
+            </button>
+
+            <AnimatePresence>
+                {open && (
+                    <motion.div
+                        role="menu"
+                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                        transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute right-0 z-50 mt-2 w-[310px] overflow-hidden rounded-xl border border-[var(--border)] p-1.5 shadow-[0_18px_44px_rgba(0,0,0,.42)]"
+                        style={{ background: 'var(--card-solid, var(--card))' }}
+                    >
+                        {items.map(it => (
+                            <button
+                                key={it.title}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => { setOpen(false); it.run(); }}
+                                className="flex w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left transition hover:bg-[var(--brand)]/10"
+                            >
+                                <span className="mt-0.5 shrink-0 text-[var(--brand)]">{it.icon}</span>
+                                <span className="min-w-0">
+                                    <span className="block text-[13px] font-semibold" style={{ color: 'var(--text)' }}>
+                                        {it.title}
+                                    </span>
+                                    <span className="mt-0.5 block text-[11px] leading-snug text-[var(--muted)]">
+                                        {it.desc}
+                                    </span>
+                                </span>
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
