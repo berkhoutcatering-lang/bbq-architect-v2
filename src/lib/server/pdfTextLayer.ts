@@ -18,6 +18,7 @@
  * aanroeper terug op de beeld-route. Nooit een harde fout.
  */
 import 'server-only';
+import { ensurePdfDomGlobals } from './pdfDomGlobals';
 
 export interface PdfPageLines {
     page: number;      /* 1-based */
@@ -50,6 +51,10 @@ export async function extractPdfPageLines(
     pageEnd?: number,
 ): Promise<PdfPageLines[] | null> {
     try {
+        /* pdfjs raakt bij het laden een paar browser-globals aan; op Vercel
+           bestaan die niet en klapt de import. Eerst klaarzetten. */
+        ensurePdfDomGlobals();
+
         /* Legacy-build draait in Node zonder DOM. Dynamische import houdt
            pdfjs uit bundels die 'm niet nodig hebben. */
         const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');

@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { extractPdfPageLines, countPriceLikeLines } from '@/lib/server/pdfTextLayer';
+import { ensurePdfDomGlobals } from '@/lib/server/pdfDomGlobals';
 
 export const runtime = 'nodejs';
 
@@ -34,6 +35,7 @@ export async function GET() {
     let moduleOk = false;
     let moduleError: string | null = null;
     try {
+        ensurePdfDomGlobals();
         await import('pdfjs-dist/legacy/build/pdf.mjs');
         moduleOk = true;
     } catch (e) {
