@@ -61,14 +61,18 @@ async function generateSummaryForOrg(orgId: string): Promise<{ summary_md: strin
     }
 
     /* Hergebruik bestaande context-loader. Geeft yoyDelta, margelek_alerts,
-       investeringen_jaar, voorbelasting_jaar. */
-    const contextData = await loadPageContext('/financien');
+       investeringen_jaar, voorbelasting_jaar.
 
-    /* Service-role client doet de subset-fetch zelf — geen RLS-context tijdens
-       cron. We slingeren orgId daarom expliciet in de prompt zodat het model
-       weet voor welke tenant het denkt; daadwerkelijke RLS-safety zit in
-       loadPageContext's eigen sb-client. We gaan hier verder met service-role
-       om de daily_summary te schrijven. */
+       Deze cron draait zonder ingelogde gebruiker, dus met de service-sleutel.
+       Die omzeilt RLS: zonder expliciet filter zou de samenvatting van deze
+       cateraar de cijfers van een ándere kunnen bevatten. Daarom geven we orgId
+       mee en filtert loadPageContext élke query daarop. */
+    const admin = getAdminClient();
+    if (!admin) {
+        console.warn('[finance-summary cron] Geen service-sleutel — org overgeslagen:', orgId);
+        return null;
+    }
+    const contextData = await loadPageContext('/financien', admin, orgId);
 
     const sanitizedContext = JSON.stringify({
         yoyDelta: contextData.yoyDelta,

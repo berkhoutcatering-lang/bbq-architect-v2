@@ -1,14 +1,7 @@
 // src/lib/bbq-context.ts
 // Laadt live Supabase-data per pagina en formatteert ze voor de AI systeem-prompt.
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-
-function getSupabase(): SupabaseClient {
-    return createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-}
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 function euro(n: number | null | undefined): string {
     return '\u20ac' + Number(n || 0).toFixed(2);
@@ -42,22 +35,22 @@ function calcOfferteTotaal(o: OfferteContext): number {
 
 // ── Page context loaders ──────────────────────────────────────────────────────
 
-async function loadEventsContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadEventsContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const today = new Date().toISOString().slice(0, 10);
-    const { data: events } = await sb.from('events').select('*').gte('date', today).order('date').limit(10);
+    const { data: events } = await sb.from('events').select('*').eq('organization_id', orgId).gte('date', today).order('date').limit(10);
     /* recepten samengevouwen onder gerechten 2026-05-01. */
-    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time').limit(50);
+    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time').eq('organization_id', orgId).limit(50);
     return { events: events || [], gerechten: gerechten || [] };
 }
 
-async function loadAgendaContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: events } = await sb.from('events').select('id,name,date,guests,status,location').order('date').limit(20);
-    const { data: tasks } = await sb.from('prep_tasks').select('*').order('created_at', { ascending: false }).limit(20);
+async function loadAgendaContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: events } = await sb.from('events').select('id,name,date,guests,status,location').eq('organization_id', orgId).order('date').limit(20);
+    const { data: tasks } = await sb.from('prep_tasks').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20);
     return { events: events || [], prep_tasks: tasks || [] };
 }
 
-async function loadOffortesContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data } = await sb.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,items,korting,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(30);
+async function loadOffortesContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data } = await sb.from('offertes').select('id,nummer,status,client_naam,datum,geldig_tot,aantal_gasten,basis_prijs_pp,items,korting,vaste_kosten,menu_selectie').eq('organization_id', orgId).order('datum', { ascending: false }).limit(30);
     const offertes = (data || []) as OfferteContext[];
     const totaal = offertes.reduce(function (s, o) { return s + calcOfferteTotaal(o); }, 0);
     const open = offertes.filter(function (o) { return (o as Record<string, unknown>).status === 'concept' || (o as Record<string, unknown>).status === 'verzonden'; });
@@ -65,11 +58,11 @@ async function loadOffortesContext(sb: SupabaseClient): Promise<Record<string, u
     return { offertes, totaal_omzet: totaal, open_offertes: open.length, open_totaal: openTotaal };
 }
 
-async function loadFacturenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadFacturenContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     /* `facturen` kent geen korting/vaste_kosten-kolommen (anders dan offertes);
        die zitten in `items`. Ze tóch opvragen liet PostgREST de hele query
        weigeren, waardoor de AI nul facturen zag. */
-    const { data } = await sb.from('facturen').select('id,nummer,client_naam,datum,vervaldatum,status,items').order('datum', { ascending: false }).limit(30);
+    const { data } = await sb.from('facturen').select('id,nummer,client_naam,datum,vervaldatum,status,items').eq('organization_id', orgId).order('datum', { ascending: false }).limit(30);
     const facturen = (data || []) as Record<string, unknown>[];
     const calcTotaal = function (f: Record<string, unknown>): number {
         const items = f.items as Array<{ qty?: number; unit_price?: number; btw_rate?: number }> | undefined;
@@ -92,67 +85,67 @@ async function loadFacturenContext(sb: SupabaseClient): Promise<Record<string, u
     };
 }
 
-async function loadGerechtenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: gangen } = await sb.from('gangen').select('*').order('volgorde');
-    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief').order('volgorde');
+async function loadGerechtenContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: gangen } = await sb.from('gangen').select('*').eq('organization_id', orgId).order('volgorde');
+    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,beschrijving,tags,allergenen,kostprijs_pp,actief').eq('organization_id', orgId).order('volgorde');
     return { gangen: gangen || [], gerechten: gerechten || [], totaal: (gerechten || []).length };
 }
 
-async function loadReceptenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadReceptenContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     /* /recepten leeft nu onder /gerechten — receptuur (bereidingswijze, porties,
        wijn-suggestie) zit op de gerecht-rij. Alias-key 'recepten' behouden zodat
        AI-prompts die om recepten vragen niet breken. */
-    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,bereidingswijze,ingredienten,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
+    const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,bereidingswijze,ingredienten,allergenen,kostprijs_pp,wijn_suggestie,service_tip').eq('organization_id', orgId).order('naam');
     /* Voorraad heet in de database current_stock/min_stock — niet hoeveelheid/min_par. */
-    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,unit,min_stock,purchase_price').order('naam');
+    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,unit,min_stock,purchase_price').eq('organization_id', orgId).order('naam');
     return { recepten: gerechten || [], inventory: inventory || [] };
 }
 
-async function loadVoorraadContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: inventory } = await sb.from('inventory').select('*').order('naam');
+async function loadVoorraadContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: inventory } = await sb.from('inventory').select('*').eq('organization_id', orgId).order('naam');
     const laag = (inventory || []).filter(function (i: Record<string, unknown>) { return (i.current_stock as number) <= (i.min_stock as number); });
     return { inventory: inventory || [], lage_voorraad: laag, laag_count: laag.length };
 }
 
-async function loadInkoopContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,min_stock,unit,purchase_price,supplier').order('naam');
-    const { data: gerechten } = await sb.from('gerechten').select('naam,ingredienten,ingredienten_winkels,ingredient_costs').limit(50);
+async function loadInkoopContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,min_stock,unit,purchase_price,supplier').eq('organization_id', orgId).order('naam');
+    const { data: gerechten } = await sb.from('gerechten').select('naam,ingredienten,ingredienten_winkels,ingredient_costs').eq('organization_id', orgId).limit(50);
     return { inventory: inventory || [], gerechten: gerechten || [] };
 }
 
-async function loadHaccpContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: logs } = await sb.from('haccp_logs').select('*').order('created_at', { ascending: false }).limit(50);
-    const { data: events } = await sb.from('events').select('id,name,date').gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)).order('date');
+async function loadHaccpContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: logs } = await sb.from('haccp_logs').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(50);
+    const { data: events } = await sb.from('events').select('id,name,date').eq('organization_id', orgId).gte('date', new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)).order('date');
     return { haccp_logs: logs || [], recent_events: events || [] };
 }
 
-async function loadServiceContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadServiceContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const today2 = new Date().toISOString().slice(0, 10);
-    const { data: events } = await sb.from('events').select('*').eq('date', today2).order('created_at');
-    const { data: gerechten } = await sb.from('gerechten').select('naam,gang_slug,battle_plan_steps,target_prep_time,service_image').order('volgorde');
+    const { data: events } = await sb.from('events').select('*').eq('organization_id', orgId).eq('date', today2).order('created_at');
+    const { data: gerechten } = await sb.from('gerechten').select('naam,gang_slug,battle_plan_steps,target_prep_time,service_image').eq('organization_id', orgId).order('volgorde');
     return { vandaag_events: events || [], gerechten: gerechten || [] };
 }
 
-async function loadUrenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadUrenContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const maandAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const { data: logs } = await sb.from('time_logs').select('*').gte('date', maandAgo).order('date', { ascending: false });
+    const { data: logs } = await sb.from('time_logs').select('*').eq('organization_id', orgId).gte('date', maandAgo).order('date', { ascending: false });
     return { uren_logs: logs || [] };
 }
 
-async function loadMaterieelContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: items } = await sb.from('materieel').select('*').order('naam');
+async function loadMaterieelContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: items } = await sb.from('materieel').select('*').eq('organization_id', orgId).order('naam');
     return { materieel: items || [] };
 }
 
-async function loadLogistiekContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadLogistiekContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const today3 = new Date().toISOString().slice(0, 10);
-    const { data: events } = await sb.from('events').select('*').gte('date', today3).order('date').limit(5);
+    const { data: events } = await sb.from('events').select('*').eq('organization_id', orgId).gte('date', today3).order('date').limit(5);
     /* materieel heeft `type` en `status` — geen categorie/actief. */
-    const { data: materieel } = await sb.from('materieel').select('id,naam,type,status').order('naam');
+    const { data: materieel } = await sb.from('materieel').select('id,naam,type,status').eq('organization_id', orgId).order('naam');
     return { komende_events: events || [], materieel: materieel || [] };
 }
 
-async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadBoekhoudingContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const nu = new Date();
     const jaarHuidig = nu.getFullYear();
     const jaarVorig = jaarHuidig - 1;
@@ -167,24 +160,24 @@ async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string
         offertesRes, facturenRes, facturenVorigRes, bonnenInvRes, bonnenAllRes,
     ] = await Promise.all([
         sb.from('offertes')
-            .select('datum,status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten')
+            .select('datum,status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').eq('organization_id', orgId)
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('facturen')
-            .select('datum,status,items')
+            .select('datum,status,items').eq('organization_id', orgId)
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('facturen')
-            .select('datum,status,items')
+            .select('datum,status,items').eq('organization_id', orgId)
             .gte('datum', startVorig).lte('datum', eindVorig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('bonnen')
-            .select('id,datum,totaal_bedrag,rgs_code,winkel,notities')
+            .select('id,datum,totaal_bedrag,rgs_code,winkel,notities').eq('organization_id', orgId)
             .eq('rgs_code', 'WAfsInv')
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(30),
         sb.from('bonnen')
-            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code')
+            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code').eq('organization_id', orgId)
             .gte('datum', startHuidig)
             .limit(500),
     ]);
@@ -258,13 +251,13 @@ async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string
     };
 }
 
-async function loadDashboardContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
+async function loadDashboardContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const today4 = new Date().toISOString().slice(0, 10);
     const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     const [evRes, invRes, offRes] = await Promise.all([
-        sb.from('events').select('id,name,date,guests,status').gte('date', today4).lte('date', week).order('date'),
-        sb.from('inventory').select('naam,current_stock,min_stock,unit').lte('current_stock', 9999).order('naam'),
-        sb.from('offertes').select('status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').order('datum', { ascending: false }).limit(20),
+        sb.from('events').select('id,name,date,guests,status').eq('organization_id', orgId).gte('date', today4).lte('date', week).order('date'),
+        sb.from('inventory').select('naam,current_stock,min_stock,unit').eq('organization_id', orgId).lte('current_stock', 9999).order('naam'),
+        sb.from('offertes').select('status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').eq('organization_id', orgId).order('datum', { ascending: false }).limit(20),
     ]);
     const invLaag = ((invRes.data || []) as Record<string, unknown>[]).filter(function (i) { return (i.current_stock as number) <= (i.min_stock as number); });
     return {
@@ -274,33 +267,49 @@ async function loadDashboardContext(sb: SupabaseClient): Promise<Record<string, 
     };
 }
 
-async function loadMenuEngineeringContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: gerechten } = await sb.from('gerechten').select('naam,gang_slug,kostprijs_pp,tags').order('volgorde');
-    const { data: offertes } = await sb.from('offertes').select('menu_selectie,basis_prijs_pp').limit(50);
+async function loadMenuEngineeringContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const { data: gerechten } = await sb.from('gerechten').select('naam,gang_slug,kostprijs_pp,tags').eq('organization_id', orgId).order('volgorde');
+    const { data: offertes } = await sb.from('offertes').select('menu_selectie,basis_prijs_pp').eq('organization_id', orgId).limit(50);
     return { gerechten: gerechten || [], offertes: offertes || [] };
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function loadPageContext(pathname: string): Promise<Record<string, unknown>> {
-    const sb = getSupabase();
+/**
+ * Laadt de data die de AI voor een pagina nodig heeft.
+ *
+ * De aanroeper geeft de client én de organisatie mee. Dat is met opzet:
+ * eerder maakte deze module zélf een anonieme verbinding, en die ziet door de
+ * beveiliging (RLS) nul rijen — de financiën-AI antwoordde dus altijd met
+ * "geen data", en meldde zelfs zelf dat €0 voorbelasting onwaarschijnlijk was.
+ *
+ * `orgId` is verplicht, geen optie: de cron-route werkt met een service-sleutel
+ * die álle organisaties kan zien. Zonder expliciet filter zou de samenvatting
+ * van de ene cateraar de cijfers van de andere bevatten. Elke query hier filtert
+ * daarom op organization_id.
+ */
+export async function loadPageContext(
+    pathname: string,
+    sb: SupabaseClient,
+    orgId: string,
+): Promise<Record<string, unknown>> {
     try {
-        if (pathname === '/' || pathname === '') return await loadDashboardContext(sb);
-        if (pathname.startsWith('/events')) return await loadEventsContext(sb);
-        if (pathname.startsWith('/agenda')) return await loadAgendaContext(sb);
-        if (pathname.startsWith('/offertes')) return await loadOffortesContext(sb);
-        if (pathname.startsWith('/facturen')) return await loadFacturenContext(sb);
-        if (pathname.startsWith('/gerechten')) return await loadGerechtenContext(sb);
-        if (pathname.startsWith('/recepten')) return await loadReceptenContext(sb);
-        if (pathname.startsWith('/voorraad')) return await loadVoorraadContext(sb);
-        if (pathname.startsWith('/inkoop')) return await loadInkoopContext(sb);
-        if (pathname.startsWith('/haccp')) return await loadHaccpContext(sb);
-        if (pathname.startsWith('/events/') && pathname.endsWith('/service')) return await loadServiceContext(sb);
-        if (pathname.startsWith('/uren')) return await loadUrenContext(sb);
-        if (pathname.startsWith('/materieel')) return await loadMaterieelContext(sb);
-        if (pathname.startsWith('/logistiek')) return await loadLogistiekContext(sb);
-        if (pathname.startsWith('/boekhouding') || pathname.startsWith('/financien')) return await loadBoekhoudingContext(sb);
-        if (pathname.startsWith('/marges')) return await loadMenuEngineeringContext(sb);
+        if (pathname === '/' || pathname === '') return await loadDashboardContext(sb, orgId);
+        if (pathname.startsWith('/events')) return await loadEventsContext(sb, orgId);
+        if (pathname.startsWith('/agenda')) return await loadAgendaContext(sb, orgId);
+        if (pathname.startsWith('/offertes')) return await loadOffortesContext(sb, orgId);
+        if (pathname.startsWith('/facturen')) return await loadFacturenContext(sb, orgId);
+        if (pathname.startsWith('/gerechten')) return await loadGerechtenContext(sb, orgId);
+        if (pathname.startsWith('/recepten')) return await loadReceptenContext(sb, orgId);
+        if (pathname.startsWith('/voorraad')) return await loadVoorraadContext(sb, orgId);
+        if (pathname.startsWith('/inkoop')) return await loadInkoopContext(sb, orgId);
+        if (pathname.startsWith('/haccp')) return await loadHaccpContext(sb, orgId);
+        if (pathname.startsWith('/events/') && pathname.endsWith('/service')) return await loadServiceContext(sb, orgId);
+        if (pathname.startsWith('/uren')) return await loadUrenContext(sb, orgId);
+        if (pathname.startsWith('/materieel')) return await loadMaterieelContext(sb, orgId);
+        if (pathname.startsWith('/logistiek')) return await loadLogistiekContext(sb, orgId);
+        if (pathname.startsWith('/boekhouding') || pathname.startsWith('/financien')) return await loadBoekhoudingContext(sb, orgId);
+        if (pathname.startsWith('/marges')) return await loadMenuEngineeringContext(sb, orgId);
         return {};
     } catch (err) {
         console.error('[bbq-context] loadPageContext error:', err);
