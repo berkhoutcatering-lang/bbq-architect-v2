@@ -269,10 +269,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         const newBaseQty = (componentRow.base_quantity as number) ?? oldBaseQuantity ?? 1;
 
         if (newBaseCost !== oldBaseCostCents && newBaseQty > 0) {
-            /* Stap 1: fetch alle gerecht_components-rijen met dit component_id */
+            /* Stap 1: fetch alle gerecht_components-rijen met dit component_id.
+               De tabel heeft géén `id` — de sleutel is (gerecht_id, component_id),
+               zie migratie 20260510130000. Vragen om `id` liet de hele query
+               falen, waardoor kostprijzen nooit doorgerekend werden. */
             const { data: gcRows, error: gcErr } = await supabase
                 .from('gerecht_components')
-                .select('id, gerecht_id, quantity_used')
+                .select('gerecht_id, quantity_used')
                 .eq('component_id', componentId)
                 .eq('organization_id', auth.orgId!);
 
@@ -283,10 +286,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                    Sequential ipv batch om RLS-policy-checks niet te verzwakken. */
                 const updatePromises = gcRows.map(row => {
                     const newCost = Math.round((Number(row.quantity_used) / newBaseQty) * newBaseCost);
+                    /* Rij aanwijzen op de échte primaire sleutel; org-filter erbij
+                       zodat een update nooit buiten de eigen organisatie kan vallen. */
                     return supabase
                         .from('gerecht_components')
                         .update({ cost_at_use_cents: newCost })
-                        .eq('id', row.id);
+                        .eq('gerecht_id', row.gerecht_id)
+                        .eq('component_id', componentId)
+                        .eq('organization_id', auth.orgId!);
                 });
                 const results = await Promise.all(updatePromises);
                 const failures = results.filter(r => r.error).length;
