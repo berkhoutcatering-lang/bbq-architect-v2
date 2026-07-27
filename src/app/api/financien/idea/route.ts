@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
     if (!apiKey) return NextResponse.json({ error: 'AI niet beschikbaar' }, { status: 503 });
     const anthropic = new Anthropic({ apiKey });
 
-    const contextData = await loadPageContext('/financien');
+    const contextData = await loadPageContext('/financien', supabase, orgId);
     const sanitizedContext = JSON.stringify({
         section: v.data.context_section,
         yoyDelta: contextData.yoyDelta,
