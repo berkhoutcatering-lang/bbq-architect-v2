@@ -1066,7 +1066,7 @@ async function handleGetLogistiekVoorEvent(sb: SupabaseClient, params: Record<st
 }
 
 async function handleGetOmzetPerPeriode(sb: SupabaseClient): Promise<Record<string, any>> {
-    const { data } = await sb.from('facturen').select('datum,status,items,korting,vaste_kosten').eq('status', 'betaald').order('datum', { ascending: false }).limit(100);
+    const { data } = await sb.from('facturen').select('datum,status,items').eq('status', 'betaald').order('datum', { ascending: false }).limit(100);
     const maandOmzet: Record<string, number> = {};
     (data || []).forEach((f: any) => {
         if (!f.datum) return;
@@ -1087,7 +1087,7 @@ async function handleGetKwartaalOmzet(sb: SupabaseClient, params: Record<string,
     const maandEind = (kwartaal * 3).toString().padStart(2, '0');
     const from = jaar + '-' + maandStart + '-01';
     const to = jaar + '-' + maandEind + '-31';
-    const { data } = await sb.from('facturen').select('datum,items,korting,vaste_kosten').eq('status', 'betaald').gte('datum', from).lte('datum', to);
+    const { data } = await sb.from('facturen').select('datum,items').eq('status', 'betaald').gte('datum', from).lte('datum', to);
     const totaal = (data || []).reduce((s: number, f: any) => {
         const sub = (f.items || []).reduce((ss: number, i: any) => ss + (i.qty || 0) * (i.unit_price || 0) * (1 + (i.btw_rate || 0) / 100), 0);
         return s + sub - Number(f.korting || 0) + (f.vaste_kosten || []).reduce((ss: number, k: any) => ss + Number(k.bedrag || 0), 0);
@@ -1109,7 +1109,7 @@ async function handleGetWeekOverzicht(sb: SupabaseClient): Promise<Record<string
     const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     const [evRes, invRes, offRes, prepRes] = await Promise.all([
         sb.from('events').select('*').gte('date', today).lte('date', week).order('date'),
-        sb.from('inventory').select('naam,hoeveelheid,min_par,unit').order('naam'),
+        sb.from('inventory').select('naam,current_stock,min_stock,unit').order('naam'),
         sb.from('offertes').select('status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').in('status', ['concept', 'verzonden']),
         sb.from('prep_tasks').select('*').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString())
     ]);

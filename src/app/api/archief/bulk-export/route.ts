@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     // 2. Haal alle bonnen op (RLS filtert op org).
     const { data: bonnen, error } = await sb
         .from('bonnen')
-        .select('id, organization_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, categorie, rgs_categorie, status, tags, file_path, file_mime, image_url, leveranciers(naam)')
+        .select('id, organization_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, categorie, rgs_category_label, status, tags, file_path, file_mime, image_url, leveranciers(naam)')
         .in('id', body.bonIds)
         .order('datum', { ascending: false });
 
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
             btw9.toFixed(2),
             btw21.toFixed(2),
             excl.toFixed(2),
-            bon.rgs_categorie ?? '',
+            bon.rgs_category_label ?? '',
             bon.status ?? '',
             String(bon.id),
         ].join(';'));

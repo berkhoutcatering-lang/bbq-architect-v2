@@ -101,7 +101,7 @@ export default function PrepCounter() {
                     .order('dagen', { ascending: true })
                     .order('id', { ascending: true }),
                 supabase.from('gerechten')
-                    .select('id, naam, categorie, beschrijving, ingredient_costs')
+                    .select('id, naam, gang_slug, beschrijving, ingredient_costs')
                     .order('naam', { ascending: true }),
             ]);
             setTasks(tRes.data || []);

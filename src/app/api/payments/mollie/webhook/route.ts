@@ -131,10 +131,10 @@ export async function POST(req: NextRequest) {
                     }) : null;
                     if (clientEmail && factuur) {
                         const { data: settingsRow } = await sb.from('settings')
-                            .select('bedrijfsnaam,bedrijf,brand_color,ondertitel')
+                            .select('bedrijfsnaam,brand_primary,ondertitel')
                             .eq('organization_id', factuur.organization_id)
                             .maybeSingle();
-                        const bedrijfsnaam = settingsRow?.bedrijfsnaam || settingsRow?.bedrijf || 'BBQ Architect';
+                        const bedrijfsnaam = settingsRow?.bedrijfsnaam || 'BBQ Architect';
                         const bedrag = Number(payment.amount?.value || 0);
                         const method = payment.method || undefined;
                         mailPaymentOntvangen({
@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
                             bedrag,
                             betalingsmethode: method,
                             bedrijfsnaam,
-                            brandColor: settingsRow?.brand_color || undefined,
+                            brandColor: settingsRow?.brand_primary || undefined,
                             ondertitel: settingsRow?.ondertitel || undefined,
                         }).then(function (r) {
                             if (!r.success) console.error('[mollie-webhook] payment-mail failed:', r.error);

@@ -29,12 +29,15 @@ const files = execSync(`grep -rl "\\.from(" src --include=*.ts --include=*.tsx`,
 const calls = [];
 for (const f of files) {
   const src = readFileSync(f, 'utf8');
-  // .from('tabel') ... .select('kolommen')  — select mag op een volgende regel staan
-  const re = /\.from\(\s*['"]([a-z0-9_]+)['"]\s*\)[\s\S]{0,200}?\.select\(\s*(['"`])([\s\S]*?)\2/g;
+  /* .from('tabel') … .select('kolommen') — select mag op een volgende regel staan,
+     maar het tussenstuk mag GEEN nieuwe .from( bevatten. Zonder die eis sprong de
+     match over een statement heen naar de select van de vólgende query, wat een
+     fout-positief opleverde (organization_members ← organizations.name). */
+  const re = /\.from\(\s*['"]([a-z0-9_]+)['"]\s*\)((?:(?!\.from\()[\s\S]){0,200}?)\.select\(\s*(['"`])([\s\S]*?)\3/g;
   let m;
   while ((m = re.exec(src)) !== null) {
     const line = src.slice(0, m.index).split('\n').length;
-    calls.push({ file: f, line, table: m[1], sel: m[3] });
+    calls.push({ file: f, line, table: m[1], sel: m[4] });
   }
 }
 

@@ -488,7 +488,7 @@ async function getEventWinstgevendheid(sb: SupabaseClient, params: Record<string
         if (t.start_time && t.end_time) {
             const uren = Math.max(0, (new Date(t.end_time).getTime() - new Date(t.start_time).getTime()) / 3600000);
             totaalUren += uren;
-            arbeidskosten += uren * (parseFloat(t.uurloon) || DEFAULT_UURLOON);
+            arbeidskosten += uren * (parseFloat(t.uurtarief_snapshot) || DEFAULT_UURLOON);
         }
     });
 
