@@ -30,6 +30,8 @@ import {
     ingredientRowCostCents,
     resolvePricingFromSupplierPrice,
     resolvePricingFromSupplierProduct,
+    recipeYieldFromRows,
+    costPerBaseFromRecipe,
 } from '@/lib/ingredientPricing';
 
 interface AiProposal {
@@ -119,6 +121,11 @@ const UNITS = ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'];
 
 function formatEuro(cents: number): string {
     return '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Hoeveelheid zonder overbodige nullen: 1000 → "1000", 0.5 → "0,5". */
+function formatQty(n: number): string {
+    return Number(n).toLocaleString('nl-NL', { maximumFractionDigits: 3 });
 }
 
 function formatPerBase(cents: number, qty: number, unit: string): string {
@@ -1329,7 +1336,9 @@ function ComponentEditDrawer({
                                     <IngredientsEditor
                                         rows={ingredients}
                                         onChange={setIngredients}
-                                        onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
+                                        onAdoptSum={(perBaseCents) => setCostEuros((perBaseCents / 100).toFixed(2))}
+                                        baseQuantity={parseDec(baseQty)}
+                                        baseUnit={baseUnit}
                                     />
                                     <StepsEditor steps={steps} onChange={setSteps} />
                                 </>
@@ -1894,15 +1903,30 @@ function StepsEditor({ steps, onChange }: { steps: string[]; onChange: (steps: s
 }
 
 function IngredientsEditor({
-    rows, onChange, onAdoptSum,
+    rows, onChange, onAdoptSum, baseQuantity, baseUnit,
 }: {
     rows: IngredientFormRow[];
     onChange: (rows: IngredientFormRow[]) => void;
-    onAdoptSum: (sumCents: number) => void;
+    /* Krijgt de kostprijs per BASIS-eenheid, al omgerekend. */
+    onAdoptSum: (costPerBaseCents: number) => void;
+    baseQuantity: number;
+    baseUnit: string;
 }) {
     const sum = ingredientSumCents(rows);
     /* Gekoppelde regels zonder aantal leveren geen kostprijs en tellen niet mee. */
     const anyNeedsQty = rows.some(r => isRowLinked(r) && !!r.unit_price && linkedRowCostCents(r) == null);
+
+    /* De som geldt voor de héle receptuur. Om 'm als kostprijs te kunnen
+       gebruiken moeten we weten hoeveel die receptuur oplevert — anders belandt
+       "€32,85 voor 1 kg" als "€32,85 per 100 g" in de kostprijs (factor 10 te
+       hoog, en dat werkt door in elk gerecht). */
+    const recipeYield = useMemo(
+        () => recipeYieldFromRows(rows.map(r => ({ qty: parseDec(r.qty), unit: r.unit }))),
+        [rows],
+    );
+    const perBaseCents = recipeYield
+        ? costPerBaseFromRecipe(sum, recipeYield, baseQuantity, baseUnit)
+        : null;
 
     function updateRow(idx: number, patch: Partial<IngredientFormRow>) {
         onChange(rows.map((r, i) => {
@@ -2040,10 +2064,28 @@ function IngredientsEditor({
                     })}
                     {sum > 0 && (
                         <div className="kf-card kf-card-accent" style={{ padding: '8px 12px' }}>
-                            <div className="flex items-center justify-between">
-                                <span style={{ fontSize: 12 }}>Som ingrediënt-kosten: <strong className="font-mono" style={{ color: 'var(--brand)' }}>€{(sum / 100).toFixed(2)}</strong></span>
-                                <button type="button" onClick={() => onAdoptSum(sum)} className="kf-add">Gebruik als kostprijs</button>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span style={{ fontSize: 12 }}>
+                                    Ingrediënten samen: <strong className="font-mono" style={{ color: 'var(--brand)' }}>{formatEuro(sum)}</strong>
+                                    {recipeYield && (
+                                        <span style={{ color: 'var(--muted)' }}> voor {formatQty(recipeYield.quantity)} {recipeYield.unit}</span>
+                                    )}
+                                </span>
+                                {perBaseCents != null ? (
+                                    <button type="button" onClick={() => onAdoptSum(perBaseCents)} className="kf-add">
+                                        Gebruik als kostprijs — {formatEuro(perBaseCents)} / {formatQty(baseQuantity)}{baseUnit}
+                                    </button>
+                                ) : null}
                             </div>
+                            {/* Zonder eenduidige opbrengst rekenen we niets uit: een verkeerde
+                                kostprijs werkt door in elk gerecht dat deze bouwsteen gebruikt. */}
+                            {perBaseCents == null && (
+                                <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                                    {recipeYield
+                                        ? `Deze receptuur levert ${formatQty(recipeYield.quantity)} ${recipeYield.unit} op; dat past niet bij de basis-eenheid "${baseUnit}". Zet de basis-eenheid gelijk, dan reken ik het om.`
+                                        : 'Om dit als kostprijs te gebruiken moeten alle ingrediënten in dezelfde soort eenheid staan (allemaal gewicht, of allemaal stuks).'}
+                                </div>
+                            )}
                             {anyNeedsQty && (
                                 <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
                                     Let op: een gekoppeld product heeft nog geen aantal en telt niet mee in dit bedrag.
@@ -2260,7 +2302,9 @@ function ReceptuurDrawer({
                     <IngredientsEditor
                         rows={ingredients}
                         onChange={setIngredients}
-                        onAdoptSum={(sumCents) => setCostEuros((sumCents / 100).toFixed(2))}
+                        onAdoptSum={(perBaseCents) => setCostEuros((perBaseCents / 100).toFixed(2))}
+                        baseQuantity={parseDec(baseQty)}
+                        baseUnit={baseUnit}
                     />
 
                     <StepsEditor steps={steps} onChange={setSteps} />

@@ -4,6 +4,8 @@ import {
     resolvePricingFromSupplierPrice,
     resolvePricingFromSupplierProduct,
     ingredientRowCostCents,
+    recipeYieldFromRows,
+    costPerBaseFromRecipe,
 } from './ingredientPricing';
 
 describe('inferApprovalPriceBasis — fix voor de .includes("kg")-bug', () => {
@@ -82,5 +84,56 @@ describe('resolvePricingFromSupplierProduct (gescande bestel-catalogus)', () => 
         const p = resolvePricingFromSupplierProduct({ base_cost_cents: 203, base_quantity: 100, base_unit: 'g' })!;
         // 150 g coppa à €20,30/kg = €3,05
         expect(ingredientRowCostCents({ qty: 150, unit: 'g', unit_price: p.unit_price, price_basis: p.price_basis })).toBe(305);
+    });
+});
+
+describe('recipeYieldFromRows — hoeveel levert de receptuur op?', () => {
+    it('telt gram en kilo op tot gram', () => {
+        expect(recipeYieldFromRows([{ qty: 1, unit: 'kg' }, { qty: 250, unit: 'g' }]))
+            .toEqual({ quantity: 1250, unit: 'g' });
+    });
+    it('liter telt op tot milliliter', () => {
+        expect(recipeYieldFromRows([{ qty: 0.5, unit: 'liter' }])).toEqual({ quantity: 500, unit: 'ml' });
+    });
+    it('gram naast stuks → null (niet optelbaar)', () => {
+        expect(recipeYieldFromRows([{ qty: 100, unit: 'g' }, { qty: 2, unit: 'stuk' }])).toBeNull();
+    });
+    it('onbekende eenheid → null', () => {
+        expect(recipeYieldFromRows([{ qty: 1, unit: 'snufje' }])).toBeNull();
+    });
+    it('regels zonder hoeveelheid tellen niet mee', () => {
+        expect(recipeYieldFromRows([{ qty: 0, unit: 'g' }, { qty: 200, unit: 'g' }]))
+            .toEqual({ quantity: 200, unit: 'g' });
+    });
+    it('lege lijst → null', () => {
+        expect(recipeYieldFromRows([])).toBeNull();
+    });
+});
+
+describe('costPerBaseFromRecipe — de bavette-fout', () => {
+    it('€32,85 voor 1 kg met basis 100 g → 328,5 ct (was 3285)', () => {
+        const y = recipeYieldFromRows([{ qty: 1, unit: 'kg' }])!;
+        expect(costPerBaseFromRecipe(3285, y, 100, 'g')).toBe(329);   // afgerond op hele centen
+    });
+    it('en 8 g in een gerecht kost dan € 0,26 i.p.v. € 2,63', () => {
+        const y = recipeYieldFromRows([{ qty: 1, unit: 'kg' }])!;
+        const perBase = costPerBaseFromRecipe(3285, y, 100, 'g')!;
+        expect(Math.round((8 / 100) * perBase)).toBe(26);
+    });
+    it('basis gelijk aan de receptuur → som blijft ongewijzigd', () => {
+        const y = recipeYieldFromRows([{ qty: 500, unit: 'g' }])!;
+        expect(costPerBaseFromRecipe(1000, y, 500, 'g')).toBe(1000);
+    });
+    it('basis in kilo werkt ook', () => {
+        const y = recipeYieldFromRows([{ qty: 2, unit: 'kg' }])!;
+        expect(costPerBaseFromRecipe(4000, y, 1, 'kg')).toBe(2000);
+    });
+    it('eenheid sluit niet aan (ml-recept, basis in gram) → null', () => {
+        const y = recipeYieldFromRows([{ qty: 1, unit: 'liter' }])!;
+        expect(costPerBaseFromRecipe(500, y, 100, 'g')).toBeNull();
+    });
+    it('basis-hoeveelheid 0 → null (geen deling door nul)', () => {
+        const y = recipeYieldFromRows([{ qty: 1, unit: 'kg' }])!;
+        expect(costPerBaseFromRecipe(3285, y, 0, 'g')).toBeNull();
     });
 });

@@ -33,6 +33,75 @@ export function resolvePricingFromSupplierPrice(
     return { price_basis: 'stuk', unit_price: Number(sp.prijs) || 0, price_unit: eenheid || 'stuk' };
 }
 
+/* ── Ingrediënt-som → kostprijs per basis-eenheid ─────────────────────────
+   De som van de ingrediënten geldt voor de HÉLE receptuur, niet per basis-
+   eenheid. Dat werd door elkaar gehaald: een recept met 1 kg vlees à €32,85
+   belandde als "€32,85 per 100 g" in de kostprijs — een factor 10 te hoog, en
+   dat werkte door in elk gerecht (8 g toonde €2,63 i.p.v. €0,263).
+
+   Om het goed te doen moet je weten hoeveel de receptuur oplevert. De ruwe
+   ingrediënt-hoeveelheid is daarvoor de eerlijkste schatting die we hebben;
+   bereidingsverlies corrigeer je daarna met de opbrengstfactor. */
+
+export type RecipeBaseUnit = 'g' | 'ml' | 'stuk';
+
+/** Ingrediënt-eenheid → basis-eenheid + factor. Null bij onbekend. */
+export function ingredientUnitToBase(unit: string): { base: RecipeBaseUnit; factor: number } | null {
+    switch ((unit || '').trim().toLowerCase()) {
+        case 'g': case 'gr': case 'gram': return { base: 'g', factor: 1 };
+        case 'kg': case 'kilo': case 'kilogram': return { base: 'g', factor: 1000 };
+        case 'ml': case 'milliliter': return { base: 'ml', factor: 1 };
+        case 'l': case 'ltr': case 'liter': return { base: 'ml', factor: 1000 };
+        case 'stuk': case 'stuks': case 'st': case 'portie': return { base: 'stuk', factor: 1 };
+        default: return null;
+    }
+}
+
+/**
+ * Totale hoeveelheid die een receptuur oplevert, uit de ingrediënt-regels.
+ *
+ * Geeft null zodra de eenheden niet op één noemer te brengen zijn (gram naast
+ * stuks) of een eenheid onbekend is. Dan is er geen eerlijke omrekening en laten
+ * we de gebruiker zelf de basis-hoeveelheid bepalen — liever niets invullen dan
+ * een verkeerde kostprijs.
+ */
+export function recipeYieldFromRows(
+    rows: Array<{ qty: number; unit: string }>,
+): { quantity: number; unit: RecipeBaseUnit } | null {
+    let total = 0;
+    let unit: RecipeBaseUnit | null = null;
+    for (const r of rows) {
+        if (!Number.isFinite(r.qty) || r.qty <= 0) continue;
+        const conv = ingredientUnitToBase(r.unit);
+        if (!conv) return null;                       // onbekende eenheid
+        if (unit === null) unit = conv.base;
+        else if (unit !== conv.base) return null;     // g naast stuks → niet optelbaar
+        total += r.qty * conv.factor;
+    }
+    if (unit === null || total <= 0) return null;
+    return { quantity: total, unit };
+}
+
+/**
+ * Reken de receptuur-som om naar de kostprijs per gekozen basis-hoeveelheid.
+ * Voorbeeld: €32,85 voor 1000 g, basis 100 g → 328,5 cent.
+ * Null als de opbrengst niet te bepalen is of de basis-eenheid niet aansluit.
+ */
+export function costPerBaseFromRecipe(
+    sumCents: number,
+    recipeYield: { quantity: number; unit: RecipeBaseUnit },
+    baseQuantity: number,
+    baseUnit: string,
+): number | null {
+    if (!Number.isFinite(sumCents) || sumCents <= 0) return null;
+    if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) return null;
+    const conv = ingredientUnitToBase(baseUnit);
+    if (!conv || conv.base !== recipeYield.unit) return null;
+    const baseInYieldUnit = baseQuantity * conv.factor;
+    if (recipeYield.quantity <= 0) return null;
+    return Math.round(sumCents * (baseInYieldUnit / recipeYield.quantity));
+}
+
 /** Vorm van een gescand bestel-product (Catalog B): kostprijs per basis-eenheid. */
 export interface SupplierProductBaseShape {
     base_cost_cents?: number | null;
