@@ -43,7 +43,7 @@ export async function GET() {
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('id, name, date, location, guests, ppp, status, client_naam, notes')
+    .select('id, name, date, location, guests, ppp, status, client_naam, notitie')
     .in('status', ['confirmed', 'completed'])
     .order('date', { ascending: true });
 
@@ -80,7 +80,7 @@ export async function GET() {
     if (ev.guests) descParts.push(`Aantal gasten: ${ev.guests}`);
     if (ev.ppp) descParts.push(`Prijs p.p.: EUR ${Number(ev.ppp).toFixed(2)}`);
     if (ev.status) descParts.push(`Status: ${ev.status}`);
-    if (ev.notes) descParts.push(`Notities: ${ev.notes}`);
+    if (ev.notitie) descParts.push(`Notities: ${ev.notitie}`);
     const description = descParts.join('\\n');
 
     lines.push('BEGIN:VEVENT');

@@ -839,7 +839,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
                 return dgs >= 0 && dgs <= 2;
             }).map(function (e: Record<string, unknown>) { return e.id; });
             if (dashEventIds.length > 0) {
-                const ptDashRes = await supabase.from('prep_tasks').select('id,event_id,naam,status,dagen').in('event_id', dashEventIds as (string | number)[]);
+                const ptDashRes = await supabase.from('prep_tasks').select('id,event_id,text,status,dagen').in('event_id', dashEventIds as (string | number)[]);
                 ctx.prep_tasks = (ptDashRes.data || []).filter(function (t: Record<string, unknown>) { return t.status !== 'done' && t.status !== 'klaar'; });
             }
         }
@@ -1037,7 +1037,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             // hierheen, dus de hele context laden ongeacht ?tab=...
             const offFinRes = await supabase.from('offertes').select('id,nummer,status,client_naam,datum,basis_prijs_pp,aantal_gasten,korting,items,vaste_kosten,menu_selectie').order('datum', { ascending: false }).limit(100);
             const facFinRes = await supabase.from('facturen').select('id,nummer,status,client_naam,datum,vervaldatum,items').order('datum', { ascending: false }).limit(50);
-            const urenFinRes = await supabase.from('time_logs').select('id,datum,uren,medewerker').order('datum', { ascending: false }).limit(200);
+            const urenFinRes = await supabase.from('time_logs').select('id,start_time,end_time,personeel_id').order('start_time', { ascending: false }).limit(200);
             ctx.offertes = offFinRes.data || [];
             ctx.facturen = facFinRes.data || [];
             ctx.time_logs = urenFinRes.data || [];
@@ -1096,7 +1096,7 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
 
         if (pathname === '/klanten') {
             // Klanten + aggregaties: aantal events per klant + totaal-omzet (op basis van bevestigde offertes).
-            const klRes = await supabase.from('klanten').select('id,naam,email,telefoon,bedrijf,laatste_contact').order('naam').limit(100);
+            const klRes = await supabase.from('klanten').select('id,naam,email,telefoon,bedrijf,created_at').order('naam').limit(100);
             ctx.klanten = klRes.data || [];
             const offKlRes = await supabase.from('offertes').select('client_naam,status,basis_prijs_pp,aantal_gasten,korting,items,datum').limit(500);
             const klStats: Record<string, { events: number; omzet: number; laatste: string }> = {};

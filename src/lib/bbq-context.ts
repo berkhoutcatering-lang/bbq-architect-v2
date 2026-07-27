@@ -66,7 +66,10 @@ async function loadOffortesContext(sb: SupabaseClient): Promise<Record<string, u
 }
 
 async function loadFacturenContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data } = await sb.from('facturen').select('id,nummer,client_naam,datum,vervaldatum,status,items,korting,vaste_kosten').order('datum', { ascending: false }).limit(30);
+    /* `facturen` kent geen korting/vaste_kosten-kolommen (anders dan offertes);
+       die zitten in `items`. Ze tóch opvragen liet PostgREST de hele query
+       weigeren, waardoor de AI nul facturen zag. */
+    const { data } = await sb.from('facturen').select('id,nummer,client_naam,datum,vervaldatum,status,items').order('datum', { ascending: false }).limit(30);
     const facturen = (data || []) as Record<string, unknown>[];
     const calcTotaal = function (f: Record<string, unknown>): number {
         const items = f.items as Array<{ qty?: number; unit_price?: number; btw_rate?: number }> | undefined;
@@ -100,18 +103,19 @@ async function loadReceptenContext(sb: SupabaseClient): Promise<Record<string, u
        wijn-suggestie) zit op de gerecht-rij. Alias-key 'recepten' behouden zodat
        AI-prompts die om recepten vragen niet breken. */
     const { data: gerechten } = await sb.from('gerechten').select('id,naam,gang_slug,porties,target_prep_time,bereidingswijze,ingredienten,allergenen,kostprijs_pp,wijn_suggestie,service_tip').order('naam');
-    const { data: inventory } = await sb.from('inventory').select('id,naam,hoeveelheid,unit,min_par,purchase_price').order('naam');
+    /* Voorraad heet in de database current_stock/min_stock — niet hoeveelheid/min_par. */
+    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,unit,min_stock,purchase_price').order('naam');
     return { recepten: gerechten || [], inventory: inventory || [] };
 }
 
 async function loadVoorraadContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
     const { data: inventory } = await sb.from('inventory').select('*').order('naam');
-    const laag = (inventory || []).filter(function (i: Record<string, unknown>) { return (i.hoeveelheid as number) <= (i.min_par as number); });
+    const laag = (inventory || []).filter(function (i: Record<string, unknown>) { return (i.current_stock as number) <= (i.min_stock as number); });
     return { inventory: inventory || [], lage_voorraad: laag, laag_count: laag.length };
 }
 
 async function loadInkoopContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
-    const { data: inventory } = await sb.from('inventory').select('id,naam,hoeveelheid,min_par,unit,purchase_price,preferred_supplier').order('naam');
+    const { data: inventory } = await sb.from('inventory').select('id,naam,current_stock,min_stock,unit,purchase_price,supplier').order('naam');
     const { data: gerechten } = await sb.from('gerechten').select('naam,ingredienten,ingredienten_winkels,ingredient_costs').limit(50);
     return { inventory: inventory || [], gerechten: gerechten || [] };
 }
@@ -143,7 +147,8 @@ async function loadMaterieelContext(sb: SupabaseClient): Promise<Record<string, 
 async function loadLogistiekContext(sb: SupabaseClient): Promise<Record<string, unknown>> {
     const today3 = new Date().toISOString().slice(0, 10);
     const { data: events } = await sb.from('events').select('*').gte('date', today3).order('date').limit(5);
-    const { data: materieel } = await sb.from('materieel').select('id,naam,categorie,actief').order('naam');
+    /* materieel heeft `type` en `status` — geen categorie/actief. */
+    const { data: materieel } = await sb.from('materieel').select('id,naam,type,status').order('naam');
     return { komende_events: events || [], materieel: materieel || [] };
 }
 
@@ -166,15 +171,15 @@ async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('facturen')
-            .select('datum,status,items,korting,vaste_kosten')
+            .select('datum,status,items')
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('facturen')
-            .select('datum,status,items,korting,vaste_kosten')
+            .select('datum,status,items')
             .gte('datum', startVorig).lte('datum', eindVorig)
             .order('datum', { ascending: false }).limit(100),
         sb.from('bonnen')
-            .select('id,datum,totaal_bedrag,rgs_code,winkel,omschrijving')
+            .select('id,datum,totaal_bedrag,rgs_code,winkel,notities')
             .eq('rgs_code', 'WAfsInv')
             .gte('datum', startHuidig)
             .order('datum', { ascending: false }).limit(30),
@@ -230,7 +235,7 @@ async function loadBoekhoudingContext(sb: SupabaseClient): Promise<Record<string
             id: b.id,
             datum: b.datum,
             bedrag: Number(b.totaal_bedrag) || 0,
-            omschrijving: (b.omschrijving || b.winkel || '').slice(0, 40),
+            omschrijving: (b.notities || b.winkel || '').slice(0, 40),
         })),
     };
 
@@ -258,10 +263,10 @@ async function loadDashboardContext(sb: SupabaseClient): Promise<Record<string, 
     const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     const [evRes, invRes, offRes] = await Promise.all([
         sb.from('events').select('id,name,date,guests,status').gte('date', today4).lte('date', week).order('date'),
-        sb.from('inventory').select('naam,hoeveelheid,min_par,unit').lte('hoeveelheid', sb.rpc ? 9999 : 9999).order('naam'),
+        sb.from('inventory').select('naam,current_stock,min_stock,unit').lte('current_stock', 9999).order('naam'),
         sb.from('offertes').select('status,items,korting,vaste_kosten,basis_prijs_pp,aantal_gasten').order('datum', { ascending: false }).limit(20),
     ]);
-    const invLaag = ((invRes.data || []) as Record<string, unknown>[]).filter(function (i) { return (i.hoeveelheid as number) <= (i.min_par as number); });
+    const invLaag = ((invRes.data || []) as Record<string, unknown>[]).filter(function (i) { return (i.current_stock as number) <= (i.min_stock as number); });
     return {
         events_deze_week: evRes.data || [],
         lage_voorraad: invLaag,
@@ -319,7 +324,7 @@ export function formatContext(pathname: string, data: Record<string, any>): stri
         });
         lines.push('Lage voorraad: ' + (data.lage_voorraad || []).length + ' items');
         (data.lage_voorraad || []).forEach(function (i: any) {
-            lines.push('  - ' + i.naam + ': ' + i.hoeveelheid + '/' + i.min_par + ' ' + i.unit + ' (TE LAAG)');
+            lines.push('  - ' + i.naam + ': ' + i.current_stock + '/' + i.min_stock + ' ' + i.unit + ' (TE LAAG)');
         });
     }
 
@@ -388,8 +393,8 @@ export function formatContext(pathname: string, data: Record<string, any>): stri
     if (data.inventory && pathname && (pathname.startsWith('/voorraad') || pathname.startsWith('/inkoop'))) {
         lines.push('Voorraad (' + (data.inventory || []).length + ' items):');
         (data.inventory || []).forEach(function (i: any) {
-            const status = i.hoeveelheid <= i.min_par ? ' \u26a0\ufe0f LAAG' : '';
-            lines.push('  - ' + i.naam + ': ' + i.hoeveelheid + ' ' + i.unit + ' (min: ' + i.min_par + ')' + status + (i.purchase_price ? ' | \u20ac' + Number(i.purchase_price).toFixed(2) : ''));
+            const status = i.current_stock <= i.min_stock ? ' \u26a0\ufe0f LAAG' : '';
+            lines.push('  - ' + i.naam + ': ' + i.current_stock + ' ' + i.unit + ' (min: ' + i.min_stock + ')' + status + (i.purchase_price ? ' | \u20ac' + Number(i.purchase_price).toFixed(2) : ''));
         });
         if (data.laag_count !== undefined) {
             lines.push('Lage voorraad: ' + data.laag_count + ' items');

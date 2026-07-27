@@ -389,13 +389,30 @@ export async function listStockMovementsForBon(
     sb: SupabaseClient,
     bonId: number,
 ): Promise<StockMovementForBon[]> {
+    /* `stock_movements` bewaart alleen een verwijzing naar het voorraad-item;
+       naam, eenheid en opslagplaats staan op `inventory`. Ze rechtstreeks
+       opvragen liet de hele query falen, waardoor de voorraad-tab bij een bon
+       altijd leeg bleef. We halen ze nu via de koppeling op en houden de
+       veldnamen naar buiten toe gelijk. */
     const { data, error } = await sb
         .from('stock_movements')
-        .select('id, item_naam, qty, qty_eenheid, warehouse, created_at')
+        .select('id, qty, created_at, inventory:inventory_id ( naam, unit, storage_type )')
         .eq('bon_id', bonId)
         .order('created_at', { ascending: false });
     if (error) return [];
-    return (data ?? []) as StockMovementForBon[];
+
+    type Row = {
+        id: number; qty: number; created_at: string;
+        inventory: { naam: string | null; unit: string | null; storage_type: string | null } | null;
+    };
+    return ((data ?? []) as unknown as Row[]).map((r) => ({
+        id: r.id,
+        item_naam: r.inventory?.naam ?? 'Onbekend item',
+        qty: r.qty,
+        qty_eenheid: r.inventory?.unit ?? null,
+        warehouse: r.inventory?.storage_type ?? null,
+        created_at: r.created_at,
+    }));
 }
 
 // ── Move inbox email → archief (Pillar #5) ─────────────────────────────

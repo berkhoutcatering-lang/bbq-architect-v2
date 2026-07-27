@@ -40,14 +40,14 @@ export default async function Page({ params }: Props) {
        event.offerte_id (kan ontbreken — empty-state hieronder). */
     const { data: event } = await supabase
         .from('events')
-        .select('id, naam, date, guests, location, offerte_id')
+        .select('id, name, date, guests, location, offerte_id')
         .eq('id', id)
         .maybeSingle();
 
     if (!event) notFound();
 
     if (!event.offerte_id) {
-        return <NoOfferteState eventId={String(event.id)} eventName={event.naam || `Event ${event.id}`} />;
+        return <NoOfferteState eventId={String(event.id)} eventName={event.name || `Event ${event.id}`} />;
     }
 
     const [
@@ -80,7 +80,7 @@ export default async function Page({ params }: Props) {
     if (!offer) {
         /* offerte_id wijst naar iets dat niet bestaat (verwijderd?) — toon
            dezelfde empty-state als de unlinked-case. */
-        return <NoOfferteState eventId={String(event.id)} eventName={event.naam || `Event ${event.id}`} />;
+        return <NoOfferteState eventId={String(event.id)} eventName={event.name || `Event ${event.id}`} />;
     }
 
     const templateId = offer.menukaart_template_id || settings?.menukaart_template_id || DEFAULT_TEMPLATE_ID;
@@ -90,7 +90,7 @@ export default async function Page({ params }: Props) {
     /* Label combineert event + offerte-context — staat in breadcrumb +
        canvas-header zodat de cateraar ziet vanuit welk event hij komt. */
     const offerLabel = offer.nummer || offer.client_naam || `Offerte ${offer.id}`;
-    const contextLabel = `${event.naam || `Event ${event.id}`} · ${offerLabel}`;
+    const contextLabel = `${event.name || `Event ${event.id}`} · ${offerLabel}`;
 
     const rawSel = offer.menu_selectie as unknown;
     const menuSelectie: Record<string, string[]> | null =

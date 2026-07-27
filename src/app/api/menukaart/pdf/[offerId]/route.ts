@@ -255,7 +255,7 @@ async function renderMenukaartPdf(
 
             const menuIds = parseMenuField(event?.menu);
             if (menuIds.length > 0) {
-                const { data: ger } = await supabase.from('gerechten').select('id, naam, beschrijving, categorie, gang_slug, allergenen');
+                const { data: ger } = await supabase.from('gerechten').select('id, naam, beschrijving, gang_slug, allergenen');
                 menuData = buildMenuData(menuIds, (ger as Gerecht[]) ?? [], [], logoUrl, logoUrlDonker);
             }
         }

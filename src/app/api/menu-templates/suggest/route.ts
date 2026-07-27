@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     /* Lees gerechten-bibliotheek van deze org. RLS doet de scoping. */
     const { data: gerechten, error: gErr } = await supabase
         .from('gerechten')
-        .select('id, naam, beschrijving, gang_slug, kostprijs_pp, prijs_pp, verkoopprijs, tags')
+        .select('id, naam, beschrijving, gang_slug, kostprijs_pp, verkoopprijs, tags')
         .eq('actief', true)
         .order('naam');
 
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     /* Bouw library-string. Houden compact om input-tokens te besparen. */
     const libraryLines = gerechten.map((g: any) => {
-        const prijs = Number(g.verkoopprijs ?? g.prijs_pp ?? 0);
+        const prijs = Number(g.verkoopprijs ?? 0);
         const kost = Number(g.kostprijs_pp ?? 0);
         const marge = prijs > 0 ? Math.round((1 - kost / prijs) * 100) : 0;
         const tags = Array.isArray(g.tags) && g.tags.length > 0 ? ` tags:[${g.tags.slice(0, 4).join(',')}]` : '';

@@ -121,7 +121,7 @@ async function executeTool(name: string, args: any, sb: SupabaseClient): Promise
             if (eventRes.error || !eventRes.data) return { error: 'Event niet gevonden' };
             const [facRes, urenRes, inkRes] = await Promise.all([
                 sb.from('facturen').select('items').eq('event_id', args.event_id),
-                sb.from('time_logs').select('start_time,end_time,uurloon').eq('event_id', args.event_id),
+                sb.from('time_logs').select('start_time,end_time,uurtarief_snapshot').eq('event_id', args.event_id),
                 sb.from('inkooplijsten').select('items').eq('event_id', args.event_id),
             ]);
             const calcTotaal = (items: any): number => {
@@ -135,7 +135,7 @@ async function executeTool(name: string, args: any, sb: SupabaseClient): Promise
             (urenRes.data || []).forEach((t: any) => {
                 if (t.start_time && t.end_time) {
                     const uren = Math.max(0, (new Date(t.end_time).getTime() - new Date(t.start_time).getTime()) / 3600000);
-                    arbeid += uren * (parseFloat(t.uurloon) || 15);
+                    arbeid += uren * (parseFloat(t.uurtarief_snapshot) || 15);
                 }
             });
             const netto = omzet - inkoop - arbeid;
