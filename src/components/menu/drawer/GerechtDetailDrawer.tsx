@@ -20,8 +20,9 @@ import {
     MRPhoto, MRStatusPill, MRTag, type GerechtStatus,
 } from '../atoms';
 import {
-    fmtEuro, getGangKey, getGangLabel, getGerechtStatus, getMargin, marginTone,
+    fmtEuro, getGangKey, getGangLabel, getGerechtStatus, marginTone,
 } from '../helpers';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import BeschrijvingBlocksView from './BeschrijvingBlocksView';
 import GerechtenBouwEditor from '@/components/menu/GerechtenBouwEditor';
 
@@ -81,11 +82,17 @@ export function GerechtDetailDrawer({
        worden gebruikt in JSX onClick handlers verderop. */
     void setTab; void setAiSheetOpen;
 
-    const margin = getMargin(gerecht);
-    const tone = marginTone(margin);
     const status: GerechtStatus = getGerechtStatus(gerecht);
     const price = Number(gerecht.verkoopprijs ?? gerecht.prijs ?? 0);
-    const cost = Number(gerecht.kostprijs_pp ?? 0);
+    /* Eén kostprijs-waarheid: de componenten-rollup (total_cost_cents) wint,
+       daarna handmatige kostprijs_pp. Was 'kostprijs_pp' → toonde €0,00 terwijl de
+       componenten (bv. €0,36) wél opgeteld waren = de "niet gekoppeld"-klacht. */
+    const cost = effectieveKostprijsPP({
+        total_cost_cents: (gerecht as { total_cost_cents?: number | null }).total_cost_cents,
+        kostprijs_pp: gerecht.kostprijs_pp,
+    });
+    const margin = price > 0 ? Math.round(((price - cost) / price) * 100) : 0;
+    const tone = marginTone(margin);
     const gangLabel = getGangLabel(getGangKey(gerecht, gangen), gangen);
 
     const tabs: Array<{ id: DetailTab; label: string; Icon: typeof FileText }> = [
