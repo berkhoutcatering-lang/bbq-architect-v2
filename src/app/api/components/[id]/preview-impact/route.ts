@@ -15,8 +15,7 @@ interface GerechtImpact {
     old_total_cost_cents: number;
     new_total_cost_cents: number;
     diff_cents: number;
-    /* Marge alleen berekenbaar als verkoopprijs bekend (gerechten.prijs of
-       gerechten.verkoopprijs). Anders null. */
+    /* Marge alleen berekenbaar als `gerechten.verkoopprijs` bekend is. Anders null. */
     verkoopprijs_eur: number | null;
     old_margin_pct: number | null;
     new_margin_pct: number | null;
@@ -64,7 +63,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     /* 2. Alle gerecht_components-rijen met dit component_id ophalen */
     const { data: gcRows, error: gcErr } = await supabase
         .from('gerecht_components')
-        .select('gerecht_id, quantity_used, cost_at_use_cents, gerechten(id, naam, prijs, verkoopprijs)')
+        /* `gerechten` heeft alleen `verkoopprijs` — een kolom `prijs` bestaat
+           niet en liet PostgREST de hele query weigeren ("column gerechten_1.prijs
+           does not exist"), waardoor het bewerk-scherm een rode foutmelding gaf. */
+        .select('gerecht_id, quantity_used, cost_at_use_cents, gerechten(id, naam, verkoopprijs)')
         .eq('component_id', componentId)
         .eq('organization_id', orgId);
     if (gcErr) return NextResponse.json({ error: gcErr.message }, { status: 500 });
@@ -85,7 +87,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     interface GerechtRow {
         id: string;
         naam: string | null;
-        prijs: number | null;
         verkoopprijs: number | null;
     }
     const perGerecht = new Map<string, {
@@ -124,7 +125,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const impacts: GerechtImpact[] = [];
     for (const [gid, data] of perGerecht.entries()) {
         const diffCents = data.new_component_cost_cents - data.old_component_cost_cents;
-        const verkoopEur = Number(data.gerecht.verkoopprijs ?? data.gerecht.prijs ?? 0);
+        const verkoopEur = Number(data.gerecht.verkoopprijs ?? 0);
         const verkoopCents = Math.round(verkoopEur * 100);
 
         /* Voor margin-pct hebben we totale gerecht-kost nodig. We fetchen die
