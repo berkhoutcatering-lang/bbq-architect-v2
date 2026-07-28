@@ -132,9 +132,12 @@ export function calcDishCostPP(
 
     const costsArray = Array.isArray(gerecht.ingredient_costs) ? gerecht.ingredient_costs : [];
 
-    // Path 1: gedetailleerde ingredient-berekening (gerechten met volledige receptuur)
+    // Path 1: gedetailleerde ingredient-berekening (gerechten met volledige receptuur).
+    // Levert dit €0 op (geen enkele ingrediënt-prijs bekend), dan NIET kortsluiten
+    // maar doorvallen naar Path 2 — anders blokkeert een lege regel-lijst het
+    // kostprijs_pp-vangnet en toont het gerecht alsnog €0.
     if (costsArray.length > 0) {
-        return costsArray.reduce((sum, item) => {
+        const som = costsArray.reduce((sum, item) => {
             if (!item || !item.naam) return sum;
             const inv = getInvPrice(inventory, item.naam, item.inventory_id);
             const price = inv ? inv.price : 0;
@@ -144,6 +147,7 @@ export function calcDishCostPP(
             if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
             return sum + ((item.qty_pp || 0) * unitFactor / yld) * price;
         }, 0);
+        if (som > 0) return som;
     }
 
     // Path 2: fallback naar pre-calculated kostprijs_pp (AI-gegenereerde gerechten,

@@ -2,9 +2,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Link, Unlink, UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X } from 'lucide-react';
+import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useSupabase } from '@/lib/useSupabase';
 import { track, trackOnce } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
@@ -20,8 +19,6 @@ import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
-import { createComponentFromMatchAction } from '@/app/gerechten/componenten/actions';
-import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
 /* Bucket C (2026-05-25) — IA opschonen: nieuwe Menu-hub components vervangen
@@ -63,7 +60,7 @@ import {
   computeKpiTiles,
   pickGlyph,
 } from './_components/stats-helpers';
-import type { InventoryItem, Gang, Gerecht, MenuTemplateRow } from '@/types';
+import type { Gang, Gerecht, MenuTemplateRow } from '@/types';
 
 /* Velden voor Gerecht (gang_slug, foto_url, tags, allergenen, ingredienten,
    bron, kostprijs_pp, verkoopprijs) en Gang (minimum, extra_prijs_pp) zijn
@@ -101,6 +98,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        kostprijs-regel meteen meebewegen bij het koppelen van een component
        (i.p.v. pas na opslaan + herladen). null = nog geen signaal ontvangen. */
     const [liveRollupCents, setLiveRollupCents] = useState<number | null>(null);
+    /* Reset bij élke wissel van gerecht — ook via dupliceren en "Bedenk met AI",
+       die setEditing('new') doen zonder door newGerecht/editGerecht te gaan.
+       Zonder dit erft een nieuw (leeg) gerecht de kostprijs van het vorige.
+       Veilig: het componenten-blok mount pas op de Bouw-tab, en beide open-routes
+       starten op 'wat', dus dit kan geen vers signaal wissen. */
+    useEffect(() => { setLiveRollupCents(null); }, [editing]);
     const [gangEditing, setGangEditing] = useState<string | number | null>(null);
     const [gangForm, setGangForm] = useState<Record<string, any>>({});
     const [tagInput, setTagInput] = useState('');
@@ -380,6 +383,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        /q/[id] zichtbaar worden — security/safety issue. */
     async function commitSave(saveData: Record<string, any>) {
         const dbData: Record<string, any> = Object.assign({}, saveData);
+        /* Server-beheerde kolommen nooit meesturen: total_cost_cents wordt door de
+           componenten-trigger gezet (kolom-comment: "geen handmatige updates").
+           Vangnet voor élk pad dat een gerecht-object in het formulier spreidt. */
+        delete dbData.total_cost_cents;
+        delete dbData.created_at;
+        delete dbData.updated_at;
         if (editing === 'new') {
             if (!dbData.status) dbData.status = 'actief';
             if (!dbData.bron) dbData.bron = 'manual';
@@ -1067,7 +1076,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         AI Receptuur-Assistent
                                     </div>
                                     <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>
-                                        Geef alleen een naam (bv. &ldquo;Pulled Pork Taco&rdquo;) — AI vult ingrediënten, bereiding, allergenen, kostprijs in. Matcht tegen je voorraad; onbekende producten worden geschat (met foto-fix-knop).
+                                        Geef alleen een naam (bv. &ldquo;Pulled Pork Taco&rdquo;) — AI vult ingrediënten, bereiding, allergenen, kostprijs in. Matcht tegen je voorraad; onbekende producten worden geschat.
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1795,10 +1804,19 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 onEdit={(g) => { setInspectingGerecht(null); editGerecht(g); }}
                 onDuplicate={(g) => {
                     setInspectingGerecht(null);
-                    /* Dupliceer-flow: vul form vanuit g, zet ID op 'new'. */
+                    /* Dupliceer-flow: vul form vanuit g, zet ID op 'new'.
+                       total_cost_cents NIET meekopiëren — die hoort bij de
+                       componenten van het ORIGINEEL en wordt door de DB-trigger
+                       beheerd; meekopiëren geeft de kopie een spook-kostprijs. */
                     setEditing('new');
                     setForm({
-                        ...g,
+                        ...(function () {
+                            const rest = Object.assign({}, g) as Record<string, any>;
+                            delete rest.total_cost_cents;
+                            delete rest.created_at;
+                            delete rest.updated_at;
+                            return rest;
+                        })(),
                         naam: g.naam + ' (kopie)',
                         id: undefined,
                     } as Record<string, any>);

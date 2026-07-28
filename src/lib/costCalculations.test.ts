@@ -128,6 +128,36 @@ describe('calcDishCostPP', () => {
         const cost = calcDishCostPP(gerechten as any, inv as any, 'Yield-test');
         expect(cost).toBeCloseTo(10.26, 1);
     });
+
+    /* Rangorde-canon (lib/gerecht-kosten): ① componenten-rollup > ② voorraad-
+       foodcost > ③ handmatige kostprijs_pp. */
+    it('Path 0: componenten-rollup wint van ingredient_costs én kostprijs_pp', () => {
+        const g = [{
+            naam: 'Rollup-gerecht',
+            total_cost_cents: 36,
+            ingredient_costs: [{ naam: 'Brisket', qty_pp: 0.18, unit: 'kg' }],
+            kostprijs_pp: 9.99,
+        }];
+        expect(calcDishCostPP(g as any, inv as any, 'Rollup-gerecht')).toBeCloseTo(0.36, 2);
+    });
+
+    it('Path 0 wordt overgeslagen bij rollup 0 — valt terug op de ingredient-regels', () => {
+        const g = [{
+            naam: 'Geen-rollup',
+            total_cost_cents: 0,
+            ingredient_costs: [{ naam: 'Coleslaw', qty_pp: 0.10, unit: 'kg' }],
+        }];
+        expect(calcDishCostPP(g as any, inv as any, 'Geen-rollup')).toBeCloseTo(0.42, 2);
+    });
+
+    it('ingredient-regels die €0 opleveren blokkeren het kostprijs_pp-vangnet niet', () => {
+        const g = [{
+            naam: 'Onbekende-producten',
+            ingredient_costs: [{ naam: 'Tofu', qty_pp: 0.2, unit: 'kg' }], // niet in voorraad → €0
+            kostprijs_pp: 4.25,
+        }];
+        expect(calcDishCostPP(g as any, inv as any, 'Onbekende-producten')).toBeCloseTo(4.25, 2);
+    });
 });
 
 describe('calcOfferteMarge', () => {

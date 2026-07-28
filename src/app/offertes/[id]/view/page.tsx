@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
+import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
 import '@/components/redesign/redesign.css';
@@ -399,7 +400,15 @@ export default function OfferteViewPage() {
     if (!g) return 0;
     let ingredients: any = g.ingredient_costs;
     if (typeof ingredients === 'string') { try { ingredients = JSON.parse(ingredients); } catch { ingredients = []; } }
-    const normalized = [{ naam: gerechtNaam, ingredient_costs: Array.isArray(ingredients) ? ingredients : [] }];
+    /* Geef ALLE kostprijs-bronnen door — anders ziet de gedeelde calculator de
+       componenten-rollup nooit en toont dit scherm €0 voor gerechten die hun
+       kostprijs uit componenten halen (terwijl de offerte-lijst wél rekent). */
+    const normalized = [{
+      naam: gerechtNaam,
+      ingredient_costs: Array.isArray(ingredients) ? ingredients : [],
+      total_cost_cents: g.total_cost_cents ?? null,
+      kostprijs_pp: Number(g.kostprijs_pp) || 0,
+    }];
     return sharedCalcDishCostPP(normalized as any, inventory as any, gerechtNaam);
   }
 
@@ -443,7 +452,10 @@ export default function OfferteViewPage() {
         if (!sel) continue;
         const name = sel.gerecht_naam || sel.naam || '';
         const g = gerechten.find((x: any) => x.naam === name);
-        if (!g || !g.ingredient_costs || (Array.isArray(g.ingredient_costs) && g.ingredient_costs.length === 0)) {
+        /* Beoordeel via de kostprijs-canon, niet via ingredient_costs alleen:
+           een gerecht met componenten-rollup heeft een prima kostprijs zonder
+           die (inmiddels afgeschafte) losse ingrediënt-regels. */
+        if (!g || kostprijsBron(g, 0) === 'geen') {
           allGerechtenHaveCosts = false;
         }
         foodcostPP += calcDishCostPP(name);
@@ -455,7 +467,7 @@ export default function OfferteViewPage() {
       return {
         totalCost: 0,
         available: false as const,
-        reason: 'De gekoppelde gerechten missen ingredient_costs. Voeg ingrediënten-kosten toe per gerecht voor een echte marge-berekening.',
+        reason: 'Eén of meer gerechten hebben nog geen kostprijs. Koppel componenten aan het gerecht, of vul een kostprijs p.p. in.',
         itemCosts: new Map<number, number>(),
       };
     }
