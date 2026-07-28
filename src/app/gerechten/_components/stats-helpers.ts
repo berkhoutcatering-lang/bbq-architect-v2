@@ -1,5 +1,6 @@
 /** Helpers om de stats voor de Gerechten-page hero uit ruwe gerechten-rijen te berekenen. */
 import { MENU_PRICE_REF } from '@/lib/menuMargin';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
 interface GerechtRow {
   id: number;
@@ -23,6 +24,8 @@ interface GerechtRow {
   target_prep_time?: number; // seconds
   beschrijving?: string;
   ingredient_costs?: unknown;
+  /** Componenten-rollup (DB-trigger). Wint boven kostprijs_pp — zie lib/gerecht-kosten.ts. */
+  total_cost_cents?: number | null;
 }
 
 /** Echte verkoopprijs lezen: verkoopprijs > prijs > extra. GEEN verzonnen prijs
@@ -40,7 +43,9 @@ export function schatVerkoop(g: GerechtRow): number {
  *  niet een verzonnen prijs). */
 export function schatMarge(g: GerechtRow): number {
   if (g.marge_pct && g.marge_pct > 0) return g.marge_pct;
-  const k = g.kostprijs_pp || 0;
+  /* Componenten-rollup wint — anders vielen gerechten die hun kostprijs uit
+     componenten halen stil uit de gemiddelde-marge-tegel. */
+  const k = effectieveKostprijsPP(g);
   if (k <= 0) return 0;
   const own = schatVerkoop(g);
   const ref = own > 0 ? own : MENU_PRICE_REF;

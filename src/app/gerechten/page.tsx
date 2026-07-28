@@ -12,17 +12,17 @@ export const dynamic = 'force-dynamic';
 export default async function GerechtenPage() {
     const supabase = await createServerSupabase();
 
-    const [gangenRes, gerechtenRes, inventoryRes, templatesRes] = await Promise.all([
+    /* Inventory-prefetch (2000 rijen) is vervallen met de oude kostprijs-invoer:
+       kostprijs komt nu uit componenten, niet uit losse voorraad-regels. */
+    const [gangenRes, gerechtenRes, templatesRes] = await Promise.all([
         supabase.from('gangen').select('*').order('volgorde').limit(50),
         supabase.from('gerechten').select('*').order('volgorde').limit(1000),
-        supabase.from('inventory').select('*').order('naam').limit(2000),
         supabase.from('menu_templates').select('*').limit(100),
     ]);
 
     const initial: GerechtenInitial = {
         gangen: gangenRes.data ?? [],
         gerechten: gerechtenRes.data ?? [],
-        inventory: inventoryRes.data ?? [],
         menuTemplates: templatesRes.data ?? [],
     };
 

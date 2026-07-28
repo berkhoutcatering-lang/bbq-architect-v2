@@ -59,6 +59,10 @@ export default function GerechtenBouwEditor({
   const [rows, setRows] = useState<GerechtComponentRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(false);
   const [rowsError, setRowsError] = useState<string>('');
+  /* Pas een bedrag naar buiten melden als er écht geladen is. Anders meldt dit
+     blok €0 vóór de fetch (en na een laadfout), en neemt de ouder die 0 over
+     als waarheid — waardoor een gerecht mét componenten kortstondig €0 toont. */
+  const [loaded, setLoaded] = useState(false);
 
   const [options, setOptions] = useState<ComponentOption[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -81,12 +85,13 @@ export default function GerechtenBouwEditor({
   );
 
   useEffect(() => {
-    if (onCostChange) onCostChange(totalCents);
-  }, [totalCents, onCostChange]);
+    if (loaded && onCostChange) onCostChange(totalCents);
+  }, [loaded, totalCents, onCostChange]);
 
   const loadRows = useCallback(async () => {
     if (!gerechtId) {
       setRows([]);
+      setLoaded(false);
       return;
     }
     setRowsLoading(true);
@@ -96,9 +101,11 @@ export default function GerechtenBouwEditor({
       if (!res.ok) throw new Error(`Kon componenten niet laden (${res.status})`);
       const data = (await res.json()) as { items?: GerechtComponentRow[] };
       setRows(Array.isArray(data.items) ? data.items : []);
+      setLoaded(true);
     } catch (err) {
       setRowsError(err instanceof Error ? err.message : 'Onbekende fout bij laden');
-      setRows([]);
+      /* rows NIET wissen en loaded niet op true: een mislukte refetch mag een
+         eerder geladen totaal niet naar €0 trekken. De foutmelding informeert. */
     } finally {
       setRowsLoading(false);
     }
