@@ -861,6 +861,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                     conceptCount={kpiData.conceptCount}
                     gemVerkoop={kpiData.gemVerkoop}
                     gemMargePct={kpiData.gemMargePct}
+                    margeBasis={kpiData.margeBasis}
                     allergenenGedekt={kpiData.allergenenGedekt}
                     totaalGerechten={kpiData.totaalGerechten}
                 />

@@ -8,6 +8,7 @@ interface Props {
   conceptCount: number;
   gemVerkoop: number; // €
   gemMargePct: number; // 0-100
+  margeBasis?: number; // over hoeveel gerechten dat gemiddelde is gerekend
   allergenenGedekt: number; // # gerechten met allergenen ingevuld
   totaalGerechten: number; // noemer voor x/y
 }
@@ -17,6 +18,7 @@ export default function GerechtenKpiTiles({
   conceptCount,
   gemVerkoop,
   gemMargePct,
+  margeBasis = 0,
   allergenenGedekt,
   totaalGerechten,
 }: Props) {
@@ -50,7 +52,11 @@ export default function GerechtenKpiTiles({
     {
       label: 'Gem. brutomarge',
       value: gemMargePct > 0 ? `${Math.round(gemMargePct)}%` : '—',
-      sub: 'op gerechten met prijs',
+      /* Noemer altijd tonen: een gemiddelde over 1 van de 13 gerechten mag
+         nooit als portefeuille-cijfer gelezen worden. */
+      sub: margeBasis > 0
+        ? `op ${margeBasis} van ${totaalGerechten} met eigen prijs`
+        : 'nog geen gerecht met eigen prijs',
       Icon: TrendingUp,
       tone: 'green' as const,
       href: null as string | null,

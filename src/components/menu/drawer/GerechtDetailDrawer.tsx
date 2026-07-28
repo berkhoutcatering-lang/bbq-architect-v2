@@ -102,13 +102,13 @@ export function GerechtDetailDrawer({
         { id: 'service',    label: 'Service',    Icon: UtensilsCrossed },
     ];
 
-    const defaultAiActions: AiAction[] = [
-        { icon: Sparkles,   label: 'Vul aan met AI',  desc: 'Receptuur aanvullen' },
-        { icon: Flame,      label: 'Vraag Rook',      desc: 'AI Pitmaster advies' },
-        { icon: Calculator, label: 'Fix kostprijs',   desc: 'Kostprijs optimaliseren' },
-        { icon: Zap,        label: 'Verfijn recept',  desc: 'AI verbetert receptuur' },
-    ];
-    const rail = aiActions ?? defaultAiActions;
+    /* GEEN demo-acties meer. Deze rail toonde vier knoppen (Vul aan met AI /
+       Vraag Rook / Fix kostprijs / Verfijn recept) zonder onClick: ze zagen er
+       klikbaar uit maar deden niets — geen request, geen foutmelding. Alleen
+       tonen wat de ouder daadwerkelijk bedraadt (Sam: licht geen lege functie uit).
+       'Vul aan met AI' en 'Verfijn recept' bestaan al werkend in het bewerk-scherm;
+       'Vraag Rook' zit in ⌘K en de FAB. */
+    const rail = aiActions ?? [];
 
     const drawerWidth = isMobile ? '100%' : '60%';
 
@@ -222,7 +222,7 @@ export function GerechtDetailDrawer({
                     </div>
 
                     {/* AI Rail (desktop sticky / mobile bottom-sheet) */}
-                    {!isMobile ? (
+                    {!isMobile && rail.length > 0 ? (
                         <div className="mr-ai-rail">
                             <MREyebrow style={{ marginBottom: 12, padding: '0 4px' }}>AI Acties</MREyebrow>
                             {rail.map((a, i) => {
