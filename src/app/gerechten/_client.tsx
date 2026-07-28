@@ -10,7 +10,6 @@ import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { useFormValidation } from '@/hooks/useFormValidation';
-import { getInvPrice as sharedGetInvPrice } from '@/lib/costCalculations';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import PageHeader from '@/components/PageHeader';
@@ -20,7 +19,6 @@ import { LoadingState } from '@/components/LoadingState';
 import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
-import InventoryAutocomplete, { type InventoryRow } from '@/components/InventoryAutocomplete';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { createComponentFromMatchAction } from '@/app/gerechten/componenten/actions';
 import EstimatedPriceFixButton, { type FixResult } from '@/components/EstimatedPriceFixButton';
@@ -79,7 +77,6 @@ import type { InventoryItem, Gang, Gerecht, MenuTemplateRow } from '@/types';
 export interface GerechtenInitial {
     gangen?: Gang[];
     gerechten?: Gerecht[];
-    inventory?: InventoryItem[];
     menuTemplates?: MenuTemplateRow[];
 }
 
@@ -91,7 +88,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
         naam: [{ required: 'Vul een naam in' }],
     });
-    const { data: inventoryData, insert: insertInventory, refetch: refetchInventory } = useSupabase<InventoryItem>('inventory', initial?.inventory ?? []);
     const [gangen, setGangen] = useState<Gang[]>(initial?.gangen ?? []);
     const [gerechten, setGerechten] = useState<Gerecht[]>(initial?.gerechten ?? []);
     const [activeGang, setActiveGang] = useState<string | null>(null);
@@ -116,7 +112,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [aiFotoOpen, setAiFotoOpen] = useState(false);
     const [stats, setStats] = useState<Record<string, any> | null>(null);
     const [hwInput, setHwInput] = useState<Record<string, any>>({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
-    const [costInput, setCostInput] = useState<Record<string, any>>({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
     const [dataLoading, setDataLoading] = useState(true);
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
@@ -140,7 +135,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [inspectingGerecht, setInspectingGerecht] = useState<Gerecht | null>(null);
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [bedenkerOpen, setBedenkerOpen] = useState(false);
-    const [savingCompIdx, setSavingCompIdx] = useState<number | null>(null);
     const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
     /* AI-allergeen-detectie bij opslaan: standaard aan, maar Sam wil de keuze.
        aiSaving = spinner-state tijdens de (trage) AI-call. */
@@ -154,7 +148,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const serviceImageRef = useRef<HTMLInputElement>(null);
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
     const HW_CATS = ['servies', 'apparatuur', 'branding', 'meubilair'];
-    const COST_UNITS = ['kg', 'g', 'L', 'ml', 'stuks'];
 
     useEffect(function () { loadData().finally(function () { setDataLoading(false); }); }, []);
 
@@ -275,7 +268,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
-        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
         setStats(null);
     }
     async function editGerecht(g) {
@@ -314,7 +306,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         });
         setTagInput(''); setAllergeenInput(''); setLabelInput(''); setBattleInput('');
         setHwInput({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
-        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0 });
         loadStats(g.naam);
     }
 
@@ -560,25 +551,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setForm(Object.assign({}, form, { ingredienten_winkels: winkels }));
     }
 
-    function addCostItem() {
-        if (!costInput.naam.trim()) return;
-        const items = (form.ingredient_costs || []).concat([Object.assign({}, costInput, {
-            naam: costInput.naam.trim(),
-            qty_pp: parseFloat(costInput.qty_pp) || 0,
-            yield: parseFloat(costInput.yield) || 1.0,
-            inventory_id: costInput.inventory_id || null,
-        })]);
-        setForm(Object.assign({}, form, { ingredient_costs: items }));
-        setCostInput({ naam: '', qty_pp: '', unit: 'kg', yield: 1.0, inventory_id: null });
-    }
-    function pickFromInventory(naam: string, inv?: InventoryRow) {
-        setCostInput((c) => Object.assign({}, c, {
-            naam,
-            inventory_id: inv?.id ?? null,
-            // Als gebruiker geen eenheid heeft gekozen, pak die van het voorraad-item
-            unit: c.unit === 'kg' && inv?.unit ? inv.unit : c.unit,
-        }));
-    }
 
     function applyAiFill(data: AiFillResult, meta: AiFillMeta) {
         /* Gang auto-invullen uit AI-suggestie (alleen vision-pad geeft gangcategorie).
@@ -626,33 +598,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* "Maak component van dit Bidfood-product" — bewaart een leverancier-match
        als herbruikbare bought_in-component, zodat het ingrediënt de volgende
        keer meteen in je bibliotheek staat. De chip flipt daarna naar bibliotheek. */
-    async function makeComponentFromMatch(idx: number) {
-        const item = (form.ingredient_costs || [])[idx];
-        const m = item?.match;
-        if (!m || m.source !== 'supplier' || typeof m.cents_per_base_unit !== 'number') return;
-        setSavingCompIdx(idx);
-        try {
-            const res = await createComponentFromMatchAction({
-                name: m.name,
-                cents_per_base_unit: m.cents_per_base_unit,
-                base_unit: m.base_unit,
-                supplier: m.supplier ?? null,
-            });
-            if ('error' in res) { showToast(res.error, 'error'); return; }
-            setForm((f: any) => {
-                const items = (f.ingredient_costs || []).slice();
-                if (items[idx]?.match) {
-                    items[idx] = { ...items[idx], match: { ...items[idx].match, source: 'component', ref_id: res.data.id, supplier: null } };
-                }
-                return Object.assign({}, f, { ingredient_costs: items });
-            });
-            showToast(`"${m.name}" opgeslagen in je bibliotheek`, 'success');
-        } catch {
-            showToast('Component opslaan mislukt', 'error');
-        } finally {
-            setSavingCompIdx(null);
-        }
-    }
 
     async function applyFineTune(tune: FineTune) {
         if (tune.type === 'add_ingredient') {
@@ -770,70 +715,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         service_tip: form.service_tip,
     };
 
-    async function applyEstimateFix(idx: number, fix: FixResult) {
-        let newInventoryId: number | null = null;
-
-        if (fix.addToInventory) {
-            try {
-                const existing = (inventoryData || []).find((i) =>
-                    (i.naam || '').toLowerCase().trim() === fix.naam.toLowerCase().trim()
-                );
-                if (existing) {
-                    newInventoryId = existing.id;
-                } else {
-                    const created = await insertInventory({
-                        naam: fix.naam,
-                        unit: fix.unit,
-                        purchase_price: fix.price,
-                        last_price_eur: fix.price,
-                        last_price_at: new Date().toISOString(),
-                        current_stock: 0,
-                        min_stock: 0,
-                        par_level: 0,
-                        categorie: 'Overig',
-                        supplier: fix.supplier || '',
-                    } as any);
-                    newInventoryId = (created as any)?.id ?? null;
-                    void refetchInventory();
-                }
-            } catch (e) {
-                console.warn('[applyEstimateFix] inventory add faalde:', (e as Error).message);
-            }
-        }
-
-        setForm((f: any) => {
-            const items = (f.ingredient_costs || []).slice();
-            if (!items[idx]) return f;
-            items[idx] = Object.assign({}, items[idx], {
-                naam: fix.naam,
-                unit: fix.unit,
-                inventory_id: newInventoryId ?? items[idx].inventory_id ?? null,
-                is_estimated: false,
-                estimated_price: null,
-            });
-            return Object.assign({}, f, { ingredient_costs: items });
-        });
-    }
-    function removeCostItem(idx: number) {
-        const items = (form.ingredient_costs || []).slice();
-        items.splice(idx, 1);
-        setForm(Object.assign({}, form, { ingredient_costs: items }));
-    }
-    function calcCostPP(item: any) {
-        // Foto-flow: de matcher heeft de regel-kostprijs al code-afgeleid uit de
-        // echte catalogus-rij (component/voorraad/Bidfood) → gebruik die direct.
-        if (item.match && typeof item.match.line_cost_cents === 'number') {
-            return item.match.line_cost_cents / 100;
-        }
-        const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
-        const price = inv ? inv.price : 0;
-        const yld = item.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
-        let unitFactor = 1;
-        if (item.unit === 'g' && inv && inv.unit === 'kg') unitFactor = 0.001;
-        if (item.unit === 'ml' && inv && inv.unit === 'L') unitFactor = 0.001;
-        return ((item.qty_pp || 0) * unitFactor / yld) * price;
-    }
-    const totalFoodcostPP = (form.ingredient_costs || []).reduce(function (sum: number, item: any) { return sum + calcCostPP(item); }, 0);
 
     function formatTime(seconds: number) {
         const m = Math.floor(seconds / 60);
@@ -1502,160 +1383,31 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                             )}
 
-                            <div style={{ borderTop: '1px solid rgba(180,140,20,.15)', paddingTop: 14, marginTop: 4 }}>
-                                <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 12 }}>
-                                    Kostprijsberekening
-                                </div>
-
-                                {(form.ingredient_costs || []).length > 0 && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                            {/* Oude kostprijsberekening — ALLEEN-LEZEN (2026-07-27).
+                                Componenten hierboven zijn voortaan de enige plek waar je
+                                kosten opbouwt. Dit blok toont alleen nog wat er historisch
+                                in staat, zodat bestaande data niet stil verdwijnt. */}
+                            {(form.ingredient_costs || []).length > 0 && (
+                                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+                                        Oude kostprijsberekening (alleen lezen)
+                                    </div>
+                                    <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+                                        Hier staan nog {(form.ingredient_costs || []).length} regels uit de oude manier van rekenen.
+                                        Ze tellen alleen mee zolang dit gerecht géén componenten heeft. Bouw het hierboven
+                                        opnieuw op met componenten — dan is er nog maar één kostprijs.
+                                    </p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                         {(form.ingredient_costs || []).map(function (item: any, idx: number) {
-                                            const inv = sharedGetInvPrice(inventoryData as any, item.naam, item.inventory_id);
-                                            const costPP = calcCostPP(item);
-                                            const isEstimated = !!item.is_estimated && !inv;
-                                            const estPrice = Number(item.estimated_price);
                                             return (
-                                                <div key={idx} className="ingredient-cost-row">
-                                                    <div className="ingredient-cost-info">
-                                                        <span className="ingredient-cost-name">{item.naam}</span>
-                                                        {item.match && item.match.line_cost_cents != null ? (
-                                                            <span style={{
-                                                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                                                padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                                                                letterSpacing: '.06em', textTransform: 'uppercase',
-                                                                color: '#22c55e', background: 'rgba(34,197,94,.10)',
-                                                                border: '1px solid rgba(34,197,94,.30)', borderRadius: 5,
-                                                            }}>
-                                                                <Link size={12} />
-                                                                {item.match.source === 'supplier'
-                                                                    ? (item.match.supplier || 'Leverancier')
-                                                                    : item.match.source === 'component' ? 'Bibliotheek' : 'Voorraad'}
-                                                                <span style={{ opacity: 0.7, fontWeight: 500, textTransform: 'none', letterSpacing: 'normal' }}>
-                                                                    · {String(item.match.name).length > 24 ? String(item.match.name).slice(0, 24) + '…' : item.match.name}
-                                                                </span>
-                                                                {item.match.confidence === 'laag' && (
-                                                                    <span style={{ color: '#f59e0b', fontWeight: 800 }} title="Lage zekerheid — check de koppeling even">?</span>
-                                                                )}
-                                                            </span>
-                                                        ) : inv ? (
-                                                            <span className="ingredient-cost-linked"><Link size={14} /> {formatEur(inv.price)}/{inv.unit}</span>
-                                                        ) : isEstimated ? (
-                                                            <span style={{
-                                                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                                padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                                                                letterSpacing: '.1em', textTransform: 'uppercase',
-                                                                color: '#f59e0b', background: 'rgba(245,158,11,.10)',
-                                                                border: '1px solid rgba(245,158,11,.35)', borderRadius: 5,
-                                                            }}>
-                                                                <Sparkles size={11} /> Geschat
-                                                                {Number.isFinite(estPrice) && estPrice > 0 && (
-                                                                    <span style={{ marginLeft: 4, fontWeight: 600, textTransform: 'none', letterSpacing: 'normal' }}>
-                                                                        {formatEur(estPrice)}/{item.unit}
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="ingredient-cost-unlinked"><Unlink size={14} /> niet in voorraad</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="ingredient-cost-details">
-                                                        <span className="ingredient-cost-chip">{item.qty_pp} {item.unit}/gast</span>
-                                                        {item.yield && item.yield < 1 && <span className="ingredient-cost-chip">yield {(item.yield * 100).toFixed(0)}%</span>}
-                                                        {isEstimated && Number.isFinite(estPrice) && estPrice > 0 && (
-                                                            <span className={'ingredient-cost-price'} title="Op basis van schatting">
-                                                                ~{formatEur((item.qty_pp || 0) * estPrice / (item.yield || 1))}
-                                                            </span>
-                                                        )}
-                                                        {!isEstimated && (
-                                                            <span className={'ingredient-cost-price' + (costPP > 0 ? '' : ' empty')}>{formatEur(costPP)}</span>
-                                                        )}
-                                                        {item.match && item.match.source === 'supplier' && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={function () { makeComponentFromMatch(idx); }}
-                                                                disabled={savingCompIdx === idx}
-                                                                title="Bewaar dit leverancier-product als herbruikbare component in je bibliotheek"
-                                                                style={{
-                                                                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                                                                    padding: '2px 8px', fontSize: 10, fontWeight: 700,
-                                                                    color: 'var(--brand)', background: 'transparent',
-                                                                    border: '1px solid var(--brand)', borderRadius: 5,
-                                                                    cursor: savingCompIdx === idx ? 'default' : 'pointer',
-                                                                    opacity: savingCompIdx === idx ? 0.5 : 1,
-                                                                }}
-                                                            >
-                                                                <Plus size={11} /> {savingCompIdx === idx ? 'Bezig…' : 'Bewaar'}
-                                                            </button>
-                                                        )}
-                                                        {isEstimated && (
-                                                            <EstimatedPriceFixButton
-                                                                ingredientName={item.naam}
-                                                                ingredientUnit={item.unit || 'kg'}
-                                                                estimatedPrice={Number.isFinite(estPrice) ? estPrice : null}
-                                                                onResult={(fix) => applyEstimateFix(idx, fix)}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                    <button type="button" className="tag-remove" onClick={function () { removeCostItem(idx); }}>×</button>
-                                                </div>
+                                                <span key={idx} style={{ fontSize: 11, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 9px' }}>
+                                                    {item.naam}{item.qty_pp ? ' \u00b7 ' + item.qty_pp + (item.unit || '') : ''}
+                                                </span>
                                             );
                                         })}
-
-                                        <div className="ingredient-cost-total">
-                                            <span>Totale Foodcost p.p.</span>
-                                            <span className="ingredient-cost-total-value">{formatEur(totalFoodcostPP)}</span>
-                                        </div>
-
-                                        {/* Hint: foodcost blijft €0 zolang AI-geschatte ingrediënten geen
-                                            voorraad-koppeling (en dus prijs) hebben. Compliance: AI verzint
-                                            geen euro's — koppel aan voorraad of vul handmatig een prijs in. */}
-                                        {totalFoodcostPP === 0 && (form.ingredient_costs || []).some((i: any) => i.is_estimated) && (
-                                            <div style={{
-                                                marginTop: 8, padding: '8px 12px', borderRadius: 8,
-                                                background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.25)',
-                                                fontSize: 12, color: 'var(--muted)', lineHeight: 1.45,
-                                            }}>
-                                                💡 Foodcost is €0 omdat de AI-geschatte ingrediënten nog geen prijs hebben.
-                                                Klik op een <strong style={{ color: 'var(--color-accent-gold)' }}>📷 GESCHAT</strong>-ingrediënt
-                                                om 'm aan je voorraad te koppelen, of vul handmatig een kostprijs in.
-                                            </div>
-                                        )}
                                     </div>
-                                )}
-
-                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                    <div className="field" style={{ flex: 2, minWidth: 160 }}>
-                                        <label>Ingrediënt</label>
-                                        <InventoryAutocomplete
-                                            inventory={inventoryData as unknown as InventoryRow[]}
-                                            value={costInput.naam}
-                                            onChange={pickFromInventory}
-                                            onCommit={addCostItem}
-                                            placeholder="Tik 3+ letters, bv. 'ker' voor kerrie…"
-                                        />
-                                    </div>
-                                    <div className="field" style={{ minWidth: 70, flex: '0 1 80px' }}>
-                                        <label>Qty p.p.</label>
-                                        <input type="number" step="0.01" min="0" value={costInput.qty_pp}
-                                            onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCostInput(Object.assign({}, costInput, { qty_pp: e.target.value })); }}
-                                            placeholder="0.08" style={{ fontSize: 12, padding: '7px 10px' }} />
-                                    </div>
-                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
-                                        <label>Eenheid</label>
-                                        <select value={costInput.unit} onChange={function (e: React.ChangeEvent<HTMLSelectElement>) { setCostInput(Object.assign({}, costInput, { unit: e.target.value })); }}
-                                            style={{ fontSize: 12, padding: '7px 6px' }}>
-                                            {COST_UNITS.map(function (u) { return <option key={u} value={u}>{u}</option>; })}
-                                        </select>
-                                    </div>
-                                    <div className="field" style={{ minWidth: 60, flex: '0 1 70px' }}>
-                                        <label>Yield</label>
-                                        <input type="number" step="0.05" min="0.1" max="1" value={costInput.yield}
-                                            onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setCostInput(Object.assign({}, costInput, { yield: parseFloat(e.target.value) || 1.0 })); }}
-                                            style={{ fontSize: 12, padding: '7px 10px' }} />
-                                    </div>
-                                    <button type="button" className="btn btn-brand btn-sm" onClick={addCostItem} style={{ height: 34 }}>+</button>
                                 </div>
-                            </div>
+                            )}
                                 </>)}
 
                                 {editTab === 'compliance' && (<>
@@ -1712,22 +1464,37 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
                                 {editTab === 'bouw' && (<>
                             <div className="form-grid">
-                                <div className="field">
-                                    <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optioneel)</span></label>
-                                    <input type="number" step="0.01" value={form.kostprijs_pp || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} placeholder="€0.00" />
-                                    {(function () {
-                                        /* Eén kostprijs-waarheid: als dit gerecht componenten heeft,
-                                           rolt de kostprijs dáár vandaan en wint die overal. */
-                                        const huidig = editing && editing !== 'new' ? gerechten.find(function (x) { return x.id === editing; }) : null;
-                                        const rollupCents = Number((huidig as { total_cost_cents?: number | null } | null)?.total_cost_cents || 0);
-                                        if (rollupCents <= 0) return null;
+                                {(function () {
+                                    /* Eén kostprijs-waarheid. Heeft dit gerecht componenten, dan
+                                       rolt de kostprijs dáár uit op en tonen we 'm alleen — geen
+                                       tweede invulveld ernaast (dat waren de "twee werelden").
+                                       Zonder componenten blijft het handmatige veld het vangnet. */
+                                    const huidig = editing && editing !== 'new' ? gerechten.find(function (x) { return x.id === editing; }) : null;
+                                    const rollupCents = liveRollupCents
+                                        ?? Number((huidig as { total_cost_cents?: number | null } | null)?.total_cost_cents || 0);
+                                    if (rollupCents > 0) {
                                         return (
-                                            <div style={{ fontSize: 11.5, color: 'var(--brand)', marginTop: 4 }}>
-                                                Rolt op uit componenten: {formatEur(rollupCents / 100)} p.p. — lijsten en analyses gebruiken dát bedrag.
+                                            <div className="field">
+                                                <label>Kostprijs p.p.</label>
+                                                <div style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums', padding: '6px 0 2px' }}>
+                                                    {formatEur(rollupCents / 100)}
+                                                </div>
+                                                <div style={{ fontSize: 11.5, color: 'var(--brand)' }}>
+                                                    Rolt automatisch op uit je componenten hierboven.
+                                                </div>
                                             </div>
                                         );
-                                    })()}
-                                </div>
+                                    }
+                                    return (
+                                        <div className="field">
+                                            <label>Kostprijs p.p. <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(nog geen componenten)</span></label>
+                                            <input type="number" step="0.01" value={form.kostprijs_pp || ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { kostprijs_pp: e.target.value })); }} placeholder="€0.00" />
+                                            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
+                                                Koppel je componenten hierboven, dan rekent de app het zelf uit.
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                                 <div className="field">
                                     <label>Volgorde</label>
                                     <input type="number" value={form.volgorde != null ? form.volgorde : ''} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { setForm(Object.assign({}, form, { volgorde: e.target.value === '' ? '' : parseInt(e.target.value) })); }} />
