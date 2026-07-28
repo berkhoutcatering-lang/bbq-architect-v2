@@ -10,6 +10,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { ChefHat, ChevronDown, ChevronUp, Copy, EyeOff, MoreVertical, Pencil } from 'lucide-react';
 import type { Gerecht, Gang } from '@/types';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
+import { costSharePct, MENU_PRICE_REF } from '@/lib/menuMargin';
 import {
     MRStatusPill, MRCardVisual, MRMarginRing, MRCostBar,
     type GerechtStatus, type MenuViewMode,
@@ -119,11 +120,26 @@ function MRGridCard({ gerecht, gangen, onClick, density, photoMode }: {
             <div className="mr-grid-card-body">
                 <div className="mr-grid-card-name">{gerecht.naam}</div>
                 <div className="mr-grid-card-gang">{gangLabel}</div>
+                {/* Bij een VAST menu verkoop je geen losse gerechten (lib/menuMargin):
+                    de kostprijs is het signaal, het menu is het oordeel. Heeft een
+                    gerecht een eigen verkoopprijs → echte marge. Zo niet → toon de
+                    kostprijs + zijn aandeel in de menu-prijs, nooit een 99%-nepmarge. */}
                 <div className="mr-grid-card-footer">
-                    <span className="mr-grid-card-price">{fmtEuro(price)}</span>
-                    <span className="mr-grid-card-margin" style={{ color: tone.color }}>{margin}%</span>
+                    {price > 0 ? (
+                        <>
+                            <span className="mr-grid-card-price">{fmtEuro(price)}</span>
+                            <span className="mr-grid-card-margin" style={{ color: tone.color }}>{margin}%</span>
+                        </>
+                    ) : (
+                        <>
+                            <span className="mr-grid-card-price">{cost > 0 ? fmtEuro(cost) : '—'}</span>
+                            <span className="mr-grid-card-margin" style={{ color: 'var(--muted)', fontWeight: 500 }}>
+                                {cost > 0 ? `${costSharePct(cost, MENU_PRICE_REF) ?? 0}% van menu` : 'geen kostprijs'}
+                            </span>
+                        </>
+                    )}
                 </div>
-                <MRCostBar cost={cost} price={price} />
+                {price > 0 && <MRCostBar cost={cost} price={price} />}
             </div>
         </div>
     );
@@ -227,9 +243,19 @@ export function MRListView({ gerechten, gangen, onSelect, density = 'comfortable
                         <div style={{ width: 70, fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{g.ingredienten?.length ?? 0}</div>
                         <div style={{ width: 90, fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtEuro(cost)}</div>
                         <div style={{ width: 90, fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>{fmtEuro(price)}</div>
+                        {/* Zonder eigen verkoopprijs is een per-gerecht marge betekenisloos
+                            bij een vast menu — dan tonen we het kostprijs-aandeel als signaal. */}
                         <div style={{ width: 80, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <MRMarginRing pct={margin} size={compact ? 28 : 34} />
-                            <span style={{ fontSize: 12, fontWeight: 600, color: tone.color, fontVariantNumeric: 'tabular-nums' }}>{margin}%</span>
+                            {price > 0 ? (
+                                <>
+                                    <MRMarginRing pct={margin} size={compact ? 28 : 34} />
+                                    <span style={{ fontSize: 12, fontWeight: 600, color: tone.color, fontVariantNumeric: 'tabular-nums' }}>{margin}%</span>
+                                </>
+                            ) : (
+                                <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                    {cost > 0 ? `${costSharePct(cost, MENU_PRICE_REF) ?? 0}% van menu` : '—'}
+                                </span>
+                            )}
                         </div>
                         <div style={{ width: 90, display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
                             <MRStatusPill status={status} />

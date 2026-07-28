@@ -1,5 +1,4 @@
 /** Helpers om de stats voor de Gerechten-page hero uit ruwe gerechten-rijen te berekenen. */
-import { MENU_PRICE_REF } from '@/lib/menuMargin';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
 interface GerechtRow {
@@ -43,13 +42,16 @@ export function schatVerkoop(g: GerechtRow): number {
  *  niet een verzonnen prijs). */
 export function schatMarge(g: GerechtRow): number {
   if (g.marge_pct && g.marge_pct > 0) return g.marge_pct;
-  /* Componenten-rollup wint — anders vielen gerechten die hun kostprijs uit
-     componenten halen stil uit de gemiddelde-marge-tegel. */
+  /* Componenten-rollup wint als kostprijs-bron. */
   const k = effectieveKostprijsPP(g);
   if (k <= 0) return 0;
+  /* GEEN referentie-menuprijs als noemer: bij een vast menu verkoop je geen
+     losse gerechten, dus "marge van dit gerecht" tegen €38,50 levert een
+     nietszeggende 99% op. Alleen een EIGEN verkoopprijs geeft een echte
+     per-gerecht marge; anders telt het gerecht niet mee (zie lib/menuMargin). */
   const own = schatVerkoop(g);
-  const ref = own > 0 ? own : MENU_PRICE_REF;
-  return ((ref - k) / ref) * 100;
+  if (own <= 0) return 0;
+  return ((own - k) / own) * 100;
 }
 
 /** Concept = niet-actief volgens DB-boolean. Status-string blijft fallback. */
@@ -64,6 +66,9 @@ export interface KpiTilesData {
   conceptCount: number;
   gemVerkoop: number;
   gemMargePct: number;
+  /** Over hoeveel gerechten het marge-gemiddelde is gerekend — een gemiddelde
+   *  over een deelverzameling mag nooit als totaalcijfer gelezen worden. */
+  margeBasis: number;
   allergenenGedekt: number;
   totaalGerechten: number;
 }
@@ -83,6 +88,7 @@ export function computeKpiTiles(gerechten: GerechtRow[]): KpiTilesData {
     conceptCount,
     gemVerkoop,
     gemMargePct,
+    margeBasis: margeValues.length,
     allergenenGedekt,
     totaalGerechten,
   };

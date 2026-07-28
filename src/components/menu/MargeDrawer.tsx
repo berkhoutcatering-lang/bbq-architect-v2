@@ -63,7 +63,13 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
 
     const outliers = margins?.dishes.filter(d => d.costOutlier) ?? [];
     const menuBelow = !!margins && margins.hasMenuPrice && margins.menuMargePct != null && margins.menuMargePct < margins.target;
-    const menuColor = !margins?.hasMenuPrice ? 'var(--muted)' : menuBelow ? 'var(--red, #e5484d)' : 'var(--brand)';
+    /* Incomplete dekking = elk gerecht zonder kostprijs telt als €0 en vleit de
+       marge. Dan NIET groen kleuren: het cijfer is nog niet te beoordelen. */
+    const dekkingIncompleet = !!margins && margins.dishesTotaal > 0 && !margins.dekkingCompleet;
+    const ontbrekend = margins ? margins.dishesTotaal - margins.dishesMetKostprijs : 0;
+    const menuColor = !margins?.hasMenuPrice ? 'var(--muted)'
+        : dekkingIncompleet ? 'var(--muted)'
+            : menuBelow ? 'var(--red, #e5484d)' : 'var(--brand)';
 
     return (
         <>
@@ -97,6 +103,11 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                                             ? `€${margins.foodcostPP.toFixed(2)} kostprijs op €${margins.menuPricePP.toFixed(2)} p.p.${margins.foodcostPct != null ? ` · food cost ${margins.foodcostPct.toFixed(0)}%` : ''}`
                                             : 'Stel een menu-prijs (basisprijs p.p.) in om de menu-marge te zien.'}
                                     </div>
+                                    {margins.hasMenuPrice && (
+                                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                                            Gerekend over {margins.dishesMetKostprijs} van de {margins.dishesTotaal} gerechten
+                                        </div>
+                                    )}
                                 </div>
                                 <label style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'right' }}>
                                     Doel-marge
@@ -123,13 +134,22 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                             </button>
                         </div>
 
-                        {menuBelow && (
+                        {dekkingIncompleet && (
+                            <div className="kf-banner kf-banner-warn" style={{ marginBottom: 10 }}>
+                                <AlertTriangle size={14} />
+                                <span>
+                                    <strong>{ontbrekend} van de {margins.dishesTotaal} gerechten</strong> hebben nog geen kostprijs.
+                                    Die tellen nu als €0 mee, dus deze marge is te rooskleurig — vul ze aan voor een echt cijfer.
+                                </span>
+                            </div>
+                        )}
+                        {menuBelow && !dekkingIncompleet && (
                             <div className="kf-banner kf-banner-warn" style={{ marginBottom: 10 }}>
                                 <AlertTriangle size={14} />
                                 <span>Menu-marge <strong>{margins.menuMargePct?.toFixed(0)}%</strong> ligt onder je doel van {margins.target}%.</span>
                             </div>
                         )}
-                        {!menuBelow && outliers.length > 0 && (
+                        {!menuBelow && !dekkingIncompleet && outliers.length > 0 && (
                             <div className="kf-banner" style={{ marginBottom: 10, color: 'var(--muted)', fontSize: 12 }}>
                                 <span><strong>{outliers.length}</strong> gerecht{outliers.length === 1 ? '' : 'en'} weegt zwaar op dit menu — maar het menu-totaal telt, niet het losse gerecht.</span>
                             </div>
@@ -143,16 +163,18 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                                 <div
                                     key={d.gerecht_id}
                                     className="flex items-center justify-between"
-                                    style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: d.costOutlier ? 'var(--amber-bg, rgba(245,158,11,.08))' : 'transparent' }}
+                                    style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', background: !d.heeftKostprijs ? 'rgba(245,158,11,.06)' : d.costOutlier ? 'var(--amber-bg, rgba(245,158,11,.08))' : 'transparent' }}
                                 >
                                     <div style={{ minWidth: 0 }}>
                                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.naam}</div>
-                                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                                            kost €{d.kostPP.toFixed(2)}{d.costSharePct != null ? ` · ${d.costSharePct.toFixed(0)}% van menu` : ''}
+                                        <div style={{ fontSize: 11, color: d.heeftKostprijs ? 'var(--muted)' : 'var(--amber, #f59e0b)' }}>
+                                            {d.heeftKostprijs
+                                                ? `kost €${d.kostPP.toFixed(2)}${d.costSharePct != null ? ` · ${d.costSharePct.toFixed(0)}% van menu` : ''}`
+                                                : 'nog geen kostprijs — koppel componenten aan dit gerecht'}
                                         </div>
                                     </div>
-                                    <div style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, color: d.costOutlier ? 'var(--amber, #f59e0b)' : 'var(--muted)' }}>
-                                        {d.costOutlier ? 'zwaar' : (d.costSharePct != null ? `${d.costSharePct.toFixed(0)}%` : `€${d.kostPP.toFixed(2)}`)}
+                                    <div style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, color: !d.heeftKostprijs ? 'var(--amber, #f59e0b)' : d.costOutlier ? 'var(--amber, #f59e0b)' : 'var(--muted)' }}>
+                                        {!d.heeftKostprijs ? '—' : d.costOutlier ? 'zwaar' : (d.costSharePct != null ? `${d.costSharePct.toFixed(0)}%` : `€${d.kostPP.toFixed(2)}`)}
                                     </div>
                                 </div>
                             ))}

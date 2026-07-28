@@ -14,7 +14,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
+import { effectieveKostprijsPP, kostprijsBron } from '@/lib/gerecht-kosten';
 import { computeMenuMargin, costSharePct, isCostOutlier } from '@/lib/menuMargin';
 
 export interface MenuTemplateShallow {
@@ -194,6 +194,10 @@ export interface MenuMarginDish {
     naam: string;
     gang_slug: string | null;
     kostPP: number;
+    /** false = dit gerecht heeft nog GEEN kostprijs. Cruciaal onderscheid:
+     *  "kost niets" en "we weten het niet" zijn allebei 0 — zonder deze vlag
+     *  telt een niet-ingevuld gerecht als gratis en vleit het de menu-marge. */
+    heeftKostprijs: boolean;
     costSharePct: number | null;   // aandeel van dit gerecht in de menu-prijs
     costOutlier: boolean;          // weegt onevenredig zwaar (signaal, geen oordeel)
     // Legacy (per-gerecht eigen verkoopprijs) — behouden voor terugval:
@@ -212,6 +216,11 @@ export interface MenuMargins {
     foodcostPct: number | null;
     menuOnTarget: boolean;
     target: number;                // doel-marge %
+    /** Dekking: over hoeveel van de gerechten de foodcost écht bekend is.
+     *  Is dit < aantal gerechten, dan is de menu-marge te rooskleurig. */
+    dishesMetKostprijs: number;
+    dishesTotaal: number;
+    dekkingCompleet: boolean;
     // Legacy: geld-gewogen per-gerecht marge (terugval).
     blendedPct: number | null;
     missingPrice: string[];        // gerecht-namen zonder eigen verkoopprijs
@@ -249,7 +258,9 @@ export async function getMenuTemplateMargins(
     for (const row of (data ?? []) as any[]) {
         const g = row.gerecht;
         if (!g) continue;
-        const kostPP = effectieveKostprijsPP({ total_cost_cents: g.total_cost_cents, kostprijs_pp: g.kostprijs_pp });
+        const kostBron = { total_cost_cents: g.total_cost_cents, kostprijs_pp: g.kostprijs_pp };
+        const kostPP = effectieveKostprijsPP(kostBron);
+        const heeftKostprijs = kostprijsBron(kostBron) !== 'geen';
         const verkoop = Number(g.verkoopprijs) || 0;
         const margePct = verkoop > 0 ? ((verkoop - kostPP) / verkoop) * 100 : null;
         if (verkoop <= 0) {
@@ -263,6 +274,7 @@ export async function getMenuTemplateMargins(
             naam: g.naam,
             gang_slug: g.gang_slug ?? row.gang_slug ?? null,
             kostPP,
+            heeftKostprijs,
             costSharePct: costSharePct(kostPP, menuPricePP),
             costOutlier: isCostOutlier(kostPP, menuPricePP),
             verkoop,
@@ -282,6 +294,9 @@ export async function getMenuTemplateMargins(
         foodcostPct: menu.foodcostPct,
         menuOnTarget: menu.onTarget,
         target,
+        dishesMetKostprijs: dishes.filter((d) => d.heeftKostprijs).length,
+        dishesTotaal: dishes.length,
+        dekkingCompleet: dishes.length > 0 && dishes.every((d) => d.heeftKostprijs),
         blendedPct: sumVerkoop > 0 ? (sumWinst / sumVerkoop) * 100 : null,
         missingPrice,
     };
