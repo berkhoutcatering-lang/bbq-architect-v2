@@ -47,6 +47,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { GANG_VISUALS, getGangKey, fmtEuro } from './helpers';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { upsertMenuTemplate, deleteMenuTemplate } from '@/app/menu-templates/actions';
 import type { MenuTemplateWithItems, MenuTemplateGerechtRef } from '@/lib/dal/menuTemplates';
 import type { Gerecht, Gang } from '@/types';
@@ -769,6 +770,12 @@ function SortablePill({ item, gerecht, gangen, currentGangSlug, onRemove, onMove
     const [menuOpen, setMenuOpen] = useState(false);
     const naam = gerecht?.naam ?? '⚠ verwijderd gerecht';
     const prijs = gerecht ? Number(gerecht.verkoopprijs ?? 0) : 0;
+    /* Bij een vast menu heeft een gerecht geen eigen verkoopprijs — dan is
+       "€0,00 p.p." pure ruis. Toon de KOSTPRIJS (het getal dat er bij een vast
+       menu toe doet), of eerlijk dat die nog ontbreekt. Zie lib/menuMargin. */
+    const kost = gerecht
+        ? effectieveKostprijsPP(gerecht as { total_cost_cents?: number | null; kostprijs_pp?: number | string | null })
+        : 0;
 
     return (
         <div
@@ -802,7 +809,11 @@ function SortablePill({ item, gerecht, gangen, currentGangSlug, onRemove, onMove
                 </div>
                 {gerecht && (
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                        €{prijs.toFixed(2)} p.p.
+                        {prijs > 0
+                            ? `€${prijs.toFixed(2)} p.p.`
+                            : kost > 0
+                                ? `kost €${kost.toFixed(2)} p.p.`
+                                : 'nog geen kostprijs'}
                     </div>
                 )}
             </div>

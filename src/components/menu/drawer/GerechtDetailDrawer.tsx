@@ -178,7 +178,7 @@ export function GerechtDetailDrawer({
                                     cost={cost} price={price} gangLabel={gangLabel} status={status}
                                 />
                             )}
-                            {tab === 'bouw' && <TabBouw gerecht={gerecht} cost={cost} price={price} />}
+                            {tab === 'bouw' && <TabBouw gerecht={gerecht} cost={cost} price={price} onEdit={onEdit} />}
                             {tab === 'compliance' && (
                                 <TabCompliance gerecht={gerecht} onCheck={onAllergenCheck} />
                             )}
@@ -340,11 +340,26 @@ function TabWat({ gerecht, margin, tone, cost, price, gangLabel, status }: {
 }
 
 /* ── Tab: Bouw — componenten lijst ─────────────────────── */
-function TabBouw({ gerecht, cost, price }: { gerecht: Gerecht; cost: number; price: number }) {
+function TabBouw({ gerecht, cost, price, onEdit }: { gerecht: Gerecht; cost: number; price: number; onEdit?: (g: Gerecht) => void }) {
     return (
         <div>
             <MREyebrow style={{ marginBottom: 12 }}>Componenten</MREyebrow>
             <GerechtenBouwEditor gerechtId={String(gerecht.id)} readOnly />
+            {/* Dit tabblad is alleen-lezen. Zonder deze uitweg liep een gerecht
+                zónder kostprijs hier dood: "nog geen componenten gekoppeld" en
+                geen enkele knop om er een toe te voegen. */}
+            {onEdit && (
+                <div style={{ marginTop: 10 }}>
+                    <MRButton variant="ghost" icon={<Pencil size={13} />} sm onClick={() => onEdit(gerecht)}>
+                        {cost > 0 ? 'Componenten aanpassen' : 'Componenten koppelen'}
+                    </MRButton>
+                    {cost <= 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                            Zonder componenten kan de app geen kostprijs berekenen — en telt dit gerecht als €0 mee in je menu-marge.
+                        </div>
+                    )}
+                </div>
+            )}
             <div style={{
                 marginTop: 16, padding: 14,
                 background: 'rgba(255,191,0,.04)', border: '1px solid rgba(255,191,0,.15)', borderRadius: 10,
@@ -352,10 +367,10 @@ function TabBouw({ gerecht, cost, price }: { gerecht: Gerecht; cost: number; pri
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--brand-gold, #c4a35a)' }}>Kostprijs rollup</span>
                     <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-                        {fmtEuro(cost)}
+                        {cost > 0 ? fmtEuro(cost) : 'nog geen kostprijs'}
                     </span>
                 </div>
-                <MRCostBar cost={cost} price={price} />
+                {cost > 0 && price > 0 && <MRCostBar cost={cost} price={price} />}
             </div>
         </div>
     );
