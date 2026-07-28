@@ -101,6 +101,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        hetzelfde rechter-paneel zijn. Reset naar 'wat' bij elke open. */
     const [editTab, setEditTab] = useState<'wat' | 'bouw' | 'compliance' | 'service'>('wat');
     const [form, setForm] = useState<Record<string, any>>({});
+    /* Live kostprijs uit het componenten-blok, zodat de compleetheid-meter en de
+       kostprijs-regel meteen meebewegen bij het koppelen van een component
+       (i.p.v. pas na opslaan + herladen). null = nog geen signaal ontvangen. */
+    const [liveRollupCents, setLiveRollupCents] = useState<number | null>(null);
     const [gangEditing, setGangEditing] = useState<string | number | null>(null);
     const [gangForm, setGangForm] = useState<Record<string, any>>({});
     const [tagInput, setTagInput] = useState('');
@@ -256,6 +260,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     }
 
     function newGerecht() {
+        setLiveRollupCents(null);
         setEditing('new');
         setEditTab('wat');
         setForm({
@@ -274,6 +279,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         setStats(null);
     }
     async function editGerecht(g) {
+        setLiveRollupCents(null);
         setEditing(g.id);
         setEditTab('wat');
 
@@ -1265,7 +1271,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 {editTab === 'bouw' && (<>
                             <div style={{ display: 'grid', gap: 12 }}>
                                 {editing && editing !== 'new' ? (
-                                    <GerechtenBouwEditor gerechtId={String(editing)} />
+                                    <GerechtenBouwEditor gerechtId={String(editing)} onCostChange={setLiveRollupCents} />
                                 ) : (
                                     <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13, border: '1px dashed var(--border)', borderRadius: 10 }}>
                                         Sla het gerecht eerst op om componenten te koppelen.
@@ -1830,7 +1836,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                         {/* Compleetheid-meter — toont in één oogopslag wat nog mist
                             voordat een concept geactiveerd kan worden. */}
                         {(function () {
-                            const checks = checklistVoor(form);
+                            /* De componenten-rollup zit niet in `form` (die komt uit de
+                               DB-rij / het live componenten-blok). Zonder dit bleef
+                               "Kostprijs" oranje terwijl de componenten al €X optelden. */
+                            const rollupCents = liveRollupCents
+                                ?? Number((gerechten.find(x => String(x.id) === String(editing)) as { total_cost_cents?: number | null } | undefined)?.total_cost_cents || 0);
+                            const checks = checklistVoor({ ...form, total_cost_cents: rollupCents });
                             const okCount = checks.filter(c => c.ok).length;
                             const total = checks.length;
                             const pct = Math.round((okCount / total) * 100);

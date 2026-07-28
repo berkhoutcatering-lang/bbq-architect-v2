@@ -9,6 +9,7 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { ChefHat, ChevronDown, ChevronUp, Copy, EyeOff, MoreVertical, Pencil } from 'lucide-react';
 import type { Gerecht, Gang } from '@/types';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import {
     MRStatusPill, MRCardVisual, MRMarginRing, MRCostBar,
     type GerechtStatus, type MenuViewMode,
@@ -99,7 +100,9 @@ function MRGridCard({ gerecht, gangen, onClick, density, photoMode }: {
     const tone = marginTone(margin);
     const status: GerechtStatus = getGerechtStatus(gerecht);
     const price = Number(gerecht.verkoopprijs ?? gerecht.prijs ?? 0);
-    const cost = Number(gerecht.kostprijs_pp ?? 0);
+    /* Componenten-rollup wint boven de handmatige kostprijs — anders toont een
+       gerecht dat zijn kosten uit componenten haalt hier € 0,00. */
+    const cost = effectieveKostprijsPP(gerecht);
     const gangKey = getGangKey(gerecht, gangen);
     const gangLabel = getGangLabel(gangKey, gangen);
 
@@ -160,7 +163,7 @@ export function MRListView({ gerechten, gangen, onSelect, density = 'comfortable
                 case 'name':   va = a.naam;                 vb = b.naam;                 break;
                 case 'gang':   va = getGangLabel(getGangKey(a, gangen), gangen); vb = getGangLabel(getGangKey(b, gangen), gangen); break;
                 case 'comps':  va = (a.ingredienten?.length ?? 0); vb = (b.ingredienten?.length ?? 0); break;
-                case 'cost':   va = Number(a.kostprijs_pp ?? 0); vb = Number(b.kostprijs_pp ?? 0); break;
+                case 'cost':   va = effectieveKostprijsPP(a); vb = effectieveKostprijsPP(b); break;
                 case 'price':  va = Number(a.verkoopprijs ?? a.prijs ?? 0); vb = Number(b.verkoopprijs ?? b.prijs ?? 0); break;
                 case 'margin': va = getMargin(a); vb = getMargin(b); break;
                 default: return 0;
@@ -204,7 +207,7 @@ export function MRListView({ gerechten, gangen, onSelect, density = 'comfortable
                 const tone = marginTone(margin);
                 const status = getGerechtStatus(g);
                 const price = Number(g.verkoopprijs ?? g.prijs ?? 0);
-                const cost = Number(g.kostprijs_pp ?? 0);
+                const cost = effectieveKostprijsPP(g);
                 const gangKey = getGangKey(g, gangen);
                 const thumbSz = compact ? 32 : 40;
                 return (
