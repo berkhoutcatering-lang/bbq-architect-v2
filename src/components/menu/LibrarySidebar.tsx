@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search, UtensilsCrossed, PanelRightClose } from 'lucide-react';
 import { getGangKey, getGangVisual, fmtEuro } from './helpers';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import type { Gerecht, Gang } from '@/types';
 
 interface Props {
@@ -153,7 +154,13 @@ export default function LibrarySidebar({
                                             <span style={{
                                                 fontSize: 11, color: 'var(--muted)',
                                                 fontVariantNumeric: 'tabular-nums', flexShrink: 0,
-                                            }}>{fmtEuro(Number(dish.verkoopprijs ?? dish.prijs ?? 0))}</span>
+                                            }}>{(function () {
+                                                    const eigen = Number(dish.verkoopprijs ?? dish.prijs ?? 0);
+                                                    if (eigen > 0) return fmtEuro(eigen);
+                                                    /* Geen eigen prijs (vast menu) → toon de kostprijs, niet €0,00. */
+                                                    const k = effectieveKostprijsPP(dish as { total_cost_cents?: number | null; kostprijs_pp?: number | string | null });
+                                                    return k > 0 ? fmtEuro(k) : '—';
+                                                })()}</span>
                                         </button>
                                     );
                                 })}
