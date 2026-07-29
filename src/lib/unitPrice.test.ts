@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { packToBase, packToBaseMulti, unitPriceLabel, exampleUseCost } from './unitPrice';
+import { packToBase, packToBaseMulti, unitPriceLabel, exampleUseCost, normalizeYield, effectiveBaseCostCents, costAtUseCents, purchaseQtyForUse } from './unitPrice';
 
 /* Deze tests ontbraken volledig (briefing §20.1). unitPrice is de
    rekenkundige canon voor gerecht-kostprijzen — hier hard vastgelegd. */
@@ -75,4 +75,70 @@ describe('exampleUseCost', () => {
         const use = exampleUseCost(b);
         expect(use).toEqual({ qty: 200, unit: 'g', cents: 180 }); // 200 g = €1,80
     });
+});
+
+/* ── Snijverlies (yield) ─────────────────────────────────────────────────── */
+
+describe('normalizeYield — klemt naar (0,1], nooit een kostprijs opblazen', () => {
+    it('laat een geldige yield staan', () => {
+        expect(normalizeYield(0.7)).toBe(0.7);
+        expect(normalizeYield(1)).toBe(1);
+    });
+    it('ontbrekend/ongeldig → 1 (geen verlies), niet 0', () => {
+        for (const bad of [undefined, null, '', 'abc', NaN, 0, -0.5]) {
+            expect(normalizeYield(bad)).toBe(1);
+        }
+    });
+    it('boven 1 wordt geklemd — een yield mag de kostprijs nooit VERLAGEN', () => {
+        expect(normalizeYield(1.5)).toBe(1);
+        expect(normalizeYield(14)).toBe(1);
+    });
+});
+
+describe('costAtUseCents — Sam’s bavette, het ijkpunt', () => {
+    /* Vittore Bavette: €3,29 per 100 g inkoop, 70% bruikbaar, 40 g op het bord. */
+    const bavette = { quantityUsed: 40, baseQuantity: 100, baseCostCents: 329 };
+
+    it('zonder snijverlies: €1,32', () => {
+        expect(costAtUseCents({ ...bavette, yieldFactor: 1 })).toBe(132);
+    });
+    it('met 70% opbrengst: €1,88', () => {
+        expect(costAtUseCents({ ...bavette, yieldFactor: 0.7 })).toBe(188);
+    });
+    it('effectieve prijs per 100 g wordt €4,70', () => {
+        expect(effectiveBaseCostCents(329, 0.7)).toBe(470);
+    });
+    it('je koopt 57 g in voor 40 g op het bord', () => {
+        expect(Math.round(purchaseQtyForUse(40, 0.7))).toBe(57);
+    });
+    it('ontbrekende yield gedraagt zich als 1 (identiek aan vandaag)', () => {
+        expect(costAtUseCents(bavette)).toBe(132);
+        expect(costAtUseCents({ ...bavette, yieldFactor: null })).toBe(132);
+    });
+    it('base_quantity 0 geeft 0, geen deling door nul', () => {
+        expect(costAtUseCents({ quantityUsed: 40, baseQuantity: 0, baseCostCents: 329, yieldFactor: 0.7 })).toBe(0);
+    });
+    it('nooit negatief', () => {
+        expect(costAtUseCents({ quantityUsed: -40, baseQuantity: 100, baseCostCents: 329, yieldFactor: 0.7 })).toBe(0);
+    });
+});
+
+describe('costAtUseCents — pariteit met de SQL-formule', () => {
+    /* Spiegelt GREATEST(0, ROUND(qty/base * cost / yield)) uit migratie
+       20260729120000. Wijkt dit af, dan lopen DB en app uit elkaar. */
+    const rows: Array<[number, number, number, number, number]> = [
+        // qty, base, cost, yield, verwacht
+        [40, 100, 329, 0.7, 188],
+        [100, 100, 329, 0.7, 470],
+        [250, 100, 329, 1, 823],
+        [1, 1, 600, 0.5, 1200],
+        [8, 100, 263, 0.85, 25],
+        [200, 100, 82, 0.9, 182],
+        [5, 100, 82, 1, 4],
+    ];
+    for (const [qty, base, cost, y, verwacht] of rows) {
+        it(`${qty}/${base} × ${cost}c ÷ ${y} = ${verwacht}c`, () => {
+            expect(costAtUseCents({ quantityUsed: qty, baseQuantity: base, baseCostCents: cost, yieldFactor: y })).toBe(verwacht);
+        });
+    }
 });

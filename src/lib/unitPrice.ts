@@ -122,3 +122,76 @@ export function exampleUseCost(base: BaseFields): { qty: number; unit: string; c
         cents: Math.round((qty / base.base_quantity) * base.base_cost_cents),
     };
 }
+
+/* ── Snijverlies (yield) ─────────────────────────────────────────────────────
+   Sam koopt bavette voor €3,29/100 g, maar van 1 kg inkoop houdt hij ~700 g
+   bruikbaar over (vet, pees, bakverlies). 40 g op het bord kost dus geen €1,32
+   maar €1,88. Zonder deze factor staat de hele menukaart structureel te laag.
+
+   HARDE REGEL: `base_cost_cents` blijft de ONGECORRIGEERDE inkoopprijs — dat is
+   wat op de factuur staat en wat de prijs-verversing terugschrijft. De deling
+   gebeurt hier, in de formule. Zou je 'm in de opgeslagen prijs vouwen, dan
+   ziet priceRefresh.ts het als een handmatige override (en ververst nooit meer)
+   en priceRefreshBoughtIn.ts overschrijft 'm bij de eerstvolgende prijsupdate.
+
+   Deze helpers spiegelen de SQL-trigger 1-op-1 (migratie 20260729120000), zodat
+   DB en app nooit uit elkaar lopen. Code-rekenwerk, nooit AI. */
+
+/** Klemt een opgeslagen/ingevoerde yield naar (0,1]. Alles wat geen bruikbaar
+ *  getal is → 1.0 (= geen verlies), zodat een ontbrekend veld nooit de kostprijs
+ *  opblaast. */
+export function normalizeYield(y: unknown): number {
+    const n = Number(y);
+    if (!Number.isFinite(n) || n <= 0) return 1;
+    return n > 1 ? 1 : n;
+}
+
+/** De prijs waarmee we in gerechten rekenen: inkoopprijs gedeeld door wat je
+ *  overhoudt. €3,29/100 g bij 70% → €4,70/100 g. */
+export function effectiveBaseCostCents(baseCostCents: number, yieldFactor: unknown): number {
+    const c = Number(baseCostCents);
+    if (!Number.isFinite(c)) return 0;
+    return Math.round(c / normalizeYield(yieldFactor));
+}
+
+/** Kostprijs van één gebruik in een gerecht. Spiegelt de DB-trigger exact:
+ *  GREATEST(0, ROUND(quantity_used / base_quantity * base_cost_cents / yield)). */
+export function costAtUseCents(opts: {
+    quantityUsed: number;
+    baseQuantity: number;
+    baseCostCents: number;
+    yieldFactor?: unknown;
+}): number {
+    const { quantityUsed, baseQuantity, baseCostCents } = opts;
+    const qty = Number(quantityUsed);
+    const base = Number(baseQuantity);
+    const cost = Number(baseCostCents);
+    if (!Number.isFinite(qty) || !Number.isFinite(base) || base === 0 || !Number.isFinite(cost)) return 0;
+    const y = normalizeYield(opts.yieldFactor);
+    return Math.max(0, Math.round((qty / base) * cost / y));
+}
+
+/** Hoeveel je moet INKOPEN voor wat er op het bord ligt. 40 g bij 70% → 57 g. */
+export function purchaseQtyForUse(quantityUsed: number, yieldFactor: unknown): number {
+    const qty = Number(quantityUsed);
+    if (!Number.isFinite(qty)) return 0;
+    return qty / normalizeYield(yieldFactor);
+}
+
+/** Mensentaal-herformulering onder het invoerveld: "Van 1 kg inkoop houd je
+ *  700 g over." Eenheid-bewust, want stuks lezen anders dan gewicht. */
+export function yieldRestatement(yieldFactor: unknown, baseUnit: string): string {
+    const y = normalizeYield(yieldFactor);
+    if (y >= 1) return 'Geen verlies — je gebruikt alles wat je inkoopt.';
+    const pct = Math.round(y * 1000) / 10;
+    switch (baseUnit) {
+        case 'g':
+        case 'kg':
+            return `Van 1 kg inkoop houd je ${Math.round(y * 1000)} g over (${pct}%).`;
+        case 'ml':
+        case 'liter':
+            return `Van 1 liter inkoop houd je ${Math.round(y * 1000)} ml over (${pct}%).`;
+        default:
+            return `Van 10 ${baseUnit || 'stuks'} inkoop houd je er ${(y * 10).toFixed(1).replace('.0', '')} over (${pct}%).`;
+    }
+}

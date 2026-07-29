@@ -8,7 +8,14 @@ import {
     Boxes, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
     Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
+    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors,
 } from 'lucide-react';
+import { getComponentVisual } from '@/components/menu/component-visuals';
+
+/* Icoon-resolver voor de soort-tegel op de componentkaart. */
+const SOORT_ICONS: Record<string, typeof Beef> = {
+    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes,
+};
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -24,7 +31,7 @@ import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, us
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
-import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
+import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import {
     ingredientRowCostCents,
@@ -97,6 +104,9 @@ interface ComponentRow {
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /* Snijverlies: bruikbare fractie van de inkoop (0<y<=1). 1 = geen verlies.
+       base_cost_cents blijft de inkoopprijs; de deling zit in de formule. */
+    yield_factor?: number | null;
     /* Pak-prijs administratie (2026-06-12): wat er bij de groothandel betaald is,
        voor welke inhoud. Bron van base_*; herzienbaar in de edit-drawer. */
     pack_price_cents: number | null;
@@ -433,9 +443,11 @@ export default function ComponentenPage() {
     const totalCount = foodComponents.length;
     /* Alles inclusief non-food — dit is het getal dat óók de mappen tellen. */
     const allCount = components.length;
-    const avgCostCents = totalCount === 0
-        ? 0
-        : Math.round(foodComponents.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
+    /* Een gemiddelde over base_cost_cents mengt €/100g met €/stuk en €/100ml —
+       onvergelijkbare eenheden, dus een betekenisloos getal. Vervangen door een
+       actie-stat: componenten ZONDER prijs maken elk gerecht waarin ze zitten
+       stilzwijgend te goedkoop, en dat is direct op te lossen werk. */
+    const zonderPrijsCount = components.filter(c => (c.base_cost_cents ?? 0) <= 0).length;
     /* Hoeveel bouwstenen worden nog nergens gebruikt — bruikbaarder signaal dan
        een AI-percentage: dit is opruimwerk dat geld kan schelen. */
     const unusedCount = components.filter(c => (usage[c.id] ?? 0) === 0).length;
@@ -515,7 +527,10 @@ export default function ComponentenPage() {
                             style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                         >
                             {/* Accentlijn die bij hover van links naar rechts invult. */}
-                            <span className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-[var(--brand)] to-transparent transition-transform duration-300 group-hover:scale-x-100" />
+                            <span
+                                className="pointer-events-none absolute inset-x-0 top-0 h-[3px] origin-left transition-transform duration-300"
+                                style={{ background: getComponentVisual(c.name, c.category).accent, opacity: 0.85 }}
+                            />
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                                     {c.type === 'prepared'
@@ -543,9 +558,27 @@ export default function ComponentenPage() {
                                     {deletingId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                 </span>
                             </div>
-                            <h3 className="mt-3 line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
-                                {c.name}
-                            </h3>
+                            {/* Soort-tegel: geeft de kaart visuele identiteit (vlees/vis/
+                                groente/…), zodat de pagina scanbaar is i.p.v. 30× grijs. */}
+                            <div className="mt-3 flex items-start gap-2.5">
+                                {(function () {
+                                    const v = getComponentVisual(c.name, c.category);
+                                    const Icon = SOORT_ICONS[v.icon] ?? Boxes;
+                                    return (
+                                        <span
+                                            aria-hidden="true"
+                                            title={v.label}
+                                            className="flex shrink-0 items-center justify-center rounded-lg"
+                                            style={{ width: 34, height: 34, background: v.gradient }}
+                                        >
+                                            <Icon size={16} color="rgba(255,255,255,.92)" />
+                                        </span>
+                                    );
+                                })()}
+                                <h3 className="line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
+                                    {c.name}
+                                </h3>
+                            </div>
                             {c.description && (
                                 <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
                             )}
@@ -562,6 +595,14 @@ export default function ComponentenPage() {
                             <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
                                 <span className="font-medium text-[var(--brand)]">
                                     {unitPriceLabel(c.base_cost_cents, c.base_quantity, c.base_unit) ?? ''}
+                                    {/* Inkoopprijs blijft vóóraan (dat is wat op de factuur staat);
+                                        de gecorrigeerde prijs staat er als gevolg achter. */}
+                                    {normalizeYield(c.yield_factor) < 1 && (
+                                        <span className="text-[var(--muted)]">
+                                            {' · na snijverlies '}
+                                            {unitPriceLabel(effectiveBaseCostCents(c.base_cost_cents, c.yield_factor), c.base_quantity, c.base_unit) ?? ''}
+                                        </span>
+                                    )}
                                 </span>
                                 <span className="text-[var(--muted)]">
                                     {(usage[c.id] ?? 0) > 0
@@ -637,7 +678,12 @@ export default function ComponentenPage() {
                     />
                     <StatTile label="Zelf-bereid" value={String(preparedCount)} hint="Met eigen receptuur" />
                     <StatTile label="Inkoop" value={String(boughtCount)} hint="Kant-en-klaar ingekocht" />
-                    <StatTile label="Gem. kostprijs" value={formatEuro(avgCostCents)} hint="Per basis-eenheid" accent />
+                    <StatTile
+                        label="Zonder prijs"
+                        value={String(zonderPrijsCount)}
+                        hint={zonderPrijsCount > 0 ? 'Maken je gerechten te goedkoop' : 'Alles heeft een prijs'}
+                        accent={zonderPrijsCount > 0}
+                    />
                 </motion.div>
 
                 {/* Eén regel die de kern uitlegt — de rest stond dubbel in de
@@ -976,6 +1022,9 @@ function ComponentEditDrawer({
     const [packPrice, setPackPrice] = useState('');
     const [packQty, setPackQty] = useState('');
     const [packUnit, setPackUnit] = useState<PackUnit>('kg');
+    /* Snijverlies (0<y<=1). 1 = geen verlies, dus bestaande componenten
+       gedragen zich exact als voorheen tot Sam het zelf aanzet. */
+    const [yieldFactor, setYieldFactor] = useState<number>(1);
     const [ingredients, setIngredients] = useState<IngredientFormRow[]>([]);
     const [steps, setSteps] = useState<string[]>([]);
     const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
@@ -1052,6 +1101,7 @@ function ComponentEditDrawer({
             setPackPrice(c.pack_price_cents != null ? (c.pack_price_cents / 100).toFixed(2) : '');
             setPackQty(c.pack_quantity != null ? String(c.pack_quantity) : '');
             setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
+            setYieldFactor(normalizeYield(c.yield_factor));
             setMasterProductId(typeof c.master_product_id === 'number' ? c.master_product_id : null);
             setSupplierPriceId(typeof c.supplier_price_id === 'number' ? c.supplier_price_id : null);
             setSupplierProductId(typeof c.supplier_product_id === 'number' ? c.supplier_product_id : null);
@@ -1164,6 +1214,7 @@ function ComponentEditDrawer({
                 flavor_tags: tags,
                 category,
                 ...packPayload(),
+                yield_factor: yieldFactor,
                 /* Blijvende leverancier-koppeling (null = ontkoppeld). Catalog A
                    (master+prijs) OF Catalog B (supplier_product), nooit beide. */
                 master_product_id: masterProductId,
@@ -1304,6 +1355,14 @@ function ComponentEditDrawer({
                                 {comp?.type === 'bought_in' && !linkLabel && (
                                     <PakketRekenhulp priceEuros={packPrice} qty={packQty} unit={packUnit} onApply={applyPack} />
                                 )}
+                                {/* Snijverlies hoort naast de prijs: het is onderdeel van de prijs. */}
+                                <SnijverliesVeld
+                                    value={yieldFactor}
+                                    onChange={setYieldFactor}
+                                    baseCostCents={Math.round((parseDec(costEuros) || 0) * 100)}
+                                    baseQuantity={parseDec(baseQty) || 1}
+                                    baseUnit={baseUnit}
+                                />
                                 <div className="kf-grid-3">
                                     <label className="kf-field">
                                         <span className="kf-label">Basis-hoeveelheid</span>
@@ -1707,6 +1766,103 @@ function SupplierImportDrawer({
                 )}
             </div>
         </>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SnijverliesVeld — "wat houd je over van je inkoop?"
+
+   Sam koopt 1 kg bavette maar houdt er ~700 g bruikbaar van over. Zonder deze
+   factor rekent de app 40 g op het bord tegen de inkoopprijs van 40 g, terwijl
+   hij er 57 g voor moest kopen. Bewust in mensentaal: geen "yield", geen
+   "opbrengstfactor" — hij zegt zelf snijverlies.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const SNIJVERLIES_PRESETS: Array<{ label: string; y: number }> = [
+    { label: 'Alles (100%)', y: 1 },
+    { label: 'Beetje bijsnijden (90%)', y: 0.9 },
+    { label: 'Vet & pees eraf (75%)', y: 0.75 },
+    { label: 'Flink bijsnijden (65%)', y: 0.65 },
+];
+
+function SnijverliesVeld({
+    value, onChange, baseCostCents, baseQuantity, baseUnit,
+}: {
+    value: number;
+    onChange: (y: number) => void;
+    baseCostCents: number;
+    baseQuantity: number;
+    baseUnit: string;
+}) {
+    const y = normalizeYield(value);
+    const pctText = String(Math.round(y * 1000) / 10);
+    const effectief = effectiveBaseCostCents(baseCostCents, y);
+    const laag = y < 0.4;
+
+    return (
+        <section className="kf-section">
+            <div className="kf-section-head">
+                <span className="kf-section-title"><Scissors size={13} /> Snijverlies</span>
+            </div>
+            <label className="kf-field">
+                <span className="kf-label">Wat houd je over van je inkoop?</span>
+                <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 8 }}>
+                    {SNIJVERLIES_PRESETS.map(p => (
+                        <button
+                            key={p.label}
+                            type="button"
+                            onClick={() => onChange(p.y)}
+                            className="kf-add"
+                            style={Math.abs(y - p.y) < 0.0005
+                                ? { borderColor: 'var(--brand)', color: 'var(--brand)' }
+                                : undefined}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="100"
+                        value={pctText}
+                        onChange={(e) => {
+                            const pct = parseFloat(e.target.value);
+                            if (!Number.isFinite(pct)) return;
+                            onChange(Math.min(100, Math.max(1, pct)) / 100);
+                        }}
+                        className="kf-input"
+                        style={{ width: 90 }}
+                        aria-label="Percentage dat je overhoudt"
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>%</span>
+                </div>
+                <div className="kf-help" style={{ marginTop: 6 }}>
+                    {yieldRestatement(y, baseUnit)}
+                </div>
+                {laag && (
+                    <div style={{ fontSize: 11.5, color: '#f59e0b', marginTop: 4 }}>
+                        Minder dan 40% overhouden is fors. Klopt dit? Je kostprijs wordt hierdoor meer dan 2,5x zo hoog.
+                    </div>
+                )}
+            </label>
+            <div className="kf-card" style={{ padding: '8px 12px', fontSize: 12 }}>
+                <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--muted)' }}>Inkoop</span>
+                    <span className="font-mono">{formatPerBase(baseCostCents, baseQuantity, baseUnit)}</span>
+                </div>
+                {y < 1 && (
+                    <div className="flex items-center justify-between" style={{ marginTop: 3 }}>
+                        <span style={{ color: 'var(--muted)' }}>In gerechten reken ik met</span>
+                        <span className="font-mono" style={{ color: 'var(--brand)', fontWeight: 600 }}>
+                            {formatPerBase(effectief, baseQuantity, baseUnit)}
+                        </span>
+                    </div>
+                )}
+            </div>
+        </section>
     );
 }
 

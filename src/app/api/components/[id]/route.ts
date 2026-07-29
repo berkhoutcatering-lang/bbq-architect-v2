@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { costAtUseCents } from '@/lib/unitPrice';
 import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
 import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 
@@ -137,6 +138,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     if (b.pack_unit === null || (typeof b.pack_unit === 'string' && ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'].includes(b.pack_unit))) {
         updateData.pack_unit = b.pack_unit;
     }
+    /* Snijverlies (0<y<=1). Buiten bereik => negeren i.p.v. stil klemmen, zodat
+       een typfout (7 i.p.v. 70) niet ongemerkt de kostprijs 14× opblaast. */
+    if (typeof b.yield_factor === 'number' && Number.isFinite(b.yield_factor) && b.yield_factor > 0 && b.yield_factor <= 1) {
+        updateData.yield_factor = b.yield_factor;
+    }
     if (b.ingredients !== undefined) updateData.ingredients = b.ingredients;
     if (b.preparation_steps !== undefined) updateData.preparation_steps = b.preparation_steps;
     /* GP-5 (2026-05-25): drag-drop verplaatsing tussen folders.
@@ -166,15 +172,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
        We detecteren de oude base_cost_cents vóór de update. */
     let oldBaseCostCents: number | null = null;
     let oldBaseQuantity: number | null = null;
-    if (typeof updateData.base_cost_cents === 'number') {
+    let oldYieldFactor: number | null = null;
+    /* Ook bij een SNIJVERLIES-wijziging moet er herrekend worden: die verandert
+       de kostprijs net zo hard als de inkoopprijs zelf. */
+    if (typeof updateData.base_cost_cents === 'number' || typeof updateData.yield_factor === 'number') {
         const { data: pre } = await supabase
             .from('components')
-            .select('base_cost_cents, base_quantity')
+            .select('base_cost_cents, base_quantity, yield_factor')
             .eq('id', componentId)
             .eq('organization_id', auth.orgId!)
             .maybeSingle();
         oldBaseCostCents = pre?.base_cost_cents ?? null;
         oldBaseQuantity = pre?.base_quantity ?? null;
+        oldYieldFactor = (pre as { yield_factor?: number } | null)?.yield_factor ?? null;
     }
 
     // Update component zelf (alleen als er velden zijn) — anders skip + ga door naar joins
@@ -264,11 +274,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
        de NIEUWE base_cost_cents kennen. We re-fetchen het component en
        updaten elke gerecht_components-rij + sommeren gerechten.total_cost_cents. */
     let recomputedGerechten = 0;
-    if (typeof updateData.base_cost_cents === 'number' && componentRow) {
+    if ((typeof updateData.base_cost_cents === 'number' || typeof updateData.yield_factor === 'number') && componentRow) {
         const newBaseCost = componentRow.base_cost_cents as number;
         const newBaseQty = (componentRow.base_quantity as number) ?? oldBaseQuantity ?? 1;
+        const newYield = (componentRow as { yield_factor?: number }).yield_factor ?? 1;
 
-        if (newBaseCost !== oldBaseCostCents && newBaseQty > 0) {
+        if ((newBaseCost !== oldBaseCostCents || newYield !== oldYieldFactor) && newBaseQty > 0) {
             /* Stap 1: fetch alle gerecht_components-rijen met dit component_id.
                De tabel heeft géén `id` — de sleutel is (gerecht_id, component_id),
                zie migratie 20260510130000. Vragen om `id` liet de hele query
@@ -285,7 +296,14 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                 /* Stap 2: per rij nieuwe cost_at_use_cents berekenen + updaten.
                    Sequential ipv batch om RLS-policy-checks niet te verzwakken. */
                 const updatePromises = gcRows.map(row => {
-                    const newCost = Math.round((Number(row.quantity_used) / newBaseQty) * newBaseCost);
+                    /* Zelfde formule als de DB-trigger (migratie 20260729120000)
+                       via de gedeelde canon, zodat app en DB niet uit elkaar lopen. */
+                    const newCost = costAtUseCents({
+                        quantityUsed: Number(row.quantity_used),
+                        baseQuantity: newBaseQty,
+                        baseCostCents: newBaseCost,
+                        yieldFactor: newYield,
+                    });
                     /* Rij aanwijzen op de échte primaire sleutel; org-filter erbij
                        zodat een update nooit buiten de eigen organisatie kan vallen. */
                     return supabase

@@ -30,6 +30,8 @@ interface ComponentInput {
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /** Snijverlies: bruikbare fractie van de inkoop (0<y<=1). 1 = geen verlies. */
+    yield_factor?: number;
     /* Pak-prijs administratie (2026-06-12): wat is er bij de groothandel betaald,
        voor welke inhoud. base_* blijft de reken-canon; dit is de bron ervan. */
     pack_price_cents?: number | null;
@@ -125,6 +127,11 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
             base_quantity: b.base_quantity,
             base_unit: b.base_unit.trim(),
             base_cost_cents: b.base_cost_cents,
+            /* Snijverlies — buiten (0,1] of ontbrekend => 1 (geen verlies). */
+            yield_factor: (function () {
+                const y = Number(b.yield_factor);
+                return Number.isFinite(y) && y > 0 && y <= 1 ? y : 1;
+            })(),
             pack_price_cents: pack?.pack_price_cents ?? null,
             pack_quantity: pack?.pack_quantity ?? null,
             pack_unit: pack?.pack_unit ?? null,
