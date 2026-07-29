@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { costAtUseCents } from '@/lib/unitPrice';
+import { isMissingYieldColumn, YIELD_MIGRATIE_MELDING } from '../route';
 import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
 import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 
@@ -140,10 +141,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     /* Snijverlies (0<y<=1). Buiten bereik => negeren i.p.v. stil klemmen, zodat
        een typfout (7 i.p.v. 70) niet ongemerkt de kostprijs 14× opblaast. */
-    /* Zie POST: pas schrijven zodra de kolom bestaat én er écht verlies is. Bij
-       precies 1 (geen verlies) niets sturen, zodat een omgeving zonder migratie
-       20260729120000 niet stukloopt op een onbekende kolom. */
-    if (typeof b.yield_factor === 'number' && Number.isFinite(b.yield_factor) && b.yield_factor > 0 && b.yield_factor < 1) {
+    /* Volledige geldige range (gelijk aan de DB-CHECK 0<y<=1). Met een guard op
+       <1 kon je snijverlies nooit meer terugzetten naar 100%: de waarde 1 viel
+       uit de update en de DB hield de oude 0,75 vast — een eenrichtingsdeur op
+       de kostprijs van élk gerecht met dat component. */
+    if (typeof b.yield_factor === 'number' && Number.isFinite(b.yield_factor) && b.yield_factor > 0 && b.yield_factor <= 1) {
         updateData.yield_factor = b.yield_factor;
     }
     if (b.ingredients !== undefined) updateData.ingredients = b.ingredients;
@@ -200,7 +202,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
             .eq('organization_id', auth.orgId!)
             .select()
             .single();
-        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        if (error) {
+            if (isMissingYieldColumn(error)) {
+                return NextResponse.json({ error: YIELD_MIGRATIE_MELDING }, { status: 409 });
+            }
+            return NextResponse.json({ error: error.message }, { status: 500 });
+        }
         if (!data) return NextResponse.json({ error: 'Component niet gevonden of geen toegang' }, { status: 404 });
         componentRow = data;
     } else if (replaceAllergens === null && replaceHaccp === null) {

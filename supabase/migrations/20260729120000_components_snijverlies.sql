@@ -215,3 +215,45 @@ $tg$;
 -- identiek laat aan vandaag. Er beweegt bij deploy geen cent. Sam zet het per
 -- component zelf aan; de FoodcostImpactModal laat eerst zien welke gerechten
 -- daardoor verschuiven. Een gegokte yield is erger dan geen yield.
+
+-- ─── 4. Bestaande koppelingen herberekenen ───────────────────
+-- De eenheid-fix repareert alléén nieuwe/gewijzigde regels: bestaande rijen
+-- houden hun foute cost_at_use_cents tot iemand ze aanraakt. In Sams data staat
+-- bv. 2,5 kg kippendij op een 100 g-component als EUR 0,00 (moet EUR 1,50).
+-- Daarom hier eenmalig herrekenen met de nieuwe formule, en de gerecht-totalen
+-- opnieuw optellen.
+--
+-- Dit VERANDERT bestaande kostprijzen — dat is precies de bedoeling (ze waren
+-- fout), maar het is geen stille wijziging: het staat in deze migratie en in de
+-- PR-omschrijving. Alleen rijen waar de eenheid ECHT omgerekend kan worden
+-- veranderen; een onmogelijke combinatie (gram vs milliliter) blijft zoals hij
+-- was, want daar kunnen we niets zinnigs van maken.
+do $recalc$
+begin
+    if to_regclass('public.components') is null
+       or to_regclass('public.gerecht_components') is null then
+        return;
+    end if;
+
+    update gerecht_components gc
+    set cost_at_use_cents = greatest(0, round(
+            (public.convert_qty(gc.quantity_used, gc.unit, c.base_unit) / c.base_quantity)
+            * c.base_cost_cents
+            / coalesce(nullif(c.yield_factor, 0), 1)
+        )::integer)
+    from components c
+    where c.id = gc.component_id
+      and c.base_quantity is not null
+      and c.base_quantity <> 0;
+
+    update gerechten g
+    set total_cost_cents = coalesce((
+        select sum(gc.cost_at_use_cents)
+        from gerecht_components gc
+        where gc.gerecht_id = g.id
+    ), 0)
+    where exists (select 1 from gerecht_components gc where gc.gerecht_id = g.id);
+
+    raise notice 'gerecht_components herrekend met eenheid-conversie + snijverlies';
+end
+$recalc$;

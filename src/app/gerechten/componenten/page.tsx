@@ -2296,17 +2296,26 @@ function InkoopDrawer({
     const [yieldFactor, setYieldFactor] = useState<number>(1);
     const [saving, setSaving] = useState(false);
 
+    /* Eenheden waarbij de catalogusprijs de prijs van de HELE verpakking is
+       ("€34,00 / doos"). Bij een maat-eenheid ("€7,75 / kg") is het een prijs
+       PER kilo — die mag je niet als pak-prijs invullen, want dan rekent de app
+       met een verzonnen bedrag zodra Sam er "60 stuks" bij zet. */
+    const PAK_EENHEDEN = /doos|pak|zak|krat|tray|bak|emmer|colli|omdoos/i;
+
     function kies(hit: CatalogSearchHit) {
         setGekozen(hit);
         setZoek(hit.naam);
-        /* Prijs uit de catalogus overnemen als startpunt — Sam kan 'm bijstellen
-           als hij een andere staffel of doos koopt. */
-        if (hit.prijs > 0) setPackPrice(String(hit.prijs).replace('.', ','));
         const e = (hit.eenheid || '').toLowerCase();
         if (e.includes('kg') || e === 'kilo') setPackUnit('kg');
         else if (e.includes('liter') || e === 'l') setPackUnit('liter');
         else if (e.includes('ml')) setPackUnit('ml');
         else setPackUnit('stuk');
+        /* Alleen voorvullen als de catalogus écht een verpakkingsprijs geeft. */
+        if (hit.prijs > 0 && PAK_EENHEDEN.test(hit.eenheid || '')) {
+            setPackPrice(String(hit.prijs).replace('.', ','));
+        } else {
+            setPackPrice('');
+        }
     }
 
     const qty = parseDec(packQty);
@@ -2413,9 +2422,16 @@ function InkoopDrawer({
                                     <span className="kf-label">Je betaalt (€)</span>
                                     <input type="text" inputMode="decimal" value={packPrice}
                                         onChange={(e) => setPackPrice(e.target.value)}
-                                        placeholder="48,60" className="kf-input" />
+                                        placeholder="34,00" className="kf-input" />
                                 </label>
                             </div>
+
+                            {gekozen.prijs > 0 && !PAK_EENHEDEN.test(gekozen.eenheid || '') && (
+                                <div className="kf-help" style={{ marginTop: 2 }}>
+                                    Je prijslijst geeft €{gekozen.prijs.toFixed(2)} per {gekozen.eenheid || 'eenheid'} —
+                                    vul hierboven in wat je voor de héle verpakking betaalt.
+                                </div>
+                            )}
 
                             {/* Het antwoord, meteen — dit is waar het om begonnen was. */}
                             <div className="kf-card kf-card-accent" style={{ padding: '10px 14px', marginTop: 4 }}>

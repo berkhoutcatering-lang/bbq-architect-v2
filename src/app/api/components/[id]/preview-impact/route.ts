@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { costAtUseCents } from '@/lib/unitPrice';
 
 interface GerechtImpact {
     gerecht_id: string;
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     /* 1. Component-base-cost ophalen (huidige) */
     const { data: comp, error: compErr } = await supabase
         .from('components')
-        .select('id, name, base_quantity, base_unit, base_cost_cents')
+        .select('*')
         .eq('id', componentId)
         .eq('organization_id', orgId)
         .maybeSingle();
@@ -100,10 +101,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         if (!gerecht) continue;
         const qtyUsed = Number(row.quantity_used ?? 0);
         const oldCostAtUse = Number(row.cost_at_use_cents ?? 0);
-        /* Nieuwe cost berekenen — guard tegen baseQuantity=0 */
-        const newCostAtUse = baseQuantity > 0
-            ? Math.round((qtyUsed / baseQuantity) * newBaseCostCents)
-            : 0;
+        /* Zelfde formule als de trigger en de PATCH-recompute (gedeelde canon),
+           inclusief eenheid-omrekening en snijverlies. Anders toont deze modal
+           andere bedragen dan er daadwerkelijk wordt opgeslagen. */
+        const newCostAtUse = costAtUseCents({
+            quantityUsed: qtyUsed,
+            usedUnit: (row as { unit?: string }).unit,
+            baseQuantity,
+            baseUnit: (comp as { base_unit?: string }).base_unit,
+            baseCostCents: newBaseCostCents,
+            yieldFactor: (comp as { yield_factor?: number }).yield_factor,
+        });
 
         const existing = perGerecht.get(gerecht.id);
         if (existing) {
