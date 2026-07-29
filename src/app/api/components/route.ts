@@ -1,3 +1,21 @@
+
+/* PostgREST/Postgres melden een onbekende kolom als 42703 of PGRST204. Zolang
+   migratie 20260729120000 niet gedraaid is, bestaat components.yield_factor niet
+   en zou de rauwe melding als "Could not find the yield_factor column" bij de
+   gebruiker landen. We vertalen dat naar mensentaal — en slaan bewust NIET stil
+   zonder snijverlies op: dan zou Sam denken dat 70% verwerkt is terwijl zijn
+   kostprijs 30% te laag blijft doorwerken in gerechten en marges. */
+export function isMissingYieldColumn(err: { code?: string; message?: string } | null): boolean {
+    if (!err) return false;
+    const code = String(err.code || '');
+    const msg = String(err.message || '');
+    return (code === '42703' || code === 'PGRST204') && msg.includes('yield_factor');
+}
+
+export const YIELD_MIGRATIE_MELDING =
+    'Snijverlies kan nog niet opgeslagen worden: de database-update ontbreekt nog '
+    + '(migratie 20260729120000). Zet het snijverlies op 100% om nu op te slaan, '
+    + 'of draai eerst die migratie.';
 /* /api/components — Inspiratie Bibliotheek PR3
    POST: create a new component (prepared OR bought_in)
    GET:  list components (RLS doet org-filter, dus geen extra filtering)
@@ -30,6 +48,12 @@ interface ComponentInput {
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /** Snijverlies: bruikbare fractie van de inkoop (0<y<=1). 1 = geen verlies. */
+    yield_factor?: number;
+    /** Koppeling aan de prijslijst-catalogus (Catalog A) — zodat de prijs later
+     *  mee kan bewegen met de leverancier. */
+    master_product_id?: number | null;
+    supplier_price_id?: number | null;
     /* Pak-prijs administratie (2026-06-12): wat is er bij de groothandel betaald,
        voor welke inhoud. base_* blijft de reken-canon; dit is de bron ervan. */
     pack_price_cents?: number | null;
@@ -125,6 +149,16 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
             base_quantity: b.base_quantity,
             base_unit: b.base_unit.trim(),
             base_cost_cents: b.base_cost_cents,
+            /* Snijverlies — buiten (0,1] of ontbrekend => 1 (geen verlies). */
+            /* Volledige geldige range (gelijk aan de DB-CHECK 0<y<=1). Een
+               strengere guard (<1) zou 100% weggooien en snijverlies tot een
+               eenrichtingsdeur maken: eenmaal op 75% nooit meer terug. */
+            ...(function () {
+                const y = Number(b.yield_factor);
+                return Number.isFinite(y) && y > 0 && y <= 1 ? { yield_factor: y } : {};
+            })(),
+            master_product_id: typeof b.master_product_id === 'number' ? b.master_product_id : null,
+            supplier_price_id: typeof b.supplier_price_id === 'number' ? b.supplier_price_id : null,
             pack_price_cents: pack?.pack_price_cents ?? null,
             pack_quantity: pack?.pack_quantity ?? null,
             pack_unit: pack?.pack_unit ?? null,
@@ -184,6 +218,9 @@ export async function POST(req: NextRequest) {
         .single();
 
     if (error) {
+        if (isMissingYieldColumn(error)) {
+            return NextResponse.json({ error: YIELD_MIGRATIE_MELDING }, { status: 409 });
+        }
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 

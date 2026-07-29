@@ -8,7 +8,14 @@ import {
     Boxes, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
     Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
+    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors,
 } from 'lucide-react';
+import { getComponentVisual } from '@/components/menu/component-visuals';
+
+/* Icoon-resolver voor de soort-tegel op de componentkaart. */
+const SOORT_ICONS: Record<string, typeof Beef> = {
+    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes,
+};
 import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -24,7 +31,7 @@ import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, us
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
-import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit } from '@/lib/unitPrice';
+import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import {
     ingredientRowCostCents,
@@ -97,6 +104,9 @@ interface ComponentRow {
     base_quantity: number;
     base_unit: string;
     base_cost_cents: number;
+    /* Snijverlies: bruikbare fractie van de inkoop (0<y<=1). 1 = geen verlies.
+       base_cost_cents blijft de inkoopprijs; de deling zit in de formule. */
+    yield_factor?: number | null;
     /* Pak-prijs administratie (2026-06-12): wat er bij de groothandel betaald is,
        voor welke inhoud. Bron van base_*; herzienbaar in de edit-drawer. */
     pack_price_cents: number | null;
@@ -284,6 +294,8 @@ export default function ComponentenPage() {
        Zelf bereid → ReceptuurDrawer, Scan kant-en-klaar → ScanDrawer. */
     const [showReceptuur, setShowReceptuur] = useState(false);
     const [showScan, setShowScan] = useState(false);
+    /* Het pad dat ontbrak: een ingekocht product handmatig toevoegen, zonder AI. */
+    const [showInkoop, setShowInkoop] = useState(false);
 
     /* S2-deel-3: folder-state. currentFolderId=null toont alle componenten;
        als ingesteld → filter op components.folder_id.
@@ -433,9 +445,11 @@ export default function ComponentenPage() {
     const totalCount = foodComponents.length;
     /* Alles inclusief non-food — dit is het getal dat óók de mappen tellen. */
     const allCount = components.length;
-    const avgCostCents = totalCount === 0
-        ? 0
-        : Math.round(foodComponents.reduce((s, c) => s + c.base_cost_cents, 0) / totalCount);
+    /* Een gemiddelde over base_cost_cents mengt €/100g met €/stuk en €/100ml —
+       onvergelijkbare eenheden, dus een betekenisloos getal. Vervangen door een
+       actie-stat: componenten ZONDER prijs maken elk gerecht waarin ze zitten
+       stilzwijgend te goedkoop, en dat is direct op te lossen werk. */
+    const zonderPrijsCount = components.filter(c => (c.base_cost_cents ?? 0) <= 0).length;
     /* Hoeveel bouwstenen worden nog nergens gebruikt — bruikbaarder signaal dan
        een AI-percentage: dit is opruimwerk dat geld kan schelen. */
     const unusedCount = components.filter(c => (usage[c.id] ?? 0) === 0).length;
@@ -515,7 +529,10 @@ export default function ComponentenPage() {
                             style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
                         >
                             {/* Accentlijn die bij hover van links naar rechts invult. */}
-                            <span className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 bg-gradient-to-r from-[var(--brand)] to-transparent transition-transform duration-300 group-hover:scale-x-100" />
+                            <span
+                                className="pointer-events-none absolute inset-x-0 top-0 h-[3px] origin-left transition-transform duration-300"
+                                style={{ background: getComponentVisual(c.name, c.category).accent, opacity: 0.85 }}
+                            />
                             <div className="flex items-start justify-between gap-2">
                                 <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
                                     {c.type === 'prepared'
@@ -543,9 +560,27 @@ export default function ComponentenPage() {
                                     {deletingId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                                 </span>
                             </div>
-                            <h3 className="mt-3 line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
-                                {c.name}
-                            </h3>
+                            {/* Soort-tegel: geeft de kaart visuele identiteit (vlees/vis/
+                                groente/…), zodat de pagina scanbaar is i.p.v. 30× grijs. */}
+                            <div className="mt-3 flex items-start gap-2.5">
+                                {(function () {
+                                    const v = getComponentVisual(c.name, c.category);
+                                    const Icon = SOORT_ICONS[v.icon] ?? Boxes;
+                                    return (
+                                        <span
+                                            aria-hidden="true"
+                                            title={v.label}
+                                            className="flex shrink-0 items-center justify-center rounded-lg"
+                                            style={{ width: 34, height: 34, background: v.gradient }}
+                                        >
+                                            <Icon size={16} color="rgba(255,255,255,.92)" />
+                                        </span>
+                                    );
+                                })()}
+                                <h3 className="line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
+                                    {c.name}
+                                </h3>
+                            </div>
                             {c.description && (
                                 <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
                             )}
@@ -562,6 +597,14 @@ export default function ComponentenPage() {
                             <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
                                 <span className="font-medium text-[var(--brand)]">
                                     {unitPriceLabel(c.base_cost_cents, c.base_quantity, c.base_unit) ?? ''}
+                                    {/* Inkoopprijs blijft vóóraan (dat is wat op de factuur staat);
+                                        de gecorrigeerde prijs staat er als gevolg achter. */}
+                                    {normalizeYield(c.yield_factor) < 1 && (
+                                        <span className="text-[var(--muted)]">
+                                            {' · na snijverlies '}
+                                            {unitPriceLabel(effectiveBaseCostCents(c.base_cost_cents, c.yield_factor), c.base_quantity, c.base_unit) ?? ''}
+                                        </span>
+                                    )}
                                 </span>
                                 <span className="text-[var(--muted)]">
                                     {(usage[c.id] ?? 0) > 0
@@ -617,6 +660,7 @@ export default function ComponentenPage() {
                         </p>
                     </div>
                     <AddComponentMenu
+                        onInkoop={() => setShowInkoop(true)}
                         onZelfBereid={() => setShowReceptuur(true)}
                         onScan={() => setShowScan(true)}
                         onImport={() => setShowImport(true)}
@@ -637,7 +681,12 @@ export default function ComponentenPage() {
                     />
                     <StatTile label="Zelf-bereid" value={String(preparedCount)} hint="Met eigen receptuur" />
                     <StatTile label="Inkoop" value={String(boughtCount)} hint="Kant-en-klaar ingekocht" />
-                    <StatTile label="Gem. kostprijs" value={formatEuro(avgCostCents)} hint="Per basis-eenheid" accent />
+                    <StatTile
+                        label="Zonder prijs"
+                        value={String(zonderPrijsCount)}
+                        hint={zonderPrijsCount > 0 ? 'Maken je gerechten te goedkoop' : 'Alles heeft een prijs'}
+                        accent={zonderPrijsCount > 0}
+                    />
                 </motion.div>
 
                 {/* Eén regel die de kern uitlegt — de rest stond dubbel in de
@@ -819,6 +868,14 @@ export default function ComponentenPage() {
                 />
             )}
 
+            {showInkoop && (
+                <InkoopDrawer
+                    folderId={currentFolderId}
+                    onClose={() => setShowInkoop(false)}
+                    onSaved={() => { setShowInkoop(false); loadComponents(); }}
+                />
+            )}
+
             {showReceptuur && (
                 <ReceptuurDrawer
                     folderId={currentFolderId}
@@ -871,8 +928,8 @@ function StatTile({ label, value, hint, accent }: {
 
 /* Eén primaire knop i.p.v. vier concurrerende: de drie manieren om een
    bouwsteen toe te voegen zitten eronder, mét uitleg wanneer je welke pakt. */
-function AddComponentMenu({ onZelfBereid, onScan, onImport }: {
-    onZelfBereid: () => void; onScan: () => void; onImport: () => void;
+function AddComponentMenu({ onInkoop, onZelfBereid, onScan, onImport }: {
+    onInkoop: () => void; onZelfBereid: () => void; onScan: () => void; onImport: () => void;
 }) {
     const [open, setOpen] = useState(false);
     const wrapRef = useRef<HTMLDivElement>(null);
@@ -892,6 +949,7 @@ function AddComponentMenu({ onZelfBereid, onScan, onImport }: {
     }, [open]);
 
     const items = [
+        { icon: <ShoppingBag size={15} />, title: 'Ingekocht product', desc: 'Zelf invullen: 60 stuks voor €48,60 → €0,81 per stuk', run: onInkoop },
         { icon: <ChefHat size={15} />, title: 'Zelf bereid', desc: 'Eigen receptuur: ingrediënten, stappen, allergenen', run: onZelfBereid },
         { icon: <Camera size={15} />, title: 'Scan kant-en-klaar', desc: 'Foto of screenshot van één product', run: onScan },
         { icon: <Upload size={15} />, title: 'Prijslijst importeren', desc: 'Veel producten tegelijk uit één bestand', run: onImport },
@@ -976,6 +1034,9 @@ function ComponentEditDrawer({
     const [packPrice, setPackPrice] = useState('');
     const [packQty, setPackQty] = useState('');
     const [packUnit, setPackUnit] = useState<PackUnit>('kg');
+    /* Snijverlies (0<y<=1). 1 = geen verlies, dus bestaande componenten
+       gedragen zich exact als voorheen tot Sam het zelf aanzet. */
+    const [yieldFactor, setYieldFactor] = useState<number>(1);
     const [ingredients, setIngredients] = useState<IngredientFormRow[]>([]);
     const [steps, setSteps] = useState<string[]>([]);
     const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
@@ -1052,6 +1113,7 @@ function ComponentEditDrawer({
             setPackPrice(c.pack_price_cents != null ? (c.pack_price_cents / 100).toFixed(2) : '');
             setPackQty(c.pack_quantity != null ? String(c.pack_quantity) : '');
             setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
+            setYieldFactor(normalizeYield(c.yield_factor));
             setMasterProductId(typeof c.master_product_id === 'number' ? c.master_product_id : null);
             setSupplierPriceId(typeof c.supplier_price_id === 'number' ? c.supplier_price_id : null);
             setSupplierProductId(typeof c.supplier_product_id === 'number' ? c.supplier_product_id : null);
@@ -1164,6 +1226,7 @@ function ComponentEditDrawer({
                 flavor_tags: tags,
                 category,
                 ...packPayload(),
+                yield_factor: yieldFactor,
                 /* Blijvende leverancier-koppeling (null = ontkoppeld). Catalog A
                    (master+prijs) OF Catalog B (supplier_product), nooit beide. */
                 master_product_id: masterProductId,
@@ -1304,6 +1367,14 @@ function ComponentEditDrawer({
                                 {comp?.type === 'bought_in' && !linkLabel && (
                                     <PakketRekenhulp priceEuros={packPrice} qty={packQty} unit={packUnit} onApply={applyPack} />
                                 )}
+                                {/* Snijverlies hoort naast de prijs: het is onderdeel van de prijs. */}
+                                <SnijverliesVeld
+                                    value={yieldFactor}
+                                    onChange={setYieldFactor}
+                                    baseCostCents={Math.round((parseDec(costEuros) || 0) * 100)}
+                                    baseQuantity={parseDec(baseQty) || 1}
+                                    baseUnit={baseUnit}
+                                />
                                 <div className="kf-grid-3">
                                     <label className="kf-field">
                                         <span className="kf-label">Basis-hoeveelheid</span>
@@ -1711,6 +1782,103 @@ function SupplierImportDrawer({
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+   SnijverliesVeld — "wat houd je over van je inkoop?"
+
+   Sam koopt 1 kg bavette maar houdt er ~700 g bruikbaar van over. Zonder deze
+   factor rekent de app 40 g op het bord tegen de inkoopprijs van 40 g, terwijl
+   hij er 57 g voor moest kopen. Bewust in mensentaal: geen "yield", geen
+   "opbrengstfactor" — hij zegt zelf snijverlies.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const SNIJVERLIES_PRESETS: Array<{ label: string; y: number }> = [
+    { label: 'Alles (100%)', y: 1 },
+    { label: 'Beetje bijsnijden (90%)', y: 0.9 },
+    { label: 'Vet & pees eraf (75%)', y: 0.75 },
+    { label: 'Flink bijsnijden (65%)', y: 0.65 },
+];
+
+function SnijverliesVeld({
+    value, onChange, baseCostCents, baseQuantity, baseUnit,
+}: {
+    value: number;
+    onChange: (y: number) => void;
+    baseCostCents: number;
+    baseQuantity: number;
+    baseUnit: string;
+}) {
+    const y = normalizeYield(value);
+    const pctText = String(Math.round(y * 1000) / 10);
+    const effectief = effectiveBaseCostCents(baseCostCents, y);
+    const laag = y < 0.4;
+
+    return (
+        <section className="kf-section">
+            <div className="kf-section-head">
+                <span className="kf-section-title"><Scissors size={13} /> Snijverlies</span>
+            </div>
+            <label className="kf-field">
+                <span className="kf-label">Wat houd je over van je inkoop?</span>
+                <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 8 }}>
+                    {SNIJVERLIES_PRESETS.map(p => (
+                        <button
+                            key={p.label}
+                            type="button"
+                            onClick={() => onChange(p.y)}
+                            className="kf-add"
+                            style={Math.abs(y - p.y) < 0.0005
+                                ? { borderColor: 'var(--brand)', color: 'var(--brand)' }
+                                : undefined}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2">
+                    <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="100"
+                        value={pctText}
+                        onChange={(e) => {
+                            const pct = parseFloat(e.target.value);
+                            if (!Number.isFinite(pct)) return;
+                            onChange(Math.min(100, Math.max(1, pct)) / 100);
+                        }}
+                        className="kf-input"
+                        style={{ width: 90 }}
+                        aria-label="Percentage dat je overhoudt"
+                    />
+                    <span style={{ fontSize: 13, color: 'var(--muted)' }}>%</span>
+                </div>
+                <div className="kf-help" style={{ marginTop: 6 }}>
+                    {yieldRestatement(y, baseUnit)}
+                </div>
+                {laag && (
+                    <div style={{ fontSize: 11.5, color: '#f59e0b', marginTop: 4 }}>
+                        Minder dan 40% overhouden is fors. Klopt dit? Je kostprijs wordt hierdoor meer dan 2,5x zo hoog.
+                    </div>
+                )}
+            </label>
+            <div className="kf-card" style={{ padding: '8px 12px', fontSize: 12 }}>
+                <div className="flex items-center justify-between">
+                    <span style={{ color: 'var(--muted)' }}>Inkoop</span>
+                    <span className="font-mono">{formatPerBase(baseCostCents, baseQuantity, baseUnit)}</span>
+                </div>
+                {y < 1 && (
+                    <div className="flex items-center justify-between" style={{ marginTop: 3 }}>
+                        <span style={{ color: 'var(--muted)' }}>In gerechten reken ik met</span>
+                        <span className="font-mono" style={{ color: 'var(--brand)', fontWeight: 600 }}>
+                            {formatPerBase(effectief, baseQuantity, baseUnit)}
+                        </span>
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
    PakketRekenhulp — de kern van inkoop-helderheid (2026-06-12).
    "Wat betaal je, voor hoeveel?" → eenheidsprijs + voorbeeld-dosering.
    Presentational: parent houdt de pak-state en voert base-velden door.
@@ -2096,6 +2264,215 @@ function IngredientsEditor({
                 </div>
             )}
         </section>
+    );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   InkoopDrawer — "Ingekocht product": begint bij de GROOTHANDEL.
+
+   Sam: "moet eerst een productkoppeling hebben naar groothandel — ik vul
+   brioche in en dan gaat hij zoeken naar best vergelijkbare opties."
+   Dus: eerst zoeken in zijn eigen prijslijsten (master_products +
+   supplier_prices, 4888 actieve prijzen), product aanklikken, en pas dán de
+   pak-rekensom: 60 stuks voor €48,60 → €0,81 per stuk.
+
+   Zo staat de leverancier-koppeling meteen vast (master_product_id +
+   supplier_price_id), waardoor de prijs later mee kan bewegen.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function InkoopDrawer({
+    folderId, onClose, onSaved,
+}: {
+    folderId: string | null;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const toast = useToast();
+    const [zoek, setZoek] = useState('');
+    const [gekozen, setGekozen] = useState<CatalogSearchHit | null>(null);
+    const [packQty, setPackQty] = useState('');
+    const [packUnit, setPackUnit] = useState<PackUnit>('stuk');
+    const [packPrice, setPackPrice] = useState('');
+    const [yieldFactor, setYieldFactor] = useState<number>(1);
+    const [saving, setSaving] = useState(false);
+
+    /* Eenheden waarbij de catalogusprijs de prijs van de HELE verpakking is
+       ("€34,00 / doos"). Bij een maat-eenheid ("€7,75 / kg") is het een prijs
+       PER kilo — die mag je niet als pak-prijs invullen, want dan rekent de app
+       met een verzonnen bedrag zodra Sam er "60 stuks" bij zet. */
+    const PAK_EENHEDEN = /doos|pak|zak|krat|tray|bak|emmer|colli|omdoos/i;
+
+    function kies(hit: CatalogSearchHit) {
+        setGekozen(hit);
+        setZoek(hit.naam);
+        const e = (hit.eenheid || '').toLowerCase();
+        if (e.includes('kg') || e === 'kilo') setPackUnit('kg');
+        else if (e.includes('liter') || e === 'l') setPackUnit('liter');
+        else if (e.includes('ml')) setPackUnit('ml');
+        else setPackUnit('stuk');
+        /* Alleen voorvullen als de catalogus écht een verpakkingsprijs geeft. */
+        if (hit.prijs > 0 && PAK_EENHEDEN.test(hit.eenheid || '')) {
+            setPackPrice(String(hit.prijs).replace('.', ','));
+        } else {
+            setPackPrice('');
+        }
+    }
+
+    const qty = parseDec(packQty);
+    const prijs = parseDec(packPrice);
+    const base = (Number.isFinite(qty) && qty > 0 && Number.isFinite(prijs) && prijs > 0)
+        ? packToBase(Math.round(prijs * 100), qty, packUnit)
+        : null;
+
+    async function handleSave() {
+        if (!gekozen) { toast('Kies eerst een product uit je prijslijsten', 'error'); return; }
+        if (!base) { toast('Vul in hoeveel er in de verpakking zit en wat je betaalt', 'error'); return; }
+        setSaving(true);
+        try {
+            const res = await fetch('/api/components', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: gekozen.naam,
+                    description: gekozen.leverancier ? `Ingekocht bij ${gekozen.leverancier}` : null,
+                    type: 'bought_in',
+                    category: NON_FOOD_RE.test(gekozen.naam) ? 'non_food' : 'food',
+                    base_quantity: base.base_quantity,
+                    base_unit: base.base_unit,
+                    base_cost_cents: base.base_cost_cents,
+                    pack_price_cents: Math.round(prijs * 100),
+                    pack_quantity: qty,
+                    pack_unit: packUnit,
+                    yield_factor: yieldFactor,
+                    /* De koppeling waar het om begonnen was. */
+                    master_product_id: gekozen.master_product_id,
+                    supplier_price_id: gekozen.supplier_price_id,
+                    folder_id: folderId && /^[0-9a-f-]{36}$/i.test(folderId) ? folderId : null,
+                }),
+            });
+            const body = await res.json();
+            if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+            toast(`"${gekozen.naam}" toegevoegd`, 'success');
+            onSaved();
+        } catch (e: unknown) {
+            toast(e instanceof Error ? e.message : 'Opslaan mislukt', 'error');
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    return (
+        <>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="inkoop-drawer-title">
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow"><ShoppingBag size={12} /> Ingekocht</span>
+                        <h2 id="inkoop-drawer-title" className="kdrawer-title">Ingekocht product toevoegen</h2>
+                    </div>
+                    <button type="button" onClick={onClose} aria-label="Sluit" className="kf-icon-x"><X size={17} /></button>
+                </div>
+
+                <div className="kf-body">
+                    {/* Stap 1 — uit de groothandel kiezen. */}
+                    <label className="kf-field">
+                        <span className="kf-label">Wat koop je? <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· zoekt in je prijslijsten</span></span>
+                        <SupplierProductAutocomplete
+                            value={zoek}
+                            onChange={(v) => { setZoek(v); if (gekozen && v !== gekozen.naam) setGekozen(null); }}
+                            onPick={kies}
+                            placeholder="bv. brioche"
+                        />
+                        {gekozen ? (
+                            <div className="flex items-center gap-1.5" style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
+                                <ShoppingBag size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
+                                <span>
+                                    <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{gekozen.leverancier || 'leverancier'}</strong>
+                                    {gekozen.prijs > 0 ? ` · €${gekozen.prijs.toFixed(2)}${gekozen.eenheid ? ' / ' + gekozen.eenheid : ''}` : ''}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="kf-help" style={{ marginTop: 6 }}>
+                                Tik een paar letters — je ziet elk product uit je geïmporteerde prijslijsten, met de prijs erbij.
+                            </div>
+                        )}
+                    </label>
+
+                    {/* Stap 2 — hoe wordt het verpakt? */}
+                    {gekozen && (
+                        <section className="kf-section">
+                            <div className="kf-section-head">
+                                <span className="kf-section-title"><Calculator size={13} /> Hoe zit de verpakking?</span>
+                            </div>
+                            <div className="kf-grid-3">
+                                <label className="kf-field">
+                                    <span className="kf-label">Er zit in</span>
+                                    <input type="text" inputMode="decimal" value={packQty}
+                                        onChange={(e) => setPackQty(e.target.value)}
+                                        placeholder="60" className="kf-input" autoFocus />
+                                </label>
+                                <label className="kf-field">
+                                    <span className="kf-label">Eenheid</span>
+                                    <select value={packUnit} onChange={(e) => setPackUnit(e.target.value as PackUnit)} className="kf-input">
+                                        {PACK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                </label>
+                                <label className="kf-field">
+                                    <span className="kf-label">Je betaalt (€)</span>
+                                    <input type="text" inputMode="decimal" value={packPrice}
+                                        onChange={(e) => setPackPrice(e.target.value)}
+                                        placeholder="34,00" className="kf-input" />
+                                </label>
+                            </div>
+
+                            {gekozen.prijs > 0 && !PAK_EENHEDEN.test(gekozen.eenheid || '') && (
+                                <div className="kf-help" style={{ marginTop: 2 }}>
+                                    Je prijslijst geeft €{gekozen.prijs.toFixed(2)} per {gekozen.eenheid || 'eenheid'} —
+                                    vul hierboven in wat je voor de héle verpakking betaalt.
+                                </div>
+                            )}
+
+                            {/* Het antwoord, meteen — dit is waar het om begonnen was. */}
+                            <div className="kf-card kf-card-accent" style={{ padding: '10px 14px', marginTop: 4 }}>
+                                {base ? (
+                                    <>
+                                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--brand)' }}>
+                                            {unitPriceLabel(base.base_cost_cents, base.base_quantity, base.base_unit) ?? ''}
+                                        </div>
+                                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                                            {packQty} {packUnit} voor {formatEuro(Math.round(prijs * 100))} — zo rekent de app het door in je gerechten.
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                                        Vul in hoeveel er in de verpakking zit en wat je ervoor betaalt.
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {gekozen && base && (
+                        <SnijverliesVeld
+                            value={yieldFactor}
+                            onChange={setYieldFactor}
+                            baseCostCents={base.base_cost_cents}
+                            baseQuantity={base.base_quantity}
+                            baseUnit={base.base_unit}
+                        />
+                    )}
+                </div>
+
+                <div className="kdrawer-foot">
+                    <button type="button" onClick={onClose} className="btn btn-ghost btn-sm">Annuleer</button>
+                    <button type="button" onClick={handleSave} disabled={saving || !gekozen || !base} className="btn btn-brand btn-sm">
+                        {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                        {saving ? 'Opslaan…' : 'Voeg toe aan bibliotheek'}
+                    </button>
+                </div>
+            </div>
+        </>
     );
 }
 
