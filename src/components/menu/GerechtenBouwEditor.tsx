@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers, Trash2, Search, Plus } from 'lucide-react';
+import { compatibleUnits } from '@/lib/unitPrice';
 
 interface GerechtComponentRow {
   gerecht_id: string;
@@ -34,7 +35,11 @@ interface GerechtenBouwEditorProps {
   onCostChange?: (totalCents: number) => void;
 }
 
-const UNITS = ['g', 'kg', 'ml', 'liter', 'stuk', 'portie', 'el', 'tl'] as const;
+/* Welke eenheden je mag kiezen hangt af van de BASIS-eenheid van de gekozen
+   component: een component per 100 g kun je in g of kg gebruiken, maar niet in
+   stuks — dan is er geen omrekening en werd er stil een factor-1000-fout
+   gemaakt. compatibleUnits() is de gedeelde bron (lib/unitPrice.ts). */
+const UNITS = ['g', 'kg', 'ml', 'liter', 'stuk', 'portie'] as const;
 
 function fmtEuroFromCents(cents: number): string {
   return new Intl.NumberFormat('nl-NL', {
@@ -434,6 +439,7 @@ export default function GerechtenBouwEditor({
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
+                title={selected ? `Deze component staat per ${selected.base_quantity} ${selected.base_unit}` : undefined}
                 style={{
                   minWidth: 120,
                   flex: '1 1 120px',
@@ -445,7 +451,10 @@ export default function GerechtenBouwEditor({
                 }}
                 disabled={submitting}
               >
-                {UNITS.map((u) => (
+                {/* Zonder gekozen component: alles. Daarna alleen wat bij de
+                    basis-eenheid past — een component per 100 g in "stuks"
+                    rekenen kán niet en gaf stil een factor-1000-fout. */}
+                {(selected ? compatibleUnits(selected.base_unit) : [...UNITS]).map((u) => (
                   <option key={u} value={u}>
                     {u}
                   </option>

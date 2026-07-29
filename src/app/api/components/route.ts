@@ -32,6 +32,10 @@ interface ComponentInput {
     base_cost_cents: number;
     /** Snijverlies: bruikbare fractie van de inkoop (0<y<=1). 1 = geen verlies. */
     yield_factor?: number;
+    /** Koppeling aan de prijslijst-catalogus (Catalog A) — zodat de prijs later
+     *  mee kan bewegen met de leverancier. */
+    master_product_id?: number | null;
+    supplier_price_id?: number | null;
     /* Pak-prijs administratie (2026-06-12): wat is er bij de groothandel betaald,
        voor welke inhoud. base_* blijft de reken-canon; dit is de bron ervan. */
     pack_price_cents?: number | null;
@@ -128,10 +132,16 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
             base_unit: b.base_unit.trim(),
             base_cost_cents: b.base_cost_cents,
             /* Snijverlies — buiten (0,1] of ontbrekend => 1 (geen verlies). */
-            yield_factor: (function () {
+            /* Alleen meesturen als er écht snijverlies is. De kolom komt pas met
+               migratie 20260729120000; tot die draait zou een altijd-meegestuurde
+               yield_factor élke component-insert laten falen. 1 = geen verlies,
+               dus weglaten is functioneel identiek. */
+            ...(function () {
                 const y = Number(b.yield_factor);
-                return Number.isFinite(y) && y > 0 && y <= 1 ? y : 1;
+                return Number.isFinite(y) && y > 0 && y < 1 ? { yield_factor: y } : {};
             })(),
+            master_product_id: typeof b.master_product_id === 'number' ? b.master_product_id : null,
+            supplier_price_id: typeof b.supplier_price_id === 'number' ? b.supplier_price_id : null,
             pack_price_cents: pack?.pack_price_cents ?? null,
             pack_quantity: pack?.pack_quantity ?? null,
             pack_unit: pack?.pack_unit ?? null,

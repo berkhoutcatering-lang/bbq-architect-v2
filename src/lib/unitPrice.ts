@@ -161,12 +161,28 @@ export function costAtUseCents(opts: {
     baseQuantity: number;
     baseCostCents: number;
     yieldFactor?: unknown;
+    /** Eenheid waarin op het gerecht gerekend wordt (bv. 'kg'). */
+    usedUnit?: string;
+    /** Basis-eenheid van de component (bv. 'g' bij "per 100 g"). */
+    baseUnit?: string;
 }): number {
-    const { quantityUsed, baseQuantity, baseCostCents } = opts;
-    const qty = Number(quantityUsed);
+    const { quantityUsed, baseQuantity, baseCostCents, usedUnit, baseUnit } = opts;
+    let qty = Number(quantityUsed);
     const base = Number(baseQuantity);
     const cost = Number(baseCostCents);
     if (!Number.isFinite(qty) || !Number.isFinite(base) || base === 0 || !Number.isFinite(cost)) return 0;
+
+    /* Eenheden gelijktrekken vóór de deling. Zonder dit gaf "2,5 kg" op een
+       component van "100 g" → 2,5/100 = €0,00 i.p.v. €1,50 (factor 1000).
+       Alleen omrekenen als beide eenheden bekend zijn én in dezelfde familie
+       zitten; anders laten we de hoeveelheid staan (het gedrag van vóór deze
+       fix), zodat een onmogelijke combinatie niet stil een verzonnen getal
+       oplevert — de UI hoort die combinatie te blokkeren en te melden. */
+    if (usedUnit && baseUnit) {
+        const converted = convertQty(qty, usedUnit, baseUnit);
+        if (converted !== null) qty = converted;
+    }
+
     const y = normalizeYield(opts.yieldFactor);
     return Math.max(0, Math.round((qty / base) * cost / y));
 }
@@ -193,5 +209,64 @@ export function yieldRestatement(yieldFactor: unknown, baseUnit: string): string
             return `Van 1 liter inkoop houd je ${Math.round(y * 1000)} ml over (${pct}%).`;
         default:
             return `Van 10 ${baseUnit || 'stuks'} inkoop houd je er ${(y * 10).toFixed(1).replace('.0', '')} over (${pct}%).`;
+    }
+}
+
+/* ── Eenheid-conversie ───────────────────────────────────────────────────────
+   De kostprijs-formule deelde quantity_used door base_quantity zonder naar de
+   eenheden te kijken. Component per 100 g + "2,5 kg" gebruikt gaf dus
+   2,5/100 × prijs = €0,00 i.p.v. €1,50 — een factor 1000, en stil.
+
+   Binnen een familie rekenen we exact om (g↔kg, ml↔liter, stuk↔portie).
+   Tussen families (gram vs milliliter, stuk vs gram) kán het niet zonder
+   dichtheid of stukgewicht: dan geven we null terug en laat de app het zien
+   i.p.v. een verzonnen getal. */
+
+export type UnitFamily = 'gewicht' | 'volume' | 'stuk';
+
+const UNIT_TO_BASE: Record<string, { family: UnitFamily; factor: number }> = {
+    g:      { family: 'gewicht', factor: 1 },
+    gram:   { family: 'gewicht', factor: 1 },
+    kg:     { family: 'gewicht', factor: 1000 },
+    kilo:   { family: 'gewicht', factor: 1000 },
+    ml:     { family: 'volume',  factor: 1 },
+    cl:     { family: 'volume',  factor: 10 },
+    dl:     { family: 'volume',  factor: 100 },
+    l:      { family: 'volume',  factor: 1000 },
+    liter:  { family: 'volume',  factor: 1000 },
+    stuk:   { family: 'stuk',    factor: 1 },
+    stuks:  { family: 'stuk',    factor: 1 },
+    portie: { family: 'stuk',    factor: 1 },
+};
+
+export function unitFamily(unit: string): UnitFamily | null {
+    return UNIT_TO_BASE[String(unit || '').trim().toLowerCase()]?.family ?? null;
+}
+
+/** Kunnen deze twee eenheden in elkaar omgerekend worden? */
+export function unitsCompatible(a: string, b: string): boolean {
+    const fa = unitFamily(a); const fb = unitFamily(b);
+    return fa !== null && fa === fb;
+}
+
+/** Reken een hoeveelheid om naar een andere eenheid binnen dezelfde familie.
+ *  null = niet mogelijk (andere familie of onbekende eenheid) — de aanroeper
+ *  moet dat tonen, niet gokken. */
+export function convertQty(qty: number, from: string, to: string): number | null {
+    const f = UNIT_TO_BASE[String(from || '').trim().toLowerCase()];
+    const t = UNIT_TO_BASE[String(to || '').trim().toLowerCase()];
+    if (!f || !t || f.family !== t.family) return null;
+    const n = Number(qty);
+    if (!Number.isFinite(n)) return null;
+    return (n * f.factor) / t.factor;
+}
+
+/** Welke eenheden mag je kiezen bij een component met deze basis-eenheid? */
+export function compatibleUnits(baseUnit: string): string[] {
+    switch (unitFamily(baseUnit)) {
+        case 'gewicht': return ['g', 'kg'];
+        case 'volume':  return ['ml', 'liter'];
+        case 'stuk':    return ['stuk', 'portie'];
+        default:        return [String(baseUnit || 'stuk')];
     }
 }

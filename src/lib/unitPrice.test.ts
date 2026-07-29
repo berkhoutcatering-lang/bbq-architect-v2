@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { packToBase, packToBaseMulti, unitPriceLabel, exampleUseCost, normalizeYield, effectiveBaseCostCents, costAtUseCents, purchaseQtyForUse } from './unitPrice';
+import { packToBase, packToBaseMulti, unitPriceLabel, exampleUseCost, normalizeYield, effectiveBaseCostCents, costAtUseCents, purchaseQtyForUse, convertQty, unitsCompatible, compatibleUnits } from './unitPrice';
 
 /* Deze tests ontbraken volledig (briefing §20.1). unitPrice is de
    rekenkundige canon voor gerecht-kostprijzen — hier hard vastgelegd. */
@@ -141,4 +141,73 @@ describe('costAtUseCents — pariteit met de SQL-formule', () => {
             expect(costAtUseCents({ quantityUsed: qty, baseQuantity: base, baseCostCents: cost, yieldFactor: y })).toBe(verwacht);
         });
     }
+});
+
+/* ── Eenheid-conversie ───────────────────────────────────────────────────── */
+
+describe('convertQty — binnen een familie exact, daarbuiten null', () => {
+    it('gewicht', () => {
+        expect(convertQty(2.5, 'kg', 'g')).toBe(2500);
+        expect(convertQty(250, 'g', 'kg')).toBe(0.25);
+    });
+    it('volume', () => {
+        expect(convertQty(1, 'liter', 'ml')).toBe(1000);
+        expect(convertQty(500, 'ml', 'liter')).toBe(0.5);
+    });
+    it('stuk en portie zijn 1-op-1', () => {
+        expect(convertQty(3, 'stuk', 'portie')).toBe(3);
+    });
+    it('tussen families kan het NIET — geen verzonnen getal', () => {
+        expect(convertQty(5, 'g', 'ml')).toBeNull();
+        expect(convertQty(1, 'stuk', 'g')).toBeNull();
+        expect(convertQty(1, 'kg', 'stuk')).toBeNull();
+    });
+    it('onbekende eenheid geeft null', () => {
+        expect(convertQty(1, 'snufje', 'g')).toBeNull();
+    });
+});
+
+describe('unitsCompatible / compatibleUnits', () => {
+    it('herkent families', () => {
+        expect(unitsCompatible('kg', 'g')).toBe(true);
+        expect(unitsCompatible('ml', 'liter')).toBe(true);
+        expect(unitsCompatible('g', 'ml')).toBe(false);
+    });
+    it('biedt alleen passende eenheden aan', () => {
+        expect(compatibleUnits('g')).toEqual(['g', 'kg']);
+        expect(compatibleUnits('ml')).toEqual(['ml', 'liter']);
+        expect(compatibleUnits('stuk')).toEqual(['stuk', 'portie']);
+    });
+});
+
+describe('costAtUseCents — de kg-op-100g-fout uit Sams data', () => {
+    /* "MC KP Dij" — 2,5 kg gebruikt op een component van 100 g à €0,06.
+       Vóór de fix: 2,5/100 x 6 = 0,15 cent => €0,00. Moet €1,50 zijn. */
+    it('rekent kg om naar de basis in gram', () => {
+        expect(costAtUseCents({
+            quantityUsed: 2.5, usedUnit: 'kg',
+            baseQuantity: 100, baseUnit: 'g', baseCostCents: 6,
+        })).toBe(150);
+    });
+    it('zonder eenheden gedraagt het zich als voorheen', () => {
+        expect(costAtUseCents({ quantityUsed: 2.5, baseQuantity: 100, baseCostCents: 6 })).toBe(0);
+    });
+    it('gelijke eenheden veranderen niets', () => {
+        expect(costAtUseCents({
+            quantityUsed: 40, usedUnit: 'g', baseQuantity: 100, baseUnit: 'g', baseCostCents: 329,
+        })).toBe(132);
+    });
+    it('onmogelijke combinatie verzint niets — laat de hoeveelheid staan', () => {
+        expect(costAtUseCents({
+            quantityUsed: 5, usedUnit: 'g', baseQuantity: 100, baseUnit: 'ml', baseCostCents: 82,
+        })).toBe(4);
+    });
+    it('conversie en snijverlies werken samen', () => {
+        /* 1 kg op een 100g-basis van €3,29, 70% opbrengst:
+           1000/100 x 329 = 3290 c, / 0,7 = 4700 c = €47,00 */
+        expect(costAtUseCents({
+            quantityUsed: 1, usedUnit: 'kg',
+            baseQuantity: 100, baseUnit: 'g', baseCostCents: 329, yieldFactor: 0.7,
+        })).toBe(4700);
+    });
 });

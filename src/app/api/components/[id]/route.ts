@@ -140,7 +140,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
     /* Snijverlies (0<y<=1). Buiten bereik => negeren i.p.v. stil klemmen, zodat
        een typfout (7 i.p.v. 70) niet ongemerkt de kostprijs 14× opblaast. */
-    if (typeof b.yield_factor === 'number' && Number.isFinite(b.yield_factor) && b.yield_factor > 0 && b.yield_factor <= 1) {
+    /* Zie POST: pas schrijven zodra de kolom bestaat én er écht verlies is. Bij
+       precies 1 (geen verlies) niets sturen, zodat een omgeving zonder migratie
+       20260729120000 niet stukloopt op een onbekende kolom. */
+    if (typeof b.yield_factor === 'number' && Number.isFinite(b.yield_factor) && b.yield_factor > 0 && b.yield_factor < 1) {
         updateData.yield_factor = b.yield_factor;
     }
     if (b.ingredients !== undefined) updateData.ingredients = b.ingredients;
@@ -286,7 +289,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                falen, waardoor kostprijzen nooit doorgerekend werden. */
             const { data: gcRows, error: gcErr } = await supabase
                 .from('gerecht_components')
-                .select('gerecht_id, quantity_used')
+                .select('gerecht_id, quantity_used, unit')
                 .eq('component_id', componentId)
                 .eq('organization_id', auth.orgId!);
 
@@ -300,7 +303,9 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                        via de gedeelde canon, zodat app en DB niet uit elkaar lopen. */
                     const newCost = costAtUseCents({
                         quantityUsed: Number(row.quantity_used),
+                        usedUnit: (row as { unit?: string }).unit,
                         baseQuantity: newBaseQty,
+                        baseUnit: (componentRow as { base_unit?: string }).base_unit,
                         baseCostCents: newBaseCost,
                         yieldFactor: newYield,
                     });

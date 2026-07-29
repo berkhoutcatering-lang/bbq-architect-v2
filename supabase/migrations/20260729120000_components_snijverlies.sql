@@ -16,6 +16,68 @@
 --  De TS-spiegel van deze formule staat in src/lib/unitPrice.ts (costAtUseCents).
 -- =============================================================
 
+
+-- ─── 0. Eenheid-conversie ────────────────────────────────────
+-- De kostprijs-formule deelde quantity_used door base_quantity zonder naar de
+-- eenheden te kijken. Een component per 100 g met "2,5 kg" in een gerecht gaf
+-- 2,5/100 x prijs = EUR 0,00 i.p.v. EUR 1,50 — factor 1000, en stil.
+-- Binnen een familie rekenen we exact om; tussen families (gram vs milliliter,
+-- stuk vs gram) kan het niet zonder dichtheid/stukgewicht en laten we de
+-- hoeveelheid staan (de UI hoort die combinatie te blokkeren).
+-- TS-spiegel: convertQty() in src/lib/unitPrice.ts.
+create or replace function public.unit_to_base_factor(p_unit text)
+returns numeric
+language sql
+immutable
+as $$
+    select case lower(btrim(coalesce(p_unit, '')))
+        when 'g'      then 1
+        when 'gram'   then 1
+        when 'kg'     then 1000
+        when 'kilo'   then 1000
+        when 'ml'     then 1
+        when 'cl'     then 10
+        when 'dl'     then 100
+        when 'l'      then 1000
+        when 'liter'  then 1000
+        when 'stuk'   then 1
+        when 'stuks'  then 1
+        when 'portie' then 1
+        else null
+    end;
+$$;
+
+create or replace function public.unit_family(p_unit text)
+returns text
+language sql
+immutable
+as $$
+    select case lower(btrim(coalesce(p_unit, '')))
+        when 'g' then 'gewicht' when 'gram' then 'gewicht'
+        when 'kg' then 'gewicht' when 'kilo' then 'gewicht'
+        when 'ml' then 'volume' when 'cl' then 'volume' when 'dl' then 'volume'
+        when 'l' then 'volume' when 'liter' then 'volume'
+        when 'stuk' then 'stuk' when 'stuks' then 'stuk' when 'portie' then 'stuk'
+        else null
+    end;
+$$;
+
+-- Rekent p_qty van p_from naar p_to; geeft p_qty ONGEWIJZIGD terug als het niet
+-- kan (andere familie / onbekend), zodat er nooit een verzonnen getal ontstaat.
+create or replace function public.convert_qty(p_qty numeric, p_from text, p_to text)
+returns numeric
+language sql
+immutable
+as $$
+    select case
+        when public.unit_family(p_from) is null
+          or public.unit_family(p_to) is null
+          or public.unit_family(p_from) is distinct from public.unit_family(p_to)
+        then p_qty
+        else p_qty * public.unit_to_base_factor(p_from) / public.unit_to_base_factor(p_to)
+    end;
+$$;
+
 -- ─── 1. Kolom ────────────────────────────────────────────────
 alter table if exists public.components
     add column if not exists yield_factor numeric(5,3) not null default 1.0;
@@ -67,7 +129,8 @@ begin
     begin
         update gerecht_components gc
         set cost_at_use_cents = greatest(0, round(
-                (gc.quantity_used / new.base_quantity) * new.base_cost_cents
+                (public.convert_qty(gc.quantity_used, gc.unit, new.base_unit) / new.base_quantity)
+                * new.base_cost_cents
                 / coalesce(nullif(new.yield_factor, 0), 1)
             )::integer)
         where gc.component_id = new.id;
@@ -92,10 +155,11 @@ begin
     -- wijziging niets en blijft de kostprijs stale.
     drop trigger if exists trg_component_cost_propagate on components;
     create trigger trg_component_cost_propagate
-        after update of base_quantity, base_cost_cents, yield_factor
+        after update of base_quantity, base_unit, base_cost_cents, yield_factor
         on components
         for each row
         when (old.base_quantity   is distinct from new.base_quantity
+           or old.base_unit       is distinct from new.base_unit
            or old.base_cost_cents is distinct from new.base_cost_cents
            or old.yield_factor    is distinct from new.yield_factor)
         execute function recompute_on_component_change();
@@ -110,13 +174,14 @@ begin
     as $body2$
     declare
         component_base_qty  numeric;
+        component_base_unit text;
         component_base_cost integer;
         component_yield     numeric;
     begin
         if tg_op in ('INSERT', 'UPDATE') then
-            select base_quantity, base_cost_cents,
+            select base_quantity, base_unit, base_cost_cents,
                    coalesce(nullif(yield_factor, 0), 1)
-              into component_base_qty, component_base_cost, component_yield
+              into component_base_qty, component_base_unit, component_base_cost, component_yield
               from components
              where id = new.component_id;
 
@@ -124,7 +189,8 @@ begin
                 new.cost_at_use_cents := 0;
             else
                 new.cost_at_use_cents := greatest(0, round(
-                    (new.quantity_used / component_base_qty) * component_base_cost
+                    (public.convert_qty(new.quantity_used, new.unit, component_base_unit)
+                     / component_base_qty) * component_base_cost
                     / coalesce(component_yield, 1)
                 )::integer);
             end if;
@@ -137,7 +203,7 @@ begin
 
     drop trigger if exists trg_gc_compute_cost_before on gerecht_components;
     create trigger trg_gc_compute_cost_before
-        before insert or update of quantity_used, component_id
+        before insert or update of quantity_used, unit, component_id
         on gerecht_components
         for each row
         execute function recompute_on_gerecht_components_change();
