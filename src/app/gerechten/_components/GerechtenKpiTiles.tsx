@@ -74,8 +74,9 @@ export default function GerechtenKpiTiles({
   return (
     <div
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        /* display + grid-template-columns staan in het style-blok onderaan, niet
+           hier: een inline-stijl wint van een media-query, waardoor de tegels op
+           een smal scherm vier kolommen bleven ondanks de regel voor 900px. */
         gap: 1,
         background: 'var(--border)',
         border: '1px solid var(--border)',
@@ -148,6 +149,10 @@ export default function GerechtenKpiTiles({
         );
       })}
       <style jsx>{`
+        :global(.kpi-tiles) {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+        }
         @media (max-width: 900px) {
           :global(.kpi-tiles) {
             grid-template-columns: repeat(2, 1fr);

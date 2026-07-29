@@ -7,18 +7,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Boxes, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
-    Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
+    Upload, FileText, ChefHat, Camera, Calculator, ImagePlus,
     Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors, LayoutGrid, List,
+    Archive, AlertTriangle, Tag, ArrowUpDown,
 } from 'lucide-react';
 import { getComponentVisual } from '@/components/menu/component-visuals';
-import { ComponentCard, ComponentListView, type ComponentViewRow } from '@/components/menu/component-views';
+import { ComponentCard, ComponentListView, type ComponentViewRow, type ComponentSortKey } from '@/components/menu/component-views';
+import ComponentKpiStrip from './_components/ComponentKpiStrip';
 import '@/styles/menu-hub.css';
 
 /* Icoon-resolver voor de soort-tegel op de componentkaart. */
 const SOORT_ICONS: Record<string, typeof Beef> = {
     Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes,
 };
-import PageHeader from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import '@/components/redesign/redesign.css';
@@ -33,7 +34,7 @@ import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, us
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
-import { packToBase, unitPriceLabel, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
+import { packToBase, unitPriceLabel, unitPriceCents, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import {
     ingredientRowCostCents,
@@ -293,6 +294,11 @@ export default function ComponentenPage() {
     const [search, setSearch] = useState('');
     /* Grid of lijst — zelfde keuze als op de gerechten-pagina. */
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    /* De volgorde woont hier, niet in de lijst-weergave. Eerder zat sorteren
+       alléén op de kolomkoppen van de lijst, dus in de grid — de weergave die
+       standaard aan staat — kreeg je gewoon de database-volgorde. Nu bedienen
+       het menu hierboven én de kolomkoppen dezelfde keuze. */
+    const [sortKey, setSortKey] = useState<ComponentSortKey>('naam_az');
 
     /* Twee first-class toevoegen-routes (2026-06-12):
        Zelf bereid → ReceptuurDrawer, Scan kant-en-klaar → ScanDrawer. */
@@ -388,7 +394,12 @@ export default function ComponentenPage() {
         return components.filter(c => {
             /* Folder-filter: bij currentFolderId=null tonen we ALLE componenten
                (root + sub). Bij specifieke folder tonen we alleen die folder. */
-            if (currentFolderId !== null && c.folder_id !== currentFolderId) return false;
+            if (currentFolderId === '__root__') {
+                /* "Zonder folder" toonde nul componenten: '__root__' werd
+                   letterlijk vergeleken met folder_id, en die is null voor een
+                   component zonder map. */
+                if (c.folder_id !== null) return false;
+            } else if (currentFolderId !== null && c.folder_id !== currentFolderId) return false;
             /* "Alle" toont écht alles (food + non-food) zodat de tellingen
                kloppen: Alle = Zelf-bereid + Inkoop + Non-food. Eerder liet
                "Alle" non-food weg, waardoor de chip 23 zei en de mappen 29 —
@@ -414,6 +425,55 @@ export default function ComponentenPage() {
             return true;
         });
     }, [components, currentFolderId, typeFilter, search, usage]);
+
+    /* Sorteren gebeurt ná het filteren, over álle weergaven heen.
+       Op prijs sorteren we op de GENORMALISEERDE eenheidsprijs (€/kg, €/liter,
+       €/stuk) en niet op base_cost_cents — anders is €62,50 voor een doos van
+       5 kg "duurder" dan €3,29 voor 100 g bavette, en dat is precies andersom.
+       Componenten waarvan we de eenheid niet kunnen normaliseren zakken in
+       beide richtingen naar onderen: onbekend hoort nooit bovenaan. */
+    const sorted = useMemo(() => {
+        const opNaam = (a: ComponentRow, b: ComponentRow) => a.name.localeCompare(b.name, 'nl');
+        const prijs = (c: ComponentRow) => unitPriceCents(c.base_cost_cents, c.base_quantity, c.base_unit);
+        const gebruik = (c: ComponentRow) => usage[c.id] ?? 0;
+
+        return [...filtered].sort((a, b) => {
+            switch (sortKey) {
+                case 'naam_za':
+                    return -opNaam(a, b);
+                case 'soort_az': {
+                    const d = getComponentVisual(a.name, a.category).label
+                        .localeCompare(getComponentVisual(b.name, b.category).label, 'nl');
+                    return d !== 0 ? d : opNaam(a, b);
+                }
+                case 'gebruik_veel': {
+                    const d = gebruik(b) - gebruik(a);
+                    return d !== 0 ? d : opNaam(a, b);
+                }
+                case 'gebruik_weinig': {
+                    const d = gebruik(a) - gebruik(b);
+                    return d !== 0 ? d : opNaam(a, b);
+                }
+                case 'prijs_hoog':
+                case 'prijs_laag': {
+                    const pa = prijs(a);
+                    const pb = prijs(b);
+                    if (pa === null && pb === null) return opNaam(a, b);
+                    if (pa === null) return 1;
+                    if (pb === null) return -1;
+                    const d = sortKey === 'prijs_hoog' ? pb - pa : pa - pb;
+                    return d !== 0 ? d : opNaam(a, b);
+                }
+                case 'nieuwste': {
+                    const d = String(b.created_at ?? '').localeCompare(String(a.created_at ?? ''));
+                    return d !== 0 ? d : opNaam(a, b);
+                }
+                case 'naam_az':
+                default:
+                    return opNaam(a, b);
+            }
+        });
+    }, [filtered, sortKey, usage]);
 
     /* Counts per folder voor de FolderBar chips. */
     const folderCounts = useMemo(() => {
@@ -462,6 +522,31 @@ export default function ComponentenPage() {
        een AI-percentage: dit is opruimwerk dat geld kan schelen. */
     const unusedCount = components.filter(c => (usage[c.id] ?? 0) === 0).length;
 
+    /* De telling naast de titel. Toont "12 van 30" zodra er iets aan staat,
+       zodat een korte lijst een zichtbare reden heeft en je niet denkt dat er
+       bouwstenen kwijt zijn. */
+    const filterActief = typeFilter !== 'all' || search.trim().length > 0 || currentFolderId !== null;
+    const mapSuffix = currentFolderId === '__root__'
+        ? ' · zonder map'
+        : currentFolderId !== null
+            ? (() => {
+                const naam = folders.find(f => f.id === currentFolderId)?.name;
+                return naam ? ` · map ${naam}` : '';
+            })()
+            : '';
+    const telling = (filterActief
+        ? `${sorted.length} van ${allCount} bouwstenen`
+        : `${allCount} ${allCount === 1 ? 'bouwsteen' : 'bouwstenen'}`)
+        + mapSuffix;
+
+    /* De cijfer-strook filtert op STAAT; de chips eronder op SOORT. Staat er een
+       staat-filter aan, dan is dat in de chips-rij onzichtbaar — vandaar deze pil. */
+    const staatFilterLabel =
+        typeFilter === 'unused' ? 'Ongebruikt'
+        : typeFilter === 'geen_prijs' ? 'Zonder prijs'
+        : typeFilter === 'in_gebruik' ? 'In gebruik'
+        : null;
+
     /* GP-5: render-helper voor het card-grid-gebied (loading/empty/cards).
        Wordt aangeroepen binnen DndContext (mr-comp-layout) of standalone
        wanneer folders niet beschikbaar zijn. Cards wikkelen in
@@ -474,7 +559,7 @@ export default function ComponentenPage() {
                 </div>
             );
         }
-        if (filtered.length === 0) {
+        if (sorted.length === 0) {
             return (
                 <div
                     className="overflow-hidden rounded-2xl border border-dashed border-[var(--border)] p-14 text-center"
@@ -488,7 +573,7 @@ export default function ComponentenPage() {
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {components.length === 0
-                            ? 'Begin met je eerste bouwsteen. Zelf bereid met volledige receptuur (aardbeien bavaroise) of scan een kant-en-klaar product met je camera.'
+                            ? "Begin met je eerste bouwsteen. Zelf bereid met volledige receptuur (aardbeien bavaroise) of scan een kant-en-klaar product met je camera. Pas hier één inkoopprijs aan en elk gerecht dat 'm gebruikt rekent direct mee."
                             : 'Geen component op deze filter of zoekterm.'}
                     </p>
                     {components.length === 0 && !showReceptuur && !showScan && (
@@ -518,7 +603,7 @@ export default function ComponentenPage() {
         if (viewMode === 'grid') {
             return (
                 <div className="mr-grid-wrap" style={{ gap: 16 }}>
-                    {filtered.map((c, idx) => (
+                    {sorted.map((c, idx) => (
                         <motion.div
                             key={c.id}
                             layout
@@ -541,99 +626,203 @@ export default function ComponentenPage() {
         }
         return (
             <ComponentListView
-                componenten={filtered as unknown as ComponentViewRow[]}
+                componenten={sorted as unknown as ComponentViewRow[]}
                 usage={usage}
                 onSelect={(c) => setSelectedComponentId(c.id)}
+                sortKey={sortKey}
+                onSortKeyChange={setSortKey}
             />
         );
     }
 
     return (
         <div className="redesign-root">
-            <div className="main" style={{ padding: '24px 0 40px' }}>
+            <div className="main" style={{ padding: '8px 0 40px' }}>
                 {/* ── Kop ──────────────────────────────────────────────────────
-                    Bewust rustig gehouden (2026-07-26): de AI-ring stond op 0%
-                    en zette een lege functie in de spotlight; vier concurrerende
-                    knoppen maakten "iets toevoegen" een keuzeprobleem. Nu: één
-                    titel, één primaire actie met menu, en cijfers die je gebruikt.
-                    De "← Menu"-knop is weg — breadcrumb + tabs doen dat al. */}
-                <motion.header
+                    Overgenomen van /gerechten (_client.tsx r.800-856), want die
+                    pagina is de maatstaf: mr-page-header met titel + telling
+                    links, bediening rechts, en de toevoeg-knop op een eigen
+                    mr-action-bar eronder.
+                    Wat eruit ging: de eyebrow-pil "BOUWSTENEN" (het woord
+                    "Componenten" stond binnen 100 px al drie keer op het scherm)
+                    en de uitleg-alinea (staat nu in de lege staat, waar je hem
+                    nodig hebt). Ook weg: het balkje "€62,50 / doos 5 kg → …" —
+                    dat toonde een verzonnen doos die bij geen enkele bouwsteen
+                    van Sam hoort, terwijl PakketRekenhulp diezelfde som al maakt
+                    met zijn eigen cijfers, in de drawer waar je hem invult. */}
+                <motion.div
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-                    className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-4"
+                    className="mr-page-header"
+                    style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border)' }}
                 >
-                    <div className="min-w-0">
-                        <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-[var(--brand)]/25 bg-[var(--brand)]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--brand)]">
-                            <Boxes size={11} /> Bouwstenen
-                        </div>
-                        <h1
-                            className="text-[32px] font-semibold leading-[1.05] tracking-tight sm:text-[38px]"
-                            style={{ color: 'var(--text)' }}
-                        >
-                            Componenten
-                        </h1>
-                        <p className="mt-2 max-w-lg text-[13px] leading-relaxed text-[var(--muted-light)]">
-                            De basis onder je gerechten. Pas hier één inkoopprijs aan en elk
-                            gerecht dat &apos;m gebruikt rekent direct mee.
-                        </p>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
+                        <h1 className="mr-page-title" style={{ fontSize: 22 }}>Componenten</h1>
+                        <span style={{ fontSize: 13, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                            {telling}
+                        </span>
                     </div>
-                    <AddComponentMenu
-                        onInkoop={() => setShowInkoop(true)}
-                        onZelfBereid={() => setShowReceptuur(true)}
-                        onScan={() => setShowScan(true)}
-                        onImport={() => setShowImport(true)}
-                    />
-                </motion.header>
 
-                {/* ── Cijfers ── vier tegels die je echt gebruikt. */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        {/* Zoeken — bewust het BESTAANDE veld, verplaatst en niet
+                            vervangen: het id 'component-search' is waar ⌘K aan hangt. */}
+                        <div className="relative" style={{ minWidth: 220, maxWidth: 320, flex: 1 }}>
+                            <Search
+                                size={14}
+                                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
+                            />
+                            <input
+                                type="search"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                placeholder="Zoek component…"
+                                id="component-search"
+                                className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] py-2 pl-9 pr-14 text-[13px] outline-none transition focus:border-[var(--brand)]/50"
+                                style={{ color: 'var(--text)' }}
+                            />
+                            <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                                {search.length > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSearch('')}
+                                        aria-label="Wis zoekopdracht"
+                                        className="rounded p-1 text-[var(--muted)] transition hover:bg-[var(--bg)] hover:text-[var(--text)]"
+                                    >
+                                        <X size={11} />
+                                    </button>
+                                ) : (
+                                    <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">
+                                        ⌘ K
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Sorteren — gold eerder alléén in de lijst, via de
+                            kolomkoppen. In de grid (de standaard) was er niets.
+                            Native select: werkt met toetsenbord en op telefoon,
+                            zonder 60 regels eigen popover. */}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <ArrowUpDown size={14} color="var(--muted)" />
+                            <span className="sr-only">Sorteer componenten</span>
+                            <select
+                                value={sortKey}
+                                onChange={(e) => setSortKey(e.target.value as ComponentSortKey)}
+                                style={{
+                                    background: 'var(--card)',
+                                    border: '1px solid var(--border)',
+                                    borderRadius: 10,
+                                    height: 34,
+                                    padding: '0 8px',
+                                    fontSize: 12.5,
+                                    color: 'var(--text)',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <option value="naam_az">Naam (A–Z)</option>
+                                <option value="naam_za">Naam (Z–A)</option>
+                                <option value="gebruik_veel">Meest gebruikt</option>
+                                <option value="gebruik_weinig">Nog nergens gebruikt bovenaan</option>
+                                <option value="prijs_hoog">Duurste eerst (per kilo, liter of stuk)</option>
+                                <option value="prijs_laag">Goedkoopste eerst (per kilo, liter of stuk)</option>
+                                <option value="nieuwste">Laatst toegevoegd</option>
+                            </select>
+                        </label>
+
+                        {/* Grid/lijst — zelfde keuze als op de gerechten-pagina. */}
+                        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
+                            {([['grid', 'Grid', LayoutGrid], ['list', 'Lijst', List]] as const).map(([mode, label, Icon]) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setViewMode(mode)}
+                                    title={`Toon als ${label}`}
+                                    aria-pressed={viewMode === mode}
+                                    className="rounded-lg px-2.5 py-1.5 transition"
+                                    style={viewMode === mode
+                                        ? { background: 'var(--brand)', color: '#0a0a0c' }
+                                        : { color: 'var(--muted)' }}
+                                >
+                                    <Icon size={14} />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* Toevoegen staat op een eigen regel, net als "+ Nieuw gerecht"
+                    op de gerechten-pagina. */}
+                <div className="mr-action-bar">
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <AddComponentMenu
+                            onInkoop={() => setShowInkoop(true)}
+                            onZelfBereid={() => setShowReceptuur(true)}
+                            onScan={() => setShowScan(true)}
+                            onImport={() => setShowImport(true)}
+                        />
+                    </div>
+                </div>
+
+                {/* ── Cijfers ──────────────────────────────────────────────────
+                    Eén aaneengesloten strook in plaats van vier losse doosjes,
+                    en elke cel is een filter. Groen betekent hier "een probleem
+                    staat op nul" — daarom kleurt "in gebruik" nooit groen: 7 van
+                    de 30 is een feit, geen prestatie, en er hangt geen actie aan. */}
                 <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
-                    className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-4"
                 >
-                    <StatTile
-                        label="Bouwstenen"
-                        value={String(allCount)}
-                        hint={nonFoodCount > 0 ? `${totalCount} food · ${nonFoodCount} non-food` : 'In je bibliotheek'}
-                        onClick={() => setTypeFilter('all')}
-                        actief={typeFilter === 'all'}
-                    />
-                    {/* De vier tegels zijn de STAAT-as (waar moet ik aan werken);
-                        de chips eronder blijven de SOORT-as. Eerder stond
-                        "Zelf-bereid" hier én als chip — dubbel. */}
-                    <StatTile
-                        label="In gebruik" value={String(allCount - unusedCount)}
-                        hint="Zit in minstens één gerecht"
-                        onClick={() => setTypeFilter('in_gebruik')} actief={typeFilter === 'in_gebruik'}
-                    />
-                    <StatTile
-                        label="Ongebruikt" value={String(unusedCount)}
-                        hint={unusedCount > 0 ? 'Nog aan geen enkel gerecht gekoppeld' : 'Alles is in gebruik'}
-                        onClick={() => setTypeFilter('unused')} actief={typeFilter === 'unused'}
-                    />
-                    <StatTile
-                        label="Zonder prijs"
-                        value={String(zonderPrijsCount)}
-                        hint={zonderPrijsCount > 0 ? 'Maken je gerechten te goedkoop' : 'Alles heeft een prijs'}
-                        accent={zonderPrijsCount > 0}
-                        onClick={() => setTypeFilter('geen_prijs')} actief={typeFilter === 'geen_prijs'}
+                    <ComponentKpiStrip
+                        stats={[
+                            {
+                                key: 'all',
+                                label: 'Bouwstenen',
+                                value: String(allCount),
+                                sub: nonFoodCount > 0 ? `waarvan ${nonFoodCount} non-food` : 'alles bij elkaar',
+                                Icon: Boxes,
+                                tone: 'default',
+                                onClick: () => setTypeFilter('all'),
+                                active: typeFilter === 'all',
+                            },
+                            {
+                                key: 'in_gebruik',
+                                label: 'In gebruik',
+                                value: String(allCount - unusedCount),
+                                sub: 'zit in minstens één gerecht',
+                                Icon: ChefHat,
+                                tone: 'default',
+                                onClick: () => setTypeFilter('in_gebruik'),
+                                active: typeFilter === 'in_gebruik',
+                            },
+                            {
+                                key: 'unused',
+                                label: 'Ongebruikt',
+                                value: String(unusedCount),
+                                sub: unusedCount > 0
+                                    ? 'nog nergens gebruikt — opruimen of inzetten'
+                                    : 'alles wordt gebruikt',
+                                Icon: Archive,
+                                tone: unusedCount === 0 ? 'green' : 'default',
+                                onClick: () => setTypeFilter('unused'),
+                                active: typeFilter === 'unused',
+                            },
+                            {
+                                key: 'geen_prijs',
+                                label: 'Zonder prijs',
+                                value: String(zonderPrijsCount),
+                                sub: zonderPrijsCount > 0
+                                    ? `Vul aan voor ${zonderPrijsCount} ${zonderPrijsCount === 1 ? 'bouwsteen' : 'bouwstenen'} →`
+                                    : 'elke bouwsteen heeft een prijs',
+                                Icon: zonderPrijsCount > 0 ? AlertTriangle : Tag,
+                                tone: zonderPrijsCount > 0 ? 'warn' : 'green',
+                                onClick: () => setTypeFilter('geen_prijs'),
+                                active: typeFilter === 'geen_prijs',
+                            },
+                        ]}
                     />
                 </motion.div>
-
-                {/* Eén regel die de kern uitlegt — de rest stond dubbel in de
-                    drawers zelf. */}
-                <div className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[12px] text-[var(--muted-light)]">
-                    <Calculator size={13} className="shrink-0 text-[var(--brand)]" />
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                        <span>€62,50 / doos 5 kg</span>
-                        <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
-                        <span>€12,50 / kg</span>
-                        <ArrowRight size={11} className="shrink-0 text-[var(--muted)]" />
-                        <span style={{ color: 'var(--text)' }}>200 g in een gerecht = €2,50</span>
-                    </span>
-                </div>
 
                 {/* GP-5 (2026-05-25): FolderBar (horizontale chips) vervangen door
                     FolderTree (Drive-style sidebar) + DndContext voor drag-drop.
@@ -646,11 +835,13 @@ export default function ComponentenPage() {
                     </div>
                 )}
 
-                {/* ── Filters + zoeken ──────────────────────────────────────────
-                    Segmented control met meebewegende markering. "Alle" telt nu
-                    álles (= zelf-bereid + inkoop + non-food), zodat dit getal
-                    gelijk loopt met de mappen links. "Ongebruikt" verving de
-                    AI-tegel: dat is opruimwerk dat je wél iets oplevert. */}
+                {/* ── Filters ──────────────────────────────────────────────────
+                    Dit is de SOORT-as: wat voor ding is het. De staat-as (waar
+                    moet ik aan werken) zit in de cijfer-strook hierboven.
+                    "Ongebruikt" stond hier én daar — die is hier weg, want twee
+                    knoppen voor hetzelfde filter is verwarrend. Staat er een
+                    staat-filter aan, dan verschijnt rechts een pil die laat zien
+                    wát er aanstaat en hoe je hem uitzet. */}
                 <div className="mb-4 flex flex-wrap items-center gap-2">
                     <div className="flex flex-wrap items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
                         {([
@@ -658,7 +849,6 @@ export default function ComponentenPage() {
                             { key: 'prepared', label: 'Zelf-bereid', icon: <Package size={12} />, count: preparedCount },
                             { key: 'bought_in', label: 'Inkoop', icon: <ShoppingBag size={12} />, count: boughtCount },
                             { key: 'non_food', label: 'Non-food', icon: <Boxes size={12} />, count: nonFoodCount },
-                            { key: 'unused', label: 'Ongebruikt', icon: null, count: unusedCount },
                         ] as const).map(f => {
                             const active = typeFilter === f.key;
                             return (
@@ -695,60 +885,24 @@ export default function ComponentenPage() {
                         })}
                     </div>
 
-                    {/* Grid/lijst — zelfde keuze als op de gerechten-pagina. */}
-                    <div className="flex shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
-                        {([['grid', 'Grid', LayoutGrid], ['list', 'Lijst', List]] as const).map(([mode, label, Icon]) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setViewMode(mode)}
-                                title={`Toon als ${label}`}
-                                aria-pressed={viewMode === mode}
-                                className="rounded-lg px-2.5 py-1.5 transition"
-                                style={viewMode === mode
-                                    ? { background: 'var(--brand)', color: '#0a0a0c' }
-                                    : { color: 'var(--muted)' }}
-                            >
-                                <Icon size={14} />
-                            </button>
-                        ))}
-                    </div>
-                    <div className="relative min-w-[220px] flex-1">
-                        <Search
-                            size={14}
-                            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
-                        />
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Zoek component…"
-                            id="component-search"
-                            className="w-full rounded-xl border border-[var(--border)] bg-[var(--card)] py-2.5 pl-9 pr-24 text-[13px] outline-none transition focus:border-[var(--brand)]/50"
-                            style={{ color: 'var(--text)' }}
-                        />
-                        <div className="absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                            {search.length > 0 ? (
-                                <>
-                                    <span className="text-[11px] tabular-nums text-[var(--muted)]">
-                                        {filtered.length}/{components.length}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSearch('')}
-                                        aria-label="Wis zoekopdracht"
-                                        className="rounded p-1 text-[var(--muted)] transition hover:bg-[var(--bg)] hover:text-[var(--text)]"
-                                    >
-                                        <X size={11} />
-                                    </button>
-                                </>
-                            ) : (
-                                <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--muted)]">
-                                    ⌘ K
-                                </span>
-                            )}
-                        </div>
-                    </div>
+                    {staatFilterLabel && (
+                        <button
+                            type="button"
+                            onClick={() => setTypeFilter('all')}
+                            className="inline-flex items-center gap-1.5"
+                            style={{
+                                borderRadius: 999,
+                                border: '1px solid var(--border)',
+                                background: 'var(--card)',
+                                padding: '5px 10px',
+                                fontSize: 12,
+                                color: 'var(--muted-light)',
+                            }}
+                        >
+                            {staatFilterLabel}
+                            <X size={11} />
+                        </button>
+                    )}
                 </div>
 
             {/* Lijst */}
@@ -859,31 +1013,6 @@ export default function ComponentenPage() {
 /* ──────────────────────────────────────────────────────────────────────────
    Kleine bouwstenen voor de kop: cijfer-tegel + één toevoeg-menu.
    ────────────────────────────────────────────────────────────────────────── */
-
-function StatTile({ label, value, hint, accent, onClick, actief }: {
-    label: string; value: string; hint: string; accent?: boolean;
-    /* Een tegel die een getal toont dat je kúnt oplossen, hoort ook een filter
-       te zijn — anders is het een sier-stat. */
-    onClick?: () => void; actief?: boolean;
-}) {
-    const Tag = (onClick ? 'button' : 'div') as 'button' | 'div';
-    return (
-        <Tag
-            {...(onClick ? { type: 'button' as const, onClick } : {})}
-            className={`rounded-xl border bg-[var(--card)] px-3.5 py-3 text-left transition ${onClick ? 'cursor-pointer hover:border-[var(--brand)]/45' : ''}`}
-            style={{ borderColor: actief ? 'var(--brand)' : 'var(--border)' }}
-        >
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
-            <div
-                className="mt-1.5 font-mono text-[24px] font-semibold leading-none tabular-nums"
-                style={{ color: accent ? 'var(--brand)' : 'var(--text)' }}
-            >
-                {value}
-            </div>
-            <div className="mt-1.5 text-[11px] leading-tight text-[var(--muted)]">{hint}</div>
-        </Tag>
-    );
-}
 
 /* Eén primaire knop i.p.v. vier concurrerende: de drie manieren om een
    bouwsteen toe te voegen zitten eronder, mét uitleg wanneer je welke pakt. */
