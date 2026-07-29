@@ -8,9 +8,11 @@ import {
     Boxes, Plus, X, Trash2, Sparkles,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
     Upload, FileText, ChefHat, Camera, Calculator, ImagePlus, ArrowRight,
-    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors,
+    Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors, LayoutGrid, List,
 } from 'lucide-react';
 import { getComponentVisual } from '@/components/menu/component-visuals';
+import { ComponentCard, ComponentListView, type ComponentViewRow } from '@/components/menu/component-views';
+import '@/styles/menu-hub.css';
 
 /* Icoon-resolver voor de soort-tegel op de componentkaart. */
 const SOORT_ICONS: Record<string, typeof Beef> = {
@@ -287,8 +289,10 @@ export default function ComponentenPage() {
     const [showImport, setShowImport] = useState(false);
     /* Zelf-bereid/Inkoop zijn food-only; non_food en unused zijn eigen chips.
        "Alle" toont álles, zodat Alle = Zelf-bereid + Inkoop + Non-food. */
-    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food' | 'unused'>('all');
+    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food' | 'unused' | 'geen_prijs' | 'in_gebruik'>('all');
     const [search, setSearch] = useState('');
+    /* Grid of lijst — zelfde keuze als op de gerechten-pagina. */
+    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
     /* Twee first-class toevoegen-routes (2026-06-12):
        Zelf bereid → ReceptuurDrawer, Scan kant-en-klaar → ScanDrawer. */
@@ -393,6 +397,10 @@ export default function ComponentenPage() {
                 if (c.category !== 'non_food') return false;
             } else if (typeFilter === 'unused') {
                 if ((usage[c.id] ?? 0) > 0) return false;
+            } else if (typeFilter === 'geen_prijs') {
+                if ((c.base_cost_cents ?? 0) > 0) return false;
+            } else if (typeFilter === 'in_gebruik') {
+                if ((usage[c.id] ?? 0) <= 0) return false;
             } else if (typeFilter !== 'all') {
                 if (c.category === 'non_food') return false;
                 if (c.type !== typeFilter) return false;
@@ -504,128 +512,39 @@ export default function ComponentenPage() {
                 </div>
             );
         }
-        return (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map((c, idx) => (
-                    <motion.div
-                        key={c.id}
-                        layout
-                        initial={{ opacity: 0, y: 12 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{
-                            duration: 0.3,
-                            /* Alleen de eerste rijen krijgen een trapje — daarna
-                               ineens, anders wacht je bij 100 kaarten te lang. */
-                            delay: Math.min(idx, 8) * 0.035,
-                            ease: [0.22, 1, 0.36, 1],
-                        }}
-                        whileHover={{ y: -3 }}
-                    >
-                    <DraggableComponentCard componentId={c.id} disabled={!foldersAvailable}>
-                        <button
-                            type="button"
-                            onClick={() => setSelectedComponentId(c.id)}
-                            className="group relative w-full h-full overflow-hidden rounded-xl border border-[var(--border)] p-4 text-left transition-all hover:border-[var(--brand)]/45 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.55)]"
-                            style={{ background: 'linear-gradient(135deg, var(--card) 0%, var(--card-solid) 100%)' }}
+        /* Grid in de gerechten-taal (mr-grid-*): beeldvlak van ~46% met de
+           soort-gradient, badge, prijs en signaal. De sleep-naar-map-wrapper
+           blijft eromheen staan, anders verlies je die functie. */
+        if (viewMode === 'grid') {
+            return (
+                <div className="mr-grid-wrap" style={{ gap: 16 }}>
+                    {filtered.map((c, idx) => (
+                        <motion.div
+                            key={c.id}
+                            layout
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(idx, 8) * 0.035, ease: [0.22, 1, 0.36, 1] }}
                         >
-                            {/* Accentlijn die bij hover van links naar rechts invult. */}
-                            <span
-                                className="pointer-events-none absolute inset-x-0 top-0 h-[3px] origin-left transition-transform duration-300"
-                                style={{ background: getComponentVisual(c.name, c.category).accent, opacity: 0.85 }}
-                            />
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">
-                                    {c.type === 'prepared'
-                                        ? <><Package size={10} /> Zelf-bereid</>
-                                        : <><ShoppingBag size={10} /> Inkoop</>}
-                                    {c.ai_suggested && (
-                                        <span className="inline-flex items-center gap-0.5 rounded bg-[var(--brand)]/10 px-1 py-0.5 text-[9px] text-[var(--brand)]">
-                                            <Sparkles size={8} /> AI
-                                        </span>
-                                    )}
-                                    {c.category === 'non_food' && (
-                                        <span className="rounded bg-[var(--bg)] px-1 py-0.5 text-[9px] normal-case tracking-normal text-[var(--muted)]">
-                                            non-food
-                                        </span>
-                                    )}
-                                </div>
-                                <span
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`Verwijder ${c.name}`}
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(c); }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); handleDelete(c); } }}
-                                    className="rounded p-1 text-[var(--muted)] opacity-0 transition hover:bg-[var(--red)]/10 hover:text-[var(--red)] group-hover:opacity-100"
-                                >
-                                    {deletingId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                                </span>
-                            </div>
-                            {/* Soort-tegel: geeft de kaart visuele identiteit (vlees/vis/
-                                groente/…), zodat de pagina scanbaar is i.p.v. 30× grijs. */}
-                            <div className="mt-3 flex items-start gap-2.5">
-                                {(function () {
-                                    const v = getComponentVisual(c.name, c.category);
-                                    const Icon = SOORT_ICONS[v.icon] ?? Boxes;
-                                    return (
-                                        <span
-                                            aria-hidden="true"
-                                            title={v.label}
-                                            className="flex shrink-0 items-center justify-center rounded-lg"
-                                            style={{ width: 34, height: 34, background: v.gradient }}
-                                        >
-                                            <Icon size={16} color="rgba(255,255,255,.92)" />
-                                        </span>
-                                    );
-                                })()}
-                                <h3 className="line-clamp-2 text-[15px] font-semibold leading-tight" style={{ color: 'var(--text)' }}>
-                                    {c.name}
-                                </h3>
-                            </div>
-                            {c.description && (
-                                <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-[var(--muted-light)]">{c.description}</p>
-                            )}
-                            <div className="mt-3 flex items-baseline justify-between border-t border-[var(--border)] pt-2.5">
-                                <span className="font-mono text-[15px] font-semibold tabular-nums" style={{ color: 'var(--text)' }}>
-                                    {formatEuro(c.base_cost_cents)}
-                                </span>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--muted)]">
-                                    /{c.base_quantity}{c.base_unit}
-                                </span>
-                            </div>
-                            {/* Inkoop-helderheid: herkenbare groothandel-eenheid + de lijn
-                                naar gerechten, direct op de kaart (2026-06-12). */}
-                            <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px]">
-                                <span className="font-medium text-[var(--brand)]">
-                                    {unitPriceLabel(c.base_cost_cents, c.base_quantity, c.base_unit) ?? ''}
-                                    {/* Inkoopprijs blijft vóóraan (dat is wat op de factuur staat);
-                                        de gecorrigeerde prijs staat er als gevolg achter. */}
-                                    {normalizeYield(c.yield_factor) < 1 && (
-                                        <span className="text-[var(--muted)]">
-                                            {' · na snijverlies '}
-                                            {unitPriceLabel(effectiveBaseCostCents(c.base_cost_cents, c.yield_factor), c.base_quantity, c.base_unit) ?? ''}
-                                        </span>
-                                    )}
-                                </span>
-                                <span className="text-[var(--muted)]">
-                                    {(usage[c.id] ?? 0) > 0
-                                        ? `in ${usage[c.id]} ${usage[c.id] === 1 ? 'gerecht' : 'gerechten'}`
-                                        : 'nog niet in een gerecht'}
-                                </span>
-                            </div>
-                            {c.flavor_tags && c.flavor_tags.length > 0 && (
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                    {c.flavor_tags.slice(0, 4).map(tag => (
-                                        <span key={tag} className="rounded-md bg-[var(--bg)] px-1.5 py-0.5 text-[10px] text-[var(--muted-light)]">
-                                            {tag}
-                                        </span>
-                                    ))}
-                                </div>
-                            )}
-                        </button>
-                    </DraggableComponentCard>
-                    </motion.div>
-                ))}
-            </div>
+                            <DraggableComponentCard componentId={c.id} disabled={!foldersAvailable}>
+                                <ComponentCard
+                                    component={c as unknown as ComponentViewRow}
+                                    gebruikt={usage[c.id] ?? 0}
+                                    onClick={() => setSelectedComponentId(c.id)}
+                                    compact={false}
+                                />
+                            </DraggableComponentCard>
+                        </motion.div>
+                    ))}
+                </div>
+            );
+        }
+        return (
+            <ComponentListView
+                componenten={filtered as unknown as ComponentViewRow[]}
+                usage={usage}
+                onSelect={(c) => setSelectedComponentId(c.id)}
+            />
         );
     }
 
@@ -678,14 +597,28 @@ export default function ComponentenPage() {
                         label="Bouwstenen"
                         value={String(allCount)}
                         hint={nonFoodCount > 0 ? `${totalCount} food · ${nonFoodCount} non-food` : 'In je bibliotheek'}
+                        onClick={() => setTypeFilter('all')}
+                        actief={typeFilter === 'all'}
                     />
-                    <StatTile label="Zelf-bereid" value={String(preparedCount)} hint="Met eigen receptuur" />
-                    <StatTile label="Inkoop" value={String(boughtCount)} hint="Kant-en-klaar ingekocht" />
+                    {/* De vier tegels zijn de STAAT-as (waar moet ik aan werken);
+                        de chips eronder blijven de SOORT-as. Eerder stond
+                        "Zelf-bereid" hier én als chip — dubbel. */}
+                    <StatTile
+                        label="In gebruik" value={String(allCount - unusedCount)}
+                        hint="Zit in minstens één gerecht"
+                        onClick={() => setTypeFilter('in_gebruik')} actief={typeFilter === 'in_gebruik'}
+                    />
+                    <StatTile
+                        label="Ongebruikt" value={String(unusedCount)}
+                        hint={unusedCount > 0 ? 'Nog aan geen enkel gerecht gekoppeld' : 'Alles is in gebruik'}
+                        onClick={() => setTypeFilter('unused')} actief={typeFilter === 'unused'}
+                    />
                     <StatTile
                         label="Zonder prijs"
                         value={String(zonderPrijsCount)}
                         hint={zonderPrijsCount > 0 ? 'Maken je gerechten te goedkoop' : 'Alles heeft een prijs'}
                         accent={zonderPrijsCount > 0}
+                        onClick={() => setTypeFilter('geen_prijs')} actief={typeFilter === 'geen_prijs'}
                     />
                 </motion.div>
 
@@ -762,6 +695,24 @@ export default function ComponentenPage() {
                         })}
                     </div>
 
+                    {/* Grid/lijst — zelfde keuze als op de gerechten-pagina. */}
+                    <div className="flex shrink-0 items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--card)] p-1">
+                        {([['grid', 'Grid', LayoutGrid], ['list', 'Lijst', List]] as const).map(([mode, label, Icon]) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setViewMode(mode)}
+                                title={`Toon als ${label}`}
+                                aria-pressed={viewMode === mode}
+                                className="rounded-lg px-2.5 py-1.5 transition"
+                                style={viewMode === mode
+                                    ? { background: 'var(--brand)', color: '#0a0a0c' }
+                                    : { color: 'var(--muted)' }}
+                            >
+                                <Icon size={14} />
+                            </button>
+                        ))}
+                    </div>
                     <div className="relative min-w-[220px] flex-1">
                         <Search
                             size={14}
@@ -909,11 +860,19 @@ export default function ComponentenPage() {
    Kleine bouwstenen voor de kop: cijfer-tegel + één toevoeg-menu.
    ────────────────────────────────────────────────────────────────────────── */
 
-function StatTile({ label, value, hint, accent }: {
+function StatTile({ label, value, hint, accent, onClick, actief }: {
     label: string; value: string; hint: string; accent?: boolean;
+    /* Een tegel die een getal toont dat je kúnt oplossen, hoort ook een filter
+       te zijn — anders is het een sier-stat. */
+    onClick?: () => void; actief?: boolean;
 }) {
+    const Tag = (onClick ? 'button' : 'div') as 'button' | 'div';
     return (
-        <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] px-3.5 py-3">
+        <Tag
+            {...(onClick ? { type: 'button' as const, onClick } : {})}
+            className={`rounded-xl border bg-[var(--card)] px-3.5 py-3 text-left transition ${onClick ? 'cursor-pointer hover:border-[var(--brand)]/45' : ''}`}
+            style={{ borderColor: actief ? 'var(--brand)' : 'var(--border)' }}
+        >
             <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--muted)]">{label}</div>
             <div
                 className="mt-1.5 font-mono text-[24px] font-semibold leading-none tabular-nums"
@@ -922,7 +881,7 @@ function StatTile({ label, value, hint, accent }: {
                 {value}
             </div>
             <div className="mt-1.5 text-[11px] leading-tight text-[var(--muted)]">{hint}</div>
-        </div>
+        </Tag>
     );
 }
 
