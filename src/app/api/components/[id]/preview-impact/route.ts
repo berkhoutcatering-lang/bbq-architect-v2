@@ -67,7 +67,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         /* `gerechten` heeft alleen `verkoopprijs` — een kolom `prijs` bestaat
            niet en liet PostgREST de hele query weigeren ("column gerechten_1.prijs
            does not exist"), waardoor het bewerk-scherm een rode foutmelding gaf. */
-        .select('gerecht_id, quantity_used, cost_at_use_cents, gerechten(id, naam, verkoopprijs)')
+        /* `unit` MOET erbij. Regel ~109 leest row.unit om de eenheid om te rekenen,
+           maar de kolom stond niet in deze select — dus was hij altijd undefined en
+           sloeg costAtUseCents de omrekening over. Een gerecht met 2,5 kg van een
+           component per 100 g kwam daardoor uit op 9 cent in de modal, terwijl de
+           PATCH-herberekening (route.ts:299, die `unit` wél ophaalt) €87,50
+           wegschreef. De modal die je om bevestiging vraagt liet dus een ander
+           bedrag zien dan wat er gebeurde — tot een factor 1000 ernaast. */
+        .select('gerecht_id, quantity_used, unit, cost_at_use_cents, gerechten(id, naam, verkoopprijs)')
         .eq('component_id', componentId)
         .eq('organization_id', orgId);
     if (gcErr) return NextResponse.json({ error: gcErr.message }, { status: 500 });
