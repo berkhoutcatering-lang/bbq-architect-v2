@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supplierProductBaseCost, type SupplierProductCostRow } from '@/lib/supplierSync/recipeCost';
+import { costForBasisCents } from '@/lib/unitPrice';
 
 export interface BoughtInRefreshReport {
     bekeken: number;        // bought_in componenten met een supplier_product-koppeling
@@ -79,20 +80,40 @@ export async function refreshBoughtInPrices(
         if (!base) { report.ongekoppeld++; continue; }
 
         const oldBase = Number(c.base_cost_cents) || 0;
-        const unchanged = base.base_cost_cents === oldBase
-            && base.base_unit === c.base_unit
-            && base.base_quantity === Number(c.base_quantity);
-        if (unchanged) { report.ongewijzigd++; continue; }
+
+        /* Alleen de PRIJS ververst, niet de basis.
+         *
+         * Dit schreef eerder ook base_quantity en base_unit terug, en
+         * supplierProductBaseCost normaliseert altijd naar 100 g / 100 ml /
+         * 1 stuk. Zette een gebruiker zijn component bewust op 1 kg, dan draaide
+         * de eerstvolgende prijs-verversing of leverancierssync dat stil terug
+         * naar 100 g — precies de klacht die we in de drawer net verholpen,
+         * binnengekomen via een andere deur.
+         *
+         * We rekenen de nieuwe leveranciersprijs dus om naar de basis die er al
+         * staat. Zit die basis in een andere eenheid-familie dan de leverancier
+         * (jouw basis in liter, hun prijs per kg), dan is er geen eerlijke
+         * omrekening: overslaan en als ongekoppeld tellen, want dan bewéégt deze
+         * prijs feitelijk niet mee. */
+        const nieuwCents = costForBasisCents({
+            srcCostCents: base.base_cost_cents,
+            srcQuantity: base.base_quantity,
+            srcUnit: base.base_unit,
+            baseQuantity: Number(c.base_quantity),
+            baseUnit: String(c.base_unit ?? ''),
+        });
+        if (nieuwCents === null) { report.ongekoppeld++; continue; }
+        if (nieuwCents === oldBase) { report.ongewijzigd++; continue; }
 
         const { error: upErr } = await sb
             .from('components')
-            .update({ base_cost_cents: base.base_cost_cents, base_quantity: base.base_quantity, base_unit: base.base_unit })
+            .update({ base_cost_cents: nieuwCents })
             .eq('id', c.id)
             .eq('organization_id', orgId);
         if (upErr) continue; // best-effort per component
         report.bijgewerkt++;
         report.totaalOudCents += oldBase;
-        report.totaalNieuwCents += base.base_cost_cents;
+        report.totaalNieuwCents += nieuwCents;
     }
 
     return report;

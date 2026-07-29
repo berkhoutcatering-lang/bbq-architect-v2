@@ -34,7 +34,7 @@ import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, us
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
-import { packToBase, unitPriceLabel, unitPriceCents, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
+import { packToBase, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import {
     ingredientRowCostCents,
@@ -1135,19 +1135,73 @@ function ComponentEditDrawer({
     const [supplierProductId, setSupplierProductId] = useState<number | null>(null);
     const [linkLabel, setLinkLabel] = useState<{ leverancier: string | null; naam: string; actief: boolean } | null>(null);
     const [linkSearch, setLinkSearch] = useState('');
+    /* De genormaliseerde leverancierprijs achter de koppeling. Bewaren we als
+       BRON en niet als conclusie, zodat de waarschuwing hieronder meebeweegt als
+       je de eenheid ter plekke wijzigt. */
+    const [linkBron, setLinkBron] = useState<{ cents: number; quantity: number; unit: string } | null>(null);
+
+    /* De gekoppelde leverancierprijs als één bron: "zoveel centen voor zoveel van
+       deze eenheid". Beide catalogi leveren dat, alleen anders verpakt — Catalog A
+       (prijslijst) als €/kg of €/stuk, Catalog B (supplier_products) als een al
+       genormaliseerd drietal. Zo hoeft de aanroeper het verschil niet te kennen. */
+    function leverancierBron(lp: {
+        source: string;
+        prijs_per_kg?: number | null; prijs_per_stuk?: number | null;
+        base_cost_cents?: number | null; base_quantity?: number | null; base_unit?: string | null;
+    }): { cents: number; quantity: number; unit: string } | null {
+        if (lp.source === 'supplier_product') {
+            if (lp.base_cost_cents != null && lp.base_quantity != null && lp.base_unit) {
+                return { cents: lp.base_cost_cents, quantity: lp.base_quantity, unit: lp.base_unit };
+            }
+            return null;
+        }
+        if (lp.prijs_per_kg && lp.prijs_per_kg > 0) {
+            return { cents: Math.round(lp.prijs_per_kg * 100), quantity: 1, unit: 'kg' };
+        }
+        if (lp.prijs_per_stuk && lp.prijs_per_stuk > 0) {
+            return { cents: Math.round(lp.prijs_per_stuk * 100), quantity: 1, unit: 'stuk' };
+        }
+        return null;
+    }
+
+    /* Beweegt de gekoppelde prijs mee met de basis die NU in het formulier staat?
+       Zo niet, dan zit hij in een andere eenheid-familie en mogen we dat niet
+       wegpoetsen achter een groene "beweegt mee"-tekst. */
+    const prijsBeweegtNietMee = (linkBron && parseDec(baseQty) > 0 && costForBasisCents({
+        srcCostCents: linkBron.cents, srcQuantity: linkBron.quantity, srcUnit: linkBron.unit,
+        baseQuantity: parseDec(baseQty), baseUnit,
+    }) === null)
+        ? { basisEenheid: baseUnit, leverancierEenheid: linkBron.unit }
+        : null;
 
     /* Kostprijs afleiden uit een genormaliseerde leverancier-prijs — €/kg → per
-       100 g (zoals de Rekenhulp), €/stuk → per stuk. Puur code-rekenwerk. */
+       100 g (zoals de Rekenhulp), €/stuk → per stuk. Puur code-rekenwerk.
+       Alleen voor het MOMENT VAN KOPPELEN: dan is er nog geen basis en is 100 g
+       een prima startpunt. Bij het heropenen van een bestaande component mag dit
+       niet draaien — daar blijft de basis van de gebruiker staan. */
     function applyLinkedPrice(prijsPerKg: number | null, prijsPerStuk: number | null): boolean {
-        if (prijsPerKg && prijsPerKg > 0) {
-            setBaseQty('100'); setBaseUnit('g'); setCostEuros((prijsPerKg / 10).toFixed(2));
-            return true;
-        }
-        if (prijsPerStuk && prijsPerStuk > 0) {
-            setBaseQty('1'); setBaseUnit('stuk'); setCostEuros(prijsPerStuk.toFixed(2));
-            return true;
-        }
-        return false; // geen genormaliseerde prijs → kostprijs blijft handmatig
+        /* Rekent via dezelfde canon als het heropenen (costForBasisCents), zodat
+           één prijslijstregel niet twee bedragen kan opleveren. Eerder deed dit
+           pad `(prijsPerKg / 10).toFixed(2)`, en dat rondt op de binaire
+           representatie naar beneden: €3,05/kg werd €0,30 bij koppelen en €0,31
+           bij heropenen. Postgres rondt half-up (migratie 20260601100000 doet
+           `round(prijs_per_kg * 100)`), dus €0,31 is het juiste getal. */
+        const bron = leverancierBron({ source: 'price_list', prijs_per_kg: prijsPerKg, prijs_per_stuk: prijsPerStuk });
+        if (!bron) return false; // geen genormaliseerde prijs → kostprijs blijft handmatig
+
+        const startBasis = bron.unit === 'kg'
+            ? { qty: 100, unit: 'g' }   // gewicht: per 100 g, zoals de Rekenhulp
+            : { qty: 1, unit: bron.unit };
+        const cents = costForBasisCents({
+            srcCostCents: bron.cents, srcQuantity: bron.quantity, srcUnit: bron.unit,
+            baseQuantity: startBasis.qty, baseUnit: startBasis.unit,
+        });
+        if (cents === null) return false;
+
+        setBaseQty(String(startBasis.qty));
+        setBaseUnit(startBasis.unit);
+        setCostEuros((cents / 100).toFixed(2));
+        return true;
     }
 
     function onPickLink(hit: CatalogSearchHit) {
@@ -1162,7 +1216,9 @@ function ComponentEditDrawer({
                 setBaseQty(String(hit.base_quantity));
                 setBaseUnit(hit.base_unit);
                 setCostEuros((hit.base_cost_cents / 100).toFixed(2));
+                setLinkBron({ cents: hit.base_cost_cents, quantity: hit.base_quantity, unit: hit.base_unit });
             } else {
+                setLinkBron(null);
                 toast('Gekoppeld — geen nette prijs bekend, vul de kostprijs zelf in', 'info');
             }
         } else {
@@ -1170,6 +1226,7 @@ function ComponentEditDrawer({
             setMasterProductId(hit.master_product_id);
             setSupplierPriceId(hit.supplier_price_id);
             setSupplierProductId(null);
+            setLinkBron(leverancierBron({ source: 'price_list', prijs_per_kg: hit.prijs_per_kg, prijs_per_stuk: hit.prijs_per_stuk }));
             const derived = applyLinkedPrice(hit.prijs_per_kg, hit.prijs_per_stuk);
             if (!derived) toast('Gekoppeld — deze leverancier heeft geen €/kg of €/stuk, dus vul de kostprijs zelf in', 'info');
         }
@@ -1180,6 +1237,7 @@ function ComponentEditDrawer({
         setSupplierPriceId(null);
         setSupplierProductId(null);
         setLinkLabel(null);
+        setLinkBron(null);
         // Kostprijs blijft staan; je kunt 'm nu weer handmatig aanpassen.
     }
 
@@ -1208,16 +1266,30 @@ function ComponentEditDrawer({
             const lp = body.linked_price as { source: string; leverancier: string | null; naam: string; actief: boolean; prijs_per_kg?: number | null; prijs_per_stuk?: number | null; base_cost_cents?: number | null; base_quantity?: number | null; base_unit?: string | null } | null;
             if (lp) {
                 setLinkLabel({ leverancier: lp.leverancier, naam: lp.naam, actief: !!lp.actief });
-                // Beweegt mee: kostprijs opnieuw afleiden uit de ACTUELE leverancier-prijs.
-                if (lp.source === 'supplier_product') {
-                    if (lp.base_cost_cents != null && lp.base_quantity != null && lp.base_unit) {
-                        setBaseQty(String(lp.base_quantity)); setBaseUnit(lp.base_unit); setCostEuros((lp.base_cost_cents / 100).toFixed(2));
-                    }
-                } else {
-                    applyLinkedPrice(lp.prijs_per_kg ?? null, lp.prijs_per_stuk ?? null);
+                /* De kostprijs beweegt mee met de leverancier — de BASIS niet.
+                   Dit zette eerder ook base_quantity/base_unit terug (naar 100 g
+                   bij een €/kg-prijs), waardoor een zelf ingevulde basis van 1 kg
+                   bij het heropenen weer 100 g was. Opslaan wérkte; openen gooide
+                   het weg. Nu rekenen we de actuele leverancierprijs om naar de
+                   basis die er staat. */
+                const bron = leverancierBron(lp);
+                if (bron) {
+                    const herrekend = costForBasisCents({
+                        srcCostCents: bron.cents,
+                        srcQuantity: bron.quantity,
+                        srcUnit: bron.unit,
+                        baseQuantity: c.base_quantity,
+                        baseUnit: c.base_unit,
+                    });
+                    /* null = andere eenheid-familie (basis in liter, prijs per kg).
+                       Dan niet gokken: laat staan wat is opgeslagen, en zeg het
+                       eerlijk in plaats van te beloven dat de prijs meebeweegt. */
+                    if (herrekend !== null) setCostEuros((herrekend / 100).toFixed(2));
                 }
+                setLinkBron(bron);
             } else {
                 setLinkLabel(null);
+                setLinkBron(null);
             }
             setIngredients(ingredientsFromJson(c.ingredients));
             setSteps(stepsFromJson(c.preparation_steps));
@@ -1447,7 +1519,21 @@ function ComponentEditDrawer({
                                                 placeholder="Zoek een product bij al je leveranciers…"
                                             />
                                         )}
-                                        <p className="kf-help">Gekoppeld → de kostprijs komt uit je prijslijst en beweegt mee bij een prijswijziging.</p>
+                                        {/* Alleen beloven wat er echt gebeurt. Staat jouw basis in
+                                            een andere eenheid-familie dan de leverancier rekent
+                                            (jij per stuk, zij per kilo), dan is er geen eerlijke
+                                            omrekening en beweegt deze prijs dus NIET mee — dan
+                                            hoort er geen groene geruststelling te staan. */}
+                                        {prijsBeweegtNietMee ? (
+                                            <p className="kf-help" style={{ color: 'var(--amber, #f59e0b)' }}>
+                                                Gekoppeld, maar de prijs beweegt <strong>niet</strong> mee: jouw basis staat in{' '}
+                                                {prijsBeweegtNietMee.basisEenheid} en de leverancier rekent per{' '}
+                                                {prijsBeweegtNietMee.leverancierEenheid}. Zet de basis-eenheid gelijk, dan
+                                                rekent hij weer mee — of pas de kostprijs zelf aan.
+                                            </p>
+                                        ) : (
+                                            <p className="kf-help">Gekoppeld → de kostprijs komt uit je prijslijst en beweegt mee bij een prijswijziging.</p>
+                                        )}
                                     </label>
                                 )}
                                 {/* Inkoop-items zonder koppeling: pak-prijs is de bron, base-velden het
