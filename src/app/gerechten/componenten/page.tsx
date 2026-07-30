@@ -34,7 +34,7 @@ import { DndContext, type DragEndEvent, DragOverlay, useDraggable, useSensor, us
 import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
-import { packToBase, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, PACK_UNITS, type PackUnit, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
+import { packToBase, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, PACK_UNITS, type PackUnit, type BaseFields, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import {
     ingredientRowCostCents,
@@ -1221,6 +1221,20 @@ function ComponentEditDrawer({
                 setLinkBron(null);
                 toast('Gekoppeld — geen nette prijs bekend, vul de kostprijs zelf in', 'info');
             }
+            /* Vul de rekenhulp met de doos zoals de leverancier hem verkoopt, zodat
+               je 'm ook per STUK kunt zien. Een doos van 60 broodjes staat in de
+               catalogus als 2100 g, dus normaliseert hij naar €1,41 per 100 g —
+               rekenkundig juist, maar wie per broodje calculeert wil €29,60 / 60 =
+               €0,49 zien. Met pack_count voorgevuld is dat één klik. */
+            /* Alleen voorvullen bij een ECHT afgebakende verpakking: pack_count én
+               content_per_item samen betekenen "zoveel stuks van zoveel inhoud", en
+               dan is `prijs` de doosprijs. Staat alleen unit='kg' zonder doosinhoud,
+               dan is `prijs` een kiloprijs en zou "60 stuks voor €29,60" gelogen zijn. */
+            if (hit.pack_count && hit.pack_count > 0 && hit.content_per_item_quantity) {
+                setPackPrice(hit.prijs.toFixed(2));
+                setPackQty(String(hit.pack_count));
+                setPackUnit('stuk');
+            }
         } else {
             /* Catalog A (prijslijst) → koppel op master_product_id + supplier_price_id. */
             setMasterProductId(hit.master_product_id);
@@ -1536,10 +1550,32 @@ function ComponentEditDrawer({
                                         )}
                                     </label>
                                 )}
-                                {/* Inkoop-items zonder koppeling: pak-prijs is de bron, base-velden het
-                                    berekende resultaat. Hier herziet Mathijs wat hij bij de slager betaalt. */}
-                                {comp?.type === 'bought_in' && !linkLabel && (
-                                    <PakketRekenhulp priceEuros={packPrice} qty={packQty} unit={packUnit} onApply={applyPack} />
+                                {/* Pak-prijs is de bron, base-velden het berekende resultaat. Hier
+                                    herziet Mathijs wat hij bij de slager betaalt.
+
+                                    Stond eerder achter `!linkLabel`, dus zodra je een leverancier
+                                    koppelde verdween de rekenhulp. Precies dan heb je hem nodig: de
+                                    catalogus slaat een doos van 60 briochebroodjes op als 2100 gram
+                                    en normaliseert naar €1,41 per 100 g, terwijl je per broodje
+                                    inkoopt en €29,60 / 60 = €0,49 wilt zien. Zonder deze rekenhulp
+                                    was die som in het scherm niet te maken. */}
+                                {comp?.type === 'bought_in' && (
+                                    <PakketRekenhulp
+                                        priceEuros={packPrice}
+                                        qty={packQty}
+                                        unit={packUnit}
+                                        onApply={applyPack}
+                                        huidigeBasis={{
+                                            qty: parseDec(baseQty),
+                                            unit: baseUnit,
+                                            cents: Math.round((parseDec(costEuros) || 0) * 100),
+                                        }}
+                                        onOvernemen={(base) => {
+                                            setBaseQty(String(base.base_quantity));
+                                            setBaseUnit(base.base_unit);
+                                            setCostEuros((base.base_cost_cents / 100).toFixed(2));
+                                        }}
+                                    />
                                 )}
                                 {/* Snijverlies hoort naast de prijs: het is onderdeel van de prijs. */}
                                 <SnijverliesVeld
@@ -2060,12 +2096,16 @@ function SnijverliesVeld({
    ────────────────────────────────────────────────────────────────────────── */
 
 function PakketRekenhulp({
-    priceEuros, qty, unit, onApply,
+    priceEuros, qty, unit, onApply, huidigeBasis, onOvernemen,
 }: {
     priceEuros: string;
     qty: string;
     unit: PackUnit;
     onApply: (price: string, qty: string, unit: PackUnit) => void;
+    /* Wat er nu in de base-velden staat — om te zien of de uitkomst hieronder
+       daarvan afwijkt. */
+    huidigeBasis?: { qty: number; unit: string; cents: number };
+    onOvernemen?: (base: BaseFields) => void;
 }) {
     const cents = Math.round(parseDec(priceEuros) * 100);
     const q = parseDec(qty);
@@ -2073,6 +2113,17 @@ function PakketRekenhulp({
     const base = valid ? packToBase(cents, q, unit) : null;
     const label = base ? unitPriceLabel(base.base_cost_cents, base.base_quantity, base.base_unit) : null;
     const example = base ? exampleUseCost(base) : null;
+
+    /* Wijkt de uitkomst af van wat er in de velden staat? Dan is er iets om over
+       te nemen. Doet zich vooral voor bij een gekoppeld groothandelsproduct: een
+       doos van 60 broodjes staat in de catalogus als 2100 g en normaliseert naar
+       €1,41 per 100 g, terwijl je per broodje inkoopt en €0,49 wilt. Zonder deze
+       knop moest je een veld aanraken om de som over te nemen — te verstopt. */
+    const wijktAf = !!(base && huidigeBasis && onOvernemen && (
+        base.base_unit !== huidigeBasis.unit
+        || base.base_quantity !== huidigeBasis.qty
+        || base.base_cost_cents !== huidigeBasis.cents
+    ));
 
     return (
         <div className="kf-card kf-card-accent">
@@ -2099,13 +2150,24 @@ function PakketRekenhulp({
             {base ? (
                 <div className="mt-3" style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
                     <div className="font-mono" style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--brand)' }}>
-                        = €{(base.base_cost_cents / 100).toFixed(2)} per {base.base_quantity === 1 ? '' : base.base_quantity}{base.base_unit}
+                        = {formatEuro(base.base_cost_cents)} per {base.base_quantity === 1 ? '' : formatQty(base.base_quantity)}{base.base_unit}
                         {label ? <span className="font-sans" style={{ marginLeft: 6, fontWeight: 400, color: 'var(--muted)' }}>({label})</span> : null}
                     </div>
                     {example && (
                         <div style={{ marginTop: 3, fontSize: 11, color: 'var(--muted)' }}>
-                            Voorbeeld: {example.qty} {example.unit} in een gerecht kost €{(example.cents / 100).toFixed(2)}
+                            Voorbeeld: {formatQty(example.qty)} {example.unit} in een gerecht kost {formatEuro(example.cents)}
                         </div>
+                    )}
+                    {wijktAf && base && (
+                        <button
+                            type="button"
+                            onClick={() => onOvernemen!(base)}
+                            className="kf-add"
+                            style={{ marginTop: 10 }}
+                        >
+                            Gebruik {formatEuro(base.base_cost_cents)} per{' '}
+                            {base.base_quantity === 1 ? '' : formatQty(base.base_quantity)}{base.base_unit} als kostprijs
+                        </button>
                     )}
                 </div>
             ) : (
