@@ -56,6 +56,13 @@ export interface CatalogSearchHit {
     base_cost_cents?: number | null;
     base_quantity?: number | null;
     base_unit?: string | null;
+    /* Hoe de verpakking in elkaar zit (alleen supplier_product): een doos van 60
+       broodjes van 35 g is pack_count=60, content_per_item_quantity=35, unit='g'.
+       De base-kostprijs hierboven normaliseert dat naar €/100 g, maar wie per stuk
+       inkoopt heeft pack_count nodig om €29,60 / 60 = €0,49 te kunnen zien. */
+    pack_count?: number | null;
+    content_per_item_quantity?: number | null;
+    content_per_item_unit?: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -189,8 +196,15 @@ export async function GET(req: NextRequest) {
             id: number; name: string; supplier_id: number | null; price_cents: number;
             unit: string | null; package_size: number | null; package_unit: string | null;
             total_base_quantity: number | null; base_unit: string | null;
+            pack_count: number | null;
+            content_per_item_quantity: number | null;
+            content_per_item_unit: string | null;
         };
-        const spCols = 'id, name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit';
+        /* pack_count + content_per_item_* erbij: daarmee weet het bewerk-scherm dat een
+           "doos 60 stuks" uit 60 stuks bestaat, en kan het de pak-rekenhulp voorvullen.
+           Zonder deze velden kon je een broodje uit een doos van 60 alleen per 100 g
+           zien (€1,41), nooit per stuk (€0,49) — terwijl je per stuk inkoopt. */
+        const spCols = 'id, name, supplier_id, price_cents, unit, package_size, package_unit, total_base_quantity, base_unit, pack_count, content_per_item_quantity, content_per_item_unit';
 
         let spQuery = supabase
             .from('supplier_products')
@@ -258,6 +272,9 @@ export async function GET(req: NextRequest) {
                     base_cost_cents: base?.base_cost_cents ?? null,
                     base_quantity: base?.base_quantity ?? null,
                     base_unit: base?.base_unit ?? null,
+                    pack_count: s.pack_count != null ? Number(s.pack_count) : null,
+                    content_per_item_quantity: s.content_per_item_quantity != null ? Number(s.content_per_item_quantity) : null,
+                    content_per_item_unit: (s.content_per_item_unit as string | null) ?? null,
                     _fuzzy: fuzzy,
                     _score: score,
                 });

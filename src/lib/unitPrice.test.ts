@@ -332,3 +332,33 @@ describe('costForBasisCents — prijs-verversing mag de gekozen basis niet omgoo
         })).toBeNull();
     });
 });
+
+describe('doos van 60 briochebroodjes — per stuk of per 100 g', () => {
+    /* De catalogus slaat Bidfood-product 7475 op als 2100 g (60 stuks x 35 g) voor
+       €29,60, en normaliseert dus naar €1,41 per 100 g. Rekenkundig juist, maar
+       wie per broodje calculeert wil €0,49 zien. Beide moeten kloppen, en ze
+       moeten in elkaar om te rekenen zijn. */
+    it('per 100 g via het gewicht van de doos', () => {
+        expect(packToBaseMulti(2960, 60, 35, 'g')).toEqual({
+            base_quantity: 100, base_unit: 'g', base_cost_cents: 141,
+        });
+    });
+    it('per stuk via het aantal in de doos — €29,60 / 60 = €0,49', () => {
+        expect(packToBase(2960, 60, 'stuk')).toEqual({
+            base_quantity: 1, base_unit: 'stuk', base_cost_cents: 49,
+        });
+    });
+    it('de twee zijn NIET in elkaar om te rekenen — gewicht en stuks zijn andere families', () => {
+        /* Daarom mag de gekoppelde prijs een per-stuk-basis niet stil overschrijven,
+           en hoort de UI te zeggen dat hij niet meebeweegt. */
+        expect(costForBasisCents({
+            srcCostCents: 141, srcQuantity: 100, srcUnit: 'g',
+            baseQuantity: 1, baseUnit: 'stuk',
+        })).toBeNull();
+    });
+    it('een doos van 120 stuks voor €34,00 geeft €0,28 per stuk', () => {
+        expect(packToBase(3400, 120, 'stuk')).toEqual({
+            base_quantity: 1, base_unit: 'stuk', base_cost_cents: 28,
+        });
+    });
+});
