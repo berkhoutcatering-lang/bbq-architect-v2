@@ -20,6 +20,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateProductionPlan } from './productionQty';
+import { componentHoeveelheidVoorGasten } from '@/lib/gerecht-kosten';
 import { scheduledAtForPhase, PHASE_DURATION_MINUTES } from './prepTaskScheduler';
 import {
     findTemplateForDish,
@@ -295,10 +296,14 @@ export async function bulkScheduleEventPrep(
         const comps = componentsByDish.get(dish.id);
         if (!comps || comps.length === 0) continue;
         dishesWithComponents.add(dish.id);
-        const factor = event.guests / Math.max(1, dish.porties ?? 10);
+        /* quantity_used is de dosering PER GAST (zie de canon in lib/gerecht-kosten.ts),
+           dus je vermenigvuldigt met het aantal gasten — niet met gasten ÷ porties.
+           Dat laatste stond hier en leverde bij een gerecht op de standaard 10 porties
+           precies 10x te weinig op: 750 g inkopen en prepen voor 50 man waar 7,5 kg
+           nodig was. `porties` beschrijft de vrije recepttekst, niet de componenten. */
         for (const row of comps) {
             const comp = row.components!;
-            const qty = (row.quantity_used ?? 0) * factor;
+            const qty = componentHoeveelheidVoorGasten(row.quantity_used ?? 0, event.guests);
             const existing = compGroups.get(comp.id);
             if (existing) {
                 existing.totalQty += qty;

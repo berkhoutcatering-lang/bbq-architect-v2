@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -76,7 +76,19 @@ interface HaccpRow {
     ai_suggested: boolean;
 }
 
-const ALLERGEN_CODES = ['G', 'L', 'N', 'V', 'E', 'S', 'Sd', 'M', 'W', 'Sl', 'Lp', 'Sf', 'Sc', 'P'];
+/* De 14 wettelijke allergenen, met EXACT de codes uit de allergens-tabel.
+ *
+ * Deze lijst liep uit de pas met de database, en dat is het gevaarlijkste soort
+ * fout dat deze app kan maken:
+ *   'V'  betekende hier "vis", maar in de database is V = VEGETARISCH.
+ *        Vink je vis aan, dan legde de app "vegetarisch" vast.
+ *   'Sd' betekende hier "sesam"; server-side werd dat SD = SELDERIJ.
+ *   'Sl' (selderij), 'Lp' (lupine), 'Sf' (sulfiet) en 'Sc' (schaaldieren)
+ *        bestaan helemaal niet in de allergens-tabel.
+ * Vis is F, sesam is SE, selderij SD, lupine LU, sulfiet SU, schaaldieren C.
+ * Wijzig deze codes nooit zonder de allergens-tabel ernaast te leggen: hier
+ * hangt de allergenen-informatie op de menukaart van een gast aan. */
+const ALLERGEN_CODES = ['G', 'L', 'N', 'P', 'E', 'S', 'F', 'C', 'W', 'M', 'SE', 'SU', 'SD', 'LU'];
 
 const HACCP_TYPES = [
     { value: 'kerntemp', label: 'Kerntemperatuur', defaultUnit: 'celsius' },
@@ -89,9 +101,9 @@ const HACCP_TYPES = [
 ];
 
 const ALLERGEN_LABELS: Record<string, string> = {
-    G: 'gluten', L: 'lactose', N: 'noten', V: 'vis', E: 'ei', S: 'soja',
-    Sd: 'sesam', M: 'mosterd', W: 'weekdieren', Sl: 'selderij',
-    Lp: 'lupine', Sf: 'sulfiet', Sc: 'schaaldieren', P: 'pinda',
+    G: 'gluten', L: 'lactose', N: 'noten', P: 'pinda', E: 'ei', S: 'soja',
+    F: 'vis', C: 'schaaldieren', W: 'weekdieren', M: 'mosterd',
+    SE: 'sesam', SU: 'sulfiet', SD: 'selderij', LU: 'lupine',
 };
 
 type ComponentType = 'prepared' | 'bought_in';
@@ -180,14 +192,59 @@ interface IngredientFormRow {
  * invullen was. Luistert in de capture-fase niet: een open zoek-popup mag Escape
  * eerst zelf afhandelen.
  */
-function useEscapeToClose(onClose: () => void) {
+function useEscapeToClose(onClose: () => void, heeftWerk?: () => boolean) {
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
-            if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+            if (e.key !== 'Escape' || e.defaultPrevented) return;
+            /* Staat er ingevuld werk, dan eerst vragen. Twintig minuten
+               ingrediënten, stappen en HACCP-punten intikken en dan per ongeluk
+               Escape (of een klik naast de drawer) gooide alles weg zonder één
+               vraag — inclusief een AI-lezing waar een verzoek voor betaald is. */
+            if (heeftWerk?.()) {
+                if (!window.confirm('Je hebt hier dingen ingevuld die nog niet opgeslagen zijn.\n\nSluiten en je invoer weggooien?')) return;
+            }
+            onClose();
         }
         document.addEventListener('keydown', onKey);
         return () => document.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    }, [onClose, heeftWerk]);
+}
+
+/* Zelfde vraag, maar dan voor de klik naast de drawer (het grijze vlak). */
+function maakScrimSluiter(onClose: () => void, heeftWerk?: () => boolean) {
+    return () => {
+        if (heeftWerk?.()) {
+            if (!window.confirm('Je hebt hier dingen ingevuld die nog niet opgeslagen zijn.\n\nSluiten en je invoer weggooien?')) return;
+        }
+        onClose();
+    };
+}
+
+/* De ingrediënt-som omrekenen naar een kostprijs PER BASIS-HOEVEELHEID.
+ *
+ * ingredientSumCents telt de regels op en dat is de prijs van de HÉLE receptuur.
+ * Het kostprijs-veld betekent iets anders: "zoveel per basis-hoeveelheid", bv.
+ * € 1,43 per 100 g. Die twee door elkaar halen is een factor-10-fout: 1000 g
+ * chimichurri voor € 24,00 werd € 24,00 per 100 g in plaats van € 2,40 — mét een
+ * groene "kostprijs overgenomen"-melding erbij, dus zonder enig signaal dat er
+ * iets fout ging. Dat rolt door in elk gerecht, elke menu-marge en elke offerte.
+ *
+ * Kan de omrekening niet (ingrediënten in eenheden die niet bij elkaar op te
+ * tellen zijn, bv. 3 stuks + 200 g), dan geven we null terug. De aanroeper MOET
+ * dan stoppen en het vragen — nooit alsnog de rauwe som wegschrijven.
+ */
+function kostprijsPerBasisUitIngredienten(
+    rows: IngredientFormRow[],
+    baseQty: number,
+    baseUnit: string,
+): { cents: number; sumCents: number } | null {
+    const sumCents = ingredientSumCents(rows);
+    if (sumCents <= 0) return null;
+    const opbrengst = recipeYieldFromRows(rows.map(r => ({ qty: parseDec(r.qty), unit: r.unit })));
+    if (!opbrengst) return null;
+    const perBase = costPerBaseFromRecipe(sumCents, opbrengst, baseQty, baseUnit);
+    if (perBase === null || !Number.isFinite(perBase)) return null;
+    return { cents: perBase, sumCents };
 }
 
 /** Is deze regel gekoppeld aan een leverancier-product (welke catalogus dan ook)? */
@@ -292,6 +349,30 @@ function stepsFromJson(value: unknown): string[] {
     return value.filter((s): s is string => typeof s === 'string');
 }
 
+/* Onthoudt een keuze in localStorage. Map, filter, sortering en weergave waren
+   vergeten zodra je even naar een gerecht klikte: je stond weer op "Alle
+   componenten", grid, naam A–Z, en moest alles opnieuw instellen. Per tabblad
+   dezelfde sleutel, dus het voelt als "waar ik gebleven was".
+   Faalt localStorage (privémodus, volle opslag), dan gedraagt de pagina zich
+   gewoon als voorheen — een voorkeur is nooit een reden om iets te breken. */
+function useBewaardeKeuze<T>(sleutel: string, start: T): [T, (v: T) => void] {
+    const [waarde, setWaarde] = useState<T>(start);
+    /* Pas ná mount lezen: op de server bestaat localStorage niet, en direct in
+       useState lezen geeft een hydration-mismatch. */
+    useEffect(() => {
+        try {
+            const rauw = window.localStorage.getItem(sleutel);
+            if (rauw !== null) setWaarde(JSON.parse(rauw) as T);
+        } catch { /* geen voorkeur beschikbaar — start-waarde blijft staan */ }
+    }, [sleutel]);
+    const zet = useCallback((v: T) => {
+        setWaarde(v);
+        try { window.localStorage.setItem(sleutel, JSON.stringify(v)); }
+        catch { /* niet kunnen onthouden mag nooit de actie zelf blokkeren */ }
+    }, [sleutel]);
+    return [waarde, zet];
+}
+
 /* Naam-heuristiek voor non-food bij scan-import (default food). */
 const NON_FOOD_RE = /folie|vacuumzak|snijplank|braadpan|servet|beker|handschoen|krat|disposable|tape|zak/i;
 
@@ -304,20 +385,19 @@ export default function ComponentenPage() {
        van inkoopprijs naar gerecht (2026-06-12). */
     const [usage, setUsage] = useState<Record<number, number>>({});
     const [loading, setLoading] = useState(true);
-    const [deletingId, setDeletingId] = useState<number | null>(null);
     const [selectedComponentId, setSelectedComponentId] = useState<number | null>(null);
     const [showImport, setShowImport] = useState(false);
     /* Zelf-bereid/Inkoop zijn food-only; non_food en unused zijn eigen chips.
        "Alle" toont álles, zodat Alle = Zelf-bereid + Inkoop + Non-food. */
-    const [typeFilter, setTypeFilter] = useState<'all' | ComponentType | 'non_food' | 'unused' | 'geen_prijs' | 'in_gebruik'>('all');
+    const [typeFilter, setTypeFilter] = useBewaardeKeuze<'all' | ComponentType | 'non_food' | 'unused' | 'geen_prijs' | 'in_gebruik'>('componenten.filter', 'all');
     const [search, setSearch] = useState('');
     /* Grid of lijst — zelfde keuze als op de gerechten-pagina. */
-    const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+    const [viewMode, setViewMode] = useBewaardeKeuze<'grid' | 'list'>('componenten.weergave', 'grid');
     /* De volgorde woont hier, niet in de lijst-weergave. Eerder zat sorteren
        alléén op de kolomkoppen van de lijst, dus in de grid — de weergave die
        standaard aan staat — kreeg je gewoon de database-volgorde. Nu bedienen
        het menu hierboven én de kolomkoppen dezelfde keuze. */
-    const [sortKey, setSortKey] = useState<ComponentSortKey>('naam_az');
+    const [sortKey, setSortKey] = useBewaardeKeuze<ComponentSortKey>('componenten.sortering', 'naam_az');
 
     /* Twee first-class toevoegen-routes (2026-06-12):
        Zelf bereid → ReceptuurDrawer, Scan kant-en-klaar → ScanDrawer. */
@@ -334,7 +414,7 @@ export default function ComponentenPage() {
        als ingesteld → filter op components.folder_id.
        GP-5 (2026-05-25): currentFolderId kan ook '__root__' zijn = "zonder folder". */
     const { rows: folders, available: foldersAvailable, refetch: refetchFolders } = useComponentFolders();
-    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+    const [currentFolderId, setCurrentFolderId] = useBewaardeKeuze<string | null>('componenten.map', null);
     const [folderModalOpen, setFolderModalOpen] = useState(false);
     const [folderEditing, setFolderEditing] = useState<ComponentFolderRow | null>(null);
 
@@ -384,8 +464,13 @@ export default function ComponentenPage() {
         }
     }
 
-    async function loadComponents() {
-        setLoading(true);
+    /* `stil` = herladen zonder de lijst weg te halen.
+       Na elke opslag draaide de hele pagina terug naar een spinner; de lijst kromp
+       daardoor tot niets en de browser gooide je scrollpositie weg. Wie bouwsteen
+       nummer 40 aanpaste, stond daarna weer bij nummer 1. Bij een hérlaad hebben we
+       de vorige lijst nog, dus die laten we gewoon staan tot de nieuwe binnen is. */
+    async function loadComponents(stil = false) {
+        if (!stil) setLoading(true);
         try {
             const res = await fetch('/api/components', { credentials: 'include' });
             const body = await res.json();
@@ -395,7 +480,7 @@ export default function ComponentenPage() {
         } catch (e: any) {
             toast(e.message || 'Laden mislukt', 'error');
         } finally {
-            setLoading(false);
+            if (!stil) setLoading(false);
         }
     }
 
@@ -499,33 +584,41 @@ export default function ComponentenPage() {
     }, [filtered, sortKey, usage]);
 
     /* Counts per folder voor de FolderBar chips. */
+    /* Een map telt ook wat er in haar SUBMAPPEN zit.
+       Eerder telde alleen wat er rechtstreeks in zat: "Vlees 2" terwijl er via
+       "Rund" en "Varken" dertig bouwstenen onder hingen. In combinatie met
+       dichtgeklapte submappen leek het dan alsof je bouwstenen kwijt was. */
     const folderCounts = useMemo(() => {
-        const m: Record<string, number> = {};
+        const direct: Record<string, number> = {};
         for (const c of components) {
-            if (c.folder_id) m[c.folder_id] = (m[c.folder_id] ?? 0) + 1;
+            if (c.folder_id) direct[c.folder_id] = (direct[c.folder_id] ?? 0) + 1;
         }
-        return m;
-    }, [components]);
+        const kinderen = new Map<string, string[]>();
+        for (const f of folders) {
+            const ouder = f.parent_id;
+            if (!ouder) continue;
+            const lijst = kinderen.get(ouder) ?? [];
+            lijst.push(f.id);
+            kinderen.set(ouder, lijst);
+        }
+        /* Diepte-eerst met bezoek-set: een (per ongeluk) cyclische map-boom mag
+           de pagina niet laten vastlopen. */
+        const totaal: Record<string, number> = {};
+        const bezig = new Set<string>();
+        function tel(id: string): number {
+            if (totaal[id] !== undefined) return totaal[id];
+            if (bezig.has(id)) return direct[id] ?? 0;
+            bezig.add(id);
+            let som = direct[id] ?? 0;
+            for (const kind of kinderen.get(id) ?? []) som += tel(kind);
+            bezig.delete(id);
+            totaal[id] = som;
+            return som;
+        }
+        for (const f of folders) tel(f.id);
+        return totaal;
+    }, [components, folders]);
     const rootCount = useMemo(() => components.filter(c => c.folder_id === null).length, [components]);
-
-    async function handleDelete(c: ComponentRow) {
-        if (!window.confirm(`Verwijder "${c.name}"?\n\nDit kan niet ongedaan worden gemaakt. Als de component in een gerecht zit, wordt verwijderen tegengehouden.`)) return;
-        setDeletingId(c.id);
-        try {
-            const res = await fetch(`/api/components/${c.id}`, {
-                method: 'DELETE',
-                credentials: 'include',
-            });
-            const body = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(body.error || 'Verwijderen mislukt');
-            toast(`"${c.name}" verwijderd`, 'success');
-            await loadComponents();
-        } catch (e: any) {
-            toast(e.message || 'Verwijderen mislukt', 'error');
-        } finally {
-            setDeletingId(null);
-        }
-    }
 
     /* De cijfers moeten gaan over wat er OP HET SCHERM staat. Stond hier eerder
        `components` (alles), dan bleef de strook "31 bouwstenen · 6 zonder prijs"
@@ -582,6 +675,30 @@ export default function ComponentenPage() {
         : typeFilter === 'in_gebruik' ? 'In gebruik'
         : null;
 
+    /* id → naam, zodat een kaart kan tonen in welke map hij ligt. Zonder deze
+       koppeling bleef de kolom "Map" leeg voor elke ingedeelde bouwsteen: een kop
+       die informatie belooft die er niet is. Bij een omgeving zonder mappen-
+       migratie geven we niets mee, dan verdwijnt de kolom vanzelf. */
+    const folderNamen = useMemo(
+        () => (foldersAvailable ? Object.fromEntries(folders.map(f => [f.id, f.name])) : undefined),
+        [folders, foldersAvailable],
+    );
+
+    /* Staat er iets in de weg dat treffers kan verbergen — een map of een
+       soort/staat-filter? De zoekterm zelf telt hier niet mee: die IS de vraag. */
+    const beperkingAan = currentFolderId !== null || typeFilter !== 'all';
+    const beperkingTekst = [
+        currentFolderId === '__root__'
+            ? 'bouwstenen zonder map'
+            : currentFolderId !== null
+                ? `de map "${folders.find(f => f.id === currentFolderId)?.name ?? 'deze map'}"`
+                : null,
+        staatFilterLabel ? `het filter "${staatFilterLabel}"` : null,
+        typeFilter === 'prepared' ? 'het filter "Zelf-bereid"'
+            : typeFilter === 'bought_in' ? 'het filter "Inkoop"'
+                : typeFilter === 'non_food' ? 'het filter "Non-food"' : null,
+    ].filter(Boolean).join(' en ') || 'de huidige selectie';
+
     /* GP-5: render-helper voor het card-grid-gebied (loading/empty/cards).
        Wordt aangeroepen binnen DndContext (mr-comp-layout) of standalone
        wanneer folders niet beschikbaar zijn. Cards wikkelen in
@@ -607,11 +724,17 @@ export default function ComponentenPage() {
                         {components.length === 0 ? 'Nog geen componenten' : 'Geen match'}
                     </h3>
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
+                        {/* Alleen "je hebt 'm niet" zeggen als er ook echt niets in de weg
+                            staat. Zoek je in de map "Sauzen" naar een chimichurri die in
+                            "Marinades" ligt, dan is de stellige melding onwaar — en de knop
+                            eronder nodigt uit om 'm nóg een keer aan te maken. */}
                         {components.length === 0
                             ? "Begin met je eerste bouwsteen. Zelf bereid met volledige receptuur (aardbeien bavaroise) of scan een kant-en-klaar product met je camera. Pas hier één inkoopprijs aan en elk gerecht dat 'm gebruikt rekent direct mee."
-                            : search.trim().length > 0
-                                ? `Je hebt nog geen bouwsteen die "${search.trim()}" heet. Deze zoekbalk kijkt alleen in je eigen bouwstenen — je leverancier-catalogi doorzoek je hieronder.`
-                                : 'Geen component op deze filter of zoekterm.'}
+                            : beperkingAan
+                                ? `Geen bouwsteen gevonden${search.trim() ? ` op "${search.trim()}"` : ''} binnen ${beperkingTekst}. Misschien staat hij ergens anders — wis de filters om overal te kijken.`
+                                : search.trim().length > 0
+                                    ? `Je hebt nog geen bouwsteen die "${search.trim()}" heet. Deze zoekbalk kijkt alleen in je eigen bouwstenen — je leverancier-catalogi doorzoek je hieronder.`
+                                    : 'Geen component op deze filter of zoekterm.'}
                     </p>
                     {/* Een lege lijst mag geen muur zijn. Wie hier op "salsa" zoekt en niets
                         vindt, concludeert dat het product niet bestaat — terwijl het gewoon
@@ -680,6 +803,8 @@ export default function ComponentenPage() {
                                     gebruikt={usage[c.id] ?? 0}
                                     onClick={() => setSelectedComponentId(c.id)}
                                     compact={false}
+                                    folderNamen={folderNamen}
+                                    onFolderSelect={setCurrentFolderId}
                                 />
                             </DraggableComponentCard>
                         </motion.div>
@@ -694,6 +819,8 @@ export default function ComponentenPage() {
                 onSelect={(c) => setSelectedComponentId(c.id)}
                 sortKey={sortKey}
                 onSortKeyChange={setSortKey}
+                folderNamen={folderNamen}
+                onFolderSelect={setCurrentFolderId}
             />
         );
     }
@@ -1033,14 +1160,15 @@ export default function ComponentenPage() {
                 <ComponentEditDrawer
                     componentId={selectedComponentId}
                     onClose={() => setSelectedComponentId(null)}
-                    onSaved={() => { setSelectedComponentId(null); loadComponents(); }}
+                    onSaved={() => { setSelectedComponentId(null); loadComponents(true); }}
+                    onDeleted={() => { setSelectedComponentId(null); loadComponents(true); }}
                 />
             )}
 
             {showImport && (
                 <SupplierImportDrawer
                     onClose={() => setShowImport(false)}
-                    onImported={() => { setShowImport(false); loadComponents(); }}
+                    onImported={() => { setShowImport(false); loadComponents(true); }}
                 />
             )}
 
@@ -1051,7 +1179,7 @@ export default function ComponentenPage() {
                        zoekterm meteen in het veld — anders moet je 'm overtikken. */
                     initialZoek={inkoopStartZoek}
                     onClose={() => { setShowInkoop(false); setInkoopStartZoek(''); }}
-                    onSaved={() => { setShowInkoop(false); setInkoopStartZoek(''); loadComponents(); }}
+                    onSaved={() => { setShowInkoop(false); setInkoopStartZoek(''); loadComponents(true); }}
                 />
             )}
 
@@ -1059,7 +1187,7 @@ export default function ComponentenPage() {
                 <ReceptuurDrawer
                     folderId={currentFolderId}
                     onClose={() => setShowReceptuur(false)}
-                    onSaved={() => { setShowReceptuur(false); loadComponents(); }}
+                    onSaved={() => { setShowReceptuur(false); loadComponents(true); }}
                 />
             )}
 
@@ -1067,16 +1195,25 @@ export default function ComponentenPage() {
                 <ScanDrawer
                     folderId={currentFolderId}
                     onClose={() => setShowScan(false)}
-                    onImported={() => { setShowScan(false); loadComponents(); }}
+                    onImported={() => { setShowScan(false); loadComponents(true); }}
                 />
             )}
 
             </div>
 
+            {/* parentId bewust null: "Nieuwe map" maakt een HOOFDMAP.
+                Hier stond currentFolderId, en dat deed twee dingen fout tegelijk.
+                Stond je in de map "Vlees", dan werd je nieuwe map stilzwijgend een
+                submap dáárvan — onzichtbaar achter een dichtgeklapt pijltje, dus je
+                maakte 'm nog een keer en kreeg "bestaat al". En stond je op "Zonder
+                folder", dan ging de tekst '__root__' als parent mee; dat is geen
+                geldig id, dus je kreeg een kale "Validatie-fout" zonder uitleg.
+                De knop kent geen bovenliggende map (onCreate: () => void), dus er
+                viel hier ook niets zinnigs te kiezen. */}
             <FolderModal
                 open={folderModalOpen}
                 editing={folderEditing}
-                parentId={currentFolderId}
+                parentId={null}
                 onClose={() => { setFolderModalOpen(false); setFolderEditing(null); }}
                 onSaved={() => { refetchFolders(); }}
             />
@@ -1175,14 +1312,40 @@ function AddComponentMenu({ onInkoop, onZelfBereid, onScan, onImport }: {
    ────────────────────────────────────────────────────────────────────────── */
 
 function ComponentEditDrawer({
-    componentId, onClose, onSaved,
+    componentId, onClose, onSaved, onDeleted,
 }: {
     componentId: number;
     onClose: () => void;
     onSaved: () => void;
+    onDeleted: () => void;
 }) {
     const toast = useToast();
     useEscapeToClose(onClose);
+    const [deleting, setDeleting] = useState(false);
+
+    /* Verwijderen. De database houdt het tegen zolang de bouwsteen in een gerecht
+       zit (FK RESTRICT) en de API vertelt in gewone taal wélke gerechten dat zijn —
+       dus we hoeven hier niets te raden en er kan niets stilzwijgend sneuvelen. */
+    async function handleDelete() {
+        const naam = comp?.name || 'deze bouwsteen';
+        if (!window.confirm(
+            `"${naam}" verwijderen?\n\n` +
+            'Dit kan niet ongedaan worden gemaakt. Zit de bouwsteen nog in een gerecht, ' +
+            'dan houdt de app het tegen en hoor je in welk gerecht.',
+        )) return;
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/components/${componentId}`, { method: 'DELETE', credentials: 'include' });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.error || 'Verwijderen mislukt');
+            toast(`"${naam}" verwijderd`, 'success');
+            onDeleted();
+        } catch (e: unknown) {
+            toast(e instanceof Error ? e.message : 'Verwijderen mislukt', 'error');
+        } finally {
+            setDeleting(false);
+        }
+    }
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [comp, setComp] = useState<ComponentRow | null>(null);
@@ -1465,8 +1628,23 @@ function ComponentEditDrawer({
         /* Zelf-bereid met lege kostprijs → som van de ingrediënten overnemen
            (voorkomt de €0-cascade naar gerechten bij vergeten 'Gebruik als kostprijs'). */
         if (comp?.type === 'prepared' && baseCostCents === 0) {
+            /* Omrekenen naar de basis-hoeveelheid, niet de rauwe som overnemen —
+               zie kostprijsPerBasisUitIngredienten. Kan het niet, dan liever geen
+               kostprijs dan een verkeerde: blokkeren en het vragen. */
             const sumC = ingredientSumCents(ingredients);
-            if (sumC > 0) { baseCostCents = sumC; setCostEuros((sumC / 100).toFixed(2)); }
+            if (sumC > 0) {
+                const afgeleid = kostprijsPerBasisUitIngredienten(ingredients, qty, baseUnit);
+                if (!afgeleid) {
+                    return {
+                        ok: false as const,
+                        reason: `Ik kan de kostprijs niet omrekenen naar ${formatQty(qty)} ${baseUnit}: `
+                            + 'je ingrediënten staan in eenheden die niet bij elkaar op te tellen zijn. '
+                            + 'Zet ze in dezelfde soort eenheid, of vul de kostprijs zelf in.',
+                    };
+                }
+                baseCostCents = afgeleid.cents;
+                setCostEuros((afgeleid.cents / 100).toFixed(2));
+            }
         }
         const tags = flavorTags.split(',').map(t => t.trim()).filter(Boolean);
         return { ok: true as const, qty, baseCostCents, tags };
@@ -1478,6 +1656,12 @@ function ComponentEditDrawer({
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                /* De versie die we bij het openen kregen. Klopt die niet meer, dan
+                   heeft iemand anders (of de prijs-verversing) de bouwsteen intussen
+                   gewijzigd en slaat de server niets op — anders overschrijft de
+                   lade die al een kwartier openstond stilzwijgend andermans werk,
+                   inclusief allergenen. */
+                expected_updated_at: comp?.updated_at ?? null,
                 name: name.trim(),
                 description: description.trim() || null,
                 base_quantity: qty,
@@ -1502,7 +1686,17 @@ function ComponentEditDrawer({
             }),
         });
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
+        if (!res.ok) {
+            /* Botsing: iemand anders was ons voor. Niet alleen melden maar de lade
+               ook bijwerken, anders blijft Sam op Opslaan drukken met een versie
+               die per definitie verouderd is. */
+            if (res.status === 409 && body?.conflict) {
+                toast(body.error || 'Deze bouwsteen is intussen door iemand anders gewijzigd.', 'error');
+                await loadDetail();
+                return;
+            }
+            throw new Error(body.error || 'Opslaan mislukt');
+        }
         const recompMsg = body.recomputed_gerechten ? ` (${body.recomputed_gerechten} gerechten herrekend)` : '';
         toast(`Component bijgewerkt${recompMsg}`, 'success');
         if (body.warnings) toast(`Wel met waarschuwingen: ${body.warnings.join(', ')}`, 'error');
@@ -1513,11 +1707,25 @@ function ComponentEditDrawer({
         const v = validateForm();
         if (!v.ok) { toast(v.reason, 'error'); return; }
 
-        /* GP-4: detecteer of base_cost_cents wijzigt. Anders → direct save (huidige flow). */
+        /* Wat verandert er aan de PRIJS-KANT van deze bouwsteen?
+           Niet alleen het bedrag telt. De kostprijs in een gerecht is
+           (hoeveelheid / basis) x bedrag / snijverlies — dus de basis-hoeveelheid,
+           de basis-eenheid én het snijverlies verschuiven diezelfde uitkomst.
+           Eerder keken we alléén naar het bedrag: wie de basis corrigeerde van
+           "€2,50 per 100 g" naar "€2,50 per 250 g" maakte al zijn gerechten in
+           één klik 2,5x goedkoper, zonder modal en zonder melding. En van 100 g
+           naar 1 stuk kon een gerecht x100 gooien. Alles wat de uitkomst raakt
+           moet dus door hetzelfde bevestig-scherm. */
         const oldBaseCostCents = comp?.base_cost_cents ?? null;
-        const costChanged = oldBaseCostCents !== null && oldBaseCostCents !== v.baseCostCents;
+        const prijsRaakt =
+            oldBaseCostCents !== null && (
+                oldBaseCostCents !== v.baseCostCents
+                || Number(comp?.base_quantity ?? 0) !== v.qty
+                || String(comp?.base_unit ?? '') !== baseUnit
+                || normalizeYield(comp?.yield_factor) !== normalizeYield(yieldFactor)
+            );
 
-        if (!costChanged) {
+        if (!prijsRaakt) {
             setSaving(true);
             try { await commitSave(v.qty, v.baseCostCents, v.tags); }
             catch (e: any) { toast(e.message || 'Opslaan mislukt', 'error'); }
@@ -1532,7 +1740,14 @@ function ComponentEditDrawer({
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ new_base_cost_cents: v.baseCostCents }),
+                body: JSON.stringify({
+                    new_base_cost_cents: v.baseCostCents,
+                    /* De basis die STRAKS wordt opgeslagen meesturen, anders rekent
+                       de preview met de oude en klopt het getoonde bedrag niet. */
+                    new_base_quantity: v.qty,
+                    new_base_unit: baseUnit,
+                    new_yield_factor: normalizeYield(yieldFactor),
+                }),
             });
             const previewBody = await previewRes.json();
             if (!previewRes.ok) throw new Error(previewBody.error || 'Impact-preview mislukt');
@@ -1721,12 +1936,29 @@ function ComponentEditDrawer({
                             <HaccpEditor rows={haccpRows} onChange={setHaccpRows} />
                         </div>
 
-                        <div className="mr-drawer-footer" style={{ justifyContent: 'flex-end' }}>
-                            <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
-                            <button type="button" onClick={handleSave} disabled={saving} className="kf-primary">
-                                {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                                {saving ? 'Opslaan…' : 'Opslaan'}
+                        {/* Verwijderen stond nergens in dit scherm: de functie en de API
+                            bestonden wél, maar niets riep ze aan. Elke typefout en elke
+                            dubbele import bleef daardoor voor altijd in de bibliotheek
+                            staan. Links, weg van Opslaan, zodat je 'm niet per ongeluk
+                            raakt — en de server vertelt welke gerechten 'm nog gebruiken. */}
+                        <div className="mr-drawer-footer" style={{ justifyContent: 'space-between' }}>
+                            <button
+                                type="button"
+                                onClick={handleDelete}
+                                disabled={saving || deleting}
+                                className="kf-ghost"
+                                style={{ color: '#ef4444' }}
+                            >
+                                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                {deleting ? 'Verwijderen…' : 'Verwijderen'}
                             </button>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button type="button" onClick={onClose} className="kf-ghost">Annuleer</button>
+                                <button type="button" onClick={handleSave} disabled={saving} className="kf-primary">
+                                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                    {saving ? 'Opslaan…' : 'Opslaan'}
+                                </button>
+                            </div>
                         </div>
                     </>
                 )}
@@ -2615,6 +2847,9 @@ function InkoopDrawer({
     useEscapeToClose(onClose);
     const [zoek, setZoek] = useState(initialZoek);
     const [gekozen, setGekozen] = useState<CatalogSearchHit | null>(null);
+    /* Zichtbare naam van de bouwsteen. Begint als de catalogusnaam, maar is
+       aanpasbaar: die naam gaat mee naar je gerechten, menukaart en kookbord. */
+    const [naam, setNaam] = useState('');
     const [packQty, setPackQty] = useState('');
     const [packUnit, setPackUnit] = useState<PackUnit>('stuk');
     const [packPrice, setPackPrice] = useState('');
@@ -2643,6 +2878,20 @@ function InkoopDrawer({
     function kies(hit: CatalogSearchHit) {
         setGekozen(hit);
         setZoek(hit.naam);
+        /* Alles van het VORIGE product eerst wissen. Zonder deze reset bleef de
+           inhoud staan: koos je eerst "Kipdij, bak 5 stuks" (5 / stuk / €14,69) en
+           daarna de kipdij uit je prijslijst (€7,75 per kg), dan sprong de eenheid
+           naar kg en werd de prijs leeggemaakt, maar bleef die 5 staan — "5 kg voor
+           €7,75", vijf keer te goedkoop. Hetzelfde gold voor het snijverlies: 65%
+           dat je bij bavette instelde, gold ineens ook voor een fles saus.
+           De takken hieronder vullen daarna zelf in wat ze zéker weten. */
+        setPackQty('');
+        setPackPrice('');
+        setYieldFactor(1);
+        /* De naam is vanaf hier bewerkbaar: de catalogusnaam is vaak een schreeuw
+           ("BROODJE BRIOCHE 60X72GR BAKKERSLAND") en die belandt zo op je kookbord
+           en je menukaart. */
+        setNaam(hit.naam);
 
         /* ── Gescande bestel-catalogus (Bidfood) ── De catalogus wéét al hoe de
            verpakking eruitziet, dus vullen we de rekenhulp voor met de ECHTE doos
@@ -2718,6 +2967,23 @@ function InkoopDrawer({
     async function handleSave() {
         if (!gekozen) { toast('Kies eerst een product uit je prijslijsten', 'error'); return; }
         if (!base) { toast('Vul in hoeveel er in de verpakking zit en wat je betaalt', 'error'); return; }
+        /* Een bouwsteen van € 0,00 telt in élk gerecht als gratis: je foodcost valt
+           te laag uit en je marge lijkt beter dan hij is — zonder dat er ooit een
+           foutmelding komt. Dat mag niet stilzwijgend gebeuren. Kan voorkomen bij
+           veel stuks in één pak (1000 servetten voor € 4,50 = 0,45 cent per stuk,
+           afgerond 0). Non-food mag wel gratis zijn: krattten en folie hoeven geen
+           kostprijs te hebben. */
+        const isNonFood = NON_FOOD_RE.test(naam.trim() || gekozen.naam);
+        if (!isNonFood && base.base_cost_cents === 0) {
+            const door = window.confirm(
+                `Dit komt neer op € 0,00 per ${formatQty(base.base_quantity)} ${base.base_unit}.\n\n` +
+                'Deze bouwsteen telt dan in al je gerechten als gratis mee, waardoor je ' +
+                'kostprijs te laag en je marge te mooi wordt.\n\n' +
+                'Tip: kies een grotere basis (bijvoorbeeld per 100 stuks in plaats van per stuk).\n\n' +
+                'Toch zo opslaan?',
+            );
+            if (!door) return;
+        }
         setSaving(true);
         try {
             const res = await fetch('/api/components', {
@@ -2725,10 +2991,10 @@ function InkoopDrawer({
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: gekozen.naam,
+                    name: naam.trim() || gekozen.naam,
                     description: gekozen.leverancier ? `Ingekocht bij ${gekozen.leverancier}` : null,
                     type: 'bought_in',
-                    category: NON_FOOD_RE.test(gekozen.naam) ? 'non_food' : 'food',
+                    category: isNonFood ? 'non_food' : 'food',
                     base_quantity: base.base_quantity,
                     base_unit: base.base_unit,
                     base_cost_cents: base.base_cost_cents,
@@ -2749,7 +3015,7 @@ function InkoopDrawer({
             });
             const body = await res.json();
             if (!res.ok) throw new Error(body.error || 'Opslaan mislukt');
-            toast(`"${gekozen.naam}" toegevoegd`, 'success');
+            toast(`"${naam.trim() || gekozen.naam}" toegevoegd`, 'success');
             onSaved();
         } catch (e: unknown) {
             toast(e instanceof Error ? e.message : 'Opslaan mislukt', 'error');
@@ -2800,6 +3066,25 @@ function InkoopDrawer({
                             </div>
                         )}
                     </label>
+
+                    {/* Hoe heet het bij jou? De catalogusnaam is vaak onleesbaar
+                        ("BROODJE BRIOCHE 60X72GR BAKKERSLAND") en gaat zo mee naar je
+                        gerechten, menukaart en kookbord. Hier meteen te corrigeren,
+                        in plaats van eerst opslaan en dan de bewerk-drawer in. */}
+                    {gekozen && (
+                        <label className="kf-field">
+                            <span className="kf-label">
+                                Hoe noem jij het? <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· zo staat het straks op je kaart</span>
+                            </span>
+                            <input
+                                type="text"
+                                value={naam}
+                                onChange={(e) => setNaam(e.target.value)}
+                                placeholder={gekozen.naam}
+                                className="kf-input"
+                            />
+                        </label>
+                    )}
 
                     {/* Stap 2 — hoe wordt het verpakt? */}
                     {gekozen && (
@@ -2894,7 +3179,6 @@ function ReceptuurDrawer({
     onSaved: () => void;
 }) {
     const toast = useToast();
-    useEscapeToClose(onClose);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [baseQty, setBaseQty] = useState('100');
@@ -2910,6 +3194,17 @@ function ReceptuurDrawer({
     const [aiBusy, setAiBusy] = useState(false);
     const [aiUsed, setAiUsed] = useState(false);
     const [saving, setSaving] = useState(false);
+
+    /* Is er iets ingevuld dat verloren zou gaan? Bewust ruim: liever één keer te
+       vaak vragen dan een half uur receptuur weggooien. Een lege startrij telt niet. */
+    const heeftWerk = useCallback(() => (
+        name.trim() !== '' || description.trim() !== '' || costEuros.trim() !== ''
+        || flavorTags.trim() !== '' || steps.length > 0 || allergenCodes.size > 0
+        || haccpRows.length > 0
+        || ingredients.some(r => r.name.trim() !== '' || r.qty.trim() !== '' || r.cost_euros.trim() !== '')
+    ), [name, description, costEuros, flavorTags, steps, allergenCodes, haccpRows, ingredients]);
+    useEscapeToClose(onClose, heeftWerk);
+    const sluitViaScrim = maakScrimSluiter(onClose, heeftWerk);
 
     function toggleAllergen(code: string) {
         setAllergenCodes(prev => {
@@ -2976,11 +3271,35 @@ function ReceptuurDrawer({
            staan, neem dan de som automatisch over (zoals 'Gebruik als kostprijs'). */
         const sumC = ingredientSumCents(ingredients);
         if (sumC > 0 && (!Number.isFinite(cost) || Math.round(cost * 100) === 0)) {
-            cost = sumC / 100;
+            const afgeleid = kostprijsPerBasisUitIngredienten(ingredients, qty, baseUnit);
+            if (!afgeleid) {
+                toast(
+                    `Ik kan de kostprijs niet omrekenen naar ${formatQty(qty)} ${baseUnit}: ` +
+                    'je ingrediënten staan in eenheden die niet bij elkaar op te tellen zijn. ' +
+                    'Zet ze in dezelfde soort eenheid, of vul de kostprijs zelf in.',
+                    'error',
+                );
+                return;
+            }
+            cost = afgeleid.cents / 100;
             setCostEuros(cost.toFixed(2));
-            toast(`Kostprijs overgenomen van je ingrediënten (${formatEuro(sumC)})`, 'success');
+            toast(
+                `Kostprijs berekend uit je ingrediënten: ${formatEuro(afgeleid.sumCents)} voor de hele ` +
+                `receptuur = ${formatEuro(afgeleid.cents)} per ${formatQty(qty)} ${baseUnit}`,
+                'success',
+            );
         }
         if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig — tip: gebruik de som van je ingrediënten', 'error'); return; }
+        /* Zie de toelichting in InkoopDrawer: € 0,00 telt overal als gratis mee. */
+        if (Math.round(cost * 100) === 0) {
+            const door = window.confirm(
+                `"${name.trim()}" krijgt kostprijs € 0,00.\n\n` +
+                'Deze bouwsteen telt dan in al je gerechten als gratis mee, waardoor je ' +
+                'kostprijs te laag en je marge te mooi wordt.\n\n' +
+                'Toch zo opslaan?',
+            );
+            if (!door) return;
+        }
 
         setSaving(true);
         try {
@@ -3021,7 +3340,7 @@ function ReceptuurDrawer({
 
     return (
         <>
-            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer-scrim" onClick={sluitViaScrim} role="presentation" />
             <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="receptuur-drawer-title">
                 <div className="kdrawer-head">
                     <div className="flex-1 min-w-0">
@@ -3128,7 +3447,6 @@ function ScanDrawer({
     onImported: () => void;
 }) {
     const toast = useToast();
-    useEscapeToClose(onClose);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [step, setStep] = useState<'upload' | 'form'>('upload');
     const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);
@@ -3149,6 +3467,15 @@ function ScanDrawer({
     const [textMode, setTextMode] = useState(false);
     const [pasted, setPasted] = useState('');
     const cameraInputRef = useRef<HTMLInputElement>(null);
+
+    /* Een gelezen foto is niet gratis: daar is een AI-verzoek voor gedaan. Die
+       samen met de ingevulde velden niet zomaar weggooien op één toetsaanslag. */
+    const heeftWerk = useCallback(() => (
+        products.length > 0 || fileDataUrl !== null || pasted.trim() !== ''
+        || name.trim() !== '' || packPrice.trim() !== '' || packQty.trim() !== ''
+    ), [products, fileDataUrl, pasted, name, packPrice, packQty]);
+    useEscapeToClose(onClose, heeftWerk);
+    const sluitViaScrim = maakScrimSluiter(onClose, heeftWerk);
 
     function acceptFile(file: File) {
         if (!SCAN_ALLOWED_TYPES.includes(file.type)) {
@@ -3280,7 +3607,7 @@ function ScanDrawer({
 
     return (
         <>
-            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer-scrim" onClick={sluitViaScrim} role="presentation" />
             <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-labelledby="scan-drawer-title">
                 <div className="kdrawer-head">
                     <div className="flex-1 min-w-0">

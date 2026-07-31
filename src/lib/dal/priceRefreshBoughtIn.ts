@@ -10,6 +10,13 @@
  *
  * Vergelijkt NOOIT Catalogus A- en B-id's: de koppeling is de expliciete
  * components.supplier_product_id → supplier_products.id (zelfde id-ruimte).
+ *
+ * LET OP — deze verversing heeft geen eigen ritme. Ze draait alleen wanneer
+ * iemand haar aanroept (menukaart doorrekenen, afronden van een extensie-sync).
+ * Zolang er geen dagelijkse ronde is, beweegt een prijsverhoging bij de
+ * leverancier dus pas mee zodra de gebruiker die bouwsteen zelf langsgaat.
+ * Beloof in de UI niet meer dan dat, of gebruik `dryRun` om het verschil te
+ * tónen ("opgeslagen €x,xx → nu €y,yy") in plaats van stil te overschrijven.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -17,23 +24,43 @@ import { supplierProductBaseCost, type SupplierProductCostRow } from '@/lib/supp
 import { resolvePricingFromSupplierPrice } from '@/lib/ingredientPricing';
 import { costForBasisCents } from '@/lib/unitPrice';
 
+/** Eén component waarvan de leveranciersprijs afwijkt van wat er is opgeslagen. */
+export interface BoughtInPriceChange {
+    componentId: number;
+    oudCents: number;
+    nieuwCents: number;
+}
+
 export interface BoughtInRefreshReport {
     bekeken: number;        // bought_in componenten met een supplier_product-koppeling
     bijgewerkt: number;
     ongewijzigd: number;
     ongekoppeld: number;    // supplier_product verdwenen of zonder bruikbare prijs
+    /** Wegschrijven mislukte (rechten, tijdelijke fout). Apart geteld, want een
+     *  automatische ronde die stilletjes 0 bijwerkt terwijl er van alles
+     *  misgaat is erger dan een ronde die faalt. */
+    mislukt: number;
     totaalOudCents: number;
     totaalNieuwCents: number;
+    /** Per component het oude en het nieuwe bedrag, zodat een scherm
+     *  "opgeslagen €x,xx → nu bij leverancier €y,yy" kan tonen in plaats van
+     *  de nieuwe prijs stil in een veld te zetten. */
+    wijzigingen: BoughtInPriceChange[];
 }
 
 function empty(): BoughtInRefreshReport {
-    return { bekeken: 0, bijgewerkt: 0, ongewijzigd: 0, ongekoppeld: 0, totaalOudCents: 0, totaalNieuwCents: 0 };
+    return { bekeken: 0, bijgewerkt: 0, ongewijzigd: 0, ongekoppeld: 0, mislukt: 0, totaalOudCents: 0, totaalNieuwCents: 0, wijzigingen: [] };
 }
 
+/** @param opts.menuTemplateId  alleen de componenten van één menukaart.
+ *  @param opts.dryRun          alléén kijken, niets wegschrijven. `bijgewerkt`
+ *    en `wijzigingen` vertellen dan wat er ZOU veranderen — bedoeld voor een
+ *    scherm dat de gebruiker eerst laat kiezen ("Neem over"), zodat een
+ *    prijswijziging bij de leverancier nooit ongemerkt in een kostprijs rolt. */
 export async function refreshBoughtInPrices(
     sb: SupabaseClient,
     orgId: string,
-    opts: { menuTemplateId?: number } = {},
+    opts: { menuTemplateId?: number; dryRun?: boolean } = {},
 ): Promise<BoughtInRefreshReport> {
     /* Optioneel: alleen componenten van één menukaart (zelfde scoping als
        refreshRecipePrices). */
@@ -165,15 +192,24 @@ export async function refreshBoughtInPrices(
         if (nieuwCents === null) { report.ongekoppeld++; continue; }
         if (nieuwCents === oldBase) { report.ongewijzigd++; continue; }
 
-        const { error: upErr } = await sb
-            .from('components')
-            .update({ base_cost_cents: nieuwCents })
-            .eq('id', c.id)
-            .eq('organization_id', orgId);
-        if (upErr) continue; // best-effort per component
+        if (!opts.dryRun) {
+            const { error: upErr } = await sb
+                .from('components')
+                /* updated_at expliciet meeschrijven: de bewerk-lade gebruikt die
+                   tijdstempel om te zien of iemand anders (of dit proces) de
+                   bouwsteen intussen heeft gewijzigd. Schrijven we hem niet, dan
+                   ziet dat slot deze prijs-verversing niet en kan een lade die al
+                   openstond de verse inkoopprijs stil terugdraaien — inclusief de
+                   doorrekening naar alle gerechten. */
+                .update({ base_cost_cents: nieuwCents, updated_at: new Date().toISOString() })
+                .eq('id', c.id)
+                .eq('organization_id', orgId);
+            if (upErr) { report.mislukt++; continue; } // best-effort per component, maar wel geteld
+        }
         report.bijgewerkt++;
         report.totaalOudCents += oldBase;
         report.totaalNieuwCents += nieuwCents;
+        report.wijzigingen.push({ componentId: Number(c.id), oudCents: oldBase, nieuwCents });
     }
 
     return report;

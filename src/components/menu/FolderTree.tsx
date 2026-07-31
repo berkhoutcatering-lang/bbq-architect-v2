@@ -13,10 +13,13 @@
 import { useMemo, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import {
-    ChevronDown, ChevronRight, Folder, FolderOpen, FolderPlus, Pencil, Plus,
+    ChevronDown, ChevronRight, Folder, FolderOpen, FolderPlus, Pencil, Plus, RefreshCw,
 } from 'lucide-react';
 import { MRButton, MREyebrow } from './atoms';
-import type { ComponentFolderRow } from '@/app/gerechten/componenten/_lib/useComponentFolders';
+import {
+    useComponentFoldersError,
+    type ComponentFolderRow,
+} from '@/app/gerechten/componenten/_lib/useComponentFolders';
 
 interface Props {
     folders: ComponentFolderRow[];
@@ -120,18 +123,20 @@ function FolderItem({
     );
 }
 
-/* Droppable "Alle componenten" + "Zonder folder" rijen */
+/* "Alle componenten" + "Zonder folder" rijen. Alleen "Zonder folder" is een
+   echt sleep-doel; zie de toelichting bij de aanroep hieronder. */
 function SpecialItem({
-    id, label, count, icon, active, onClick,
+    id, label, count, icon, active, droppable, onClick,
 }: {
     id: string;
     label: string;
     count: number;
     icon: React.ReactNode;
     active: boolean;
+    droppable: boolean;
     onClick: () => void;
 }) {
-    const { isOver, setNodeRef } = useDroppable({ id: `folder:${id}` });
+    const { isOver, setNodeRef } = useDroppable({ id: `folder:${id}`, disabled: !droppable });
     return (
         <button
             ref={setNodeRef}
@@ -147,18 +152,38 @@ function SpecialItem({
     );
 }
 
+/**
+ * Staat deze hoofdmap open? Een map die je nog nooit hebt aan- of dichtgeklapt
+ * staat open.
+ *
+ * Dit stond eerder als begin-waarde in de useState van de tree, en die draaide
+ * één keer — vóórdat de mappen binnen waren. Gevolg: élke hoofdmap bleef dicht,
+ * inclusief de submap die je net had gemaakt, met een teller van 0 ernaast. Door
+ * "open" hier af te leiden i.p.v. vooraf te vullen, geldt het ook voor mappen die
+ * later binnenkomen, en blijft wat jij zelf dichtklapte gewoon dicht.
+ */
+export function isMapOpen(opengeklapt: Record<string, boolean>, mapId: string): boolean {
+    return opengeklapt[mapId] ?? true;
+}
+
+/** Open ⇄ dicht voor één map, zonder de rest aan te raken. */
+export function toggleMap(
+    opengeklapt: Record<string, boolean>,
+    mapId: string,
+): Record<string, boolean> {
+    return { ...opengeklapt, [mapId]: !isMapOpen(opengeklapt, mapId) };
+}
+
 export function FolderTree({
     folders, counts, rootCount, currentFolderId, onSelectFolder, onCreate, onEdit,
 }: Props) {
     const tree = useMemo(() => buildTree(folders), [folders]);
-    const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-        /* Default: alle root-folders expanded (max 5-10 vouw-niveaus). */
-        const init: Record<string, boolean> = {};
-        tree.forEach((t) => { init[t.id] = true; });
-        return init;
-    });
+    const laadFout = useComponentFoldersError();
+    /* Alleen de mappen die de gebruiker zélf heeft aangeklikt staan hierin; de
+       rest volgt de standaard uit isMapOpen. */
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-    const toggle = (id: string) => setExpanded((p) => ({ ...p, [id]: !p[id] }));
+    const toggle = (id: string) => setExpanded((p) => toggleMap(p, id));
     const totalCount = rootCount + Object.values(counts).reduce((s, c) => s + c, 0);
 
     return (
@@ -181,12 +206,49 @@ export function FolderTree({
                 </button>
             </div>
 
+            {/* Mislukt laden mag nooit als "je hebt geen mappen" op het scherm
+                komen: dan denkt Sam dat zijn indeling weg is en maakt hij alles
+                opnieuw aan. Daarom een eerlijke regel mét knop, en de mappen die
+                we al hadden blijven gewoon staan. */}
+            {laadFout && (
+                <div
+                    role="status"
+                    style={{
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                        padding: '10px 10px', marginBottom: 8, borderRadius: 8,
+                        border: '1px solid var(--border)', background: 'rgba(239,68,68,.06)',
+                        fontSize: 12, color: 'var(--text)',
+                    }}
+                >
+                    <span>{laadFout.message}</span>
+                    <button
+                        type="button"
+                        onClick={laadFout.retry}
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            alignSelf: 'flex-start', padding: '5px 9px', borderRadius: 7,
+                            background: 'transparent', border: '1px solid var(--border)',
+                            color: 'var(--text)', fontSize: 11.5, fontWeight: 600,
+                            cursor: 'pointer', font: 'inherit',
+                        }}
+                    >
+                        <RefreshCw size={11} /> Opnieuw proberen
+                    </button>
+                </div>
+            )}
+
+            {/* "Alle componenten" is een weergave, geen bewaarplaats: er is geen
+                map waar een bouwsteen dan in zou komen. Hij lichtte wel op tijdens
+                het slepen en deed daarna niets — vandaar droppable={false}, zodat
+                de rij eronder ("Zonder folder") het zichtbare doel is voor "haal
+                deze bouwsteen uit zijn map". */}
             <SpecialItem
                 id="all"
                 label="Alle componenten"
                 count={totalCount}
                 icon={<Folder size={15} color={currentFolderId === null ? 'var(--brand)' : 'var(--muted)'} />}
                 active={currentFolderId === null}
+                droppable={false}
                 onClick={() => onSelectFolder(null)}
             />
 
@@ -196,13 +258,14 @@ export function FolderTree({
                 count={rootCount}
                 icon={<Folder size={15} color="var(--muted)" />}
                 active={currentFolderId === ROOT_DROP_ID}
+                droppable
                 onClick={() => onSelectFolder(ROOT_DROP_ID)}
             />
 
             <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
 
             {tree.map((root) => {
-                const isOpen = !!expanded[root.id];
+                const isOpen = isMapOpen(expanded, root.id);
                 return (
                     <div key={root.id}>
                         <FolderItem
@@ -233,7 +296,9 @@ export function FolderTree({
                 );
             })}
 
-            {folders.length === 0 && (
+            {/* Alleen "nog geen mappen" zeggen als we ook echt weten dat de lijst
+                leeg is. Bij een laadfout staat de regel hierboven al. */}
+            {folders.length === 0 && !laadFout && (
                 <div style={{ padding: '12px 8px', fontSize: 12, color: 'var(--muted)' }}>
                     Nog geen folders.{' '}
                     <button
@@ -259,7 +324,9 @@ export function parseDropId(id: string | number | null): string | null | undefin
     const s = String(id);
     if (!s.startsWith('folder:')) return undefined;
     const fid = s.slice(7);
-    if (fid === 'all') return undefined; // 'all' is read-only, niet droppable
+    /* 'all' is een weergave, geen map — hij is hierboven ook niet als sleep-doel
+       geregistreerd, dus dit is de vangnet-regel. */
+    if (fid === 'all') return undefined;
     if (fid === ROOT_DROP_ID) return null; // null = geen folder
     return fid;
 }

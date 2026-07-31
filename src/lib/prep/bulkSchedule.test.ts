@@ -433,7 +433,10 @@ describe('bulkScheduleEventPrep — menu-shapes uit productie (2026-06-12)', () 
 describe('bulkScheduleEventPrep — component-taken (kookbord v2)', () => {
     it('genereert per component één gebundelde taak met opgetelde, geschaalde hoeveelheid', async () => {
         const state: MockState = {
-            // 50 gasten, gerechten met porties 10 → factor 5
+            /* 50 gasten. quantity_used is de dosering PER GAST (zie de canon in
+               lib/gerecht-kosten.ts), dus je vermenigvuldigt met 50 — niet met
+               gasten ÷ porties. Deze test legde eerder factor 5 vast en bevroor
+               daarmee de bug: 1,5 liter mayonaise inkopen voor 50 man. */
             event: { id: 1, organization_id: 'org-1', name: 'X', date: '2026-06-20', start_time: '16:00:00', guests: 50 },
             existingPrepCount: 0,
             dishes: [
@@ -447,7 +450,7 @@ describe('bulkScheduleEventPrep — component-taken (kookbord v2)', () => {
             courses: [],
             offerteMenuSelection: { hoofdgerechten: [{ gerecht_id: 'dish-slider' }, { gerecht_id: 'dish-taco' }] },
             gerechtComponents: [
-                // zelfde mayo in twee gerechten → één bundeltaak van 0.2×5 + 0.1×5 = 1.5
+                // zelfde mayo in twee gerechten → één bundeltaak van 0.2×50 + 0.1×50 = 15
                 { gerecht_id: 'dish-slider', quantity_used: 0.2, unit: 'l', components: { id: 50, name: 'Mayonaise basis', type: 'house_made', category: 'food', prep_minutes: 25 } },
                 { gerecht_id: 'dish-taco', quantity_used: 0.1, unit: 'l', components: { id: 50, name: 'Mayonaise basis', type: 'house_made', category: 'food', prep_minutes: 25 } },
                 // bought_in → klaarzet-taak
@@ -469,7 +472,7 @@ describe('bulkScheduleEventPrep — component-taken (kookbord v2)', () => {
         }>;
         const mayo = rows.find((r) => r.component_id === 50)!;
         expect(mayo.text).toContain('Mayonaise basis');
-        expect(mayo.target_qty).toBe(1.5);
+        expect(mayo.target_qty).toBe(15);
         expect(mayo.target_unit).toBe('l');
         expect(mayo.batch_key).toBe('comp:50:2026-06-20');
         expect(mayo.duration_min).toBe(25);

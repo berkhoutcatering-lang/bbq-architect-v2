@@ -198,6 +198,14 @@ export interface MenuMarginDish {
      *  "kost niets" en "we weten het niet" zijn allebei 0 — zonder deze vlag
      *  telt een niet-ingevuld gerecht als gratis en vleit het de menu-marge. */
     heeftKostprijs: boolean;
+    /** Hoeveel bouwstenen dit gerecht heeft, en hoeveel daarvan nog op €0 staan.
+     *  Een bouwsteen zonder prijs telt in de optelling gewoon als nul mee: het
+     *  gerecht lijkt dan compleet doorgerekend terwijl de helft van de kostprijs
+     *  ontbreekt. Daarom reist die telling mee naar het menu. */
+    componentenTotaal: number;
+    componentenZonderPrijs: number;
+    /** Pas waar als er een kostprijs is én geen enkele bouwsteen op €0 staat. */
+    kostprijsCompleet: boolean;
     costSharePct: number | null;   // aandeel van dit gerecht in de menu-prijs
     costOutlier: boolean;          // weegt onevenredig zwaar (signaal, geen oordeel)
     // Legacy (per-gerecht eigen verkoopprijs) — behouden voor terugval:
@@ -216,10 +224,19 @@ export interface MenuMargins {
     foodcostPct: number | null;
     menuOnTarget: boolean;
     target: number;                // doel-marge %
-    /** Dekking: over hoeveel van de gerechten de foodcost écht bekend is.
-     *  Is dit < aantal gerechten, dan is de menu-marge te rooskleurig. */
+    /** Dekking: over hoeveel van de gerechten de foodcost écht VOLLEDIG bekend
+     *  is — dus met een kostprijs én zonder bouwsteen op €0. Is dit < aantal
+     *  gerechten, dan is de menu-marge te rooskleurig. */
     dishesMetKostprijs: number;
     dishesTotaal: number;
+    /** Gerechten waar minstens één bouwsteen nog geen prijs heeft. Die kostprijs
+     *  is per definitie te laag, dus de menu-marge is te rooskleurig. */
+    dishesMetGatInKostprijs: number;
+    /** Totaal aantal bouwstenen zonder prijs over de hele menukaart. */
+    componentenZonderPrijs: number;
+    /** Alleen waar als élk gerecht een kostprijs heeft én geen enkele bouwsteen
+     *  op €0 staat. De UI kleurt hierop; te snel "compleet" zeggen is precies
+     *  hoe een menu te laag geprijsd de deur uit gaat. */
     dekkingCompleet: boolean;
     // Legacy: geld-gewogen per-gerecht marge (terugval).
     blendedPct: number | null;
@@ -250,6 +267,33 @@ export async function getMenuTemplateMargins(
         .order('volgorde', { ascending: true });
     if (error) throw new Error(`getMenuTemplateMargins: ${error.message}`);
 
+    /* Bouwstenen zonder prijs opsporen.
+     *
+     * De kostprijs van een gerecht is de som van z'n bouwstenen. Een bouwsteen
+     * waar nog geen prijs bij staat telt in die som als €0 mee — de som is dan
+     * groter dan nul, dus het gerecht ziet eruit als "doorgerekend" en de
+     * menukaart meldt een marge die te mooi is. Sam prijst zijn menu daardoor
+     * te laag en merkt het pas op de jaarrekening. We tellen die nullen daarom
+     * apart en laten ze meereizen naar het menu-oordeel. */
+    const gerechtIds = Array.from(new Set(
+        ((data ?? []) as any[]).map((row) => row.gerecht?.id).filter((v): v is string => typeof v === 'string'),
+    ));
+    const componentenTotaalPerGerecht = new Map<string, number>();
+    const componentenZonderPrijsPerGerecht = new Map<string, number>();
+    if (gerechtIds.length > 0) {
+        const { data: gcs } = await sb
+            .from('gerecht_components')
+            .select('gerecht_id, cost_at_use_cents')
+            .in('gerecht_id', gerechtIds);
+        for (const gc of (gcs ?? []) as any[]) {
+            const gid = String(gc.gerecht_id);
+            componentenTotaalPerGerecht.set(gid, (componentenTotaalPerGerecht.get(gid) ?? 0) + 1);
+            if (!(Number(gc.cost_at_use_cents) > 0)) {
+                componentenZonderPrijsPerGerecht.set(gid, (componentenZonderPrijsPerGerecht.get(gid) ?? 0) + 1);
+            }
+        }
+    }
+
     const dishes: MenuMarginDish[] = [];
     const missingPrice: string[] = [];
     let sumVerkoop = 0;
@@ -269,12 +313,17 @@ export async function getMenuTemplateMargins(
             sumVerkoop += verkoop;
             sumWinst += verkoop - kostPP;
         }
+        const componentenTotaal = componentenTotaalPerGerecht.get(String(g.id)) ?? 0;
+        const componentenZonderPrijs = componentenZonderPrijsPerGerecht.get(String(g.id)) ?? 0;
         dishes.push({
             gerecht_id: g.id,
             naam: g.naam,
             gang_slug: g.gang_slug ?? row.gang_slug ?? null,
             kostPP,
             heeftKostprijs,
+            componentenTotaal,
+            componentenZonderPrijs,
+            kostprijsCompleet: heeftKostprijs && componentenZonderPrijs === 0,
             costSharePct: costSharePct(kostPP, menuPricePP),
             costOutlier: isCostOutlier(kostPP, menuPricePP),
             verkoop,
@@ -294,9 +343,11 @@ export async function getMenuTemplateMargins(
         foodcostPct: menu.foodcostPct,
         menuOnTarget: menu.onTarget,
         target,
-        dishesMetKostprijs: dishes.filter((d) => d.heeftKostprijs).length,
+        dishesMetKostprijs: dishes.filter((d) => d.kostprijsCompleet).length,
         dishesTotaal: dishes.length,
-        dekkingCompleet: dishes.length > 0 && dishes.every((d) => d.heeftKostprijs),
+        dishesMetGatInKostprijs: dishes.filter((d) => d.componentenZonderPrijs > 0).length,
+        componentenZonderPrijs: dishes.reduce((s, d) => s + d.componentenZonderPrijs, 0),
+        dekkingCompleet: dishes.length > 0 && dishes.every((d) => d.kostprijsCompleet),
         blendedPct: sumVerkoop > 0 ? (sumWinst / sumVerkoop) * 100 : null,
         missingPrice,
     };

@@ -25,6 +25,7 @@ export const YIELD_MIGRATIE_MELDING =
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { syncComponentIngredients } from '@/lib/dal/componentIngredients';
+import { formatEur, formatNumber } from '@/lib/format';
 
 interface AllergenInput {
     allergen_code: string;
@@ -175,6 +176,148 @@ function validateInput(body: unknown): { ok: true; data: ComponentInput } | { ok
     };
 }
 
+/* ─── Dubbele bouwstenen tegenhouden ────────────────────────────────────────
+   Er zijn vier ingangen die hier binnenkomen (handmatig, Ingekocht-drawer,
+   scan-drawer, AI-voorstel) en de database heeft geen unieke sleutel op naam
+   of op de prijslijst-koppeling. Zonder deze controle staat "Brioche bun" er
+   na een herimport drie keer in, met drie verschillende prijzen — en weet Sam
+   bij het bouwen van een gerecht niet meer welke de goede is. Daarom weigeren
+   we een dubbele en wijzen we naar de bestaande; alleen een aanroeper die het
+   expliciet wil (allow_duplicate) mag er langs. */
+
+/** Naam-vergelijking voor dubbelen: hoofdletters en extra spaties tellen niet
+ *  mee. 'Brioche Bun' en 'brioche  bun' zijn voor de keuken één bouwsteen. */
+export function normalizeComponentName(name: string): string {
+    return String(name ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+/** Zoekpatroon voor de naam-lookup. De jokertekens van de database (%, _, *)
+ *  in een productnaam zouden anders als joker gelezen worden — daarom worden
+ *  ze onschadelijk gemaakt. Het patroon mag ruim matchen: de echte
+ *  vergelijking gebeurt daarna in vindDuplicaat(). */
+export function likePatternForName(name: string): string {
+    return String(name ?? '')
+        .trim()
+        .replace(/[%_*\\]/g, '_')
+        .replace(/\s+/g, '%');
+}
+
+export interface BestaandeBouwsteen {
+    id: number;
+    name: string;
+    type?: string | null;
+    base_quantity?: number | string | null;
+    base_unit?: string | null;
+    base_cost_cents?: number | null;
+    supplier_product_id?: number | null;
+    master_product_id?: number | null;
+}
+
+export type DuplicaatReden = 'naam' | 'product';
+
+/** Zoekt in de kandidaten de bouwsteen die dezelfde is als wat er binnenkomt.
+ *  Een koppeling aan hetzelfde prijslijst-product weegt zwaarder dan de naam:
+ *  dezelfde regel uit de leverancierslijst is per definitie hetzelfde spul,
+ *  ook als de naam ondertussen aangepast is. */
+export function vindDuplicaat(
+    kandidaten: BestaandeBouwsteen[],
+    input: { name: string; supplier_product_id?: number | null; master_product_id?: number | null },
+): { bestaand: BestaandeBouwsteen; reden: DuplicaatReden } | null {
+    const sp = typeof input.supplier_product_id === 'number' && input.supplier_product_id > 0
+        ? input.supplier_product_id : null;
+    const mp = typeof input.master_product_id === 'number' && input.master_product_id > 0
+        ? input.master_product_id : null;
+
+    for (const k of kandidaten) {
+        if (sp !== null && k.supplier_product_id === sp) return { bestaand: k, reden: 'product' };
+        if (mp !== null && k.master_product_id === mp) return { bestaand: k, reden: 'product' };
+    }
+
+    const doel = normalizeComponentName(input.name);
+    if (doel.length > 0) {
+        for (const k of kandidaten) {
+            if (normalizeComponentName(k.name) === doel) return { bestaand: k, reden: 'naam' };
+        }
+    }
+    return null;
+}
+
+/** "€ 4,50 voor 12 stuk" — geld altijd via format.ts, nooit zelf afronden. */
+function prijsRegel(b: BestaandeBouwsteen): string {
+    const cents = Number(b.base_cost_cents ?? 0);
+    const qty = Number(b.base_quantity ?? 0);
+    const bedrag = formatEur(cents / 100);
+    if (!Number.isFinite(qty) || qty <= 0 || !b.base_unit) return bedrag;
+    const decimalen = Number.isInteger(qty) ? 0 : 3;
+    return `${bedrag} voor ${formatNumber(qty, decimalen)} ${b.base_unit}`;
+}
+
+/** Melding in mensentaal. Geen tabel- of kolomnamen, en geen verwijzing naar
+ *  een knop die niet bestaat — alleen wat Sam nú kan doen. */
+export function duplicaatMelding(bestaand: BestaandeBouwsteen, reden: DuplicaatReden): string {
+    if (reden === 'product') {
+        return `Dit product uit je prijslijst zit al in je bouwstenen als "${bestaand.name}" `
+            + `(${prijsRegel(bestaand)}). Werk die bij — dan verandert de kostprijs meteen in `
+            + 'alle gerechten waar hij in zit.';
+    }
+    return `Je hebt "${bestaand.name}" al als bouwsteen (${prijsRegel(bestaand)}). `
+        + 'Werk die bij in plaats van er een tweede naast te zetten, of geef deze een andere '
+        + 'naam als het echt iets anders is.';
+}
+
+type ServerSupabase = Awaited<ReturnType<typeof createServerSupabase>>;
+
+const DUPLICAAT_KOLOMMEN = 'id, name, type, base_quantity, base_unit, base_cost_cents, supplier_product_id, master_product_id';
+
+/** Haalt de handvol bouwstenen op die op deze nieuwe kunnen lijken: dezelfde
+ *  naam, of dezelfde koppeling aan de prijslijst. Twee smalle queries in
+ *  plaats van de hele bibliotheek ophalen. */
+async function zoekBestaandeBouwsteen(
+    supabase: ServerSupabase,
+    organizationId: string,
+    input: { name: string; supplier_product_id?: number | null; master_product_id?: number | null },
+): Promise<{ treffer: { bestaand: BestaandeBouwsteen; reden: DuplicaatReden } | null; error: string | null }> {
+    const koppelFilters: string[] = [];
+    if (typeof input.supplier_product_id === 'number' && input.supplier_product_id > 0) {
+        koppelFilters.push(`supplier_product_id.eq.${input.supplier_product_id}`);
+    }
+    if (typeof input.master_product_id === 'number' && input.master_product_id > 0) {
+        koppelFilters.push(`master_product_id.eq.${input.master_product_id}`);
+    }
+
+    /* organization_id expliciet erbij ondanks RLS (defence-in-depth, zoals de
+       rest van deze route). Anders zou een verkeerd beleid ons naar een
+       bouwsteen van een andere cateraar laten wijzen. */
+    const naamQuery = supabase
+        .from('components')
+        .select(DUPLICAAT_KOLOMMEN)
+        .eq('organization_id', organizationId)
+        .ilike('name', likePatternForName(input.name))
+        .limit(25);
+
+    const koppelQuery = koppelFilters.length > 0
+        ? supabase
+            .from('components')
+            .select(DUPLICAAT_KOLOMMEN)
+            .eq('organization_id', organizationId)
+            .or(koppelFilters.join(','))
+            .limit(25)
+        : null;
+
+    const [naamRes, koppelRes] = await Promise.all([
+        naamQuery,
+        koppelQuery ?? Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const fout = naamRes.error?.message ?? koppelRes.error?.message ?? null;
+    const kandidaten = [
+        ...((koppelRes.data ?? []) as unknown as BestaandeBouwsteen[]),
+        ...((naamRes.data ?? []) as unknown as BestaandeBouwsteen[]),
+    ];
+
+    return { treffer: vindDuplicaat(kandidaten, input), error: fout };
+}
+
 export async function POST(req: NextRequest) {
     const supabase = await createServerSupabase();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -201,6 +344,31 @@ export async function POST(req: NextRequest) {
     // Split nested writes uit (allergens + haccp gaan naar join-tables)
     const { allergens, haccp_points, folder_id, ...componentData } = v.data;
     const now = new Date().toISOString();
+    const warnings: string[] = [];
+
+    /* Bewuste ontsnapping: een aanroeper die écht een tweede exemplaar wil
+       (bijv. twee verschillende broodjes die toevallig gelijk heten) stuurt
+       allow_duplicate mee. Zonder die vlag wint de bescherming. */
+    const staDubbelToe = typeof body === 'object' && body !== null
+        && (body as Record<string, unknown>).allow_duplicate === true;
+
+    if (!staDubbelToe) {
+        const check = await zoekBestaandeBouwsteen(supabase, membership.organization_id, componentData);
+        if (check.treffer) {
+            return NextResponse.json({
+                error: duplicaatMelding(check.treffer.bestaand, check.treffer.reden),
+                bestaande_bouwsteen: check.treffer.bestaand,
+                reden: check.treffer.reden,
+            }, { status: 409 });
+        }
+        /* Kan de controle niet draaien, dan blokkeren we het opslaan niet — dat
+           zou Sam buitensluiten om een storing die niets met zijn invoer te
+           maken heeft. Wel eerlijk melden dat er níet op dubbelen gekeken is. */
+        if (check.error) {
+            console.warn('[components] dubbel-controle mislukt:', check.error);
+            warnings.push('kon niet controleren of je deze bouwsteen al had');
+        }
+    }
 
     const { data, error } = await supabase
         .from('components')
@@ -226,7 +394,6 @@ export async function POST(req: NextRequest) {
 
     // Nested writes — bewust niet-fataal: component is binnen, allergens/haccp best-effort.
     // Bij failure loggen we het maar geven 201 met component terug (UI kan retry op detail-page).
-    const warnings: string[] = [];
 
     if (allergens && allergens.length > 0) {
         const rows = allergens.map(a => ({
@@ -270,6 +437,55 @@ export async function POST(req: NextRequest) {
     }, { status: 201 });
 }
 
+/* ─── Ophalen zonder stil plafond ───────────────────────────────────────────
+   Een query zonder .range() wordt door de database afgekapt op max-rows
+   (standaard 1000) zónder dat er iets van te merken is. Voor de koppeltabel
+   gerecht-component gebeurt dat als eerste — die groeit met gerechten ×
+   bouwstenen — en dan gaan "In gebruik" en "Ongebruikt" liegen: een bouwsteen
+   die wél in een gerecht zit komt als ongebruikt in beeld. Daarom halen we
+   expliciet pagina voor pagina op, tot een hard plafond, en vertellen we in
+   het antwoord of we alles hebben. */
+const PAGINA_GROOTTE = 1000;
+/* Ruim boven wat een cateraar-bibliotheek realistisch is; puur een noodrem
+   zodat één tenant de server nooit leegtrekt. */
+const MAX_COMPONENTEN = 5000;
+const MAX_GEBRUIK_RIJEN = 20000;
+
+interface PaginaResultaat<T> {
+    rijen: T[];
+    totaal: number | null;
+    afgekapt: boolean;
+    error: string | null;
+}
+
+export async function haalAlleRijen<T>(
+    pagina: (van: number, tot: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null; count: number | null }>,
+    plafond: number,
+): Promise<PaginaResultaat<T>> {
+    const rijen: T[] = [];
+    let totaal: number | null = null;
+
+    for (;;) {
+        const res = await pagina(rijen.length, rijen.length + PAGINA_GROOTTE - 1);
+        if (res.error) return { rijen, totaal, afgekapt: false, error: res.error.message };
+        const batch = res.data ?? [];
+        if (res.count != null) totaal = res.count;
+        rijen.push(...batch);
+
+        if (batch.length === 0) break;
+        if (totaal != null && rijen.length >= totaal) break;
+        /* Zonder telling weten we alleen aan een niet-volle pagina dat we er
+           zijn. Mét telling doen we dat niet: de server mag een kleinere
+           max-rows hanteren dan onze paginagrootte. */
+        if (totaal == null && batch.length < PAGINA_GROOTTE) break;
+        if (rijen.length >= plafond) {
+            return { rijen, totaal, afgekapt: totaal == null || totaal > rijen.length, error: null };
+        }
+    }
+
+    return { rijen, totaal, afgekapt: false, error: null };
+}
+
 export async function GET() {
     const supabase = await createServerSupabase();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -281,26 +497,73 @@ export async function GET() {
     // gerecht_components erbij zodat de UI per component "in N gerechten"
     // kan tonen — de zichtbare lijn van inkoopprijs naar gerecht.
     const [compRes, usageRes] = await Promise.all([
-        supabase.from('components').select('*').order('created_at', { ascending: false }),
-        supabase.from('gerecht_components').select('component_id, gerecht_id'),
+        /* Tweede sorteersleutel is geen sier: met alleen created_at kunnen twee
+           bouwstenen uit dezelfde seconde tussen twee pagina's in dubbel of
+           helemaal niet terugkomen. */
+        haalAlleRijen<Record<string, unknown>>(
+            (van, tot) => supabase
+                .from('components')
+                .select('*', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(van, tot),
+            MAX_COMPONENTEN,
+        ),
+        haalAlleRijen<{ component_id: number; gerecht_id: string }>(
+            (van, tot) => supabase
+                .from('gerecht_components')
+                .select('component_id, gerecht_id', { count: 'exact' })
+                .order('component_id', { ascending: true })
+                .order('gerecht_id', { ascending: true })
+                .range(van, tot),
+            MAX_GEBRUIK_RIJEN,
+        ),
     ]);
 
     if (compRes.error) {
-        return NextResponse.json({ error: compRes.error.message }, { status: 500 });
+        return NextResponse.json({ error: compRes.error }, { status: 500 });
     }
 
     /* Distinct gerechten per component (een gerecht kan een component
        in theorie 2× bevatten; dat telt als 1 gerecht). */
     const usage: Record<number, number> = {};
-    if (usageRes.data) {
-        const seen = new Set<string>();
-        for (const row of usageRes.data) {
-            const key = `${row.component_id}:${row.gerecht_id}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            usage[row.component_id as number] = (usage[row.component_id as number] ?? 0) + 1;
-        }
+    const seen = new Set<string>();
+    for (const row of usageRes.rijen) {
+        const key = `${row.component_id}:${row.gerecht_id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        usage[row.component_id] = (usage[row.component_id] ?? 0) + 1;
     }
 
-    return NextResponse.json({ components: compRes.data ?? [], usage });
+    const getoond = compRes.rijen.length;
+    const totaalComponenten = compRes.totaal ?? getoond;
+    /* Weten we niet zeker dat we élke koppeling hebben, dan is "in gebruik" /
+       "ongebruikt" een gok. Dat zeggen we hardop in plaats van het cijfer als
+       waarheid te presenteren. */
+    const gebruikCompleet = !usageRes.error && !usageRes.afgekapt;
+
+    const waarschuwingen: string[] = [];
+    if (usageRes.error) {
+        console.warn('[components] gebruik-telling mislukt:', usageRes.error);
+        waarschuwingen.push('We konden niet ophalen in welke gerechten je bouwstenen zitten — "in gebruik" en "ongebruikt" kloppen nu niet.');
+    } else if (usageRes.afgekapt) {
+        waarschuwingen.push('Je hebt zoveel gerechten dat we niet alle koppelingen konden nalopen — "ongebruikt" kan er meer tonen dan het zijn.');
+    }
+    if (compRes.afgekapt) {
+        waarschuwingen.push(`We tonen ${getoond} van je ${totaalComponenten} bouwstenen — de rest valt buiten deze lijst.`);
+    }
+
+    return NextResponse.json({
+        components: compRes.rijen,
+        usage,
+        /* Eerlijk over de horizon: een lijst die vol lijkt maar stilzwijgend
+           rijen weglaat, leest als "meer is er niet". */
+        totalen: {
+            componenten_totaal: totaalComponenten,
+            componenten_getoond: getoond,
+            meer: Math.max(0, totaalComponenten - getoond),
+            gebruik_compleet: gebruikCompleet,
+        },
+        ...(waarschuwingen.length > 0 ? { warnings: waarschuwingen } : {}),
+    });
 }

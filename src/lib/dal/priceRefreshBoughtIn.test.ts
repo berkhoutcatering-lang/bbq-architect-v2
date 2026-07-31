@@ -90,7 +90,11 @@ describe('refreshBoughtInPrices — prijslijst-koppeling (Catalogus A)', () => {
         expect(rapport.bekeken).toBe(1);
         expect(rapport.bijgewerkt).toBe(1);
         expect(updates).toHaveLength(1);
-        expect(updates[0].patch).toEqual({ base_cost_cents: 140 });
+        expect(updates[0].patch.base_cost_cents).toBe(140);
+        /* updated_at MOET meegeschreven worden: daar hangt het slot tegen
+           gelijktijdig opslaan aan. Zonder die stempel ziet de bewerk-lade deze
+           prijswijziging niet en kan ze 'm stil terugdraaien. */
+        expect(typeof updates[0].patch.updated_at).toBe('string');
     });
 
     it('volgt de nieuwste actieve prijs, niet het opgeslagen supplier_price_id', async () => {
@@ -110,7 +114,7 @@ describe('refreshBoughtInPrices — prijslijst-koppeling (Catalogus A)', () => {
 
         await refreshBoughtInPrices(client, ORG);
 
-        expect(updates[0].patch).toEqual({ base_cost_cents: 250 });
+        expect(updates[0].patch.base_cost_cents).toBe(250);
     });
 
     it('laat de basis-eenheid staan en rekent de prijs daarnaartoe om', async () => {
@@ -131,7 +135,7 @@ describe('refreshBoughtInPrices — prijslijst-koppeling (Catalogus A)', () => {
         await refreshBoughtInPrices(client, ORG);
 
         /* €12,50/kg op een basis van 1 kg = 1250 cent — géén stille herbasering naar 100 g. */
-        expect(updates[0].patch).toEqual({ base_cost_cents: 1250 });
+        expect(updates[0].patch.base_cost_cents).toBe(1250);
     });
 
     it('telt als ongekoppeld wanneer er geen actieve prijs meer is', async () => {
@@ -149,6 +153,28 @@ describe('refreshBoughtInPrices — prijslijst-koppeling (Catalogus A)', () => {
 
         expect(rapport.ongekoppeld).toBe(1);
         expect(updates).toHaveLength(0);
+    });
+
+    it('schrijft niets weg bij dryRun, maar meldt wél het verschil', async () => {
+        /* Voor een scherm dat "opgeslagen €1,35 → nu €1,40 — Neem over" toont in
+           plaats van de nieuwe prijs stil in het veld te zetten. */
+        const { client, updates } = fakeSupabase({
+            components: [{
+                id: 60, organization_id: ORG, type: 'bought_in',
+                base_cost_cents: 135, base_quantity: 100, base_unit: 'g',
+                supplier_product_id: null, master_product_id: 8767, supplier_price_id: null,
+            }],
+            supplier_prices: [
+                { id: 9001, organization_id: ORG, master_product_id: 8767, leverancier: 'Beef Club',
+                  prijs: 14, eenheid: 'kg', prijs_per_kg: 14, prijs_per_stuk: null, datum: '2026-07-30', actief: true },
+            ],
+            supplier_products: [],
+        });
+
+        const rapport = await refreshBoughtInPrices(client, ORG, { dryRun: true });
+
+        expect(updates).toHaveLength(0);
+        expect(rapport.wijzigingen).toEqual([{ componentId: 60, oudCents: 135, nieuwCents: 140 }]);
     });
 
     it('raakt een handmatige component zonder koppeling niet aan', async () => {
