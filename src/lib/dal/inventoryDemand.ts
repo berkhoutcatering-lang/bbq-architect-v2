@@ -14,9 +14,14 @@
  *
  * Demand-buffer (Sam: "× gasten plus altijd 10% derving"):
  *     reserved_met_derving = reserved × (1 + derving_pct/100)   // per item
- *     target   = reserved_met_derving                           // keuze A: par is
- *                GEEN bestel-ondergrens (alleen een signaal op /voorraad)
+ *     target   = reserved_met_derving + par_level               // par IS een
+ *                bestel-ondergrens: wat je minimaal in huis wilt houden staat
+ *                LOS van wat de cateringen opeten, dus het telt erbovenop
  *     shortfall = max(0, target − current_stock − in_flight)
+ *
+ *   Waarom optellen en niet max(): de events verbruiken je voorraad. Wil je 4 kg
+ *   overhouden voor een spoedaanvraag én vraagt een catering 6 kg, dan moet er
+ *   10 kg staan — bij max() zou je op 6 uitkomen en na het event op nul.
  *   in_flight = verzonden-maar-niet-ontvangen orderregels (uit inkoop_order_lines),
  *   met een guard tegen vergeten/oude 'sent'-orders (P0-1 uit de review).
  *
@@ -52,11 +57,47 @@ export interface InventoryDemandRow {
   reserved_qty: number;
   // NIEUW: buffer + onderweg + doel maken de shortfall-berekening transparant.
   derving_pct: number;
+  /** reserved_qty inclusief de dervingsbuffer, vóór par erbij komt. Apart veld
+   *  zodat de "waarom dit aantal"-opbouw regel voor regel blijft optellen. */
+  reserved_buffered_qty: number;
   in_flight_qty: number;
   target_qty: number;
   shortfall: number;
   events: DemandPerEvent[];
   leverancier_id: number | null;
+}
+
+/**
+ * Doel en tekort voor één voorraad-item — de kern-rekenregel van de bestellijst.
+ *
+ * Losse pure functie zodat dit narekenbaar is zonder database eromheen. Dit is
+ * het getal waar de bestelling en dus het geld aan hangt.
+ *
+ *   doel   = event-vraag × (1 + derving%)  +  minimale voorraad (par)
+ *   tekort = max(0, doel − wat er ligt − wat onderweg is)
+ */
+export function berekenTekort(opts: {
+  /** Som van de per-event vraag, vóór derving. */
+  reserved: number;
+  /** Dervingsbuffer in procenten, alleen op de event-vraag. */
+  dervingPct: number;
+  /** Wat je minimaal in huis wilt houden nádat de events eruit zijn. */
+  parLevel: number;
+  stock: number;
+  inFlight: number;
+}): { reservedBuffered: number; target: number; shortfall: number } {
+  const reserved = Math.max(0, Number(opts.reserved) || 0);
+  const par = Math.max(0, Number(opts.parLevel) || 0);
+  const stock = Math.max(0, Number(opts.stock) || 0);
+  const inFlight = Math.max(0, Number(opts.inFlight) || 0);
+  const dervingFactor = 1 + Math.max(0, Number(opts.dervingPct) || 0) / 100;
+
+  const reservedBuffered = reserved * dervingFactor;
+  const target = reservedBuffered + par;
+  const shortfall = Math.max(0, target - stock - inFlight);
+
+  const rond = (n: number) => Math.round(n * 1000) / 1000;
+  return { reservedBuffered: rond(reservedBuffered), target: rond(target), shortfall: rond(shortfall) };
 }
 
 export interface UnmatchedIngredient {
@@ -389,21 +430,22 @@ export async function getInventoryWithDemand(
     // inkoop_order_lines bestaat mogelijk nog niet (pre-migratie) — dan geen aftrek.
   }
 
-  // 8. Bouw rows: derving-buffer − voorraad − onderweg (par is GEEN ondergrens, keuze A).
+  // 8. Bouw rows: par + derving-buffer − voorraad − onderweg.
   const rows: InventoryDemandRow[] = inventory.map(function (inv: any) {
     const eventsForInv = demandMap.get(inv.id) || [];
     const reserved = eventsForInv.reduce(function (s, e) { return s + e.qty; }, 0);
     const stock = Number(inv.current_stock) || 0;
     const par = Number(inv.par_level) || 0;
     const dervingPct = inv.derving_pct != null ? Number(inv.derving_pct) : DEFAULT_DERVING_PCT;
-    const dervingFactor = 1 + Math.max(0, dervingPct) / 100;
-    const reservedBuffered = reserved * dervingFactor;
     const inFlight = inFlightByInv.get(inv.id) || 0;
-    // Optie A (Sam): de bestellijst is PUUR event-gedreven. Par-niveau is GEEN
-    // ondergrens — we bestellen alleen wat de events nodig hebben (+ derving),
-    // niet "alles bijvullen tot par". Par blijft wel op /voorraad zichtbaar.
-    const target = reservedBuffered;
-    const shortfall = Math.max(0, target - stock - inFlight);
+    // Par IS een ondergrens (Sam, 2026-07-31): "ik wil niet dat alles op is —
+    // als er opeens een aanvraag komt moet ik kunnen koken". Vandaar par ÉN de
+    // events, niet de hoogste van de twee: de events eten je voorraad op, dus
+    // wat je minimaal wilt overhouden komt er bovenop.
+    //   4 kg suiker in huis willen + een catering die 6 kg vraagt = 10 kg doel.
+    const { reservedBuffered, target, shortfall } = berekenTekort({
+      reserved, dervingPct, parLevel: par, stock, inFlight,
+    });
     return {
       id: inv.id,
       naam: inv.naam,
@@ -414,6 +456,7 @@ export async function getInventoryWithDemand(
       par_level: inv.par_level == null ? null : par,
       reserved_qty: Math.round(reserved * 1000) / 1000,
       derving_pct: dervingPct,
+      reserved_buffered_qty: Math.round(reservedBuffered * 1000) / 1000,
       in_flight_qty: Math.round(inFlight * 1000) / 1000,
       target_qty: Math.round(target * 1000) / 1000,
       shortfall: Math.round(shortfall * 1000) / 1000,

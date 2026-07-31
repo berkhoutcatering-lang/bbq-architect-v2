@@ -95,7 +95,7 @@ export default async function InkoopPage() {
         return (
             <RequireTier feature="inkoop">
                 <div className="artisan-page inkoop-page">
-                    <PageHeader title="Inkoop" description="Bestellen voor de events" />
+                    <PageHeader title="Inkoop" description="Bestellen voor je minimale voorraad en je events" />
                     <div
                         style={{
                             background: 'var(--card)',
@@ -117,7 +117,7 @@ export default async function InkoopPage() {
             <div className="artisan-page inkoop-page">
                 <PageHeader
                     title="Inkoop"
-                    description={`Bestellen voor de events komende ${summary.totals.window_days} dagen`}
+                    description={`Minimale voorraad aanvullen + bestellen voor de events komende ${summary.totals.window_days} dagen`}
                 />
 
                 <div style={{ margin: '4px 0 14px' }}>

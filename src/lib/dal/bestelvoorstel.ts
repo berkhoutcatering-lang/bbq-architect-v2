@@ -2,9 +2,13 @@
 /**
  * Bestelvoorstel DAL
  * ──────────────────
- * Groepeert "wat moet ik bestellen voor de events komende N dagen" per
- * leverancier. Math is server-side & deterministic — AI bemoeit zich NIET met
- * de getallen.
+ * Groepeert "wat moet ik bestellen voor de events komende N dagen én om mijn
+ * minimale voorraad op peil te houden" per leverancier. Math is server-side &
+ * deterministic — AI bemoeit zich NIET met de getallen.
+ *
+ * Let op: sinds 2026-07-31 is par_level een bestel-ondergrens die BOVENOP de
+ * event-vraag komt (zie inventoryDemand.ts). Een item zonder events kan dus
+ * tóch op de lijst staan, puur omdat de voorraad onder par is gezakt.
  *
  * Nieuw t.o.v. v1:
  *  - Vaste leverancier-koppeling (inventory.preferred_supplier_product_id) bepaalt
@@ -22,6 +26,17 @@ import { getInventoryWithDemand, type InventoryDemandRow, type UnmatchedIngredie
 import { ensureConceptOrder } from './inkoopOrders';
 import { getOverridesForOrg, type OrderOverride } from './orderOverrides';
 import { roundUpToPack, type RoundingReason } from './packRounding';
+import { pakVoorstel } from '../voorraadTelling';
+
+/** "5000 g" → "5 kg", "1500 ml" → "1,5 liter". Alleen voor het label; het
+ *  bestelde aantal blijft in de eenheid van het voorraad-item staan. */
+function netPak(size: number | null, unit: string | null): string {
+  if (size == null || !unit) return `${size ?? '?'} ${unit ?? ''}`.trim();
+  const pak = pakVoorstel({ pack_total_quantity: size, pack_total_unit: unit });
+  const q = pak ? pak.inhoud : size;
+  const u = pak ? pak.eenheid : unit;
+  return `${String(Math.round(q * 1000) / 1000).replace('.', ',')} ${u}`;
+}
 
 export interface BestelvoorstelItem {
   inventory_id: number;
@@ -49,11 +64,13 @@ export interface BestelvoorstelItem {
   original_qty: number;
   /* Opbouw van het aantal (fix #4: "waarom dit aantal"-uitklap). Alle stappen die
      samen het tekort vormen — zodat een sceptische operator het kan narekenen. */
-  reserved_qty: number;   // som van de per-event vraag (vóór derving)
-  derving_pct: number;    // buffer-percentage
-  target_qty: number;     // reserved + derving
-  current_stock: number;  // wat er al ligt
-  in_flight_qty: number;  // wat al onderweg is (verzonden, niet ontvangen)
+  reserved_qty: number;          // som van de per-event vraag (vóór derving)
+  derving_pct: number;           // buffer-percentage
+  reserved_buffered_qty: number; // reserved + derving, vóór par
+  par_level: number | null;      // minimale voorraad die je wilt overhouden
+  target_qty: number;            // reserved + derving + par
+  current_stock: number;         // wat er al ligt
+  in_flight_qty: number;         // wat al onderweg is (verzonden, niet ontvangen)
 }
 
 export interface BestelvoorstelLeverancier {
@@ -262,7 +279,11 @@ export async function buildBestelvoorstel(
       qty_needed: packed.qty_needed,
       qty_ordered: packed.qty_ordered,
       packs: packed.packs,
-      pack_label: packed.packs != null ? `${packed.packs}× ${packed.pack_size} ${packed.pack_unit}` : null,
+      /* Label alleen netter schrijven, niet omrekenen: de leverancier levert
+         "5000 g" maar de rest van de regel staat in kg ("nodig 3.00 kg"). Twee
+         eenheden in één zin laten staan maakt een kloppende bestelling
+         onleesbaar. qty_ordered blijft ongemoeid — dit is puur weergave. */
+      pack_label: packed.packs != null ? `${packed.packs}× ${netPak(packed.pack_size, packed.pack_unit)}` : null,
       pack_size: packed.pack_size,
       pack_unit: packed.pack_unit,
       rounding_reason: packed.reason,
@@ -283,6 +304,8 @@ export async function buildBestelvoorstel(
       original_qty: originalQty,
       reserved_qty: r.reserved_qty,
       derving_pct: r.derving_pct,
+      reserved_buffered_qty: r.reserved_buffered_qty,
+      par_level: r.par_level,
       target_qty: r.target_qty,
       current_stock: r.current_stock,
       in_flight_qty: r.in_flight_qty,

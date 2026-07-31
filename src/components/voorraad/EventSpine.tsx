@@ -112,13 +112,31 @@ export default function EventSpine({ windowDays = 14 }: { windowDays?: number })
   }
 
   if (!summary || summary.events_in_window.length === 0) {
+    /* Geen events betekent sinds de par-ondergrens niet meer "voorraad rust":
+       items die onder hun minimum zijn gezakt staan óók zonder event op de
+       bestellijst. Dat hier verzwijgen leest als "niks te doen". */
+    const onderPar = summary?.totals.items_with_shortfall ?? 0;
     return (
-      <div className="event-spine event-spine--empty">
+      <div className={onderPar > 0 ? 'event-spine event-spine--warning' : 'event-spine event-spine--empty'}>
         <Calendar size={14} aria-hidden />
-        <span>Geen bevestigde events komende {windowDays} dagen — voorraad rust.</span>
-        <Link href="/agenda" className="event-spine__cta">
-          plan event <ChevronRight size={12} aria-hidden />
-        </Link>
+        {onderPar > 0 ? (
+          <>
+            <span>
+              Geen events komende {windowDays} dagen ·{' '}
+              <strong style={{ fontWeight: 600 }}>{onderPar} {onderPar === 1 ? 'product' : 'producten'}</strong> onder je minimale voorraad
+            </span>
+            <Link href="/inkoop" className="event-spine__cta">
+              bestellijst <ChevronRight size={12} aria-hidden />
+            </Link>
+          </>
+        ) : (
+          <>
+            <span>Geen bevestigde events komende {windowDays} dagen — voorraad op peil.</span>
+            <Link href="/agenda" className="event-spine__cta">
+              plan event <ChevronRight size={12} aria-hidden />
+            </Link>
+          </>
+        )}
       </div>
     );
   }

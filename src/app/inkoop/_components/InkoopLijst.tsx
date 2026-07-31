@@ -4,7 +4,8 @@
  * InkoopLijst — hoofd-component van /inkoop (bucket D · P0-2)
  * ───────────────────────────────────────────────────────────
  * Vervangt het oude tab-systeem (leveranciers/bonnen/archief) door één
- * focus: "Wat moet ik bestellen voor de events komende 14 dagen, per leverancier?".
+ * focus: "Wat moet ik bestellen om mijn minimale voorraad op peil te houden én de
+ * events komende 14 dagen te kunnen koken, per leverancier?".
  *
  * Per leverancier-card:
  *   - header: naam · type · items-count · €totaal · deadline-pill · bel-link
@@ -818,13 +819,24 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                                 </div>
                             );
                         })}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', borderTop: '1px solid var(--border)', marginTop: 4 }}>
-                            <span>events samen</span>
-                            <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.reserved_qty, item.unit)}</span>
-                        </div>
-                        {item.derving_pct > 0 && (
+                        {item.events.length > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '3px 0', borderTop: '1px solid var(--border)', marginTop: 4 }}>
+                                <span>events samen</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.reserved_qty, item.unit)}</span>
+                            </div>
+                        )}
+                        {item.derving_pct > 0 && item.reserved_qty > 0 && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0' }}>
                                 <span>+ {item.derving_pct}% marge (derving)</span>
+                                <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.reserved_buffered_qty, item.unit)}</span>
+                            </div>
+                        )}
+                        {/* Par staat LOS van de events: dit is wat je wilt overhouden nádat
+                            de cateringen eruit zijn. Zonder deze regel telt de opbouw niet
+                            meer op en lijkt er een aantal uit de lucht te vallen. */}
+                        {(item.par_level ?? 0) > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '2px 0', borderTop: item.events.length === 0 ? '1px solid var(--border)' : undefined, marginTop: item.events.length === 0 ? 4 : undefined }}>
+                                <span>{item.events.length > 0 ? '+ minimaal in huis houden' : 'minimaal in huis houden'}</span>
                                 <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>{fmtQty(item.target_qty, item.unit)}</span>
                             </div>
                         )}
