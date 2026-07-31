@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 /**
  * Mollie iDEAL/SEPA betaallinken voor facturen.
@@ -52,7 +53,7 @@ function berekenFactuurTotaal(factuur: any): number {
   let totaal = 0;
   items.forEach(function (item: any) {
     const subtotaal = (item.qty || 0) * (item.prijs || 0);
-    const btw = item.btw || 21;
+    const btw = resolveBtwPct(item.btw);
     totaal += subtotaal * (1 + btw / 100);
   });
   return Math.round(totaal * 100) / 100;

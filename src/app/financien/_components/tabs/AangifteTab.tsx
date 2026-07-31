@@ -18,7 +18,13 @@ import {
 
 interface Props {
     facturen: FactuurMin[];
-    bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string; ai_classify_status?: string }>;
+    bonnen: Array<BonMin & {
+        btw_laag_bedrag?: number | string;
+        btw_hoog_bedrag?: number | string;
+        ai_classify_status?: string;
+        voorbelasting_bevestigd?: boolean | null;
+        zakelijk_pct?: number | string | null;
+    }>;
 }
 
 interface VastgezetteAangifte {
@@ -272,9 +278,22 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                                 </tr>
                                 <tr>
                                     <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono, ui-monospace)' }}>5b</td>
-                                    <td colSpan={2}>Voorbelasting (bonnen)</td>
+                                    <td colSpan={2}>Voorbelasting (bevestigde bonnen)</td>
                                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--green)' }}>−{fmt(rubrieken.rubriek_5b)}</td>
                                 </tr>
+                                {rubrieken.voorbelasting_onbevestigd > 0 && (
+                                    <tr>
+                                        <td />
+                                        <td colSpan={2} style={{ color: 'var(--muted)', fontSize: 12 }}>
+                                            Nog niet meegeteld — {rubrieken.voorbelasting_onbevestigd_count} bon
+                                            {rubrieken.voorbelasting_onbevestigd_count === 1 ? '' : 'nen'} wacht
+                                            {rubrieken.voorbelasting_onbevestigd_count === 1 ? '' : 'en'} op bevestiging
+                                        </td>
+                                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontSize: 12, color: 'var(--muted)' }}>
+                                            ({fmt(rubrieken.voorbelasting_onbevestigd)})
+                                        </td>
+                                    </tr>
+                                )}
                                 <tr style={{ background: 'rgba(167,139,250,.04)' }}>
                                     <td colSpan={3} style={{ fontWeight: 700 }}>Saldo</td>
                                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: 16, color: rubrieken.saldo >= 0 ? 'var(--brand)' : 'var(--green)' }}>
@@ -285,6 +304,52 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                         </table>
                     </div>
                 </MetallicCard>
+
+                {/* Handmatig verwerken — regels die niet automatisch in een rubriek passen.
+                    Deze stonden eerder nergens: een 0%-regel viel stil buiten de aangifte.
+                    Een zichtbare lijst is veiliger dan een stil verkeerd totaal. */}
+                {rubrieken.gaten.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                        <MetallicCard hover={false}>
+                            <div className="panel-head">
+                                <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <AlertTriangle size={12} style={{ color: 'var(--amber, #d97706)' }} /> Handmatig verwerken
+                                </h3>
+                                <span style={{ fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
+                                    {rubrieken.gaten.length} regel{rubrieken.gaten.length === 1 ? '' : 's'} · {fmt(rubrieken.gaten_bedrag)}
+                                </span>
+                            </div>
+                            <div style={{ padding: '0 22px 8px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                                Deze regels zitten <strong>niet</strong> in de bedragen hierboven. De rubrieken
+                                1c, 1d, 1e, 3c, 4a en 4b bestaan nog niet in dit systeem, en bij 0% ligt de
+                                reden (verlegd, export, EU-levering, vrijgesteld) niet vast in de data. Fout
+                                raden maakt de aangifte te hoog of te laag — dus wordt er niet geraden.
+                            </div>
+                            <div className="tbl-wrap">
+                                <table className="tbl">
+                                    <tbody>
+                                        {rubrieken.gaten.map((g, i) => (
+                                            <tr key={`${g.referentie}-${i}`}>
+                                                <td style={{ width: 110, fontFamily: 'var(--font-mono, ui-monospace)', fontSize: 12 }}>{g.referentie}</td>
+                                                <td style={{ width: 90, color: 'var(--muted)', fontSize: 12 }}>{g.datum}</td>
+                                                <td>
+                                                    <div style={{ fontSize: 13 }}>{g.omschrijving}</div>
+                                                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{g.reden}</div>
+                                                </td>
+                                                <td style={{ width: 60, textAlign: 'right', fontSize: 12, color: 'var(--muted)' }}>
+                                                    {g.pct === null ? '—' : `${g.pct}%`}
+                                                </td>
+                                                <td style={{ width: 110, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                                                    {fmt(g.bedrag)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </MetallicCard>
+                    </div>
+                )}
             </div>
 
             {/* Generate concept actions */}

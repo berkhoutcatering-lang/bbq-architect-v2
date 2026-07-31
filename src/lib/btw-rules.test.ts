@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
     BTW_RULES_2026,
+    BTW_TARIEVEN,
+    BTW_TABEL_VANAF,
+    ALCOHOL_GRENS,
+    drinkCategoryForAlcohol,
+    getBtwRules,
     getBtwRate,
     getBtwPct,
     validateBtwPct,
     categoryFromLegacyPct,
+    isMissingBtwPct,
+    resolveBtwPct,
+    requireBtwPct,
     type BtwCategory,
 } from './btw-rules';
 
@@ -23,6 +31,20 @@ describe('BTW_RULES_2026 lookup-tabel', () => {
         const rule = BTW_RULES_2026.find(r => r.category === 'alcohol');
         expect(rule?.rate).toBe(0.21);
         expect(rule?.rate_pct).toBe(21);
+    });
+
+    /* Regressie: hier stond 21% met de toelichting "sinds 1 jan 2026 alle
+       drinks 21%". Dat verwarde de VERBRUIKSBELASTING op frisdrank met de btw.
+       Belastingdienst: alcoholvrije dranken staan op 9%. Deze fout rekende te
+       veel btw op vrijwel elke cateringfactuur. */
+    it('soft_drinks = 9% — alcoholvrije dranken vallen onder het lage tarief', () => {
+        const rule = BTW_RULES_2026.find(r => r.category === 'soft_drinks');
+        expect(rule?.rate).toBe(0.09);
+        expect(rule?.rate_pct).toBe(9);
+    });
+
+    it('food en alcoholvrije dranken staan op hetzelfde tarief', () => {
+        expect(getBtwPct('soft_drinks')).toBe(getBtwPct('food_catering'));
     });
 
     it('b2b_intra_eu_reverse = 0%', () => {
@@ -108,6 +130,99 @@ describe('validateBtwPct', () => {
         // Test die PR #76 in CI rood maakte:
         // expected 9 to be 0. Nu moet hij 0 zijn.
         expect(validateBtwPct(3)).toBe(0);
+    });
+});
+
+describe('datumgebonden tarieven', () => {
+    it('elke regel heeft een geldig_vanaf', () => {
+        for (const r of BTW_TARIEVEN) {
+            expect(r.geldig_vanaf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
+    });
+
+    it('lookup op een datum binnen bereik werkt', () => {
+        expect(getBtwRate('soft_drinks', '2026-03-01')).toBe(0.09);
+        expect(getBtwRate('alcohol', '2026-03-01')).toBe(0.21);
+    });
+
+    it('weigert datums vóór de gedekte periode in plaats van te gokken', () => {
+        expect(() => getBtwRate('food_catering', '2018-12-31')).toThrow();
+        expect(() => getBtwRules('2000-01-01')).toThrow();
+    });
+
+    it('accepteert de eerste gedekte dag', () => {
+        expect(() => getBtwRules(BTW_TABEL_VANAF)).not.toThrow();
+    });
+
+    it('geen dubbele categorie op één datum — anders wint een willekeurige', () => {
+        const cats = getBtwRules('2026-06-01').map(r => r.category);
+        expect(new Set(cats).size).toBe(cats.length);
+    });
+});
+
+describe('drinkCategoryForAlcohol', () => {
+    it('alcoholvrij bier (0,0%) is soft_drinks, dus 9%', () => {
+        expect(drinkCategoryForAlcohol(0, 'bier')).toBe('soft_drinks');
+        expect(getBtwPct(drinkCategoryForAlcohol(0, 'bier'))).toBe(9);
+    });
+
+    it('bier precies op de grens (0,5%) blijft 9%', () => {
+        expect(drinkCategoryForAlcohol(ALCOHOL_GRENS.bier_vol_pct, 'bier')).toBe('soft_drinks');
+    });
+
+    it('pils (5%) is alcohol, dus 21%', () => {
+        expect(drinkCategoryForAlcohol(5, 'bier')).toBe('alcohol');
+        expect(getBtwPct(drinkCategoryForAlcohol(5, 'bier'))).toBe(21);
+    });
+
+    it('overige dranken hebben een andere grens (1,2%)', () => {
+        expect(drinkCategoryForAlcohol(1.2)).toBe('soft_drinks');
+        expect(drinkCategoryForAlcohol(1.3)).toBe('alcohol');
+        /* 1,0% zou als bier wél 21% zijn, als overige drank niet. */
+        expect(drinkCategoryForAlcohol(1.0, 'bier')).toBe('alcohol');
+        expect(drinkCategoryForAlcohol(1.0, 'overig')).toBe('soft_drinks');
+    });
+});
+
+describe('resolveBtwPct / isMissingBtwPct / requireBtwPct', () => {
+    /* De kern van de falsy-nul-bug: 0 is een geldig tarief. Op 2026-07-29
+       stond `x || 21` op 27 plekken, waaronder UBL/Moneybird/Exact/PDF. */
+    it('0 blijft 0 en wordt NIET 21', () => {
+        expect(resolveBtwPct(0)).toBe(0);
+        expect(isMissingBtwPct(0)).toBe(false);
+        expect(requireBtwPct(0, 'test')).toBe(0);
+    });
+
+    it('ontbrekende waarde krijgt de fallback', () => {
+        expect(resolveBtwPct(undefined)).toBe(21);
+        expect(resolveBtwPct(null)).toBe(21);
+        expect(resolveBtwPct('')).toBe(21);
+        expect(resolveBtwPct('abc')).toBe(21);
+        expect(resolveBtwPct(NaN)).toBe(21);
+    });
+
+    it('eigen fallback wordt gerespecteerd', () => {
+        expect(resolveBtwPct(undefined, 9)).toBe(9);
+        expect(resolveBtwPct(0, 9)).toBe(0);
+    });
+
+    it('leest numerieke strings', () => {
+        expect(resolveBtwPct('9')).toBe(9);
+        expect(resolveBtwPct('0')).toBe(0);
+    });
+
+    it('isMissingBtwPct herkent alleen écht ontbrekende waardes', () => {
+        expect(isMissingBtwPct(undefined)).toBe(true);
+        expect(isMissingBtwPct(null)).toBe(true);
+        expect(isMissingBtwPct('')).toBe(true);
+        expect(isMissingBtwPct('nvt')).toBe(true);
+        expect(isMissingBtwPct(9)).toBe(false);
+        expect(isMissingBtwPct('21')).toBe(false);
+    });
+
+    it('requireBtwPct weigert te raden bij een ontbrekend tarief', () => {
+        expect(() => requireBtwPct(undefined, 'factuurregel 1')).toThrow(/factuurregel 1/);
+        expect(() => requireBtwPct(null, 'regel')).toThrow();
     });
 });
 

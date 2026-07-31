@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
             .gte('datum', period.start_date)
             .lte('datum', period.end_date),
         supabase.from('bonnen')
-            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code')
+            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,voorbelasting_bevestigd,zakelijk_pct')
             .gte('datum', period.start_date)
             .lte('datum', period.end_date),
     ]);

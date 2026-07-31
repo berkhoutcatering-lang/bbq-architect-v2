@@ -15,6 +15,7 @@
     "ai-eval": "tsx scripts/ai-eval.ts",
     "enable-leaked-password-protection": "tsx scripts/enable-leaked-password-protection.ts",
     "lint:contrast": "tsx scripts/contrast-audit.ts",
+    "btw:afwijkingen": "tsx scripts/btw-afwijkingsrapport.ts",
     "seed-help": "node scripts/seed-help-articles.mjs"
   },
   "dependencies": {

@@ -33,6 +33,7 @@ import AangifteTab from './tabs/AangifteTab';
 import BankTab from './tabs/BankTab';
 import AgingPanel from './sections/AgingPanel';
 import ConcentrationBanner from './sections/ConcentrationBanner';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
@@ -289,7 +290,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
         const btwMap: Record<string, { netto: number; btw: number }> = {};
         facturen.forEach(function (f) {
             (f.items || []).forEach(function (item: any) {
-                const pct = item.btw || 0;
+                const pct = resolveBtwPct(item.btw);
                 const line = (item.qty || 0) * (item.prijs || 0);
                 const btwBedrag = line * (pct / 100);
                 if (!btwMap[pct]) btwMap[pct] = { netto: 0, btw: 0 };

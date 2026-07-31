@@ -26,6 +26,7 @@ import {
     GOLD,
     MetalCard, Eyebrow, Hint, BtnPrimary, BtnGhost, ModelToggle, Pill, SectionExplain,
 } from './_atoms';
+import { resolveBtwPct } from '@/lib/btw-rules';
 import {
     fmt2, normalizeLeverancier, normalizeFactuurnummer,
     detectDuplicates, fuzzyScore, matchInventoryItem,
@@ -1410,7 +1411,7 @@ function FolderReceipts() {
             winkel: parsed.winkel || 'Onbekend',
             datum: parsed.datum || null,
             totaal_bedrag: parsed.totaal_bedrag || 0,
-            btw_pct: parsed.btw_pct || 21,
+            btw_pct: resolveBtwPct(parsed.btw_pct),
             categorie: parsed.categorie || null,
             raw_analysis: parsed.regels || [],
             notities: parsed.notities || null,
@@ -1662,7 +1663,7 @@ function ReceiptReview({ parsed, setParsed, preview, onSave, onCancel }: { parse
                         <Field label="Winkel" value={parsed.winkel || ''} onChange={v => upd('winkel', v)} />
                         <Field label="Datum" value={parsed.datum || ''} onChange={v => upd('datum', v)} type="date" />
                         <CurrencyField label="Totaal bedrag (incl BTW)" value={String(parsed.totaal_bedrag ?? 0)} onChange={v => upd('totaal_bedrag', parseFloat(v) || 0)} />
-                        <PercentField label="BTW tarief" value={String(parsed.btw_pct ?? 21)} onChange={v => upd('btw_pct', parseFloat(v) || 21)} />
+                        <PercentField label="BTW tarief" value={String(parsed.btw_pct ?? 21)} onChange={v => upd('btw_pct', resolveBtwPct(parseFloat(v)))} />
                         <div style={{ gridColumn: '1 / -1' }}>
                             <Field label="Categorie" value={parsed.categorie || ''} onChange={v => upd('categorie', v)} />
                         </div>

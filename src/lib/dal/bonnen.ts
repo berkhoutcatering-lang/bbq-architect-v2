@@ -51,6 +51,11 @@ export interface BonRow {
     file_mime: string | null;
     locked_at: string | null;
     locked_by: string | null;
+    /* Voorbelasting (veiligheidsfase F6) — pas na menselijke controle telt de
+       BTW van deze bon mee in aangifte-rubriek 5b. */
+    voorbelasting_bevestigd?: boolean | null;
+    zakelijk_pct?: number | null;
+    voorbelasting_bevestigd_at?: string | null;
     extracted_text: string | null;
     bon_items: unknown[] | null;
     snippet?: string | null;             // populated when search-query active
@@ -125,7 +130,7 @@ export async function searchBonnen(
     // Zonder search-query: normale builder.
     let q = sb
         .from('bonnen')
-        .select('id, organization_id, leverancier_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, status, source, categorie, rgs_code, rgs_category_label, tags, notities, image_url, file_path, file_mime, locked_at, locked_by, extracted_text, bon_items, created_at, updated_at, leveranciers(naam)')
+        .select('id, organization_id, leverancier_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, status, source, categorie, rgs_code, rgs_category_label, tags, notities, image_url, file_path, file_mime, locked_at, locked_by, voorbelasting_bevestigd, zakelijk_pct, voorbelasting_bevestigd_at, extracted_text, bon_items, created_at, updated_at, leveranciers(naam)')
         .eq('organization_id', orgId)
         .order('datum', { ascending: false, nullsFirst: false })
         .limit(filters.limit)

@@ -243,7 +243,7 @@ export default function Offertes() {
             desc: template_naam,
             qty: 1,
             prijs: 0,
-            btw: (settings && settings.default_btw) || 21,
+            btw: settings?.default_btw ?? 21,
         };
     }
 
@@ -262,7 +262,7 @@ export default function Offertes() {
         const p = activeEventData?.ppp || 0;
         const fromEvent = g > 0 && p > 0;
         const basisItem = fromEvent
-            ? { desc: result.template_naam, qty: g, prijs: p, btw: (settings && settings.default_btw) || 21 }
+            ? { desc: result.template_naam, qty: g, prijs: p, btw: settings?.default_btw ?? 21 }
             : buildBasisItem(result.template_naam);
         setForm(Object.assign({
             nummer: nummer,
@@ -308,7 +308,7 @@ export default function Offertes() {
         setForm(Object.assign({
             nummer: nummer, status: 'concept', client_naam: '', client_adres: '', client_email: '',
             datum: today(), geldig_tot: addDays(today(), geldigDagen), notitie: '',
-            items: [{ desc: '', qty: fromEvent ? g : 1, prijs: fromEvent ? p : 0, btw: (settings && settings.default_btw) || 21 }],
+            items: [{ desc: '', qty: fromEvent ? g : 1, prijs: fromEvent ? p : 0, btw: settings?.default_btw ?? 21 }],
         }, fromEvent ? { aantal_gasten: g, basis_prijs_pp: p } : {}));
     }
 
@@ -658,7 +658,7 @@ export default function Offertes() {
         setEditing(null); setForm(null);
     }
 
-    function addItem() { setItems((form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
+    function addItem() { setItems((form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: settings?.default_btw ?? 21 }])); }
     function addDiscountItem() {
         setItems((form!.items || []).concat([{ desc: 'Korting', qty: 1, prijs: 0, btw: 0, type: 'discount', discount_type: 'amount', discount_value: 0 }]));
     }

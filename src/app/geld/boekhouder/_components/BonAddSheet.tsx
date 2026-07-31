@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Camera, Loader2, X, Check, AlertCircle, Package, Plus } from 'lucide-react';
 import { resizeImage } from '@/lib/utils';
 import { RGS_CATERING_CATEGORIES } from '@/lib/rgsCategories';
+import { resolveBtwPct } from '@/lib/btw-rules';
 import AiBadge from '@/components/ai/AiBadge';
 
 /**
@@ -142,7 +143,7 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
           eenheid: it.unit || 'stuks',
           prijs_per_eenheid: Number(it.prijs) || 0,
           totaal: Number(it.totaal) || 0,
-          btw_pct: Number(it.btw_pct) || 21,
+          btw_pct: resolveBtwPct(it.btw_pct),
           inventory_id: it.inventory_id,
           inventory_naam: it.inventory_naam,
           match_confidence: it.match_confidence,

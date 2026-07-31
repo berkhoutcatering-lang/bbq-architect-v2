@@ -13,6 +13,8 @@
  *   #4 Klant-concentratie (>30% = warning)
  */
 
+import { isMissingBtwPct, resolveBtwPct } from '@/lib/btw-rules';
+
 export interface FactuurMin {
     id?: number | string;
     nummer?: string;
@@ -69,7 +71,7 @@ export interface AgingResult {
 
 function lineTotal(items: FactuurMin['items']): number {
     if (!Array.isArray(items)) return 0;
-    return items.reduce((s, it) => s + ((it.qty || 0) * (it.prijs || 0) * (1 + (it.btw || 0) / 100)), 0);
+    return items.reduce((s, it) => s + ((it.qty || 0) * (it.prijs || 0) * (1 + resolveBtwPct(it.btw) / 100)), 0);
 }
 
 export function computeAging(facturen: FactuurMin[], today: Date = new Date()): AgingResult {
@@ -386,16 +388,56 @@ export function quarterPeriod(year: number, quarter: 1 | 2 | 3 | 4, today: Date 
     return { year, quarter, start_date, end_date, deadline, days_until_deadline, is_open };
 }
 
+/**
+ * Een factuurregel die NIET automatisch in een rubriek te plaatsen is.
+ *
+ * Bestaat omdat de vorige versie zulke regels stil liet vallen: een 0%-regel
+ * belandde in geen enkele rubriek en verdween daarmee ongemerkt uit de
+ * aangifte. Een zichtbare lijst is veiliger dan een stil verkeerd totaal.
+ */
+/** Bon met de velden die voor de voorbelasting (5b) nodig zijn. */
+export type BonVoorbelasting = BonMin & {
+    btw_laag_bedrag?: number | string;
+    btw_hoog_bedrag?: number | string;
+    /** Zie migratie voorbelasting_bevestigd — pas true na menselijke controle. */
+    voorbelasting_bevestigd?: boolean | null;
+    /** Zakelijk gebruik in procenten (0-100). Leeg = 100. */
+    zakelijk_pct?: number | string | null;
+};
+
+export interface BtwGat {
+    bron: 'factuur';
+    referentie: string;
+    datum: string;
+    omschrijving: string;
+    /** Netto omzet van de regel. */
+    bedrag: number;
+    /** Het gevonden percentage, of null als er geen tarief in de data stond. */
+    pct: number | null;
+    reden: string;
+}
+
 export interface BtwAangifteRubrieken {
     /** 1a — Leveringen/diensten belast met hoog tarief (21%) */
     rubriek_1a: { omzet: number; btw: number };
     /** 1b — Leveringen/diensten belast met laag tarief (9%) */
     rubriek_1b: { omzet: number; btw: number };
-    /** 2a — Leveringen/diensten waarover BTW is verlegd (B2B intra-EU) — voor v1 niet ingevuld */
+    /**
+     * 2a — Leveringen/diensten waarbij de omzetbelasting naar ÓNS is verlegd.
+     *
+     * Dit is BINNENLANDSE verlegging (bv. onderaanneming, of inkoop waarbij een
+     * Nederlandse leverancier de btw naar ons verlegt). Nadrukkelijk NIET
+     * intra-EU: die horen in 4b (EU) respectievelijk 4a (buiten de EU), waar de
+     * verschuldigde btw óók weer als voorbelasting in 5b terugkomt.
+     *
+     * Tot 2026-07-29 stond hier "B2B intra-EU" — verkeerd. 4a/4b bestaan nog
+     * niet in dit systeem, dus wordt hier niets automatisch in geboekt: alles
+     * wat hierop lijkt komt in `gaten` te staan voor handmatige verwerking.
+     */
     rubriek_2a: { omzet: number; btw: number };
-    /** 3a — Leveringen naar landen buiten EU — voor v1 niet ingevuld */
+    /** 3a — Leveringen naar landen buiten EU — niet automatisch bepaald */
     rubriek_3a: { omzet: number };
-    /** 3b — Leveringen naar EU-landen — voor v1 niet ingevuld */
+    /** 3b — Leveringen naar EU-landen — niet automatisch bepaald */
     rubriek_3b: { omzet: number };
     /** 5a — Verschuldigde omzetbelasting (som 1a + 1b + 2a) */
     rubriek_5a: number;
@@ -403,11 +445,19 @@ export interface BtwAangifteRubrieken {
     rubriek_5b: number;
     /** Saldo te betalen (positief) of terug te vragen (negatief) */
     saldo: number;
+    /** Regels die handmatig verwerkt moeten worden; zie BtwGat. */
+    gaten: BtwGat[];
+    /** Som van de netto bedragen in `gaten` — hoeveel omzet buiten de telling valt. */
+    gaten_bedrag: number;
+    /** BTW op bonnen die nog niet als voorbelasting is bevestigd — NIET in 5b. */
+    voorbelasting_onbevestigd: number;
+    /** Aantal bonnen dat op bevestiging wacht. */
+    voorbelasting_onbevestigd_count: number;
 }
 
 export function computeBtwAangifte(
     facturen: FactuurMin[],
-    bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string }>,
+    bonnen: BonVoorbelasting[],
     period: BtwAangiftePeriod,
 ): BtwAangifteRubrieken {
     const r: BtwAangifteRubrieken = {
@@ -419,35 +469,87 @@ export function computeBtwAangifte(
         rubriek_5a: 0,
         rubriek_5b: 0,
         saldo: 0,
+        gaten: [],
+        gaten_bedrag: 0,
+        voorbelasting_onbevestigd: 0,
+        voorbelasting_onbevestigd_count: 0,
     };
 
-    /* Filter facturen op periode + status=betaald. Concept-aangiftes
-       gebruiken kasstelsel (boekhouder kan switchen — uit scope v1). */
+    /* FACTUURSTELSEL: meegeteld wordt elke niet-vervallen factuur met een
+       factuurdatum in de periode, ongeacht of hij al betaald is.
+       Let op — hier stond tot 2026-07-29 in commentaar dat dit "kasstelsel"
+       was en op status=betaald filterde. Geen van beide klopte; alleen
+       concept en geannuleerd worden overgeslagen. De keuze tussen factuur- en
+       kasstelsel hoort per administratie vast te liggen (accounting kernel);
+       tot die tijd is dit expliciet factuurstelsel. */
     for (const f of facturen) {
         if (!f.datum) continue;
         if (f.datum < period.start_date || f.datum > period.end_date) continue;
         if (f.status === 'concept' || f.status === 'geannuleerd') continue;
-        for (const it of f.items || []) {
+
+        for (const [idx, it] of (f.items || []).entries()) {
             const omzet = (it.qty || 0) * (it.prijs || 0);
-            const pct = it.btw || 0;
-            const btw = omzet * (pct / 100);
+            const ontbreekt = isMissingBtwPct(it.btw);
+            const pct = ontbreekt ? null : resolveBtwPct(it.btw);
+
+            const gat = (reden: string) => {
+                r.gaten.push({
+                    bron: 'factuur',
+                    referentie: f.nummer || String(f.id ?? '?'),
+                    datum: f.datum!,
+                    omschrijving:
+                        (it as { omschrijving?: string }).omschrijving || `regel ${idx + 1}`,
+                    bedrag: omzet,
+                    pct,
+                    reden,
+                });
+                r.gaten_bedrag += omzet;
+            };
+
             if (pct === 21) {
                 r.rubriek_1a.omzet += omzet;
-                r.rubriek_1a.btw += btw;
+                r.rubriek_1a.btw += omzet * 0.21;
             } else if (pct === 9) {
                 r.rubriek_1b.omzet += omzet;
-                r.rubriek_1b.btw += btw;
+                r.rubriek_1b.btw += omzet * 0.09;
+            } else if (pct === null) {
+                gat('Geen BTW-tarief ingevuld op deze regel.');
+            } else if (pct === 0) {
+                /* 0% kan verlegging (2a/4a/4b), export (3a), EU-levering (3b),
+                   nultarief of vrijstelling zijn. Het datamodel legt dat verschil
+                   niet vast, dus is het niet af te leiden — en fout raden maakt
+                   de aangifte te hoog of te laag. */
+                gat('0%: reden onbekend (verlegd, export, EU-levering of vrijgesteld). Handmatig indelen.');
+            } else {
+                gat(`Percentage ${pct}% past in geen NL-rubriek (verwacht 0, 9 of 21).`);
             }
-            /* Andere percentages (0%) negeren we voor v1 — vereist
-               handmatige context (EU-reverse vs export). Boekhouder vult aan. */
         }
     }
 
-    /* Voorbelasting uit bonnen — 5b. */
+    /* Voorbelasting uit bonnen — 5b.
+       Aftrek vereist zakelijk gebruik én een factuur die aan de eisen voldoet.
+       Alleen bonnen die daar expliciet op zijn nagelopen tellen mee; de rest
+       komt in `voorbelasting_onbevestigd` te staan. Zie F6 in de veiligheids-
+       fase: bestaande bonnen staan op niet-bevestigd, dus 5b daalt. Dat is de
+       bedoeling — het oude getal was te hoog, niet te laag. */
     for (const b of bonnen) {
         if (!b.datum) continue;
         if (b.datum < period.start_date || b.datum > period.end_date) continue;
-        r.rubriek_5b += (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0);
+        const btwBedrag = (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0);
+        if (btwBedrag === 0) continue;
+
+        const bevestigd = b.voorbelasting_bevestigd === true;
+        /* Zakelijk deel: 100 als niets is ingevuld. */
+        const zakelijkPct = Number.isFinite(Number(b.zakelijk_pct))
+            ? Math.min(100, Math.max(0, Number(b.zakelijk_pct)))
+            : 100;
+
+        if (bevestigd) {
+            r.rubriek_5b += btwBedrag * (zakelijkPct / 100);
+        } else {
+            r.voorbelasting_onbevestigd += btwBedrag;
+            r.voorbelasting_onbevestigd_count += 1;
+        }
     }
 
     r.rubriek_5a = r.rubriek_1a.btw + r.rubriek_1b.btw + r.rubriek_2a.btw;
@@ -461,6 +563,8 @@ export function computeBtwAangifte(
     r.rubriek_5a = round(r.rubriek_5a);
     r.rubriek_5b = round(r.rubriek_5b);
     r.saldo = round(r.saldo);
+    r.gaten_bedrag = round(r.gaten_bedrag);
+    r.voorbelasting_onbevestigd = round(r.voorbelasting_onbevestigd);
 
     return r;
 }
@@ -652,7 +756,7 @@ const OPEN_ISSUED = new Set(['verzonden', 'verlopen', 'vervallen']);
 
 export function computeBalans(
     facturen: FactuurMin[],
-    bonnen: Array<BonMin & { btw_laag_bedrag?: number | string; btw_hoog_bedrag?: number | string }>,
+    bonnen: BonVoorbelasting[],
     year: number,
 ): Balans {
     /* Debiteuren = verstuurde-maar-onbetaalde facturen, incl. BTW. */
@@ -661,7 +765,7 @@ export function computeBalans(
         if (!OPEN_ISSUED.has(f.status || '')) continue;
         let incl = 0, heeft = false;
         for (const it of f.items || []) {
-            incl += (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (1 + (Number(it.btw) || 0) / 100);
+            incl += (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (1 + resolveBtwPct(it.btw) / 100);
             heeft = true;
         }
         if (heeft) { debiteuren += incl; debiteuren_count++; }

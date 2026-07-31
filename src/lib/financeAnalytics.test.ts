@@ -148,21 +148,99 @@ describe('computeBtwAangifte', () => {
         expect(r.rubriek_5a).toBe(255);
     });
 
-    it('5b: voorbelasting uit bonnen', () => {
+    it('5b: voorbelasting uit BEVESTIGDE bonnen', () => {
         const r = computeBtwAangifte([], [
-            { datum: '2026-04-10', btw_laag_bedrag: 9, btw_hoog_bedrag: 0 },
-            { datum: '2026-05-20', btw_laag_bedrag: 0, btw_hoog_bedrag: 42 },
+            { datum: '2026-04-10', btw_laag_bedrag: 9, btw_hoog_bedrag: 0, voorbelasting_bevestigd: true },
+            { datum: '2026-05-20', btw_laag_bedrag: 0, btw_hoog_bedrag: 42, voorbelasting_bevestigd: true },
         ], period);
         expect(r.rubriek_5b).toBe(51);
+        expect(r.voorbelasting_onbevestigd).toBe(0);
+    });
+
+    it('5b telt onbevestigde bonnen NIET mee, maar maakt ze wel zichtbaar', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-04-10', btw_laag_bedrag: 9, btw_hoog_bedrag: 0, voorbelasting_bevestigd: true },
+            { datum: '2026-05-20', btw_laag_bedrag: 0, btw_hoog_bedrag: 42 },
+        ], period);
+        expect(r.rubriek_5b).toBe(9);
+        expect(r.voorbelasting_onbevestigd).toBe(42);
+        expect(r.voorbelasting_onbevestigd_count).toBe(1);
+    });
+
+    it('zakelijk_pct kort de aftrek naar rato in', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-04-10', btw_hoog_bedrag: 100, voorbelasting_bevestigd: true, zakelijk_pct: 60 },
+        ], period);
+        expect(r.rubriek_5b).toBe(60);
     });
 
     it('saldo = 5a - 5b', () => {
         const r = computeBtwAangifte(
             [{ status: 'verzonden', datum: '2026-04-15', items: [{ qty: 1, prijs: 1000, btw: 21 }] }],
-            [{ datum: '2026-04-15', btw_hoog_bedrag: 21 }],
+            [{ datum: '2026-04-15', btw_hoog_bedrag: 21, voorbelasting_bevestigd: true }],
             period,
         );
         expect(r.saldo).toBe(189); // 210 - 21
+    });
+
+    /* ── Gaten-lijst: wat NIET automatisch te classificeren is ───────────── */
+
+    it('0%-regel verdwijnt niet stil maar komt in de gaten-lijst', () => {
+        const r = computeBtwAangifte([
+            { status: 'verzonden', nummer: '2026-004', datum: '2026-04-15', items: [
+                { qty: 1, prijs: 1000, btw: 21 },
+                { qty: 1, prijs: 800, btw: 0 },
+            ]},
+        ], [], period);
+        expect(r.rubriek_1a.omzet).toBe(1000);
+        expect(r.gaten).toHaveLength(1);
+        expect(r.gaten[0].referentie).toBe('2026-004');
+        expect(r.gaten[0].bedrag).toBe(800);
+        expect(r.gaten[0].pct).toBe(0);
+        expect(r.gaten_bedrag).toBe(800);
+    });
+
+    it('regel zonder tarief komt in de gaten-lijst met pct null', () => {
+        const r = computeBtwAangifte([
+            { status: 'verzonden', nummer: '2026-005', datum: '2026-04-15', items: [
+                { qty: 2, prijs: 250 },
+            ]},
+        ], [], period);
+        expect(r.gaten).toHaveLength(1);
+        expect(r.gaten[0].pct).toBeNull();
+        expect(r.gaten[0].bedrag).toBe(500);
+        expect(r.rubriek_1a.omzet).toBe(0);
+        expect(r.rubriek_1b.omzet).toBe(0);
+    });
+
+    it('onbekend percentage (legacy 6%) komt in de gaten-lijst', () => {
+        const r = computeBtwAangifte([
+            { status: 'verzonden', nummer: '2026-006', datum: '2026-04-15', items: [
+                { qty: 1, prijs: 100, btw: 6 },
+            ]},
+        ], [], period);
+        expect(r.gaten).toHaveLength(1);
+        expect(r.gaten[0].pct).toBe(6);
+    });
+
+    it('2a wordt niet automatisch gevuld — verlegging is niet af te leiden', () => {
+        const r = computeBtwAangifte([
+            { status: 'verzonden', datum: '2026-04-15', items: [{ qty: 1, prijs: 1000, btw: 0 }] },
+        ], [], period);
+        expect(r.rubriek_2a.omzet).toBe(0);
+        expect(r.rubriek_2a.btw).toBe(0);
+        expect(r.rubriek_5a).toBe(0);
+    });
+
+    it('gezonde aangifte heeft een lege gaten-lijst', () => {
+        const r = computeBtwAangifte([
+            { status: 'verzonden', datum: '2026-04-15', items: [
+                { qty: 1, prijs: 1000, btw: 21 },
+                { qty: 1, prijs: 500, btw: 9 },
+            ]},
+        ], [], period);
+        expect(r.gaten).toHaveLength(0);
+        expect(r.gaten_bedrag).toBe(0);
     });
 });
 
@@ -293,7 +371,7 @@ describe('computeBalans', () => {
     it('BTW-vordering als voorbelasting groter is dan verschuldigd', () => {
         const b = computeBalans(
             [{ status: 'betaald', datum: '2026-04-13', items: [{ qty: 1, prijs: 100, btw: 9 }] }], // verschuldigd 9
-            [{ datum: '2026-04-02', btw_hoog_bedrag: 100 }],                                          // voorbelasting 100
+            [{ datum: '2026-04-02', btw_hoog_bedrag: 100, voorbelasting_bevestigd: true }],           // voorbelasting 100
             2026,
         );
         expect(b.btw_vordering).toBe(91);

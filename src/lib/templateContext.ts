@@ -7,6 +7,7 @@
 
 import type { RenderContext } from '@/types/template.types';
 import type { BrandingConfig } from '@/lib/branding';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 function eur(n: number | null | undefined): string {
   if (n == null || isNaN(n)) return '\u20ac 0,00';
@@ -104,7 +105,7 @@ export function buildRenderContext(opts: ContextOptions): RenderContext {
       omschrijving: item.omschrijving || item.desc || '',
       qty: item.qty || 1,
       prijs: item.prijs || 0,
-      btw: item.btw || 0,
+      btw: resolveBtwPct(item.btw),
     };
   });
 

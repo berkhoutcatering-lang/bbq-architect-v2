@@ -246,7 +246,7 @@ export default function KlantGesprek() {
         aantal_vega: totalVegaMenu,
         basis_prijs_pp: budget.ppp,
         menu_selectie: menuSelectie,
-        items: [{ desc: 'BBQ Catering - ' + (event.naam || klant.naam), qty: event.gasten, prijs: budget.ppp, btw: settings?.default_btw || 21 }],
+        items: [{ desc: 'BBQ Catering - ' + (event.naam || klant.naam), qty: event.gasten, prijs: budget.ppp, btw: settings?.default_btw ?? 21 }],
       };
 
       const offRes = await supabase!.from('offertes').insert(offerteData).select();

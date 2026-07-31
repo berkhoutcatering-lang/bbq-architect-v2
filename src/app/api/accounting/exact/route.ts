@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { mergedAccountingConfig, type AccountingConfig } from '@/lib/accountingConfig';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 /**
  * Exact Online sales-entry push. Tenant-instelbare division-code via
@@ -123,7 +124,7 @@ function factuurToExactSalesEntry(factuur: any): Record<string, any> {
   // Exact Online SalesEntry (verkoopboeking) formaat
   const salesEntryLines = (factuur.items || []).map(function (item: any, idx: number) {
     const subtotaal = (item.qty || 0) * (item.prijs || 0);
-    const btwPercentage = item.btw || 21;
+    const btwPercentage = resolveBtwPct(item.btw);
 
     return {
       GLAccount: EXACT_GL_ACCOUNT_GUID,

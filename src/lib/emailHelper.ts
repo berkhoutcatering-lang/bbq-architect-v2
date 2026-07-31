@@ -3,6 +3,7 @@
 // Fallback naar mailto: als Resend niet geconfigureerd is
 
 import { fmt } from './utils';
+import { resolveBtwPct } from './btw-rules';
 
 function escH(s: string): string {
   return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -105,7 +106,7 @@ export async function mailFactuur(factuur: any, bedrijfsnaam: string, brandColor
   let subtotaal = 0; let totalBtw = 0;
   items.forEach(function (item: any) {
     const line = (item.qty || 0) * (item.prijs || 0);
-    subtotaal += line; totalBtw += line * ((item.btw || 21) / 100);
+    subtotaal += line; totalBtw += line * (resolveBtwPct(item.btw) / 100);
   });
 
   const html = wrapHtml(`
@@ -138,7 +139,7 @@ export async function mailBetaalherinnering(factuur: any, bedrijfsnaam: string, 
   let totaal = 0;
   items.forEach(function (item: any) {
     const line = (item.qty || 0) * (item.prijs || 0);
-    totaal += line + line * ((item.btw || 21) / 100);
+    totaal += line + line * (resolveBtwPct(item.btw) / 100);
   });
 
   const html = wrapHtml(`

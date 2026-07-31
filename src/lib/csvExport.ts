@@ -2,6 +2,7 @@
 // CSV export voor boekhouding (Exact Online / Moneybird import)
 
 import type { Factuur, FactuurItem } from '@/types';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 function escapeCsv(val: any): string {
   const s = String(val ?? '');
@@ -38,7 +39,7 @@ export function facturenToCsv(facturen: Factuur[]): string {
       items.forEach(item => {
         const qty = item.qty || 0;
         const prijs = item.prijs || 0;
-        const btwPct = item.btw || 21;
+        const btwPct = resolveBtwPct(item.btw);
         const lineTotal = qty * prijs;
         const btwBedrag = lineTotal * (btwPct / 100);
         rows.push([
@@ -84,7 +85,7 @@ export function offertesToCsv(offertes: any[]): string {
       items.forEach((item: any) => {
         const qty = item.qty || 0;
         const prijs = item.prijs || 0;
-        const btw = item.btw || 21;
+        const btw = resolveBtwPct(item.btw);
         rows.push([
           o.nummer || '', o.datum || '', o.geldig_tot || '', o.client_naam || '',
           o.status || '', String(o.aantal_gasten || ''), String(o.basis_prijs_pp || ''),

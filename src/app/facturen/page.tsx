@@ -11,6 +11,7 @@ import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { useOrg } from '@/lib/OrgContext';
 import { downloadUBL, generateAndValidateUBL } from '@/lib/ublExport';
+import { resolveBtwPct } from '@/lib/btw-rules';
 import { facturenToCsv, downloadCsv } from '@/lib/csvExport';
 import { mailFactuur, mailBetaalherinnering } from '@/lib/emailHelper';
 import { useFormValidation } from '@/hooks/useFormValidation';
@@ -86,7 +87,7 @@ export default function Facturen() {
         const nummer = nextNummer((settings && settings.factuur_prefix) || 'F2026-', facturen.map((f: any) => f.nummer));
         const betaaltermijn = (settings && settings.betaaltermijn) || 14;
         setEditing('new');
-        setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), vervaldatum: addDays(today(), betaaltermijn), items: [{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }] });
+        setForm({ nummer: nummer, status: 'concept', client_naam: '', client_adres: '', datum: today(), vervaldatum: addDays(today(), betaaltermijn), items: [{ desc: '', qty: 1, prijs: 0, btw: settings?.default_btw ?? 21 }] });
         /* Herstel concept als die binnen TTL terug te halen is — overschrijft
            de zojuist gezette defaults binnen 1 render. */
         loadDraft();
@@ -164,7 +165,7 @@ export default function Facturen() {
         });
     }
 
-    function addItem() { setField('items', (form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: (settings && settings.default_btw) || 21 }])); }
+    function addItem() { setField('items', (form!.items || []).concat([{ desc: '', qty: 1, prijs: 0, btw: settings?.default_btw ?? 21 }])); }
     function updateItem(idx: number, key: string, val: any) {
         const items = form!.items.map(function (item: any, i: number) { return i === idx ? Object.assign({}, item, { [key]: val }) : item; });
         setField('items', items);
@@ -231,7 +232,7 @@ export default function Facturen() {
                                             <td><input type="number" value={item.qty} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'qty', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" step="0.01" value={item.prijs} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'prijs', parseFloat(e.target.value) || 0); }} /></td>
                                             <td><input type="number" value={item.btw} onChange={function (e: React.ChangeEvent<HTMLInputElement>) { updateItem(idx, 'btw', parseFloat(e.target.value) || 0); }} /></td>
-                                            <td style={{ color: 'var(--muted)' }}>{fmt((item.prijs || 0) * (1 + (item.btw || 0) / 100))}</td>
+                                            <td style={{ color: 'var(--muted)' }}>{fmt((item.prijs || 0) * (1 + resolveBtwPct(item.btw) / 100))}</td>
                                             <td style={{ fontWeight: 600 }}>{fmt((item.qty || 0) * (item.prijs || 0))}</td>
                                             <td><button className="del-btn" onClick={function () { removeItem(idx); }} aria-label="Regel verwijderen"><Trash2 size={14} /></button></td>
                                         </tr>

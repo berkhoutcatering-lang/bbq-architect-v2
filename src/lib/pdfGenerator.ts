@@ -8,6 +8,7 @@ import type { BrandingConfig } from '@/lib/branding';
 import { renderFromTemplate } from '@/lib/templateRenderer';
 import { loadTemplate } from '@/lib/templateLoader';
 import { buildRenderContext } from '@/lib/templateContext';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 interface LogoResult {
     data: string;
@@ -370,7 +371,7 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
 
             const receiptHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW']];
             const receiptBody = (opts.items || []).map(function (i) {
-                return [i.naam || '', i.aantal || 1, eur(i.prijs), (i.btw_tarief || 21) + '%'];
+                return [i.naam || '', i.aantal || 1, eur(i.prijs), resolveBtwPct(i.btw_tarief) + '%'];
             });
 
             doc3.autoTable({
@@ -872,12 +873,12 @@ export async function generatePDF(opts: PDFOptions): Promise<void> {
         const tableHead = [['Omschrijving', 'Aantal', 'Prijs', 'BTW%', 'Prijs incl. BTW', 'Totaal']];
         const tableBody = (form.items || []).map(function (item: any) {
             const lineTotal = (item.qty || 0) * (item.prijs || 0);
-            const prijsInclBtw = (item.prijs || 0) * (1 + (item.btw || 0) / 100);
+            const prijsInclBtw = (item.prijs || 0) * (1 + resolveBtwPct(item.btw) / 100);
             return [
                 item.desc || item.omschrijving || '',
                 String(item.qty || 0),
                 eur(item.prijs),
-                (item.btw || 0) + '%',
+                resolveBtwPct(item.btw) + '%',
                 eur(prijsInclBtw),
                 eur(lineTotal)
             ];
