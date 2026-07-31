@@ -82,22 +82,48 @@ export async function telProduct(input: unknown): Promise<ActionResult<TelProduc
     if (!parsed.success) {
         return { error: 'validation', fields: parsed.error.flatten().fieldErrors as Record<string, string[]> };
     }
-    const v = parsed.data;
 
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: 'unauthorized' };
 
-    const { data: mem } = await supabase
+    const orgId = await actieveOrganisatie(supabase, user.id);
+    if (!orgId) return { error: 'geen actieve organisatie gevonden' };
+
+    const res = await legVast(supabase, orgId, parsed.data);
+    if ('error' in res) return { error: res.error };
+
+    revalidatePath('/voorraad');
+    revalidatePath('/voorraad/nulmeting');
+    revalidatePath('/inkoop');
+    return { data: res.data };
+}
+
+/** De organisatie waar deze gebruiker actief lid van is. */
+async function actieveOrganisatie(
+    supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+    userId: string,
+): Promise<string | null> {
+    const { data } = await supabase
         .from('organization_members')
         .select('organization_id')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('status', 'active')
         .limit(1)
         .maybeSingle();
-    const orgId = mem?.organization_id as string | undefined;
-    if (!orgId) return { error: 'geen actieve organisatie gevonden' };
+    return (data?.organization_id as string | undefined) ?? null;
+}
 
+/**
+ * Eén product vastleggen. Losgetrokken uit telProduct zodat de plak-lijst
+ * exact hetzelfde pad gebruikt: één rij tellen via het scherm en dertig rijen
+ * tellen via een geplakte lijst mogen nooit anders in de database landen.
+ */
+async function legVast(
+    supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+    orgId: string,
+    v: z.output<typeof TelProductSchema>,
+): Promise<{ data: TelProductResult } | { error: string }> {
     const totaal = telTotaal(v.aantal_pakken, v.inhoud_per_pak);
 
     /* ── 1. Bestaand item vinden ──────────────────────────────────────
@@ -212,10 +238,6 @@ export async function telProduct(input: unknown): Promise<ActionResult<TelProduc
         }
     }
 
-    revalidatePath('/voorraad');
-    revalidatePath('/voorraad/nulmeting');
-    revalidatePath('/inkoop');
-
     return {
         data: {
             id: itemId,
@@ -225,6 +247,102 @@ export async function telProduct(input: unknown): Promise<ActionResult<TelProduc
             vorige_stand: vorigeStand,
             nieuw_item: nieuwItem,
             foto_url: fotoPad ? await signedFotoUrl(supabase, fotoPad) : null,
+        },
+    };
+}
+
+/* ─── telLijst ────────────────────────────────────────────────────────────
+   Een hele geplakte lijst in één keer wegschrijven.
+
+   Bestaat omdat product-voor-product tikken niet werkt als je met twintig
+   regels op een kladblaadje voor een open vriezer staat. De regels zijn op het
+   scherm al nagelopen en gecorrigeerd; hier worden ze alleen nog vastgelegd —
+   via exact hetzelfde pad als één losse telling. */
+
+const LijstRegelSchema = z.object({
+    naam: z.string().trim().min(1).max(200),
+    aantal_pakken: z.coerce.number().min(0),
+    inhoud_per_pak: z.coerce.number().positive(),
+    eenheid: z.string().trim().min(1).max(50),
+    par_level: z.coerce.number().min(0).optional().default(0),
+});
+
+const TelLijstSchema = z.object({
+    zone: z.enum(['vries', 'vers', 'houdbaar']),
+    /* Bovengrens is een vangnet tegen een geplakt boek, geen echte limiet:
+       een vriezer met meer dan 200 verschillende producten bestaat niet. */
+    regels: z.array(LijstRegelSchema).min(1).max(200),
+});
+
+export interface TelLijstResult {
+    /** Per regel wat ermee gebeurd is, in dezelfde volgorde als geplakt. */
+    resultaten: Array<{
+        naam: string;
+        gelukt: boolean;
+        nieuw: boolean;
+        totaal: number;
+        eenheid: string;
+        fout?: string;
+    }>;
+    opgeslagen: number;
+    mislukt: number;
+}
+
+export async function telLijst(input: unknown): Promise<ActionResult<TelLijstResult>> {
+    const parsed = TelLijstSchema.safeParse(input);
+    if (!parsed.success) {
+        return { error: 'validation', fields: parsed.error.flatten().fieldErrors as Record<string, string[]> };
+    }
+
+    const supabase = await createServerSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: 'unauthorized' };
+
+    const orgId = await actieveOrganisatie(supabase, user.id);
+    if (!orgId) return { error: 'geen actieve organisatie gevonden' };
+
+    const resultaten: TelLijstResult['resultaten'] = [];
+
+    /* Bewust één voor één en niet in bulk: elke regel moet z'n eigen
+       stock_movement krijgen (anders klopt de historie niet) en één rotte regel
+       mag de andere achttien niet meeslepen. Twintig regels is een fractie van
+       een seconde; correctheid weegt hier zwaarder dan een bulk-insert. */
+    for (const r of parsed.data.regels) {
+        const res = await legVast(supabase, orgId, {
+            inventory_id: null,
+            naam: r.naam,
+            categorie: 'Overig',
+            aantal_pakken: r.aantal_pakken,
+            inhoud_per_pak: r.inhoud_per_pak,
+            eenheid: r.eenheid,
+            zone: parsed.data.zone,
+            par_level: r.par_level,
+            prijs_per_eenheid: null,
+            leverancier_naam: '',
+            leverancier_id: null,
+            supplier_product_id: null,
+            foto_data_url: null,
+        });
+
+        if ('error' in res) {
+            resultaten.push({ naam: r.naam, gelukt: false, nieuw: false, totaal: 0, eenheid: r.eenheid, fout: res.error });
+        } else {
+            resultaten.push({
+                naam: res.data.naam, gelukt: true, nieuw: res.data.nieuw_item,
+                totaal: res.data.totaal, eenheid: res.data.eenheid,
+            });
+        }
+    }
+
+    revalidatePath('/voorraad');
+    revalidatePath('/voorraad/nulmeting');
+    revalidatePath('/inkoop');
+
+    return {
+        data: {
+            resultaten,
+            opgeslagen: resultaten.filter((r) => r.gelukt).length,
+            mislukt: resultaten.filter((r) => !r.gelukt).length,
         },
     };
 }

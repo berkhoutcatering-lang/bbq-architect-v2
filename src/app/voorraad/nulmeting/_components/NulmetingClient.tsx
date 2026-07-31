@@ -20,10 +20,13 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
     ArrowLeft, Camera, Check, Loader2, Package, Plus, Minus,
     Search, Snowflake, Refrigerator, Archive, X, Pencil, ChevronRight,
+    ClipboardPaste,
 } from 'lucide-react';
+import PlakLijst from './PlakLijst';
 import { useToast } from '@/components/Toast';
 import { resizeImage, fmt } from '@/lib/utils';
 import {
@@ -93,9 +96,15 @@ interface Kaart {
 
 export default function NulmetingClient({ initial }: { initial: GeteldItem[] }) {
     const showToast = useToast();
+    const router = useRouter();
     const [items, setItems] = useState<GeteldItem[]>(initial);
     const [zone, setZone] = useState<Zone | null>(null);
     const [kaart, setKaart] = useState<Kaart | null>(null);
+    const [plakken, setPlakken] = useState(false);
+
+    /* De server-lijst is na een geplakte lijst de waarheid — die kan tientallen
+       rijen bevatten, en die allemaal client-side naspelen is vragen om drift. */
+    useEffect(() => { setItems(initial); }, [initial]);
 
     const perZone = useMemo(() => {
         const map: Record<Zone, GeteldItem[]> = { vries: [], vers: [], houdbaar: [] };
@@ -149,6 +158,16 @@ export default function NulmetingClient({ initial }: { initial: GeteldItem[] }) 
         );
     }
 
+    if (zone && plakken) {
+        return (
+            <PlakLijst
+                zone={zone}
+                onKlaar={() => { setPlakken(false); router.refresh(); }}
+                onSluit={() => setPlakken(false)}
+            />
+        );
+    }
+
     if (zone) {
         return (
             <ZoneScherm
@@ -157,6 +176,7 @@ export default function NulmetingClient({ initial }: { initial: GeteldItem[] }) 
                 alleItems={items}
                 onTerug={() => setZone(null)}
                 onKies={setKaart}
+                onPlak={() => setPlakken(true)}
             />
         );
     }
@@ -282,12 +302,13 @@ function Stat({ label, waarde, kleur }: { label: string; waarde: string; kleur?:
    SCHERM 2 — In de zone: zoeken en tellen
    ═══════════════════════════════════════════════════════════════════ */
 
-function ZoneScherm({ zone, geteld, alleItems, onTerug, onKies }: {
+function ZoneScherm({ zone, geteld, alleItems, onTerug, onKies, onPlak }: {
     zone: Zone;
     geteld: GeteldItem[];
     alleItems: GeteldItem[];
     onTerug: () => void;
     onKies: (k: Kaart) => void;
+    onPlak: () => void;
 }) {
     const [q, setQ] = useState('');
     const [treffers, setTreffers] = useState<CatalogHit[]>([]);
@@ -500,6 +521,29 @@ function ZoneScherm({ zone, geteld, alleItems, onTerug, onKies }: {
                         </span>
                     </button>
                 </div>
+            )}
+
+            {/* Heb je je lijst al op papier? Dan is aantikken per product zonde
+                van je tijd — dat bleek in de vriezer. */}
+            {!heeftTerm && (
+                <button
+                    onClick={onPlak}
+                    style={{
+                        ...kaartStyle, width: '100%', marginBottom: 18, padding: '14px 16px',
+                        display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+                        minHeight: 62, textAlign: 'left', touchAction: 'manipulation',
+                        borderColor: `${GOLD}55`,
+                    }}
+                >
+                    <ClipboardPaste size={19} style={{ color: GOLD, flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>
+                        <span style={{ display: 'block', fontSize: 14, fontWeight: 600 }}>Lijst plakken</span>
+                        <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                            Staat je voorraad al op papier? Plak hem in één keer.
+                        </span>
+                    </span>
+                    <ChevronRight size={15} style={{ color: 'var(--muted-light)', flexShrink: 0 }} />
+                </button>
             )}
 
             {/* Wat je in deze kast al hebt gehad */}
