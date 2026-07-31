@@ -23,6 +23,7 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, ShoppingBag, Loader2 } from 'lucide-react';
+import { formatEur } from '@/lib/format';
 import type { CatalogSearchHit } from '@/app/api/catalog/search/route';
 
 export type { CatalogSearchHit };
@@ -43,10 +44,12 @@ interface Props {
 
 const GOLD = '#c4a35a';
 
+/* Geld altijd via de canon in lib/format.ts — anders staat er "€7.50" met een punt
+   tussen alle andere bedragen die netjes "€ 7,50" schrijven. */
 function priceLabel(h: CatalogSearchHit): string {
-    if (h.prijs_per_kg && h.prijs_per_kg > 0) return `€${h.prijs_per_kg.toFixed(2)} / kg`;
-    if (h.prijs_per_stuk && h.prijs_per_stuk > 0) return `€${h.prijs_per_stuk.toFixed(2)} / stuk`;
-    if (h.prijs > 0) return `€${h.prijs.toFixed(2)}${h.eenheid ? ' / ' + h.eenheid : ''}`;
+    if (h.prijs_per_kg && h.prijs_per_kg > 0) return `${formatEur(h.prijs_per_kg)} / kg`;
+    if (h.prijs_per_stuk && h.prijs_per_stuk > 0) return `${formatEur(h.prijs_per_stuk)} / stuk`;
+    if (h.prijs > 0) return `${formatEur(h.prijs)}${h.eenheid ? ' / ' + h.eenheid : ''}`;
     return 'geen prijs';
 }
 
@@ -70,6 +73,9 @@ export default function SupplierProductAutocomplete({
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
     const [hits, setHits] = useState<CatalogSearchHit[]>([]);
+    /* Aantal treffers dat NIET getoond wordt. Een lijst die vol lijkt maar er 796
+       verzwijgt, leest als "meer is er niet" — en dan zoekt niemand verder. */
+    const [meer, setMeer] = useState(0);
     const [loading, setLoading] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -79,12 +85,26 @@ export default function SupplierProductAutocomplete({
     const [pos, setPos] = useState<{ top: number; left: number; width: number; openUp: boolean } | null>(null);
     useEffect(() => { setMounted(true); }, []);
 
+    /* Word je met autoFocus én een voorgevulde term geopend (de brug vanuit een
+       lege zoekresultaat-lijst), zet de lijst dan meteen open. Anders staat de
+       zoekterm er wel, maar gebeurt er pas iets als je zelf in het veld klikt —
+       en dat leest als "hij vindt niets". Alleen bij mount, daarna neemt
+       onFocus/onChange het over. */
+    useEffect(() => {
+        if (autoFocus && value.trim().length >= minChars) setOpen(true);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     /* Debounced fetch — alleen terwijl de popup open is. Zo vuurt een bestaande
        (voorgevulde) regel bij het openen van de drawer geen zoekopdracht + spinner
        af; pas als de gebruiker het veld gebruikt, gaan we zoeken. */
     useEffect(() => {
         const q = value.trim();
-        if (!open || q.length < minChars) { setLoading(false); return; }
+        /* Ook hier de teller ophogen: anders kan een antwoord dat nog onderweg was
+           toen je de zoekterm wiste alsnog binnenkomen en de lijst vullen onder een
+           heel andere term — je klikt dan een product aan dat niets met je zoekterm
+           te maken heeft, en koppelt stilletjes de verkeerde inkoop. */
+        if (!open || q.length < minChars) { reqSeq.current++; setLoading(false); setHits([]); setMeer(0); return; }
         setLoading(true);
         const seq = ++reqSeq.current;
         const t = setTimeout(async () => {
@@ -93,15 +113,16 @@ export default function SupplierProductAutocomplete({
                 const body = await res.json().catch(() => ({}));
                 if (seq !== reqSeq.current) return;
                 setHits(Array.isArray(body.results) ? body.results : []);
+                setMeer(Number(body?.totals?.meer) || 0);
                 setActive(0);
             } catch {
-                if (seq === reqSeq.current) setHits([]);
+                if (seq === reqSeq.current) { setHits([]); setMeer(0); }
             } finally {
                 if (seq === reqSeq.current) setLoading(false);
             }
         }, 220);
         return () => clearTimeout(t);
-    }, [value, minChars, open]);
+    }, [value, minChars, open, includeSupplierProducts]);
 
     /* Sluiten bij klik buiten. */
     useEffect(() => {
@@ -224,9 +245,16 @@ export default function SupplierProductAutocomplete({
                     }}
                 >
                     {showEmpty ? (
+                        /* Diagnostisch, niet dooddoend. De oude tekst stuurde altijd naar
+                           "importeer een prijslijst" — ook als er allang gezocht was in de
+                           gescande bestel-catalogus. Wie op een merk zoekt ("bresc") gaat
+                           dan een import doen die niets oplost, want merknamen staan niet
+                           in de productnaam. Zeg dus wáár we gekeken hebben en wat wél werkt. */
                         <div style={{ padding: '12px 14px', color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
-                            Geen leverancier-prijs gevonden voor &ldquo;{q}&rdquo;.<br />
-                            Importeer een prijslijst bij <strong>Leveranciers</strong>, of tik gewoon door om het als los ingrediënt te noteren.
+                            Niets gevonden op &ldquo;{q}&rdquo; — niet in je prijslijsten
+                            {includeSupplierProducts ? ' en niet in je gescande bestel-catalogus' : ''}.<br />
+                            Zoek op de <strong>productnaam</strong> (bv. &ldquo;tomatensalsa&rdquo;); merknamen staan
+                            meestal niet in de catalogusnaam. Of tik gewoon door om het als los ingrediënt te noteren.
                         </div>
                     ) : (
                         hits.map((h, idx) => {
@@ -262,6 +290,15 @@ export default function SupplierProductAutocomplete({
                                 </div>
                             );
                         })
+                    )}
+                    {!showEmpty && meer > 0 && (
+                        <div style={{
+                            padding: '8px 10px', marginTop: 2, borderTop: '1px solid var(--border, #2b3444)',
+                            color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.45,
+                        }}>
+                            Nog <strong style={{ color: 'var(--text)' }}>{meer.toLocaleString('nl-NL')}</strong> treffers
+                            die hier niet passen — tik een woord erbij om te verfijnen.
+                        </div>
                     )}
                 </div>,
                 document.body,

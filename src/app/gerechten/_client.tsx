@@ -1802,7 +1802,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 gerecht={inspectingGerecht}
                 gangen={gangen}
                 onClose={() => setInspectingGerecht(null)}
-                onEdit={(g) => { setInspectingGerecht(null); editGerecht(g); }}
+                onEdit={(g, tab) => { setInspectingGerecht(null); editGerecht(g).then(() => { if (tab) setEditTab(tab); }); }}
                 onDuplicate={(g) => {
                     setInspectingGerecht(null);
                     /* Dupliceer-flow: vul form vanuit g, zet ID op 'new'.

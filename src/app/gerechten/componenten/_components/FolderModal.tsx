@@ -49,6 +49,14 @@ export default function FolderModal({ open, editing, parentId, onClose, onSaved 
         setDeleting(false);
     }, [open, editing]);
 
+    /* Escape sluit de drawer — zelfde reflex als bij alle andere drawers. */
+    useEffect(function () {
+        if (!open) return;
+        function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+        document.addEventListener('keydown', onKey);
+        return function () { document.removeEventListener('keydown', onKey); };
+    }, [open, onClose]);
+
     if (!open) return null;
 
     function submit() {
@@ -75,24 +83,23 @@ export default function FolderModal({ open, editing, parentId, onClose, onSaved 
         });
     }
 
+    /* Rechter drawer, geen gecentreerde modal. Alle andere toevoeg-/bewerk-schermen
+       op deze pagina (bewerken, ingekocht, zelf bereid, scannen) schuiven van rechts
+       in; deze sprong als enige midden op het scherm en gooide de lijst eronder weg.
+       Zelfde patroon = zelfde reflex. */
     return (
         <>
-            <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)', zIndex: 9998 }} />
-            <div role="dialog" aria-label={editing ? 'Map bewerken' : 'Nieuwe map'} style={{
-                position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                width: 'min(440px, 92vw)', maxHeight: '90dvh', overflowY: 'auto',
-                background: 'var(--color-bg-elevated, #1a1a1d)',
-                border: '1px solid var(--border)', borderRadius: 16,
-                boxShadow: '0 30px 60px rgba(0,0,0,.5)', zIndex: 9999,
-            }}>
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <strong style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, fontWeight: 400, color: 'var(--text)' }}>
-                        {editing ? 'Map bewerken' : 'Nieuwe map'}
-                    </strong>
-                    <button onClick={onClose} aria-label="Sluiten" style={iconBtnStyle}><X size={16} /></button>
+            <div className="mr-drawer-scrim" onClick={onClose} role="presentation" />
+            <div className="mr-drawer kdrawer" role="dialog" aria-modal="true" aria-label={editing ? 'Map bewerken' : 'Nieuwe map'}>
+                <div className="kdrawer-head">
+                    <div className="flex-1 min-w-0">
+                        <span className="kf-eyebrow"><Folder size={12} /> Map</span>
+                        <h2 className="kdrawer-title">{editing ? 'Map bewerken' : 'Nieuwe map'}</h2>
+                    </div>
+                    <button onClick={onClose} aria-label="Sluiten" className="kf-icon-x"><X size={17} /></button>
                 </div>
 
-                <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="kf-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <label style={fieldStyle}>
                         <span style={labelStyle}>Naam</span>
                         <input
@@ -114,9 +121,9 @@ export default function FolderModal({ open, editing, parentId, onClose, onSaved 
                                     aria-pressed={iconId === id}
                                     style={{
                                         padding: 10, borderRadius: 8,
-                                        background: iconId === id ? 'rgba(255,191,0,.08)' : 'rgba(0,0,0,.2)',
-                                        border: `1px solid ${iconId === id ? 'rgba(255,191,0,.4)' : 'var(--border)'}`,
-                                        color: iconId === id ? '#FFBF00' : 'var(--muted)',
+                                        background: iconId === id ? 'color-mix(in srgb, var(--brand) 12%, transparent)' : 'rgba(0,0,0,.2)',
+                                        border: `1px solid ${iconId === id ? 'color-mix(in srgb, var(--brand) 45%, transparent)' : 'var(--border)'}`,
+                                        color: iconId === id ? 'var(--brand)' : 'var(--muted)',
                                         cursor: 'pointer',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}
@@ -162,7 +169,7 @@ export default function FolderModal({ open, editing, parentId, onClose, onSaved 
                     )}
                 </div>
 
-                <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="kdrawer-foot" style={{ justifyContent: 'space-between' }}>
                     {editing ? (
                         deleting ? (
                             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -213,7 +220,9 @@ const inputStyle: React.CSSProperties = {
 };
 const primaryBtnStyle: React.CSSProperties = {
     padding: '8px 14px', borderRadius: 7,
-    background: '#FFBF00', color: '#000',
+    /* Merkkleur, niet een vaste amber: bij een olijfgroen merk stond hier
+       een felgele knop die nergens anders in de app voorkomt. */
+    background: 'var(--brand)', color: '#0a0a0c',
     border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer',
     display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 36,
 };

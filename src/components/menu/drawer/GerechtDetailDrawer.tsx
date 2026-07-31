@@ -53,7 +53,9 @@ interface Props {
     /* Audit-trail per gerecht — laat parent ophalen, hier alleen renderen. */
     auditTrail?: AuditEntry[];
     /* Edit-callbacks vanuit drawer-acties. */
-    onEdit?: (g: Gerecht) => void;
+    /* Tweede argument = op welk tabblad de bewerk-drawer moet openen. Een knop
+       die "Componenten koppelen" heet hoort niet op het tabblad Wat te landen. */
+    onEdit?: (g: Gerecht, tab?: 'wat' | 'bouw' | 'compliance' | 'service') => void;
     onDuplicate?: (g: Gerecht) => void;
     onDelete?: (g: Gerecht) => void;
     /* Allergen hercheck (Compliance-tab). */
@@ -320,10 +322,20 @@ function TabWat({ gerecht, margin, tone, cost, price, gangLabel, status }: {
                 </div>
                 <div className="mr-detail-stat">
                     <MREyebrow>Marge</MREyebrow>
-                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <MRMarginRing pct={margin} size={38} />
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: tone.color }}>{margin}%</span>
-                    </div>
+                    {/* Geen verkoopprijs = geen marge, niet "0%". Nul procent leest als
+                        "je verdient hier niets", terwijl er simpelweg nog geen prijs
+                        staat. Zelfde regel als bij een ontbrekende kostprijs: eerlijk
+                        zeggen dat het getal er nog niet is. */}
+                    {price > 0 ? (
+                        <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <MRMarginRing pct={margin} size={38} />
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: tone.color }}>{margin}%</span>
+                        </div>
+                    ) : (
+                        <div style={{ marginTop: 6, fontSize: 13, lineHeight: 1.4, color: 'var(--muted)' }}>
+                            Nog geen verkoopprijs
+                        </div>
+                    )}
                 </div>
             </div>
             {(gerecht.tags?.length || gerecht.allergenen?.length) ? (
@@ -340,7 +352,7 @@ function TabWat({ gerecht, margin, tone, cost, price, gangLabel, status }: {
 }
 
 /* ── Tab: Bouw — componenten lijst ─────────────────────── */
-function TabBouw({ gerecht, cost, price, onEdit }: { gerecht: Gerecht; cost: number; price: number; onEdit?: (g: Gerecht) => void }) {
+function TabBouw({ gerecht, cost, price, onEdit }: { gerecht: Gerecht; cost: number; price: number; onEdit?: (g: Gerecht, tab?: 'wat' | 'bouw' | 'compliance' | 'service') => void }) {
     return (
         <div>
             <MREyebrow style={{ marginBottom: 12 }}>Componenten</MREyebrow>
@@ -350,7 +362,7 @@ function TabBouw({ gerecht, cost, price, onEdit }: { gerecht: Gerecht; cost: num
                 geen enkele knop om er een toe te voegen. */}
             {onEdit && (
                 <div style={{ marginTop: 10 }}>
-                    <MRButton variant="ghost" icon={<Pencil size={13} />} sm onClick={() => onEdit(gerecht)}>
+                    <MRButton variant="ghost" icon={<Pencil size={13} />} sm onClick={() => onEdit(gerecht, 'bouw')}>
                         {cost > 0 ? 'Componenten aanpassen' : 'Componenten koppelen'}
                     </MRButton>
                     {cost <= 0 && (

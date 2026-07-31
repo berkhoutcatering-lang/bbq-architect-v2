@@ -104,6 +104,30 @@ export function unitPriceLabel(baseCostCents: number, baseQuantity: number, base
     }
 }
 
+/* Hetzelfde getal als unitPriceLabel, maar als cijfer — zodat sorteren op
+   "duurste eerst" €/kg met €/kg vergelijkt en niet een doos van 5 kg met
+   100 g bavette. Bewust dezelfde switch als unitPriceLabel hierboven: gaan die
+   twee uit elkaar lopen, dan zegt het label iets anders dan de volgorde.
+   Retourneert null voor een eenheid die we niet kunnen normaliseren. */
+export function unitPriceCents(baseCostCents: number, baseQuantity: number, baseUnit: string): number | null {
+    if (!Number.isFinite(baseCostCents) || !Number.isFinite(baseQuantity) || baseQuantity <= 0) return null;
+    switch (baseUnit) {
+        case 'g':
+            return (baseCostCents * 1000) / baseQuantity;
+        case 'kg':
+            return baseCostCents / baseQuantity;
+        case 'ml':
+            return (baseCostCents * 1000) / baseQuantity;
+        case 'liter':
+            return baseCostCents / baseQuantity;
+        case 'stuk':
+        case 'portie':
+            return baseCostCents / baseQuantity;
+        default:
+            return null;
+    }
+}
+
 /* Voorbeeldregel voor de rekenhulp: laat zien wat een realistische dosering
    in een gerecht kost ("200 g in een gerecht = €2,50"). */
 export function exampleUseCost(base: BaseFields): { qty: number; unit: string; cents: number } | null {
@@ -259,6 +283,36 @@ export function convertQty(qty: number, from: string, to: string): number | null
     const n = Number(qty);
     if (!Number.isFinite(n)) return null;
     return (n * f.factor) / t.factor;
+}
+
+/* De omgekeerde van unitPriceCents: je kent een leverancierprijs (kost X centen
+   voor Y van eenheid Z) en wilt weten wat JOUW basis kost.
+   "€32,90 per 1 kg" met een basis van 100 g → 329 centen. Met een basis van
+   1 kg → 3290 centen.
+
+   Bestaat omdat de component-drawer bij het openen de kostprijs opnieuw afleidde
+   uit de gekoppelde leverancier, maar daarbij óók de basis terugzette naar
+   100 g. Zette je hem op 1 kg, dan stond er bij het heropenen weer 100 g. De
+   prijs hoort mee te bewegen, de basis is jouw keuze.
+
+   null = de eenheden zitten in verschillende families (bv. jouw basis in liter,
+   de leverancierprijs per kg). Dan niet gokken maar laten staan wat er stond. */
+export function costForBasisCents(opts: {
+    /** wat de leverancier kost: srcCostCents voor srcQuantity van srcUnit */
+    srcCostCents: number;
+    srcQuantity: number;
+    srcUnit: string;
+    /** de basis die de gebruiker zelf koos */
+    baseQuantity: number;
+    baseUnit: string;
+}): number | null {
+    const { srcCostCents, srcQuantity, srcUnit, baseQuantity, baseUnit } = opts;
+    if (!Number.isFinite(srcCostCents) || srcCostCents < 0) return null;
+    if (!Number.isFinite(srcQuantity) || srcQuantity <= 0) return null;
+    if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) return null;
+    const basisInLeveranciersEenheid = convertQty(baseQuantity, baseUnit, srcUnit);
+    if (basisInLeveranciersEenheid === null) return null;
+    return Math.round((srcCostCents / srcQuantity) * basisInLeveranciersEenheid);
 }
 
 /** Welke eenheden mag je kiezen bij een component met deze basis-eenheid? */

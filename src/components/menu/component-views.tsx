@@ -14,7 +14,6 @@
    zonder foto.
    ═══════════════════════════════════════════════════════════════ */
 
-import { useMemo, useState } from 'react';
 import {
     Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes,
     ChevronDown, ChevronUp, ShoppingBag, ChefHat, AlertTriangle,
@@ -130,7 +129,19 @@ export function ComponentCard({
     const prijs = unitPriceLabel(component.base_cost_cents, component.base_quantity, component.base_unit);
 
     return (
-        <div className="mr-grid-card" onClick={onClick} style={{ width: w, height: h }}>
+        /* Echte knop-semantiek: zonder role/tabIndex/onKeyDown kon je met het
+           toetsenbord wel naar een kaart tabben (dnd-kit zet dat op de sleep-laag)
+           maar 'm nooit openen — Enter en spatie deden niets. */
+        <div
+            className="mr-grid-card"
+            onClick={onClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); }
+            }}
+            style={{ width: w, height: h }}
+        >
             <div className="mr-grid-card-photo" style={{ height: photoH }}>
                 <MRComponentVisual
                     component={component}
@@ -182,60 +193,67 @@ export function ComponentCard({
     );
 }
 
-export function ComponentGridView({ componenten, usage, onSelect, density = 'comfortable' }: ViewProps) {
-    if (!componenten.length) return null;
-    return (
-        <div className="mr-grid-wrap" style={{ gap: density === 'compact' ? 12 : 16 }}>
-            {componenten.map(c => (
-                <ComponentCard
-                    key={c.id}
-                    component={c}
-                    gebruikt={usage[c.id] ?? 0}
-                    onClick={() => onSelect(c)}
-                    compact={density === 'compact'}
-                />
-            ))}
-        </div>
-    );
-}
-
 /* ── Lijst ─────────────────────────────────────────────────── */
 
-type SortCol = 'name' | 'soort' | 'prijs' | 'gebruik' | null;
+/* De sorteervolgorde van de componenten-pagina.
+ *
+ * Stond eerder ALLEEN in dit bestand, als lokale state op de kolomkoppen — dus
+ * in de grid-weergave (die standaard aan staat) was er geen enkele manier om te
+ * sorteren en kreeg je gewoon de database-volgorde. De keuze woont nu op de
+ * pagina, en de kolomkoppen hieronder bedienen diezelfde keuze. Schakel je van
+ * lijst naar grid, dan blijft je volgorde staan. */
+export type ComponentSortKey =
+    | 'naam_az' | 'naam_za'
+    | 'soort_az'
+    | 'gebruik_veel' | 'gebruik_weinig'
+    | 'prijs_hoog' | 'prijs_laag'
+    | 'nieuwste';
 
-export function ComponentListView({ componenten, usage, onSelect, density = 'comfortable' }: ViewProps) {
-    const [sortCol, setSortCol] = useState<SortCol>(null);
-    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+type SortCol = 'name' | 'soort' | 'prijs' | 'gebruik';
+
+/* Eén vertaaltabel kolom ⇄ sleutel, zodat de ▲/▼-pijl altijd uit dezelfde
+   bron komt als de sortering zelf. Drie losse if-jes lopen vroeg of laat
+   uit elkaar. */
+const KOLOM_SLEUTELS: Record<SortCol, { asc: ComponentSortKey; desc: ComponentSortKey }> = {
+    name: { asc: 'naam_az', desc: 'naam_za' },
+    soort: { asc: 'soort_az', desc: 'soort_az' },
+    prijs: { asc: 'prijs_laag', desc: 'prijs_hoog' },
+    gebruik: { asc: 'gebruik_weinig', desc: 'gebruik_veel' },
+};
+
+function kolomStand(sortKey: ComponentSortKey): { col: SortCol | null; dir: 'asc' | 'desc' } {
+    for (const col of Object.keys(KOLOM_SLEUTELS) as SortCol[]) {
+        const s = KOLOM_SLEUTELS[col];
+        if (s.asc === sortKey) return { col, dir: 'asc' };
+        if (s.desc === sortKey) return { col, dir: 'desc' };
+    }
+    return { col: null, dir: 'asc' };
+}
+
+interface ListProps extends ViewProps {
+    sortKey: ComponentSortKey;
+    onSortKeyChange: (k: ComponentSortKey) => void;
+}
+
+export function ComponentListView({ componenten, usage, onSelect, density = 'comfortable', sortKey, onSortKeyChange }: ListProps) {
     const compact = density === 'compact';
+    const stand = kolomStand(sortKey);
 
-    const sorted = useMemo(() => {
-        if (!sortCol) return componenten;
-        const dir = sortDir === 'asc' ? 1 : -1;
-        return [...componenten].sort((a, b) => {
-            switch (sortCol) {
-                case 'name': return a.name.localeCompare(b.name, 'nl') * dir;
-                case 'soort': return getComponentVisual(a.name, a.category).label
-                    .localeCompare(getComponentVisual(b.name, b.category).label, 'nl') * dir;
-                case 'prijs': return ((a.base_cost_cents || 0) - (b.base_cost_cents || 0)) * dir;
-                case 'gebruik': return ((usage[a.id] ?? 0) - (usage[b.id] ?? 0)) * dir;
-                default: return 0;
-            }
-        });
-    }, [componenten, usage, sortCol, sortDir]);
-
-    function th(col: SortCol, label: string, width: number) {
-        const actief = sortCol === col;
+    function th(col: SortCol, label: string, width?: number) {
+        const actief = stand.col === col;
         return (
             <div
                 className={`mr-list-th sortable ${actief ? 'sorted' : ''}`}
-                style={{ width }}
+                style={width ? { width } : { flex: 1 }}
                 onClick={() => {
-                    if (actief) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-                    else { setSortCol(col); setSortDir('asc'); }
+                    const s = KOLOM_SLEUTELS[col];
+                    /* Tweede klik op dezelfde kop draait om. Bij "Soort" is er maar
+                       één richting, dus die blijft staan. */
+                    onSortKeyChange(actief && stand.dir === 'asc' ? s.desc : s.asc);
                 }}
             >
                 {label}
-                {actief && (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
+                {actief && (stand.dir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
             </div>
         );
     }
@@ -246,24 +264,26 @@ export function ComponentListView({ componenten, usage, onSelect, density = 'com
         <div className="mr-list-wrap">
             <div className="mr-list-header">
                 <div style={{ width: 50 }} />
-                <div className="mr-list-th sortable" style={{ flex: 1 }} onClick={() => {
-                    if (sortCol === 'name') setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
-                    else { setSortCol('name'); setSortDir('asc'); }
-                }}>
-                    Naam {sortCol === 'name' && (sortDir === 'asc' ? <ChevronUp size={11} /> : <ChevronDown size={11} />)}
-                </div>
+                {th('name', 'Naam')}
                 {th('soort', 'Soort', 100)}
                 <div className="mr-list-th" style={{ width: 90 }}>Basis</div>
                 {th('prijs', 'Prijs', 100)}
                 {th('gebruik', 'Gebruik', 110)}
             </div>
-            {sorted.map(c => {
+            {componenten.map(c => {
                 const v = getComponentVisual(c.name, c.category);
                 const gebruikt = usage[c.id] ?? 0;
                 const sig = signaal(c, gebruikt);
                 const thumb = compact ? 32 : 40;
                 return (
+                    /* Idem voor de lijstweergave: die had helemaal geen tab-stop,
+                       dus zonder muis kwam je er nooit bij. */
                     <div key={c.id} className="mr-list-row" onClick={() => onSelect(c)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(c); }
+                        }}
                         style={{ padding: compact ? '8px 16px' : '12px 16px' }}>
                         <div style={{ width: 50 }}>
                             <MRComponentVisual
@@ -287,8 +307,22 @@ export function ComponentListView({ componenten, usage, onSelect, density = 'com
                         <div style={{ width: 90, fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {c.base_quantity} {c.base_unit}
                         </div>
+                        {/* Basisprijs én eenheidsprijs. Alleen de basisprijs tonen
+                            maakte de kolom onleesbaar zodra je op prijs sorteert:
+                            er wordt op de genormaliseerde eenheidsprijs gesorteerd
+                            (€/kg, €/liter, €/stuk), dus €16,29 per stuk hoort onder
+                            €2,19 per 100 g — wat als een fout oogt tot je ziet dat
+                            die tweede €21,90 per kilo is. */}
                         <div style={{ width: 100, fontSize: 13, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
                             {c.base_cost_cents > 0 ? euro(c.base_cost_cents) : '—'}
+                            {c.base_cost_cents > 0 && (() => {
+                                const perEenheid = unitPriceLabel(c.base_cost_cents, c.base_quantity, c.base_unit);
+                                return perEenheid ? (
+                                    <div style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--muted)', marginTop: 1 }}>
+                                        {perEenheid}
+                                    </div>
+                                ) : null;
+                            })()}
                         </div>
                         <div style={{ width: 110, fontSize: 11.5, color: sig.kleur, display: 'flex', alignItems: 'center', gap: 4 }}>
                             {(c.base_cost_cents ?? 0) <= 0 && <AlertTriangle size={11} />}

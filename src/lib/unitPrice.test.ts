@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { packToBase, packToBaseMulti, unitPriceLabel, exampleUseCost, normalizeYield, effectiveBaseCostCents, costAtUseCents, purchaseQtyForUse, convertQty, unitsCompatible, compatibleUnits } from './unitPrice';
+import { packToBase, packToBaseMulti, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, normalizeYield, effectiveBaseCostCents, costAtUseCents, purchaseQtyForUse, convertQty, unitsCompatible, compatibleUnits } from './unitPrice';
 
 /* Deze tests ontbraken volledig (briefing §20.1). unitPrice is de
    rekenkundige canon voor gerecht-kostprijzen — hier hard vastgelegd. */
@@ -209,5 +209,156 @@ describe('costAtUseCents — de kg-op-100g-fout uit Sams data', () => {
             quantityUsed: 1, usedUnit: 'kg',
             baseQuantity: 100, baseUnit: 'g', baseCostCents: 329, yieldFactor: 0.7,
         })).toBe(4700);
+    });
+});
+
+describe('unitPriceCents — sorteren op prijs vergelijkt appels met appels', () => {
+    it('100 g voor €3,29 → €32,90 per kg', () => {
+        expect(unitPriceCents(329, 100, 'g')).toBeCloseTo(3290, 6);
+    });
+    it('een doos 5 kg voor €62,50 is GOEDKOPER per kilo dan 100 g voor €3,29', () => {
+        /* Precies de val die "duurste eerst" onbruikbaar maakte: op de ruwe
+           base_cost_cents is 6250 > 329, maar per kilo is het 1250 < 3290. */
+        expect(unitPriceCents(6250, 5, 'kg')).toBeLessThan(unitPriceCents(329, 100, 'g')!);
+    });
+    it('label en getal komen uit dezelfde switch', () => {
+        expect(unitPriceLabel(329, 100, 'g')).toBe('€ 32,90 / kg');
+        expect(unitPriceCents(329, 100, 'g')).toBeCloseTo(3290, 6);
+    });
+    it('onbekende eenheid geeft null in plaats van een gok', () => {
+        expect(unitPriceCents(500, 1, 'doos')).toBeNull();
+    });
+});
+
+describe('costForBasisCents — de leverancierprijs volgt JOUW basis', () => {
+    it('€32,90 per kg op een basis van 100 g → €3,29', () => {
+        expect(costForBasisCents({
+            srcCostCents: 3290, srcQuantity: 1, srcUnit: 'kg', baseQuantity: 100, baseUnit: 'g',
+        })).toBe(329);
+    });
+    it('dezelfde prijs op een basis van 1 kg → €32,90 (dit was de bug)', () => {
+        /* De drawer zette de basis terug naar 100 g bij elke keer openen, dus een
+           zelf ingevulde basis van 1 kg overleefde het niet. */
+        expect(costForBasisCents({
+            srcCostCents: 3290, srcQuantity: 1, srcUnit: 'kg', baseQuantity: 1, baseUnit: 'kg',
+        })).toBe(3290);
+    });
+    it('is de omgekeerde van unitPriceCents', () => {
+        const perKg = unitPriceCents(329, 100, 'g')!;
+        expect(costForBasisCents({
+            srcCostCents: Math.round(perKg), srcQuantity: 1, srcUnit: 'kg', baseQuantity: 100, baseUnit: 'g',
+        })).toBe(329);
+    });
+    it('per stuk blijft per stuk — 60 briochebroodjes van €0,81', () => {
+        expect(costForBasisCents({
+            srcCostCents: 81, srcQuantity: 1, srcUnit: 'stuk', baseQuantity: 60, baseUnit: 'stuk',
+        })).toBe(4860);
+    });
+    it('een genormaliseerd drietal uit Catalog B rekent net zo goed om', () => {
+        /* supplier_products levert (base_cost_cents, base_quantity, base_unit). */
+        expect(costForBasisCents({
+            srcCostCents: 102, srcQuantity: 100, srcUnit: 'g', baseQuantity: 1, baseUnit: 'kg',
+        })).toBe(1020);
+    });
+    it('andere eenheid-familie geeft null — niet gokken maar laten staan', () => {
+        /* Basis in liter, leverancierprijs per kg: daar bestaat geen eerlijke
+           omrekening voor, dus mag de opgeslagen kostprijs blijven staan. */
+        expect(costForBasisCents({
+            srcCostCents: 3290, srcQuantity: 1, srcUnit: 'kg', baseQuantity: 1, baseUnit: 'liter',
+        })).toBeNull();
+    });
+    it('een basis van 0 of negatief geeft null', () => {
+        expect(costForBasisCents({
+            srcCostCents: 3290, srcQuantity: 1, srcUnit: 'kg', baseQuantity: 0, baseUnit: 'g',
+        })).toBeNull();
+    });
+});
+
+describe('costForBasisCents — afronding is half-up, gelijk aan Postgres round()', () => {
+    it('€3,05 per kg op 100 g → 31 cent, niet 30', () => {
+        /* Het oude pad deed (3.05 / 10).toFixed(2) = "0.30": toFixed rondt op de
+           binaire representatie van 0,305 naar BENEDEN. Postgres doet
+           round(prijs_per_kg * 100) = 305 en dus half-up. Twee routes in dezelfde
+           app die verschillend afronden leverden voor één prijslijstregel twee
+           bedragen op — €0,30 bij koppelen, €0,31 bij heropenen. */
+        expect(costForBasisCents({
+            srcCostCents: Math.round(3.05 * 100), srcQuantity: 1, srcUnit: 'kg',
+            baseQuantity: 100, baseUnit: 'g',
+        })).toBe(31);
+    });
+    it('een halve cent rondt consequent omhoog', () => {
+        for (const perKg of [0.15, 0.35, 0.45, 0.75, 1.45, 3.05, 3.55]) {
+            const cents = costForBasisCents({
+                srcCostCents: Math.round(perKg * 100), srcQuantity: 1, srcUnit: 'kg',
+                baseQuantity: 100, baseUnit: 'g',
+            })!;
+            expect(cents).toBe(Math.round(Math.round(perKg * 100) / 10));
+        }
+    });
+    it('per stuk verandert er niets ten opzichte van het oude pad', () => {
+        for (const perStuk of [0.81, 1.35, 65.51]) {
+            expect(costForBasisCents({
+                srcCostCents: Math.round(perStuk * 100), srcQuantity: 1, srcUnit: 'stuk',
+                baseQuantity: 1, baseUnit: 'stuk',
+            })).toBe(Math.round(perStuk * 100));
+        }
+    });
+});
+
+describe('costForBasisCents — prijs-verversing mag de gekozen basis niet omgooien', () => {
+    it('leverancier levert per 100 g, gebruiker rekent per kg → x10', () => {
+        /* refreshBoughtInPrices schreef hier eerder base_quantity=100 en
+           base_unit=g overheen, waardoor een bewust gekozen basis van 1 kg bij de
+           eerstvolgende sync stil terugsprong naar 100 g. */
+        expect(costForBasisCents({
+            srcCostCents: 329, srcQuantity: 100, srcUnit: 'g',
+            baseQuantity: 1, baseUnit: 'kg',
+        })).toBe(3290);
+    });
+    it('gelijke basis levert exact hetzelfde bedrag — geen drift bij herhaald verversen', () => {
+        let cents = 329;
+        for (let i = 0; i < 20; i++) {
+            cents = costForBasisCents({
+                srcCostCents: 329, srcQuantity: 100, srcUnit: 'g',
+                baseQuantity: 100, baseUnit: 'g',
+            })!;
+        }
+        expect(cents).toBe(329);
+    });
+    it('basis in een andere familie geeft null → verversing slaat over in plaats van te gokken', () => {
+        expect(costForBasisCents({
+            srcCostCents: 329, srcQuantity: 100, srcUnit: 'g',
+            baseQuantity: 1, baseUnit: 'stuk',
+        })).toBeNull();
+    });
+});
+
+describe('doos van 60 briochebroodjes — per stuk of per 100 g', () => {
+    /* De catalogus slaat Bidfood-product 7475 op als 2100 g (60 stuks x 35 g) voor
+       €29,60, en normaliseert dus naar €1,41 per 100 g. Rekenkundig juist, maar
+       wie per broodje calculeert wil €0,49 zien. Beide moeten kloppen, en ze
+       moeten in elkaar om te rekenen zijn. */
+    it('per 100 g via het gewicht van de doos', () => {
+        expect(packToBaseMulti(2960, 60, 35, 'g')).toEqual({
+            base_quantity: 100, base_unit: 'g', base_cost_cents: 141,
+        });
+    });
+    it('per stuk via het aantal in de doos — €29,60 / 60 = €0,49', () => {
+        expect(packToBase(2960, 60, 'stuk')).toEqual({
+            base_quantity: 1, base_unit: 'stuk', base_cost_cents: 49,
+        });
+    });
+    it('de twee zijn NIET in elkaar om te rekenen — gewicht en stuks zijn andere families', () => {
+        /* Daarom mag de gekoppelde prijs een per-stuk-basis niet stil overschrijven,
+           en hoort de UI te zeggen dat hij niet meebeweegt. */
+        expect(costForBasisCents({
+            srcCostCents: 141, srcQuantity: 100, srcUnit: 'g',
+            baseQuantity: 1, baseUnit: 'stuk',
+        })).toBeNull();
+    });
+    it('een doos van 120 stuks voor €34,00 geeft €0,28 per stuk', () => {
+        expect(packToBase(3400, 120, 'stuk')).toEqual({
+            base_quantity: 1, base_unit: 'stuk', base_cost_cents: 28,
+        });
     });
 });
