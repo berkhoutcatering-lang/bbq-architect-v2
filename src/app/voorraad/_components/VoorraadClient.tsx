@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
@@ -250,8 +251,8 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
     const { data: priceHistoryRows } = useSupabase<{ id: number; inventory_id: number; datum: string; unit_price: number; unit?: string; source: string }>('price_history', initial?.priceHistory ?? [], skipFetch);
     const showToast = useToast();
     const showConfirm = useConfirm();
+    const router = useRouter();
 
-    const [view, setView] = useState<'overzicht' | 'tellen'>('overzicht');
     const [filter, setFilter] = useState<string>('Alles');
     const [search, setSearch] = useState('');
     const [scannerOpen, setScannerOpen] = useState(false);
@@ -324,22 +325,6 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         }
         await refetchInventory();
         showToast(`${item.naam}: ${result.data?.resulting_stock ?? '—'} ${item.unit}`, 'success');
-    }
-
-    async function setStock(item: InventoryItem, newStock: number) {
-        const delta = Math.max(0, newStock) - Number(item.current_stock || 0);
-        if (delta === 0) return;
-        const result = await adjustStock({
-            inventory_id: item.id,
-            delta,
-            type: 'count',
-            note: 'Telling-modus',
-        });
-        if (result.error) {
-            showToast('Telling-mutatie mislukt: ' + result.error, 'error');
-            return;
-        }
-        await refetchInventory();
     }
 
     function openNewItem() { setAddOpen(true); }
@@ -464,7 +449,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         lines.push(`Je hebt **${totalItems} producten** met een totale waarde van **${fmt(totalValue)}**.`);
         if (lowStock.length > 0) {
             lines.push(`\n## Onder je bestelpunt`);
-            lines.push(`**${lowStock.length} items** staan onder par — tel of controleer. Bestellen loopt event-gedreven via **/inkoop**.\n`);
+            lines.push(`**${lowStock.length} items** staan onder par — die staan op de bestellijst in **/inkoop**, ook zonder event.\n`);
             lowStock.slice(0, 8).forEach(i => {
                 const par = i.par_level || i.min_stock || 0;
                 lines.push(`- **${i.naam}** — ${i.current_stock}/${par} ${i.unit} · ${i.supplier || 'geen lev.'}`);
@@ -508,14 +493,6 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
         />;
     }
 
-    if (view === 'tellen') {
-        return <CountMode
-            inventory={inventory} byCategory={byCategory}
-            onSetStock={setStock}
-            onClose={() => setView('overzicht')}
-        />;
-    }
-
     return (
         <RequireTier feature="voorraad">
             <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
@@ -538,7 +515,7 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
                     expiringCount={expiringSoon.length}
                     avgCoverage={avgCoverage}
                     totalValue={totalValue}
-                    onTell={() => setView('tellen')}
+                    onTell={() => router.push('/voorraad/nulmeting')}
                     onScan={() => setScannerOpen(true)}
                     onPDF={exportPDF}
                     onAI={generateAIReport}
@@ -670,7 +647,7 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
                     icon={Euro}
                 />
                 <StatTile
-                    label={<Hint tip="Producten waar de huidige voorraad onder of op het bestelpunt staat. Tel of controleer — bestellen is event-gedreven via Inkoop.">Onder par-level</Hint>}
+                    label={<Hint tip="Producten waar de huidige voorraad onder of op het bestelpunt staat. Die komen vanzelf op de bestellijst in Inkoop, ook als er geen event voor staat.">Onder par-level</Hint>}
                     value={lowStockCount}
                     sub={lowStockCount > 0 ? 'onder bestelpunt' : 'alles op peil'}
                     tone={lowStockCount > 3 ? 'bad' : lowStockCount > 0 ? 'warn' : 'ok'}
@@ -906,7 +883,7 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onAdjust }: { 
                 </div>
             </MetalCard>
 
-            {/* Card 3 — Bestellen leeft op /inkoop (één bron van waarheid, event-gedreven) */}
+            {/* Card 3 — Bestellen leeft op /inkoop (één bron van waarheid: par + events) */}
             <MetalCard style={{ position: 'relative', overflow: 'hidden', borderColor: `${GOLD}4D` }}>
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)` }} />
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10, background: `${GOLD}10` }}>
@@ -915,14 +892,14 @@ function ActionPanel({ lowStock, expiring, inventory, onOpenItem, onAdjust }: { 
                     </div>
                     <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>Bestellen</div>
-                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Event-gedreven bestellijst per leverancier</div>
+                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>Minimale voorraad + events, per leverancier</div>
                     </div>
                 </div>
                 <div style={{ padding: 14 }}>
                     <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 14 }}>
-                        Je bestellijst wordt automatisch berekend uit je geplande events (gasten × recept) en gebundeld per vaste leverancier — inclusief 10% marge en wat al onderweg is.
+                        Je bestellijst wordt automatisch berekend uit wat je minimaal in huis wilt houden plus je geplande events (gasten × recept), gebundeld per vaste leverancier — inclusief 10% marge en wat al onderweg is.
                         {lowStock.length > 0
-                            ? <> <strong style={{ color: 'var(--text)' }}>{lowStock.length} item(s)</strong> staan onder par; die tellen alleen mee als ze in een event vallen.</>
+                            ? <> <strong style={{ color: 'var(--text)' }}>{lowStock.length} item(s)</strong> staan onder par en komen op de lijst, ook zonder event.</>
                             : ' Alles op peil.'}
                     </div>
                     <a href="/inkoop" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '11px 14px', borderRadius: 8, background: `${GOLD}26`, color: GOLD, fontWeight: 600, fontSize: 13, textDecoration: 'none', border: `1px solid ${GOLD}4D` }}>
@@ -1925,70 +1902,6 @@ function EditItemView({ editForm, setEditForm, editing, recepten, leveranciers, 
                     <BtnGhost onClick={onClose}>Annuleren</BtnGhost>
                     <BtnPrimary icon={Save} onClick={onSave}>Opslaan</BtnPrimary>
                 </div>
-            </div>
-        </div>
-    );
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   COUNT MODE — telling-modus voor mobiel
-   ═══════════════════════════════════════════════════════════════════ */
-function CountMode({ inventory, byCategory, onSetStock, onClose }: { inventory: InventoryItem[]; byCategory: any[]; onSetStock: (i: InventoryItem, n: number) => void; onClose: () => void }) {
-    const [activeCat, setActiveCat] = useState<string>(byCategory[0]?.name || 'Vlees');
-    const [counted, setCounted] = useState<Set<number>>(new Set());
-
-    const items = inventory.filter(i => i.categorie === activeCat);
-
-    return (
-        <div className="mobile-safe-bottom" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 900, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <button onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', minHeight: 44, color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, touchAction: 'manipulation' }}>
-                    <ArrowLeft size={14} /> Terug
-                </button>
-                <div>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>Telling-modus</h1>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{counted.size} geteld · {inventory.length - counted.size} nog te doen</div>
-                </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-                {byCategory.map(c => (
-                    <Pill key={c.name} variant={activeCat === c.name ? 'brand' : 'draft'} onClick={() => setActiveCat(c.name)}>
-                        {c.name} · {c.count}
-                    </Pill>
-                ))}
-            </div>
-
-            <MetalCard>
-                <div style={{ padding: 12 }}>
-                    {items.map(i => (
-                        <div key={i.id} style={{
-                            display: 'grid', gridTemplateColumns: '3px 1fr 200px', gap: 12, alignItems: 'center',
-                            padding: '12px 10px', borderBottom: '1px solid var(--border)',
-                            background: counted.has(i.id) ? `${GOLD}10` : 'transparent',
-                        }}>
-                            <div style={{ width: 3, height: 32, background: CAT_META[i.categorie]?.color || '#949494', borderRadius: 2 }} />
-                            <div>
-                                <div style={{ fontSize: 13, fontWeight: 500 }}>{i.naam}</div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{i.current_stock} {i.unit} · par {i.par_level || i.min_stock}</div>
-                            </div>
-                            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                <input type="number" step="0.1" defaultValue={i.current_stock} onBlur={(e) => {
-                                    const v = parseFloat(e.target.value);
-                                    if (!isNaN(v)) {
-                                        onSetStock(i, v);
-                                        setCounted(prev => new Set(prev).add(i.id));
-                                    }
-                                }} style={{ ...inputStyle, height: 36, textAlign: 'right' }} />
-                                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{i.unit}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </MetalCard>
-
-            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
-                <BtnPrimary icon={CheckCircle} onClick={onClose}>Telling afsluiten ({counted.size})</BtnPrimary>
             </div>
         </div>
     );
