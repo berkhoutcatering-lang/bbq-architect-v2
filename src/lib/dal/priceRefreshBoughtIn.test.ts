@@ -177,6 +177,54 @@ describe('refreshBoughtInPrices — prijslijst-koppeling (Catalogus A)', () => {
         expect(rapport.wijzigingen).toEqual([{ componentId: 60, oudCents: 135, nieuwCents: 140 }]);
     });
 
+    it('raakt een prijsregel ZONDER genormaliseerde prijs niet aan', async () => {
+        /* De regressie die dit vastlegt, is live gebeurd. "Beef Club Burgers 80 gram"
+           hangt aan een prijsregel met prijs=123,48 en eenheid 'ST', zonder
+           prijs_per_kg of prijs_per_stuk. De algemene resolver leest dat als
+           EUR 123,48 per stuk, en de bouwsteen ging van EUR 1,35 naar EUR 12.348
+           per 100 stuks. Zo'n vrije eenheid is in de praktijk vaak een doosprijs.
+           Een stille schrijver mag daar niet naar gokken: niets doen is het enige
+           veilige antwoord. */
+        const { client, updates } = fakeSupabase({
+            components: [{
+                id: 35, organization_id: ORG, type: 'bought_in',
+                base_cost_cents: 135, base_quantity: 100, base_unit: 'stuk',
+                supplier_product_id: null, master_product_id: 2537, supplier_price_id: 1902,
+            }],
+            supplier_prices: [
+                { id: 1902, organization_id: ORG, master_product_id: 2537, leverancier: 'beef club 29',
+                  prijs: 123.48, eenheid: 'ST', prijs_per_kg: null, prijs_per_stuk: null,
+                  datum: '2026-07-30', actief: true },
+            ],
+            supplier_products: [],
+        });
+
+        const rapport = await refreshBoughtInPrices(client, ORG);
+
+        expect(updates).toHaveLength(0);
+        expect(rapport.ongekoppeld).toBe(1);
+        expect(rapport.bijgewerkt).toBe(0);
+    });
+
+    it('gebruikt prijs_per_stuk wanneer die er wél is', async () => {
+        const { client, updates } = fakeSupabase({
+            components: [{
+                id: 36, organization_id: ORG, type: 'bought_in',
+                base_cost_cents: 100, base_quantity: 1, base_unit: 'stuk',
+                supplier_product_id: null, master_product_id: 77, supplier_price_id: null,
+            }],
+            supplier_prices: [
+                { id: 700, organization_id: ORG, master_product_id: 77, leverancier: 'Bidfood',
+                  prijs: 29.6, eenheid: 'doos', prijs_per_kg: null, prijs_per_stuk: 1.23,
+                  datum: '2026-07-30', actief: true },
+            ],
+            supplier_products: [],
+        });
+
+        await refreshBoughtInPrices(client, ORG);
+        expect(updates[0].patch.base_cost_cents).toBe(123);
+    });
+
     it('raakt een handmatige component zonder koppeling niet aan', async () => {
         const { client, updates } = fakeSupabase({
             components: [{

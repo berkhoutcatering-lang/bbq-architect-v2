@@ -21,7 +21,6 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supplierProductBaseCost, type SupplierProductCostRow } from '@/lib/supplierSync/recipeCost';
-import { resolvePricingFromSupplierPrice } from '@/lib/ingredientPricing';
 import { costForBasisCents } from '@/lib/unitPrice';
 
 /** Eén component waarvan de leveranciersprijs afwijkt van wat er is opgeslagen. */
@@ -153,16 +152,26 @@ export async function refreshBoughtInPrices(
             const prijs = prijsByMaster.get(c.master_product_id)
                 ?? (typeof c.supplier_price_id === 'number' ? prijsById.get(c.supplier_price_id) : undefined);
             if (!prijs) { report.ongekoppeld++; continue; }
-            /* Zelfde resolver als de receptuur-verversing en het bewerk-scherm,
-               zodat één prijslijstregel niet twee verschillende bedragen kan
-               opleveren afhankelijk van welk scherm ernaar kijkt. */
-            const pr = resolvePricingFromSupplierPrice(prijs as Parameters<typeof resolvePricingFromSupplierPrice>[0]);
-            if (!(pr.unit_price > 0)) { report.ongekoppeld++; continue; }
-            base = {
-                base_cost_cents: Math.round(pr.unit_price * 100),
-                base_quantity: 1,
-                base_unit: pr.price_basis === 'kg' ? 'kg' : 'stuk',
-            };
+            /* ALLEEN de genormaliseerde prijsvelden. Dit is een STILLE schrijver:
+               hij werkt zonder dat iemand meekijkt de kostprijs van elke gekoppelde
+               bouwsteen bij. Dan mag hij niet gokken.
+               De algemene resolver valt bij ontbrekende prijs_per_kg/prijs_per_stuk
+               terug op de kale `prijs` plus de vrije `eenheid`, en die is
+               dubbelzinnig: een regel "prijs 123,48 / eenheid ST" is in de praktijk
+               een doosprijs, maar wordt dan gelezen als €123,48 per stuk. Precies
+               dat gebeurde live bij "Beef Club Burgers 80 gram": die ging van
+               €1,35 naar €12.348 per 100 stuks. Geen genormaliseerde prijs = niet
+               aanraken; de bouwsteen houdt gewoon zijn huidige kostprijs. */
+            const perKg = Number((prijs as { prijs_per_kg?: unknown }).prijs_per_kg) || 0;
+            const perStuk = Number((prijs as { prijs_per_stuk?: unknown }).prijs_per_stuk) || 0;
+            if (perKg > 0) {
+                base = { base_cost_cents: Math.round(perKg * 100), base_quantity: 1, base_unit: 'kg' };
+            } else if (perStuk > 0) {
+                base = { base_cost_cents: Math.round(perStuk * 100), base_quantity: 1, base_unit: 'stuk' };
+            } else {
+                report.ongekoppeld++;
+                continue;
+            }
         }
         if (!base) { report.ongekoppeld++; continue; }
 

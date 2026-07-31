@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Boxes, Plus, X, Trash2, Sparkles,
+    Boxes, Plus, X, Trash2, Sparkles, RefreshCw,
     Package, ShoppingBag, Loader2, Search, Check, ThermometerSun,
     Upload, FileText, ChefHat, Camera, Calculator, ImagePlus,
     Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Scissors, LayoutGrid, List,
@@ -26,6 +26,7 @@ import '@/components/redesign/redesign.css';
 import { useComponentFolders, type ComponentFolderRow } from './_lib/useComponentFolders';
 /* GP-5 (2026-05-25): FolderBar vervangen door FolderTree (Drive-style sidebar).
    Import gehouden voor evt. fallback maar momenteel niet gerendered. */
+import { refreshRecipePricesAction } from '@/app/menu-templates/actions';
 import FolderModal from './_components/FolderModal';
 /* GP-4 (2026-05-25): live foodcost-impact preview bij component-prijswijziging. */
 import { FoodcostImpactModal, type FoodcostImpactPayload } from '@/components/menu/FoodcostImpactModal';
@@ -485,6 +486,33 @@ export default function ComponentenPage() {
     }
 
     useEffect(() => { loadComponents(); }, []);
+
+    const [ververst, setVerverst] = useState(false);
+
+    /* Haalt de actuele leveranciersprijzen op voor álle gekoppelde bouwstenen
+       (zelf-bereid uit de prijslijst én ingekocht uit beide catalogi) en laat de
+       database de gerechten opnieuw doorrekenen. Zonder argument = org-breed. */
+    async function ververesPrijzen() {
+        setVerverst(true);
+        try {
+            const res = await refreshRecipePricesAction();
+            if ('error' in res) { toast(res.error || 'Verversen mislukt', 'error'); return; }
+            const recepten = res.data.receptenBijgewerkt ?? 0;
+            const inkoop = res.data.boughtIn?.bijgewerkt ?? 0;
+            const totaal = recepten + inkoop;
+            toast(
+                totaal === 0
+                    ? 'Alle prijzen waren al actueel — er is niets veranderd.'
+                    : `${totaal} ${totaal === 1 ? 'bouwsteen' : 'bouwstenen'} bijgewerkt naar de actuele leveranciersprijs. Je gerechten zijn opnieuw doorgerekend.`,
+                'success',
+            );
+            await loadComponents(true);
+        } catch (e: unknown) {
+            toast(e instanceof Error ? e.message : 'Verversen mislukt', 'error');
+        } finally {
+            setVerverst(false);
+        }
+    }
 
     /* ⌘K / Ctrl+K focuses the search input — matches the shortcut-hint badge */
     useEffect(() => {
@@ -954,6 +982,22 @@ export default function ComponentenPage() {
                             onScan={() => setShowScan(true)}
                             onImport={() => setShowImport(true)}
                         />
+                        {/* De bewerk-lade belooft "de kostprijs beweegt mee bij een
+                            prijswijziging", maar dat gebeurt alleen als iemand het
+                            aftrapt — en die knop zat verstopt in de marge-lade van een
+                            menukaart. Een belofte hoort een knop te hebben op de plek
+                            waar hij gedaan wordt. */}
+                        <button
+                            type="button"
+                            onClick={ververesPrijzen}
+                            disabled={ververst}
+                            className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition hover:opacity-90 disabled:opacity-60"
+                            style={{ background: 'var(--panel)', color: 'var(--text)', border: '1px solid var(--border)' }}
+                            title="Haalt de actuele leveranciersprijzen op en rekent je gerechten opnieuw door"
+                        >
+                            {ververst ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                            {ververst ? 'Prijzen ophalen…' : 'Ververs prijzen'}
+                        </button>
                     </div>
                 </div>
 
