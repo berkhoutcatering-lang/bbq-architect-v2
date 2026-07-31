@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 import {
     normalizeIngredientName,
     pickBestMatch,
@@ -26,7 +27,13 @@ export const maxDuration = 30;
  * Zoekt per ingrediënt in 3 bronnen, org-scoped:
  *   1. components  (eigen bibliotheek — base_cost_cents)
  *   2. inventory   (eigen voorraad — purchase_price / last_price_eur)
- *   3. supplier_prices (Catalog A — incl. Bidfood; NOOIT Catalog B/supplier_products)
+ *   3. supplier_prices    (Catalogus A — de geimporteerde prijslijsten)
+ *   4. supplier_products (Catalogus B — de gescande bestel-catalogus)
+ *
+ * Catalogus B stond hier eerst bewust NIET bij, uit de regel "nooit de twee
+ * catalogi op id joinen". Die regel gaat over JOINEN, niet over zoeken: 7.7k
+ * gescande producten negeren maakte de kostprijs van een recept structureel te
+ * laag. Ze blijven aparte bronnen met een eigen id-ruimte.
  *
  * Ranking + prijs-rekenkunde in lib/recipeMatch.ts (puur + getest).
  */
@@ -82,6 +89,33 @@ function fromSupplierPrice(r: any): CostCandidate | null {
     };
 }
 
+/** supplier_products-rij (Catalog B, gescande bestel-catalogus) → CostCandidate.
+ *
+ * Deze bron ontbrak, en dat kostte geld: master_products bevat 0 producten met
+ * "salsa", supplier_products twee mét prijs. Zo'n regel kwam er als "geschat"
+ * uit terwijl de echte prijs (EUR 7,50/kg) gewoon in huis was — de kostprijs van
+ * het recept viel te laag uit en de marge zag er te mooi uit.
+ *
+ * De kostprijs komt uit supplierProductBaseCost, dezelfde deterministische
+ * helper die de catalogus-zoek en de component-drawer gebruiken. We joinen
+ * NOOIT op id met Catalogus A; dit is een eigen bron met een eigen id-ruimte. */
+function fromSupplierProduct(r: any, levNaam: string | null): CostCandidate | null {
+    const base = supplierProductBaseCost({
+        price_cents: r.price_cents, unit: r.unit,
+        package_size: r.package_size, package_unit: r.package_unit,
+        total_base_quantity: r.total_base_quantity, base_unit: r.base_unit,
+    });
+    if (!base || base.base_cost_cents <= 0) return null;
+    const conv = toBaseUnit(base.base_unit);
+    if (!conv || base.base_quantity <= 0) return null;
+    const perBase = base.base_cost_cents / base.base_quantity / conv.factor;
+    return {
+        source: 'supplier_product', ref_id: r.id, name: r.name,
+        centsPerBaseUnit: perBase, baseUnit: conv.base,
+        supplier: levNaam, supplierProductId: r.id,
+    };
+}
+
 export async function POST(req: NextRequest) {
     try {
         const sb = await createServerSupabase();
@@ -104,6 +138,14 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geen ingrediënten' }, { status: 400 });
         }
 
+        /* Leveranciersnamen één keer ophalen i.p.v. per ingrediënt: supplier_products
+           heeft alleen een supplier_id, en zonder naam staat er straks "onbekende
+           leverancier" bij een product waarvan we de leverancier prima kennen. */
+        const { data: levs } = await sb
+            .from('leveranciers').select('id, naam').eq('organization_id', orgId);
+        const levById = new Map<number, string>();
+        for (const l of levs ?? []) levById.set(l.id as number, (l.naam as string) ?? '');
+
         const results = await Promise.all(ingredients.map(async (ing) => {
             const naam = String(ing.naam || '').slice(0, 120);
             const qty = Number(ing.qty_pp) || 0;
@@ -111,20 +153,23 @@ export async function POST(req: NextRequest) {
             const term = searchTerm(naam);
             if (!term) return { naam, qty_pp: qty, eenheid, match: null as any };
 
-            // 3 bronnen parallel doorzoeken, org-scoped (RLS + expliciete filter).
-            const [comp, inv, sup] = await Promise.all([
+            // 4 bronnen parallel doorzoeken, org-scoped (RLS + expliciete filter).
+            const [comp, inv, sup, sprod] = await Promise.all([
                 sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
                     .eq('organization_id', orgId).ilike('name', `%${term}%`).limit(15),
                 sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
                     .eq('organization_id', orgId).ilike('naam', `%${term}%`).limit(15),
                 sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
                     .eq('organization_id', orgId).eq('actief', true).ilike('product_naam', `%${term}%`).limit(25),
+                sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                    .eq('organization_id', orgId).eq('active', true).ilike('name', `%${term}%`).limit(25),
             ]);
 
             const candidates: CostCandidate[] = [
                 ...(comp.data || []).map(fromComponent),
                 ...(inv.data || []).map(fromInventory),
                 ...(sup.data || []).map(fromSupplierPrice),
+                ...(sprod.data || []).map((r: any) => fromSupplierProduct(r, levById.get(r.supplier_id) ?? null)),
             ].filter((c): c is CostCandidate => c !== null);
 
             const best = pickBestMatch(naam, candidates);

@@ -7,6 +7,7 @@ import { estimateAiCostCents } from '@/lib/aiCost';
 import { checkAiCap } from '@/lib/aiCostCap';
 import { matchInventory } from '@/lib/inventoryDeduction';
 import { PURCHASE_CODES, rgsLookup } from '@/lib/rgsCategories';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
         eenheid: it.eenheid || 'stuks',
         prijs_per_eenheid: Number(it.prijs_per_eenheid) || 0,
         totaal: Number(it.totaal) || 0,
-        btw_pct: Number(it.btw_pct) || 21,
+        btw_pct: resolveBtwPct(it.btw_pct),
         inventory_id: matched ? Number(matched.id) : null,
         inventory_naam: matched ? matched.naam : null,
         match_confidence: confidence,

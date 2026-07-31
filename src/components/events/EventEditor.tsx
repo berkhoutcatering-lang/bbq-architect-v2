@@ -170,7 +170,7 @@ export default function EventEditor({ eventId, onSaved, onDeleted }: Props) {
       datum: today(),
       geldig_tot: addDays(today(), geldigDagen),
       notitie: form.notitie || '',
-      items: [{ desc: 'BBQ Catering - ' + form.name, qty: form.guests || 50, prijs: form.ppp || 45, btw: (settings && settings.default_btw) || 21 }],
+      items: [{ desc: 'BBQ Catering - ' + form.name, qty: form.guests || 50, prijs: form.ppp || 45, btw: settings?.default_btw ?? 21 }],
     };
     await offertes.insert(offData);
     showToast('Offerte aangemaakt vanuit event', 'success');

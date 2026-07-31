@@ -36,7 +36,14 @@ export function trigrams(input: string): Set<string> {
     return set;
 }
 
-/** Trigram-similarity (Jaccard, 0..1) tussen twee strings, zoals pg_trgm.similarity. */
+/** Trigram-similarity (0..1). Neemt de hoogste van twee maten:
+ *  - Jaccard (doorsnede / vereniging), zoals pg_trgm.similarity;
+ *  - containment (doorsnede / kleinste set) — nodig voor Nederlandse
+ *    samenstellingen. "salsa" zit vólledig in "tomatensalsa", maar Jaccard
+ *    straft het lengteverschil af (4/15 = 0,27) en dan haalt het de drempel van
+ *    0,35 niet. Containment geeft 4/6 = 0,67 en vindt het product wél.
+ *    Ondergrens van 3 trigrams voorkomt dat een toevallig fragment van twee
+ *    letters ineens overal "in zit". */
 export function trigramSimilarity(a: string, b: string): number {
     const ta = trigrams(a);
     const tb = trigrams(b);
@@ -44,7 +51,10 @@ export function trigramSimilarity(a: string, b: string): number {
     let inter = 0;
     for (const t of ta) if (tb.has(t)) inter++;
     const union = ta.size + tb.size - inter;
-    return union === 0 ? 0 : inter / union;
+    const jaccard = union === 0 ? 0 : inter / union;
+    const kleinste = Math.min(ta.size, tb.size);
+    const containment = kleinste >= 3 ? inter / kleinste : 0;
+    return Math.max(jaccard, containment);
 }
 
 /** Woord-bewuste similarity (0..1): elke getypte term wordt vergeleken met het

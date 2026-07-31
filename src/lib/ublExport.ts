@@ -8,6 +8,7 @@
 
 import type { Factuur, FactuurItem } from '@/types';
 import { XMLParser } from 'fast-xml-parser';
+import { isMissingBtwPct, requireBtwPct } from '@/lib/btw-rules';
 
 interface UBLOptions {
   leverancier: {
@@ -32,15 +33,70 @@ function escapeXml(s: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/* ─── Exporteerbaarheid ───────────────────────────────────────────────────
+ *
+ * Twee dingen mogen hier NOOIT geraden worden, omdat het resultaat het pand
+ * verlaat richting klant en Peppol-ontvanger:
+ *
+ * 1. Een ontbrekend btw-percentage. Tot 2026-07-29 stond hier `item.btw || 21`;
+ *    omdat 0 falsy is verliet élke 0%-regel het pand als 21%.
+ * 2. De TaxCategory bij een 0%-regel. 0% kan Z (nultarief), E (vrijgesteld),
+ *    AE (verlegd), K (intracommunautair), G (export) of O (buiten scope) zijn,
+ *    elk met een eigen TaxExemptionReasonCode. Het datamodel legt dat verschil
+ *    nu niet vast, dus is het niet af te leiden. Tot er echte tax codes zijn
+ *    (accounting kernel) weigeren we de export liever dan een verkeerde
+ *    categorie te sturen: een geweigerde export is herstelbaar, een verzonden
+ *    foute e-factuur niet.
+ */
+
+export class UblExportError extends Error {
+  readonly problems: string[];
+  constructor(problems: string[]) {
+    super(`UBL-export geweigerd: ${problems[0]}`);
+    this.name = 'UblExportError';
+    this.problems = problems;
+  }
+}
+
+/** Blokkerende problemen die vóór generatie al vaststaan. Leeg = exporteerbaar. */
+export function checkUblExportable(factuur: Factuur): string[] {
+  const problems: string[] = [];
+  const items: FactuurItem[] = Array.isArray(factuur.items) ? factuur.items : [];
+
+  items.forEach((item, idx) => {
+    const nr = idx + 1;
+    const naam = item.omschrijving ? ` ("${item.omschrijving}")` : '';
+    if (isMissingBtwPct(item.btw)) {
+      problems.push(`Regel ${nr}${naam} heeft geen BTW-percentage — vul een tarief in.`);
+      return;
+    }
+    const pct = Number(item.btw);
+    if (pct === 0) {
+      problems.push(
+        `Regel ${nr}${naam} staat op 0%. UBL vereist een expliciete reden ` +
+        `(verlegd, export, vrijgesteld); die is nog niet vast te leggen. ` +
+        `Maak deze factuur handmatig op of laat de boekhouder hem verwerken.`,
+      );
+    } else if (pct < 0) {
+      problems.push(`Regel ${nr}${naam} heeft een negatief BTW-percentage (${pct}).`);
+    }
+  });
+
+  return problems;
+}
+
 export function generateUBL(factuur: Factuur, options: UBLOptions): string {
   const lev = options.leverancier;
   const items: FactuurItem[] = Array.isArray(factuur.items) ? factuur.items : [];
 
+  const problems = checkUblExportable(factuur);
+  if (problems.length > 0) throw new UblExportError(problems);
+
   let subtotaal = 0;
   let totalBtw = 0;
-  items.forEach(item => {
+  items.forEach((item, idx) => {
     const lineTotal = (item.qty || 0) * (item.prijs || 0);
-    const btwPct = item.btw || 21;
+    const btwPct = requireBtwPct(item.btw, `factuurregel ${idx + 1}`);
     subtotaal += lineTotal;
     totalBtw += lineTotal * (btwPct / 100);
   });
@@ -48,8 +104,7 @@ export function generateUBL(factuur: Factuur, options: UBLOptions): string {
 
   const lines = items.map((item, idx) => {
     const lineTotal = (item.qty || 0) * (item.prijs || 0);
-    const btwPct = item.btw || 21;
-    const btwAmount = lineTotal * (btwPct / 100);
+    const btwPct = requireBtwPct(item.btw, `factuurregel ${idx + 1}`);
     return `
     <cac:InvoiceLine>
       <cbc:ID>${idx + 1}</cbc:ID>
@@ -127,6 +182,8 @@ ${lines}
 }
 
 export function downloadUBL(factuur: Factuur, options: UBLOptions) {
+  /* generateUBL gooit UblExportError als de factuur niet exporteerbaar is —
+     bewust niet gevangen: er mag hier geen half bestand op de schijf landen. */
   const xml = generateUBL(factuur, options);
   const blob = new Blob([xml], { type: 'application/xml' });
   const url = URL.createObjectURL(blob);
@@ -269,7 +326,13 @@ export function validateUBL(xml: string): UBLValidationResult {
 export function generateAndValidateUBL(
   factuur: Factuur,
   options: UBLOptions,
-): { xml: string; validation: UBLValidationResult } {
+): { xml: string | null; validation: UBLValidationResult } {
+  /* Niet-exporteerbaar is geen exception hier: de UI toont dit als gewone
+     validatiefout, zodat de gebruiker leest wát er mis is met welke regel. */
+  const problems = checkUblExportable(factuur);
+  if (problems.length > 0) {
+    return { xml: null, validation: { valid: false, errors: problems, warnings: [] } };
+  }
   const xml = generateUBL(factuur, options);
   return { xml, validation: validateUBL(xml) };
 }

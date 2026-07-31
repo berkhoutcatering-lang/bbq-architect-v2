@@ -384,10 +384,31 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
         .eq('organization_id', auth.orgId!);
 
     if (error) {
-        // FK RESTRICT op gerecht_components → 23503; user-friendly message
+        /* FK RESTRICT op gerecht_components → 23503. De database beschermt hier
+           terecht tegen dataverlies, maar "verwijder eerst die referenties" is
+           geen taal waar een kok iets mee kan: het zegt niet wát er in de weg
+           staat en niet waar hij moet zijn. Dus noemen we de gerechten bij naam. */
         if (error.code === '23503') {
+            const { data: inGebruik } = await supabase
+                .from('gerecht_components')
+                .select('gerechten(id, naam)')
+                .eq('component_id', componentId)
+                .eq('organization_id', auth.orgId!)
+                .limit(20);
+            const namen = (inGebruik ?? [])
+                .map((r) => (r as { gerechten?: { naam?: string } | null }).gerechten?.naam)
+                .filter((n): n is string => !!n);
+            const uniek = Array.from(new Set(namen));
+            const opsomming = uniek.length === 0
+                ? ''
+                : uniek.length <= 3
+                    ? ` (${uniek.join(', ')})`
+                    : ` (${uniek.slice(0, 3).join(', ')} en nog ${uniek.length - 3})`;
             return NextResponse.json({
-                error: 'Component zit nog in één of meer gerechten. Verwijder eerst die referenties.',
+                error: uniek.length === 1
+                    ? `Deze bouwsteen zit nog in het gerecht${opsomming}. Haal 'm daar eerst uit, dan kun je 'm verwijderen.`
+                    : `Deze bouwsteen zit nog in ${uniek.length || 'meerdere'} gerechten${opsomming}. Haal 'm daar eerst uit, dan kun je 'm verwijderen.`,
+                gerechten: uniek,
             }, { status: 409 });
         }
         return NextResponse.json({ error: error.message }, { status: 500 });

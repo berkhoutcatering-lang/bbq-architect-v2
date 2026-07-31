@@ -1233,7 +1233,7 @@ export function formatContextForPrompt(contextData: ContextData | null): string 
     if (contextData.settings) {
         const s = contextData.settings;
         lines.push('**Bedrijf:** ' + (s.bedrijfsnaam || '?') + (s.ondertitel ? ' — ' + s.ondertitel : ''));
-        lines.push('**Instellingen:** BTW ' + (s.default_btw || 21) + '% | Betaaltermijn ' + (s.betaaltermijn || 14) + ' dagen | Offerte geldig ' + (s.offerte_geldig || 30) + ' dagen');
+        lines.push('**Instellingen:** BTW ' + (s.default_btw ?? 21) + '% | Betaaltermijn ' + (s.betaaltermijn || 14) + ' dagen | Offerte geldig ' + (s.offerte_geldig || 30) + ' dagen');
         lines.push('');
     }
 

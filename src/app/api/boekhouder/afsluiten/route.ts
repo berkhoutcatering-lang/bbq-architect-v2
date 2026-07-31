@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     const [factResp, bonnenResp, afsluitResp, vastResp] = await Promise.all([
         supabase.from('facturen').select('id,nummer,client_naam,datum,status,items')
             .eq('organization_id', org.orgId).gte('datum', `${year}-01-01`).lte('datum', `${year}-12-31`),
-        supabase.from('bonnen').select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,ai_classify_status')
+        supabase.from('bonnen').select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,ai_classify_status,voorbelasting_bevestigd,zakelijk_pct')
             .eq('organization_id', org.orgId).gte('datum', `${year}-01-01`).lte('datum', `${year}-12-31`),
         supabase.from('maand_afsluitingen').select('maand').eq('organization_id', org.orgId).eq('jaar', year),
         supabase.from('btw_aangiftes').select('kwartaal, saldo').eq('organization_id', org.orgId).eq('jaar', year),

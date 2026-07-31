@@ -11,6 +11,9 @@ import { ChefHat, ChevronDown, ChevronUp, Copy, EyeOff, MoreVertical, Pencil } f
 import type { Gerecht, Gang } from '@/types';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { costSharePct, MENU_PRICE_REF } from '@/lib/menuMargin';
+/* Percentages via de canon in lib/format.ts: anders staat er "31.1%" met een punt
+   pal naast "€ 11,97" met een komma, binnen dezelfde kaart. */
+import { formatPercent } from '@/lib/format';
 import {
     MRStatusPill, MRCardVisual, MRMarginRing, MRCostBar,
     type GerechtStatus, type MenuViewMode,
@@ -134,7 +137,7 @@ function MRGridCard({ gerecht, gangen, onClick, density, photoMode }: {
                         <>
                             <span className="mr-grid-card-price">{cost > 0 ? fmtEuro(cost) : '—'}</span>
                             <span className="mr-grid-card-margin" style={{ color: 'var(--muted)', fontWeight: 500 }}>
-                                {cost > 0 ? `${costSharePct(cost, MENU_PRICE_REF) ?? 0}% van menu` : 'geen kostprijs'}
+                                {cost > 0 ? `${formatPercent(costSharePct(cost, MENU_PRICE_REF) ?? 0)} van menu` : 'geen kostprijs'}
                             </span>
                         </>
                     )}
@@ -253,7 +256,7 @@ export function MRListView({ gerechten, gangen, onSelect, density = 'comfortable
                                 </>
                             ) : (
                                 <span style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                                    {cost > 0 ? `${costSharePct(cost, MENU_PRICE_REF) ?? 0}% van menu` : '—'}
+                                    {cost > 0 ? `${formatPercent(costSharePct(cost, MENU_PRICE_REF) ?? 0)} van menu` : '—'}
                                 </span>
                             )}
                         </div>

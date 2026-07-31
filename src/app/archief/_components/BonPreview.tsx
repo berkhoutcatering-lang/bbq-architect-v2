@@ -21,7 +21,7 @@ import { useQueryState } from 'nuqs';
 import type { BonRow, AuditLogEntry, StockMovementForBon } from '@/lib/dal/bonnen';
 import { getStatusVisual } from '../_lib/statusMap';
 import { fmtEur, fmtDate, fmtDateTime, fmtDateShort } from './format';
-import { getSignedUrlAction, removeBonFileAction, deleteBonAction } from '../actions';
+import { getSignedUrlAction, removeBonFileAction, deleteBonAction, confirmVoorbelastingAction } from '../actions';
 
 const PdfViewerInner = dynamic(() => import('./PdfViewerInner'), {
     ssr: false,
@@ -563,6 +563,109 @@ function DetailsTab({ bon }: { bon: BonRow }) {
                     <Row key={r.k} k={r.k} v={r.v} />
                 ))}
             </div>
+            <VoorbelastingPanel bon={bon} />
+        </div>
+    );
+}
+
+/**
+ * Voorbelasting-bevestiging (veiligheidsfase F6).
+ *
+ * De BTW op deze bon telt pas mee in aangifte-rubriek 5b als hier bevestigd is
+ * dat de uitgave zakelijk is én de bon een geldige factuur. Daarvóór stond elke
+ * bon automatisch in de aftrek, ook privé-uitgaven en bonnen zonder
+ * tenaamstelling — de aangifte vroeg daarmee te veel terug.
+ */
+function VoorbelastingPanel({ bon }: { bon: BonRow }) {
+    const router = useRouter();
+    const [pending, startTransition] = useTransition();
+    const [error, setError] = useState<string | null>(null);
+    const [zakelijk, setZakelijk] = useState<number>(bon.zakelijk_pct ?? 100);
+
+    const btw = Number(bon.btw_laag_bedrag ?? 0) + Number(bon.btw_hoog_bedrag ?? 0);
+    const bevestigd = bon.voorbelasting_bevestigd === true;
+    const vergrendeld = !!bon.locked_at;
+
+    if (btw === 0) return null;
+
+    const aftrekbaar = (btw * zakelijk) / 100;
+
+    function submit(next: boolean) {
+        setError(null);
+        startTransition(async () => {
+            const res = await confirmVoorbelastingAction({
+                bonId: bon.id,
+                bevestigd: next,
+                zakelijkPct: zakelijk,
+            });
+            if (!res.ok) setError(res.error ?? 'Mislukt');
+            else router.refresh();
+        });
+    }
+
+    return (
+        <div
+            className="mt-5 rounded-[10px] border p-4"
+            style={{
+                borderColor: bevestigd ? 'rgba(52,168,83,.35)' : 'rgba(217,119,6,.35)',
+                background: bevestigd ? 'rgba(52,168,83,.05)' : 'rgba(217,119,6,.05)',
+            }}
+        >
+            <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold">
+                {bevestigd ? 'Voorbelasting bevestigd' : 'Voorbelasting nog niet bevestigd'}
+                <span className="font-mono text-[12px] font-normal text-[var(--muted)]">
+                    {fmtEur(btw)} BTW
+                </span>
+            </div>
+
+            <p className="mb-3 text-[11px] leading-relaxed text-[var(--muted)]">
+                {bevestigd
+                    ? `Telt mee in BTW-aangifte 5b voor ${fmtEur(aftrekbaar)}${zakelijk < 100 ? ` (${zakelijk}% zakelijk)` : ''}.`
+                    : 'Deze BTW telt nog NIET mee in de aangifte. Bevestig pas als de uitgave zakelijk is én de bon aan de factuureisen voldoet (tenaamstelling, BTW-nummer bij bedragen boven de kleinbedragdrempel).'}
+            </p>
+
+            {vergrendeld ? (
+                <p className="text-[11px] text-[var(--muted)]">
+                    Bon zit in een afgesloten periode — niet meer te wijzigen.
+                </p>
+            ) : bevestigd ? (
+                <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => submit(false)}
+                    className="rounded-[6px] border px-3 py-1.5 text-[12px] disabled:opacity-50"
+                    style={{ borderColor: 'rgba(130,130,130,.3)' }}
+                >
+                    Bevestiging intrekken
+                </button>
+            ) : (
+                <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-[12px] text-[var(--muted)]">
+                        Zakelijk
+                        <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={zakelijk}
+                            onChange={(e) => setZakelijk(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                            className="w-16 rounded-[6px] border bg-transparent px-2 py-1 text-right text-[12px]"
+                            style={{ borderColor: 'rgba(130,130,130,.3)' }}
+                        />
+                        %
+                    </label>
+                    <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => submit(true)}
+                        className="rounded-[6px] px-3 py-1.5 text-[12px] font-semibold text-black disabled:opacity-50"
+                        style={{ background: 'var(--brand-gold, #c4a35a)' }}
+                    >
+                        {pending ? 'Bezig…' : `Bevestig ${fmtEur(aftrekbaar)}`}
+                    </button>
+                </div>
+            )}
+
+            {error && <p className="mt-2 text-[11px] text-[var(--red,#dc2626)]">{error}</p>}
         </div>
     );
 }

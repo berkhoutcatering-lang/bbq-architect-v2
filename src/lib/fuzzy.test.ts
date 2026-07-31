@@ -91,3 +91,27 @@ describe('fuzzyShingles', () => {
         expect(sh.some(s => s.includes(' '))).toBe(false);
     });
 });
+
+/* Nederlandse samenstellingen. Sam schrijft zoals een kok praat: "salsa" voor
+   "Tomatensalsa", "gehakt" voor "Rundergehakt". Met alleen Jaccard viel dat onder
+   de drempel (het lengteverschil straft te hard), waardoor producten die er
+   letterlijk staan onvindbaar waren. Containment vangt dat op. */
+describe('samenstellingen (containment)', () => {
+    const FUZZY_MIN = 0.35; // moet gelijk lopen met de route-drempel
+    it('deel van een samenstelling haalt de drempel', () => {
+        expect(trigramSimilarity('salsa', 'tomatensalsa')).toBeGreaterThanOrEqual(FUZZY_MIN);
+        expect(trigramSimilarity('gehakt', 'rundergehakt')).toBeGreaterThanOrEqual(FUZZY_MIN);
+        expect(trigramSimilarity('worst', 'braadworst')).toBeGreaterThanOrEqual(FUZZY_MIN);
+    });
+    it('tokenSetSimilarity vindt het losse woord in de samenstelling', () => {
+        expect(tokenSetSimilarity('salsa', 'Tomatensalsa, bak 1 kg')).toBeGreaterThanOrEqual(FUZZY_MIN);
+    });
+    it('maakt niet ineens alles gelijk — losse fragmenten blijven laag', () => {
+        expect(trigramSimilarity('ribeye', 'Komkommer julienne')).toBeLessThan(FUZZY_MIN);
+        expect(trigramSimilarity('zalm', 'Runderbrisket')).toBeLessThan(FUZZY_MIN);
+    });
+    it('blijft symmetrisch', () => {
+        expect(trigramSimilarity('salsa', 'tomatensalsa'))
+            .toBeCloseTo(trigramSimilarity('tomatensalsa', 'salsa'), 10);
+    });
+});

@@ -144,7 +144,7 @@ export default function EventWizard({ isOpen, onClose, onComplete }: EventWizard
         aantal_gasten: details.gasten,
         basis_prijs_pp: details.ppp,
         menu_selectie: menuSelectie,
-        items: [{ desc: `BBQ Catering - ${details.naam || klant.naam}`, qty: details.gasten, prijs: details.ppp, btw: settings?.default_btw || 21 }],
+        items: [{ desc: `BBQ Catering - ${details.naam || klant.naam}`, qty: details.gasten, prijs: details.ppp, btw: settings?.default_btw ?? 21 }],
       };
 
       const { data: offerte, error: offError } = await supabase!.from('offertes').insert(offerteData).select().single();

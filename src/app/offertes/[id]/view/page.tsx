@@ -13,6 +13,7 @@ import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
 import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
+import { resolveBtwPct } from '@/lib/btw-rules';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -483,7 +484,7 @@ export default function OfferteViewPage() {
 
   const totals = useMemo(() => {
     const subtotaal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0), 0);
-    const btw = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * ((Number(it.btw) || 9) / 100), 0);
+    const btw = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (resolveBtwPct(it.btw) / 100), 0);
     const totalCost = costBreakdown.available ? costBreakdown.totalCost : 0;
     const margin = costBreakdown.available && subtotaal > 0 ? ((subtotaal - totalCost) / subtotaal) * 100 : null;
     const guests = offerte?.aantal_gasten || items[0]?.qty || 0;

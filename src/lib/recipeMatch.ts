@@ -12,7 +12,12 @@
  */
 
 export type BaseUnit = 'g' | 'ml' | 'stuk';
-export type MatchSource = 'component' | 'inventory' | 'supplier';
+/* 'supplier'         = prijslijst-import (Catalogus A, supplier_prices)
+   'supplier_product' = gescande bestel-catalogus (Catalogus B, supplier_products)
+   Twee aparte bronnen met eigen id-ruimte — ze worden nooit op id gejoind, maar
+   allebei WEL doorzocht: 7.7k gescande producten stilzwijgend negeren maakte de
+   kostprijs van een recept structureel te laag. */
+export type MatchSource = 'component' | 'inventory' | 'supplier' | 'supplier_product';
 
 /** Genormaliseerde kandidaat: elke bron wordt hiernaartoe gemapt vóór matching. */
 export interface CostCandidate {
@@ -25,6 +30,8 @@ export interface CostCandidate {
     supplier?: string | null;
     /** Alleen voor source==='supplier': master_product_id, om component te kunnen aanmaken. */
     masterProductId?: number | null;
+    /** Alleen voor source==='supplier_product': de koppeling naar Catalogus B. */
+    supplierProductId?: number | null;
 }
 
 export interface MatchResult {
@@ -117,7 +124,11 @@ export function isTailOnlyMatch(ingredient: string, candidate: string): boolean 
    Kandidaten worden gescoord; bij gelijke score wint de bron-prioriteit
    (eigen bibliotheek > eigen voorraad > leverancier-catalogus). Onder de
    floor → null (dan tonen we "geschat, geen match" i.p.v. een gok). */
-const SOURCE_RANK: Record<MatchSource, number> = { component: 3, inventory: 2, supplier: 1 };
+/* Bij een gelijke naam-score wint de bron die het dichtst bij Sam's eigen
+   administratie staat. De prijslijst gaat vóór de gescande catalogus: dat is de
+   prijs die hij daadwerkelijk onderhandeld heeft. Onderlinge volgorde bewust
+   gelijk aan voorheen, alleen met de nieuwe bron eronder. */
+const SOURCE_RANK: Record<MatchSource, number> = { component: 4, inventory: 3, supplier: 2, supplier_product: 1 };
 
 export function pickBestMatch(
     ingredientName: string,

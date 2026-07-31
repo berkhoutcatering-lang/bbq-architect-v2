@@ -13,6 +13,7 @@ import type {
   ShapeBlock, IconBlock, StampBlock, BorderFrameBlock,
 } from '@/types/template.types';
 import { interpolateVariables, resolveColor } from '@/lib/templateVariables';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 // ── Helpers (shared with pdfGenerator.ts) ──
 function eur(n: number | null | undefined): string {
@@ -223,11 +224,11 @@ function renderItemsTableBlock(doc: any, block: ItemsTableBlock, ctx: RenderCont
       if (col.key === 'totaal') {
         row[col.key] = eur((item.qty || 1) * (item.prijs || 0));
       } else if (col.key === 'prijs_incl_btw') {
-        row[col.key] = eur((item.prijs || 0) * (1 + (item.btw || 0) / 100));
+        row[col.key] = eur((item.prijs || 0) * (1 + resolveBtwPct(item.btw) / 100));
       } else if (col.key === 'prijs') {
         row[col.key] = eur(item.prijs);
       } else if (col.key === 'btw') {
-        row[col.key] = (item.btw || 0) + '%';
+        row[col.key] = resolveBtwPct(item.btw) + '%';
       } else {
         row[col.key] = String(item[col.key] || '');
       }

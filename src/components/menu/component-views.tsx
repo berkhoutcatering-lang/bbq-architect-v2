@@ -129,7 +129,19 @@ export function ComponentCard({
     const prijs = unitPriceLabel(component.base_cost_cents, component.base_quantity, component.base_unit);
 
     return (
-        <div className="mr-grid-card" onClick={onClick} style={{ width: w, height: h }}>
+        /* Echte knop-semantiek: zonder role/tabIndex/onKeyDown kon je met het
+           toetsenbord wel naar een kaart tabben (dnd-kit zet dat op de sleep-laag)
+           maar 'm nooit openen — Enter en spatie deden niets. */
+        <div
+            className="mr-grid-card"
+            onClick={onClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); }
+            }}
+            style={{ width: w, height: h }}
+        >
             <div className="mr-grid-card-photo" style={{ height: photoH }}>
                 <MRComponentVisual
                     component={component}
@@ -264,7 +276,14 @@ export function ComponentListView({ componenten, usage, onSelect, density = 'com
                 const sig = signaal(c, gebruikt);
                 const thumb = compact ? 32 : 40;
                 return (
+                    /* Idem voor de lijstweergave: die had helemaal geen tab-stop,
+                       dus zonder muis kwam je er nooit bij. */
                     <div key={c.id} className="mr-list-row" onClick={() => onSelect(c)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(c); }
+                        }}
                         style={{ padding: compact ? '8px 16px' : '12px 16px' }}>
                         <div style={{ width: 50 }}>
                             <MRComponentVisual

@@ -5,6 +5,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { RGS_BY_CODE } from '@/lib/rgsCategories';
 import { generateBoekhouderPdf, type PdfBon, type PdfFactuur, type PdfRit } from '@/lib/boekhouderPdf';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -401,7 +402,7 @@ export async function POST(req: NextRequest) {
       let netto = 0, btw9 = 0, btw21 = 0;
       items.forEach(function (it: any) {
         const lineTotal = (Number(it.aantal) || 0) * (Number(it.prijs) || 0);
-        const pct = Number(it.btw_pct) || 21;
+        const pct = resolveBtwPct(it.btw_pct);
         const btwAmount = lineTotal * pct / (100 + pct);
         netto += lineTotal - btwAmount;
         if (pct === 9) btw9 += btwAmount;

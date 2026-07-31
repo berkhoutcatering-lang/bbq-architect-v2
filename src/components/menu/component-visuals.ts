@@ -50,7 +50,11 @@ const SOORT_RULES: Array<{ soort: ComponentSoort; rx: RegExp }> = [
     { soort: 'nonfood', rx: /folie|vacu.?mzak|snijplank|braadpan|servet|handschoen|disposable|\btape\b|prikker|bestek|afvalzak|vuilniszak/i },
     /* Kruiden/rub/saus vóór vlees: "dry rub kip" en "BBQ dryrub mix kip" zijn
        kruidenmengsels, geen vlees — anders wint het woord 'kip'. */
-    { soort: 'saus',    rx: /\brubs?\b|dry.?rub|marinade|kruidenmix|saus|dressing|\bolie\b|azijn|ketchup|mosterd|siroop|glaze|\bjus\b|bouillon|fond\b|pesto|aioli|mayo|sriracha|soja|honing|specerij|peper\b|zout\b/i },
+    /* Salsa, dips en smeersels horen bij saus. Zonder deze woorden werd een
+       "Tomatensalsa, bak 1 kg" een grijze Overig-kaart (of erger: groen, want
+       'tomaat' staat in de groente-regel) — terwijl de hele bedoeling van deze
+       kleuren is dat je saus en vlees in één oogopslag uit elkaar houdt. */
+    { soort: 'saus',    rx: /\brubs?\b|dry.?rub|marinade|kruidenmix|saus|dressing|\bolie\b|azijn|ketchup|mosterd|siroop|glaze|\bjus\b|bouillon|fond\b|pesto|aioli|mayo|sriracha|soja|honing|specerij|peper\b|zout\b|salsa|\bdips?\b|hummus|tzatziki|guacamole|chimichurri|tapenade|relish|chutney|\bspread\b|kruidenboter|ketjap|tabasco|\bwrap.?saus/i },
     { soort: 'vis',     rx: /zalm|salmon|tonijn|tuna|garna|shrimp|\bvis\b|kabeljauw|forel|makreel|haring|oester|mossel|krab|scampi|inktvis/i },
     { soort: 'vlees',   rx: /ba[vb]ette|brisket|spare?ribs?|\brib\b|rund|beef|varken|pork|\bkip\b|kippen|chicken|eend|duck|\blam\b|worst|spek|\bham\b|pulled|picanha|entrec|coppa|chorizo|bacon|gehakt|schnitzel|filet|angus|wagyu|short.?rib|procureur|buikspek|\bdij\b|\bhaas\b|sucade|riblap|shoarma|gyros|kalkoen|\bkalfs/i },
     { soort: 'zuivel',  rx: /kaas|cheese|\broom\b|slagroom|boter|butter|melk|milk|yoghurt|mascarpone|cr.?me|parmez|mozzarella|feta|burrata|\bei\b|eieren/i },

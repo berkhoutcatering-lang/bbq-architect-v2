@@ -117,6 +117,59 @@ export async function updateBonTagsAction(input: unknown) {
     }
 }
 
+// ── Voorbelasting bevestigen (veiligheidsfase F6) ─────────────────────
+//
+// BTW van een bon telt pas mee in rubriek 5b als iemand heeft vastgesteld dat
+// (a) de uitgave zakelijk is en (b) de bon een geldige factuur is. Zonder deze
+// stap vroeg de aangifte structureel te veel terug.
+//
+// De DB-trigger zet zelf wie/wanneer — die velden komen bewust NIET uit de
+// client, anders is de bevestiging niet te vertrouwen.
+
+const voorbelastingSchema = z.object({
+    bonId: z.number().int().positive(),
+    bevestigd: z.boolean(),
+    /* Zakelijk gebruik; bij gemengd gebruik is maar een deel aftrekbaar. */
+    zakelijkPct: z.number().int().min(0).max(100).default(100),
+});
+
+export async function confirmVoorbelastingAction(input: unknown) {
+    try {
+        const { bonId, bevestigd, zakelijkPct } = voorbelastingSchema.parse(input);
+        const { sb } = await getAuthContext();
+
+        /* Een vergrendelde bon hoort bij een afgesloten periode; die mag de
+           aftrek niet meer wijzigen, anders verandert een reeds ingediende
+           aangifte met terugwerkende kracht. */
+        const { data: bon, error: readErr } = await sb
+            .from('bonnen')
+            .select('locked_at')
+            .eq('id', bonId)
+            .single();
+        if (readErr) throw new Error(readErr.message);
+        if (bon?.locked_at) {
+            throw new Error('Bon zit in een afgesloten periode en kan niet meer gewijzigd worden');
+        }
+
+        const { error } = await sb
+            .from('bonnen')
+            .update({
+                voorbelasting_bevestigd: bevestigd,
+                zakelijk_pct: bevestigd ? zakelijkPct : 100,
+            })
+            .eq('id', bonId);
+        if (error) throw new Error(error.message);
+
+        await logBonAction(sb, bonId, bevestigd ? 'voorbelasting_bevestigd' : 'voorbelasting_ingetrokken');
+
+        revalidatePath('/archief');
+        revalidatePath('/financien');
+        return { ok: true as const };
+    } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Kon voorbelasting niet bijwerken' };
+    }
+}
+
 // ── Inbox → Archief (Pillar #5) ───────────────────────────────────────
 
 const moveInboxSchema = z.object({ inboxId: z.number().int().positive() });

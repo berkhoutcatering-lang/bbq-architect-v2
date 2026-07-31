@@ -32,8 +32,51 @@ const THIN_RESULTS = 6;
 const FUZZY_MIN = 0.35;
 const FUZZY_CANDIDATES = 200;
 
+/* Hoeveel rijen we per catalogus uit de database halen om te wegen. Ruim boven
+   het aantal dat we tonen, zodat de relevantie-ordening iets te kiezen heeft. */
+const CANDIDATE_LIMIT = 300;
+/* Wat er uiteindelijk over de lijn gaat. Per bron een gegarandeerd quotum, want
+   één gedeelde alfabetische stapel liet de prijslijst de gescande catalogus
+   verdringen (of andersom) — dan verdwijnt precies de bron waarin het product
+   dat je zoekt wél staat. Houdt een bron ruimte over, dan mag de ander die
+   opmaken tot MAX_RESULTS. */
+const PER_SOURCE_QUOTA = 30;
+const MAX_RESULTS = 60;
+
 /* Interne rang-velden — worden vóór verzending gestript. */
-type RankedHit = CatalogSearchHit & { _fuzzy?: boolean; _score?: number };
+type RankedHit = CatalogSearchHit & { _fuzzy?: boolean; _score?: number; _rank?: number };
+
+/* Hoe goed past deze naam bij wat er getypt is? Puur op de naam, zodat beide
+   catalogi met dezelfde meetlat gerangschikt worden. Hoger = beter.
+   Zonder dit werd er alfabetisch afgekapt: bij "kip" hield je alles tot
+   "Kipfiletrollade" over en verdwenen Kiprollade, Kipsaté en Kipschnitzel — niet
+   omdat ze minder relevant waren, maar omdat de K later in het alfabet komt. */
+function rankScore(naam: string, qLower: string, tokens: string[]): { score: number; hits: number } {
+    const n = (naam || '').toLowerCase();
+    let score = 0;
+    if (n === qLower) score += 1000;
+    else if (n.startsWith(qLower)) score += 500;
+    else if (n.includes(qLower)) score += 250;
+
+    let hits = 0;
+    for (const t of tokens) {
+        const at = n.indexOf(t);
+        if (at < 0) continue;
+        hits++;
+        /* Aan het begin van een woord telt zwaarder dan ergens middenin: "kip" in
+           "Kipsaté" is raker dan "kip" in "Snoekipfilet". */
+        const woordbegin = at === 0 || !/[a-z0-9]/.test(n[at - 1] ?? '');
+        score += woordbegin ? 30 : 10;
+    }
+    /* Meer van de getypte woorden geraakt = relevanter. Dit is wat "bresc
+       tomatensalsa" redt: de salsa-rijen raken 1 van de 2 woorden en komen
+       bovenaan, in plaats van dat het hele resultaat op nul valt. */
+    score += hits * 40;
+    /* Korte namen die de term bevatten zijn meestal het "kale" product;
+       lange namen zijn varianten. Klein duwtje, geen doorslaggevende factor. */
+    score -= Math.min(20, Math.floor(n.length / 12));
+    return { score, hits };
+}
 
 export interface CatalogSearchHit {
     /* 'price_list' = Catalog A (master_products+supplier_prices, prijslijst-import).
@@ -63,13 +106,22 @@ export interface CatalogSearchHit {
     pack_count?: number | null;
     content_per_item_quantity?: number | null;
     content_per_item_unit?: string | null;
+    /* De verpakking zoals de leverancier hem verkoopt (alleen supplier_product):
+       "bak 1 kg" = 1000 + 'g'. De base-kostprijs hierboven is genormaliseerd naar
+       €/100 g; wie de pak-rekenhulp wil voorvullen heeft de ECHTE inhoud nodig,
+       anders staat er "100 g voor € 0,75" waar Sam "1000 g voor € 7,50" kocht. */
+    pack_total_quantity?: number | null;
+    pack_total_unit?: string | null;
 }
 
 export async function GET(req: NextRequest) {
-    /* Sanitize: houd letters/cijfers/spatie/koppelteken over. Weg met de tekens
-       die een PostgREST-filterwaarde kunnen breken (%, _, komma, haakjes, *). */
+    /* Sanitize: houd letters/cijfers/spatie over. Weg met de tekens die een
+       PostgREST-filterwaarde kunnen breken (%, _, komma, haakjes, *). Koppelteken
+       en schuine streep worden een SPATIE, niet niets: "tomaten-salsa" moet als
+       twee woorden gezocht worden, anders bestaat het als substring nergens en
+       krijg je nul treffers op een product dat gewoon in de catalogus staat. */
     const raw = (req.nextUrl.searchParams.get('q') || '').trim();
-    const q = raw.replace(/[%_,()*]/g, ' ').replace(/\s+/g, ' ').trim();
+    const q = raw.replace(/[%_,()*[\]\-/+]/g, ' ').replace(/\s+/g, ' ').trim();
     if (q.length < 2) return NextResponse.json({ results: [] });
 
     /* Zoek per woord (AND), volgorde-onafhankelijk, i.p.v. de hele zin als één
@@ -79,6 +131,7 @@ export async function GET(req: NextRequest) {
        tekens; max 6 om de query begrensd te houden. */
     const tokens = q.split(' ').filter((t) => t.length >= 2).slice(0, 6);
     const searchTokens = tokens.length > 0 ? tokens : [q];
+    const qLower = q.toLowerCase();
 
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();
@@ -94,18 +147,45 @@ export async function GET(req: NextRequest) {
     const orgId = member?.organization_id;
     if (!orgId) return NextResponse.json({ error: 'Geen organisatie' }, { status: 400 });
 
-    /* 1) Matchende producten. RLS scoped + expliciete org-filter (defensief). */
+    /* 1) Matchende producten. RLS scoped + expliciete org-filter (defensief).
+       .order() is niet cosmetisch: zonder ORDER BY levert Postgres bij een LIMIT
+       een willekeurige greep uit de fysieke rijvolgorde. "kip" heeft 634 treffers
+       in de gescande catalogus; welke 30 je daarvan kreeg was ongedefinieerd —
+       en omdat ze daarna netjes A→Z op het scherm kwamen, zag dat er compleet
+       uit. Vandaar: vaste volgorde, ruimer plafond, en relevantie-ordening in
+       code (rankScore) vóór we afkappen. */
     let masterQuery = supabase
         .from('master_products')
         .select('id, naam, categorie, standaard_eenheid')
         .eq('organization_id', orgId)
         .eq('uit_assortiment', false);
     for (const t of searchTokens) masterQuery = masterQuery.ilike('naam', `%${t}%`);
-    const { data: masters, error: mErr } = await masterQuery.limit(60);
+    const { data: masters, error: mErr } = await masterQuery.order('naam').limit(CANDIDATE_LIMIT);
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+
+    /* Hoeveel zijn er écht? Alleen tellen, geen rijen ophalen — zo kunnen we
+       eerlijk "nog 604 meer" melden i.p.v. te doen alsof dit alles was. */
+    let masterCountQuery = supabase
+        .from('master_products')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .eq('uit_assortiment', false);
+    for (const t of searchTokens) masterCountQuery = masterCountQuery.ilike('naam', `%${t}%`);
+    const { count: masterTotal } = await masterCountQuery;
 
     const wantSupplierProducts = req.nextUrl.searchParams.get('supplierProducts') === '1';
     const results: RankedHit[] = [];
+    let spTotal = 0;
+
+    /* Levert de harde AND (alle woorden in één naam) niets op, dan is er meestal
+       één woord bij dat nergens in een productnaam staat — typisch een MERK.
+       "Bresc tomatensalsa" gaf nul treffers terwijl "Tomatensalsa, bak 1 kg"
+       gewoon in de catalogus staat, want merknamen zitten niet in de naam-kolom.
+       Dan zoeken we met OR en laten rankScore de rijen die de meeste woorden
+       raken bovenaan zetten — in plaats van Sam met lege handen te laten staan. */
+    const orFilterVanTokens = searchTokens.length > 1
+        ? searchTokens.map((t) => `%COL%.ilike.%${t}%`).join(',')
+        : null;
 
     /* ── Catalog A: prijslijst (master_products + supplier_prices) ── */
     type MasterMeta = { naam: string; categorie: string | null; standaard_eenheid: string | null; fuzzy: boolean; score: number };
@@ -118,6 +198,26 @@ export async function GET(req: NextRequest) {
             fuzzy: false,
             score: 1,
         });
+    }
+
+    if (masterById.size === 0 && orFilterVanTokens) {
+        const { data: orMasters } = await supabase
+            .from('master_products')
+            .select('id, naam, categorie, standaard_eenheid')
+            .eq('organization_id', orgId)
+            .eq('uit_assortiment', false)
+            .or(orFilterVanTokens.replaceAll('%COL%', 'naam'))
+            .order('naam')
+            .limit(CANDIDATE_LIMIT);
+        for (const m of (orMasters || [])) {
+            masterById.set(m.id as number, {
+                naam: (m.naam as string) ?? '',
+                categorie: (m.categorie as string | null) ?? null,
+                standaard_eenheid: (m.standaard_eenheid as string | null) ?? null,
+                fuzzy: false,
+                score: 1,
+            });
+        }
     }
 
     /* Fuzzy-fallback (Catalog A): weinig exacte treffers → haal kandidaten op die
@@ -212,10 +312,33 @@ export async function GET(req: NextRequest) {
             .eq('organization_id', orgId)
             .eq('active', true);
         for (const t of searchTokens) spQuery = spQuery.ilike('name', `%${t}%`);
-        const { data: spsExact } = await spQuery.limit(30);
+        const { data: spsExact } = await spQuery.order('name').limit(CANDIDATE_LIMIT);
+
+        let spCountQuery = supabase
+            .from('supplier_products')
+            .select('id', { count: 'exact', head: true })
+            .eq('organization_id', orgId)
+            .eq('active', true);
+        for (const t of searchTokens) spCountQuery = spCountQuery.ilike('name', `%${t}%`);
+        const { count: spTotalExact } = await spCountQuery;
+        spTotal = spTotalExact ?? 0;
 
         const spById = new Map<number, { row: SpRow; fuzzy: boolean; score: number }>();
         for (const s of (spsExact || []) as SpRow[]) spById.set(s.id, { row: s, fuzzy: false, score: 1 });
+
+        /* Geen enkele naam bevat álle woorden → merknaam-geval, zie hierboven. */
+        if (spById.size === 0 && orFilterVanTokens) {
+            const { data: orSps } = await supabase
+                .from('supplier_products')
+                .select(spCols)
+                .eq('organization_id', orgId)
+                .eq('active', true)
+                .or(orFilterVanTokens.replaceAll('%COL%', 'name'))
+                .order('name')
+                .limit(CANDIDATE_LIMIT);
+            for (const s of (orSps || []) as SpRow[]) spById.set(s.id, { row: s, fuzzy: false, score: 1 });
+            spTotal = spById.size;
+        }
 
         /* Fuzzy-fallback (Catalog B) — zelfde principe als hierboven. */
         if ((spsExact?.length ?? 0) < THIN_RESULTS) {
@@ -275,6 +398,10 @@ export async function GET(req: NextRequest) {
                     pack_count: s.pack_count != null ? Number(s.pack_count) : null,
                     content_per_item_quantity: s.content_per_item_quantity != null ? Number(s.content_per_item_quantity) : null,
                     content_per_item_unit: (s.content_per_item_unit as string | null) ?? null,
+                    /* Dezelfde bron én volgorde die supplierProductBaseCost gebruikt, zodat
+                       de pak-rekenhulp exact dezelfde base-kostprijs teruggeeft als hierboven. */
+                    pack_total_quantity: s.total_base_quantity ?? s.package_size ?? null,
+                    pack_total_unit: (s.base_unit ?? s.package_unit ?? null) as string | null,
                     _fuzzy: fuzzy,
                     _score: score,
                 });
@@ -282,9 +409,11 @@ export async function GET(req: NextRequest) {
         }
     }
 
-    /* Exacte treffers eerst (alfabetisch), daarna de fuzzy-treffers op aflopende
-       gelijkenis — zo staat wat je écht typte bovenaan en zijn tikfout-suggesties
-       een vangnet eronder. Interne rang-velden strippen we vóór verzending. */
+    /* Exacte treffers eerst, dan op RELEVANTIE (niet op alfabet), dan pas op naam.
+       De fuzzy-treffers (tikfout-vangnet) blijven onderaan hangen op aflopende
+       gelijkenis. Alfabetisch afkappen liet bij "kip" alles ná "Kipfiletrollade"
+       verdwijnen; dat is geen keuze maar toeval. */
+    for (const r of results) r._rank = rankScore(r.naam, qLower, searchTokens).score;
     results.sort((a, b) => {
         const fa = a._fuzzy ? 1 : 0;
         const fb = b._fuzzy ? 1 : 0;
@@ -292,14 +421,54 @@ export async function GET(req: NextRequest) {
         if (fa === 1) {
             const d = (b._score ?? 0) - (a._score ?? 0);
             if (Math.abs(d) > 1e-6) return d;
+        } else {
+            const d = (b._rank ?? 0) - (a._rank ?? 0);
+            if (d !== 0) return d;
         }
         return a.naam.localeCompare(b.naam, 'nl') ||
             (a.leverancier || '').localeCompare(b.leverancier || '', 'nl');
     });
 
-    const clean: CatalogSearchHit[] = results.slice(0, 50).map(({ _fuzzy, _score, ...hit }) => {
-        void _fuzzy; void _score;
+    /* Afkappen met een quotum per bron: eerst mag elke catalogus zijn eigen
+       PER_SOURCE_QUOTA vullen, daarna gaan de resterende plekken naar wie er nog
+       over heeft. Zo kan de prijslijst de gescande catalogus niet meer volledig
+       verdringen (of andersom) — dat was precies hoe Bidfood-producten
+       "verdwenen" terwijl de lijst er gevuld uitzag. */
+    const gekozen: RankedHit[] = [];
+    const overloop: RankedHit[] = [];
+    let uitA = 0;
+    let uitB = 0;
+    for (const r of results) {
+        const isB = r.source === 'supplier_product';
+        if (isB ? uitB < PER_SOURCE_QUOTA : uitA < PER_SOURCE_QUOTA) {
+            gekozen.push(r);
+            if (isB) uitB++; else uitA++;
+        } else {
+            overloop.push(r);
+        }
+    }
+    for (const r of overloop) {
+        if (gekozen.length >= MAX_RESULTS) break;
+        gekozen.push(r);
+    }
+    gekozen.sort((a, b) => results.indexOf(a) - results.indexOf(b));
+
+    const clean: CatalogSearchHit[] = gekozen.slice(0, MAX_RESULTS).map(({ _fuzzy, _score, _rank, ...hit }) => {
+        void _fuzzy; void _score; void _rank;
         return hit;
     });
-    return NextResponse.json({ results: clean });
+
+    /* Eerlijk zijn over wat er níet getoond wordt. Een lijst die vol lijkt maar
+       stilzwijgend 604 treffers weglaat, leest als "meer is er niet". */
+    const totaalGevonden = (masterTotal ?? 0) + spTotal;
+    return NextResponse.json({
+        results: clean,
+        totals: {
+            price_list: masterTotal ?? 0,
+            supplier_product: spTotal,
+            shown: clean.length,
+            /* Hoeveel treffers er nog achter de horizon staan (0 = je ziet alles). */
+            meer: Math.max(0, totaalGevonden - clean.length),
+        },
+    });
 }

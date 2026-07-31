@@ -141,8 +141,11 @@ function formatQty(n: number): string {
     return Number(n).toLocaleString('nl-NL', { maximumFractionDigits: 3 });
 }
 
+/* "€ 0,75 / 100 g" — en bij een basis van 1 gewoon "/ stuk", want "/ 1stuk"
+   leest als een typefout. Spatie tussen getal en eenheid, zoals overal. */
 function formatPerBase(cents: number, qty: number, unit: string): string {
-    return `${formatEuro(cents)} / ${qty}${unit}`;
+    const basis = qty === 1 ? unit : `${formatQty(qty)} ${unit}`;
+    return `${formatEuro(cents)} / ${basis}`;
 }
 
 /* Decimaal-parser die ook Nederlandse komma's accepteert ("2,5"). */
@@ -169,6 +172,22 @@ interface IngredientFormRow {
     unit_price?: number | null;              // € per kg of per (verpakkings)eenheid
     price_basis?: 'kg' | 'stuk' | null;      // rekenwijze: 'kg' = per kilo, 'stuk' = per eenheid × aantal
     price_unit?: string | null;              // eerlijk label/lock-eenheid van de prijs ('kg' | 'stuk' | 'doos' | 'pak' …)
+}
+
+/**
+ * Escape sluit de drawer. Universele reflex, en zonder dit moet je met de muis
+ * naar het kruisje rechtsboven — juist als je net met het toetsenbord aan het
+ * invullen was. Luistert in de capture-fase niet: een open zoek-popup mag Escape
+ * eerst zelf afhandelen.
+ */
+function useEscapeToClose(onClose: () => void) {
+    useEffect(() => {
+        function onKey(e: KeyboardEvent) {
+            if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+        }
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
 }
 
 /** Is deze regel gekoppeld aan een leverancier-product (welke catalogus dan ook)? */
@@ -306,6 +325,10 @@ export default function ComponentenPage() {
     const [showScan, setShowScan] = useState(false);
     /* Het pad dat ontbrak: een ingekocht product handmatig toevoegen, zonder AI. */
     const [showInkoop, setShowInkoop] = useState(false);
+    /* Zoekterm die de Ingekocht-drawer meekrijgt als je 'm opent vanuit een lege
+       zoekresultaat-lijst ("salsa staat niet in je bouwstenen — zoek bij je
+       leveranciers"). Leeg = gewoon een blanco drawer. */
+    const [inkoopStartZoek, setInkoopStartZoek] = useState('');
 
     /* S2-deel-3: folder-state. currentFolderId=null toont alle componenten;
        als ingesteld → filter op components.folder_id.
@@ -504,23 +527,35 @@ export default function ComponentenPage() {
         }
     }
 
+    /* De cijfers moeten gaan over wat er OP HET SCHERM staat. Stond hier eerder
+       `components` (alles), dan bleef de strook "31 bouwstenen · 6 zonder prijs"
+       zeggen terwijl je in de map "Sauzen" met 4 stuks keek — en klikken op
+       "Zonder prijs 6" leverde een leeg scherm op, want in díe map zat er geen.
+       Dus: dezelfde map-tak als in `filtered`, zonder de soort/zoek-filters (die
+       zijn juist wat de tegels en chips zélf aanzetten). */
+    const inMap = useMemo(() => components.filter(c => {
+        if (currentFolderId === '__root__') return c.folder_id === null;
+        if (currentFolderId !== null) return c.folder_id === currentFolderId;
+        return true;
+    }), [components, currentFolderId]);
+
     /* Statistieken rekenen alleen over food — non-food (folie, kratten) zou
        het gemiddelde kostprijs-beeld vervuilen. Defensief: alles ≠ non_food = food. */
-    const foodComponents = components.filter(c => c.category !== 'non_food');
-    const nonFoodCount = components.length - foodComponents.length;
+    const foodComponents = inMap.filter(c => c.category !== 'non_food');
+    const nonFoodCount = inMap.length - foodComponents.length;
     const preparedCount = foodComponents.filter(c => c.type === 'prepared').length;
     const boughtCount = foodComponents.filter(c => c.type === 'bought_in').length;
     const totalCount = foodComponents.length;
     /* Alles inclusief non-food — dit is het getal dat óók de mappen tellen. */
-    const allCount = components.length;
+    const allCount = inMap.length;
     /* Een gemiddelde over base_cost_cents mengt €/100g met €/stuk en €/100ml —
        onvergelijkbare eenheden, dus een betekenisloos getal. Vervangen door een
        actie-stat: componenten ZONDER prijs maken elk gerecht waarin ze zitten
        stilzwijgend te goedkoop, en dat is direct op te lossen werk. */
-    const zonderPrijsCount = components.filter(c => (c.base_cost_cents ?? 0) <= 0).length;
+    const zonderPrijsCount = inMap.filter(c => (c.base_cost_cents ?? 0) <= 0).length;
     /* Hoeveel bouwstenen worden nog nergens gebruikt — bruikbaarder signaal dan
        een AI-percentage: dit is opruimwerk dat geld kan schelen. */
-    const unusedCount = components.filter(c => (usage[c.id] ?? 0) === 0).length;
+    const unusedCount = inMap.filter(c => (usage[c.id] ?? 0) === 0).length;
 
     /* De telling naast de titel. Toont "12 van 30" zodra er iets aan staat,
        zodat een korte lijst een zichtbare reden heeft en je niet denkt dat er
@@ -574,8 +609,36 @@ export default function ComponentenPage() {
                     <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--muted-light)]">
                         {components.length === 0
                             ? "Begin met je eerste bouwsteen. Zelf bereid met volledige receptuur (aardbeien bavaroise) of scan een kant-en-klaar product met je camera. Pas hier één inkoopprijs aan en elk gerecht dat 'm gebruikt rekent direct mee."
-                            : 'Geen component op deze filter of zoekterm.'}
+                            : search.trim().length > 0
+                                ? `Je hebt nog geen bouwsteen die "${search.trim()}" heet. Deze zoekbalk kijkt alleen in je eigen bouwstenen — je leverancier-catalogi doorzoek je hieronder.`
+                                : 'Geen component op deze filter of zoekterm.'}
                     </p>
+                    {/* Een lege lijst mag geen muur zijn. Wie hier op "salsa" zoekt en niets
+                        vindt, concludeert dat het product niet bestaat — terwijl het gewoon
+                        in de Bidfood-catalogus staat en één klik verderop toe te voegen is. */}
+                    {components.length > 0 && (
+                        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                            {search.trim().length >= 2 && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setInkoopStartZoek(search.trim()); setShowInkoop(true); }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--brand)] px-3 py-1.5 text-[12px] font-semibold text-black transition hover:opacity-90"
+                                >
+                                    <ShoppingBag size={12} /> Zoek &ldquo;{search.trim()}&rdquo; bij je leveranciers
+                                </button>
+                            )}
+                            {filterActief && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); setTypeFilter('all'); setCurrentFolderId(null); }}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-[12px] font-medium transition hover:bg-[var(--brand)]/10"
+                                    style={{ color: 'var(--text)' }}
+                                >
+                                    <X size={12} /> Wis filters en zoekterm
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {components.length === 0 && !showReceptuur && !showScan && (
                         <div className="mt-6 flex items-center justify-center gap-2">
                             <button
@@ -672,8 +735,11 @@ export default function ComponentenPage() {
                                 size={14}
                                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]"
                             />
+                            {/* type="text", niet "search": bij type="search" tekent de browser
+                                zijn eigen kruisje ér nog eens naast het onze, en dan staan er
+                                twee wis-knopjes in hetzelfde veld. */}
                             <input
-                                type="search"
+                                type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Zoek component…"
@@ -774,13 +840,18 @@ export default function ComponentenPage() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
                 >
+                    {/* Tijdens het laden geen cijfers tonen: met nul componenten in beeld
+                        zei deze strook groen "0 ongebruikt — alles wordt gebruikt" en
+                        "0 zonder prijs — elke bouwsteen heeft een prijs". Dat is een
+                        geruststelling die nog nergens op gebaseerd is. Streepjes, en
+                        pas kleur zodra de cijfers echt geteld zijn. */}
                     <ComponentKpiStrip
                         stats={[
                             {
                                 key: 'all',
                                 label: 'Bouwstenen',
-                                value: String(allCount),
-                                sub: nonFoodCount > 0 ? `waarvan ${nonFoodCount} non-food` : 'alles bij elkaar',
+                                value: loading ? '—' : String(allCount),
+                                sub: loading ? 'aan het tellen…' : nonFoodCount > 0 ? `waarvan ${nonFoodCount} non-food` : 'alles bij elkaar',
                                 Icon: Boxes,
                                 tone: 'default',
                                 onClick: () => setTypeFilter('all'),
@@ -789,8 +860,8 @@ export default function ComponentenPage() {
                             {
                                 key: 'in_gebruik',
                                 label: 'In gebruik',
-                                value: String(allCount - unusedCount),
-                                sub: 'zit in minstens één gerecht',
+                                value: loading ? '—' : String(allCount - unusedCount),
+                                sub: loading ? 'aan het tellen…' : 'zit in minstens één gerecht',
                                 Icon: ChefHat,
                                 tone: 'default',
                                 onClick: () => setTypeFilter('in_gebruik'),
@@ -799,24 +870,24 @@ export default function ComponentenPage() {
                             {
                                 key: 'unused',
                                 label: 'Ongebruikt',
-                                value: String(unusedCount),
-                                sub: unusedCount > 0
+                                value: loading ? '—' : String(unusedCount),
+                                sub: loading ? 'aan het tellen…' : unusedCount > 0
                                     ? 'nog nergens gebruikt — opruimen of inzetten'
                                     : 'alles wordt gebruikt',
                                 Icon: Archive,
-                                tone: unusedCount === 0 ? 'green' : 'default',
+                                tone: loading ? 'default' : unusedCount === 0 ? 'green' : 'default',
                                 onClick: () => setTypeFilter('unused'),
                                 active: typeFilter === 'unused',
                             },
                             {
                                 key: 'geen_prijs',
                                 label: 'Zonder prijs',
-                                value: String(zonderPrijsCount),
-                                sub: zonderPrijsCount > 0
+                                value: loading ? '—' : String(zonderPrijsCount),
+                                sub: loading ? 'aan het tellen…' : zonderPrijsCount > 0
                                     ? `Vul aan voor ${zonderPrijsCount} ${zonderPrijsCount === 1 ? 'bouwsteen' : 'bouwstenen'} →`
                                     : 'elke bouwsteen heeft een prijs',
-                                Icon: zonderPrijsCount > 0 ? AlertTriangle : Tag,
-                                tone: zonderPrijsCount > 0 ? 'warn' : 'green',
+                                Icon: !loading && zonderPrijsCount > 0 ? AlertTriangle : Tag,
+                                tone: loading ? 'default' : zonderPrijsCount > 0 ? 'warn' : 'green',
                                 onClick: () => setTypeFilter('geen_prijs'),
                                 active: typeFilter === 'geen_prijs',
                             },
@@ -976,8 +1047,11 @@ export default function ComponentenPage() {
             {showInkoop && (
                 <InkoopDrawer
                     folderId={currentFolderId}
-                    onClose={() => setShowInkoop(false)}
-                    onSaved={() => { setShowInkoop(false); loadComponents(); }}
+                    /* Kom je hier vanuit een lege zoekresultaat-lijst, dan staat je
+                       zoekterm meteen in het veld — anders moet je 'm overtikken. */
+                    initialZoek={inkoopStartZoek}
+                    onClose={() => { setShowInkoop(false); setInkoopStartZoek(''); }}
+                    onSaved={() => { setShowInkoop(false); setInkoopStartZoek(''); loadComponents(); }}
                 />
             )}
 
@@ -1064,7 +1138,10 @@ function AddComponentMenu({ onInkoop, onZelfBereid, onScan, onImport }: {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
-                        className="absolute right-0 z-50 mt-2 w-[310px] overflow-hidden rounded-xl border border-[var(--border)] p-1.5 shadow-[0_18px_44px_rgba(0,0,0,.42)]"
+                        /* left-0, niet right-0: deze knop staat linksboven op de pagina,
+                           dus een menu dat naar links uitklapt valt 56 px buiten beeld
+                           en is onleesbaar. Uitklappen naar rechts houdt 'm in beeld. */
+                        className="absolute left-0 z-50 mt-2 w-[310px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-[var(--border)] p-1.5 shadow-[0_18px_44px_rgba(0,0,0,.42)]"
                         style={{ background: 'var(--card-solid, var(--card))' }}
                     >
                         {items.map(it => (
@@ -1105,6 +1182,7 @@ function ComponentEditDrawer({
     onSaved: () => void;
 }) {
     const toast = useToast();
+    useEscapeToClose(onClose);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [comp, setComp] = useState<ComponentRow | null>(null);
@@ -1229,9 +1307,17 @@ function ComponentEditDrawer({
             /* Alleen voorvullen bij een ECHT afgebakende verpakking: pack_count én
                content_per_item samen betekenen "zoveel stuks van zoveel inhoud", en
                dan is `prijs` de doosprijs. Staat alleen unit='kg' zonder doosinhoud,
-               dan is `prijs` een kiloprijs en zou "60 stuks voor €29,60" gelogen zijn. */
-            if (hit.pack_count && hit.pack_count > 0 && hit.content_per_item_quantity) {
-                setPackPrice(hit.prijs.toFixed(2));
+               dan is `prijs` een kiloprijs en zou "60 stuks voor €29,60" gelogen zijn.
+               De harde toets daarop is pack_total_quantity: alleen als de catalogus de
+               TOTALE inhoud kent, deelt supplierProductBaseCost de prijs door die
+               inhoud — en pas dán is `prijs` echt een doosprijs. "Runderhamburger
+               150 gr, bak 5 stuks" staat als €14,98 /kg zónder totale inhoud; "5 stuks
+               voor €14,98" zou daar €3,00 per burger zeggen i.p.v. €2,25.
+               En pack_count moet écht > 1 zijn: bij een gewone bak schrijft de
+               catalogus "1 × 1 kg", en een stuk-basis kun je niet per gram doseren. */
+            if (hit.pack_total_quantity && hit.pack_total_quantity > 0
+                && hit.pack_count && hit.pack_count > 1 && hit.content_per_item_quantity) {
+                setPackPrice(hit.prijs.toFixed(2).replace('.', ','));
                 setPackQty(String(hit.pack_count));
                 setPackUnit('stuk');
             }
@@ -1717,6 +1803,7 @@ function SupplierImportDrawer({
     onImported: () => void;
 }) {
     const toast = useToast();
+    useEscapeToClose(onClose);
     const [step, setStep] = useState<'input' | 'preview'>('input');
     const [inputMode, setInputMode] = useState<'text' | 'image'>('text');
     const [pasted, setPasted] = useState('');
@@ -1856,7 +1943,7 @@ function SupplierImportDrawer({
                             </div>
                             <div className="kf-banner">
                                 <ShoppingBag size={14} />
-                                <span>Zoek je in <strong>Zelf bereid → Ingrediënt</strong> je leverancier-prijzen (spareribs van Beef Club, Bidfood…)? Die komen uit je <strong>prijslijsten</strong> — importeer een prijslijst bij <Link href="/leveranciers" className="underline">Leveranciers</Link>. Deze bulk-import vult je componenten­bibliotheek, niet dat zoekvak.</span>
+                                <span>Zoek je in <strong>Zelf bereid → Ingrediënt</strong> een leverancier-product (spareribs van Beef Club, salsa van Bidfood…)? Dat zoekvak doorzoekt zowel je geïmporteerde <strong>prijslijsten</strong> als je <strong>gescande bestel-catalogus</strong> — daar hoef je hier niets voor te doen. Deze bulk-import vult je componenten­bibliotheek; wil je er een prijslijst bij, dan doe je dat bij <Link href="/leveranciers" className="underline">Leveranciers</Link>.</span>
                             </div>
 
                             <div className="kf-banner kf-banner-warn">
@@ -2517,14 +2604,16 @@ function IngredientsEditor({
    ────────────────────────────────────────────────────────────────────────── */
 
 function InkoopDrawer({
-    folderId, onClose, onSaved,
+    folderId, onClose, onSaved, initialZoek = '',
 }: {
     folderId: string | null;
     onClose: () => void;
     onSaved: () => void;
+    initialZoek?: string;
 }) {
     const toast = useToast();
-    const [zoek, setZoek] = useState('');
+    useEscapeToClose(onClose);
+    const [zoek, setZoek] = useState(initialZoek);
     const [gekozen, setGekozen] = useState<CatalogSearchHit | null>(null);
     const [packQty, setPackQty] = useState('');
     const [packUnit, setPackUnit] = useState<PackUnit>('stuk');
@@ -2538,9 +2627,75 @@ function InkoopDrawer({
        met een verzonnen bedrag zodra Sam er "60 stuks" bij zet. */
     const PAK_EENHEDEN = /doos|pak|zak|krat|tray|bak|emmer|colli|omdoos/i;
 
+    /* De catalogus-eenheid ('kg', 'liter', 'stuks'…) naar een rekenhulp-eenheid. */
+    function naarPackUnit(eenheid: string | null | undefined): PackUnit | null {
+        const e = (eenheid || '').toLowerCase().trim();
+        if (!e) return null;
+        if (e === 'g' || e === 'gram') return 'g';
+        if (e === 'ml') return 'ml';
+        if (e === 'kg' || e === 'kilo') return 'kg';
+        if (e === 'l' || e === 'liter' || e === 'ltr') return 'liter';
+        if (e === 'stuk' || e === 'stuks' || e === 'piece') return 'stuk';
+        if (e === 'portie' || e === 'porties') return 'portie';
+        return null;
+    }
+
     function kies(hit: CatalogSearchHit) {
         setGekozen(hit);
         setZoek(hit.naam);
+
+        /* ── Gescande bestel-catalogus (Bidfood) ── De catalogus wéét al hoe de
+           verpakking eruitziet, dus vullen we de rekenhulp voor met de ECHTE doos
+           i.p.v. Sam alles te laten overtikken. We gebruiken precies dezelfde bron
+           en volgorde als supplierProductBaseCost, zodat de kostprijs die hij
+           straks ziet gelijk is aan die in de rest van de app. */
+        if (hit.source === 'supplier_product') {
+            /* De vraag die alles bepaalt: is `prijs` de prijs van de HELE verpakking,
+               of een prijs PER kilo? Dat weet je alleen als de catalogus de totale
+               inhoud kent (pack_total_quantity) — dan deelt supplierProductBaseCost
+               de prijs door die inhoud, en is het dus een verpakkingsprijs. Ontbreekt
+               die inhoud, dan rekent diezelfde functie met €/kg. Wij houden ons exact
+               aan die volgorde, anders kost hetzelfde product hier iets anders dan in
+               de rest van de app.
+               Tegenvoorbeeld dat dit afdwingt: "Runderhamburger 150 gr, bak 5 stuks"
+               staat als €14,98 /kg zónder totale inhoud. "5 stuks voor €14,98" zou
+               €3,00 per burger zeggen, terwijl de app overal €2,25 rekent. */
+            const totaalBekend = !!(hit.pack_total_quantity && hit.pack_total_quantity > 0);
+            const packU = naarPackUnit(hit.pack_total_unit);
+
+            /* 1) Echte doos met bekende inhoud én meerdere stuks ("bak 5 × 80 g") →
+               toon 'm per stuk, want zo koop en dosseer je 'm. Dit geeft exact
+               dezelfde kostprijs als de kilo-weg: 5 stuks voor €14,69 = €2,94, en
+               400 g voor €14,69 = €3,67/100 g → een stuk van 80 g = €2,94. */
+            if (totaalBekend && hit.pack_count && hit.pack_count > 1 && hit.content_per_item_quantity && hit.prijs > 0) {
+                setPackQty(String(hit.pack_count));
+                setPackUnit('stuk');
+                setPackPrice(hit.prijs.toFixed(2).replace('.', ','));
+                return;
+            }
+            /* 2) Vaste verpakking met bekende inhoud ("bak 1 kg" → 1000 g voor €7,50). */
+            if (totaalBekend && packU && hit.prijs > 0) {
+                setPackQty(String(hit.pack_total_quantity));
+                setPackUnit(packU);
+                setPackPrice(hit.prijs.toFixed(2).replace('.', ','));
+                return;
+            }
+            /* 3) Prijs per maat-eenheid ("€12,50 / kg") → 1 kg voor €12,50. */
+            const unitU = naarPackUnit(hit.eenheid);
+            if (unitU && hit.prijs > 0) {
+                setPackQty('1');
+                setPackUnit(unitU);
+                setPackPrice(hit.prijs.toFixed(2).replace('.', ','));
+                return;
+            }
+            /* 4) Niets bruikbaars bekend → leeg laten, Sam vult zelf in. */
+            setPackQty('');
+            setPackUnit('stuk');
+            setPackPrice('');
+            return;
+        }
+
+        /* ── Prijslijst (Catalog A) — ongewijzigd gedrag. ── */
         const e = (hit.eenheid || '').toLowerCase();
         if (e.includes('kg') || e === 'kilo') setPackUnit('kg');
         else if (e.includes('liter') || e === 'l') setPackUnit('liter');
@@ -2581,9 +2736,14 @@ function InkoopDrawer({
                     pack_quantity: qty,
                     pack_unit: packUnit,
                     yield_factor: yieldFactor,
-                    /* De koppeling waar het om begonnen was. */
-                    master_product_id: gekozen.master_product_id,
-                    supplier_price_id: gekozen.supplier_price_id,
+                    /* De koppeling waar het om begonnen was — en die hangt af van
+                       wélke catalogus de treffer kwam uit. Een gescand product
+                       (Bidfood) heeft master_product_id/supplier_price_id 0; die
+                       0 als koppeling opslaan levert een verwijzing naar niets.
+                       Nooit beide invullen: het is A óf B. */
+                    master_product_id: gekozen.source === 'supplier_product' ? null : gekozen.master_product_id,
+                    supplier_price_id: gekozen.source === 'supplier_product' ? null : gekozen.supplier_price_id,
+                    supplier_product_id: gekozen.source === 'supplier_product' ? (gekozen.supplier_product_id ?? null) : null,
                     folder_id: folderId && /^[0-9a-f-]{36}$/i.test(folderId) ? folderId : null,
                 }),
             });
@@ -2613,11 +2773,16 @@ function InkoopDrawer({
                 <div className="kf-body">
                     {/* Stap 1 — uit de groothandel kiezen. */}
                     <label className="kf-field">
-                        <span className="kf-label">Wat koop je? <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· zoekt in je prijslijsten</span></span>
+                        <span className="kf-label">Wat koop je? <span style={{ fontWeight: 400, color: 'var(--muted)' }}>· zoekt in al je leverancier-catalogi</span></span>
                         <SupplierProductAutocomplete
                             value={zoek}
                             onChange={(v) => { setZoek(v); if (gekozen && v !== gekozen.naam) setGekozen(null); }}
                             onPick={kies}
+                            includeSupplierProducts
+                            /* Kom je hier vanuit "zoek 'guacamole' bij je leveranciers", dan
+                               staat de term er al — dan hoort de cursor er ook te staan en
+                               de lijst meteen open, anders lijkt het alsof er niets gebeurt. */
+                            autoFocus={!!initialZoek}
                             placeholder="bv. brioche"
                         />
                         {gekozen ? (
@@ -2625,12 +2790,13 @@ function InkoopDrawer({
                                 <ShoppingBag size={11} style={{ color: 'var(--brand)' }} aria-hidden="true" />
                                 <span>
                                     <strong style={{ color: 'var(--text)', fontWeight: 600 }}>{gekozen.leverancier || 'leverancier'}</strong>
-                                    {gekozen.prijs > 0 ? ` · €${gekozen.prijs.toFixed(2)}${gekozen.eenheid ? ' / ' + gekozen.eenheid : ''}` : ''}
+                                    {gekozen.prijs > 0 ? ` · ${formatEuro(Math.round(gekozen.prijs * 100))}${gekozen.eenheid ? ' / ' + gekozen.eenheid : ''}` : ''}
                                 </span>
                             </div>
                         ) : (
                             <div className="kf-help" style={{ marginTop: 6 }}>
-                                Tik een paar letters — je ziet elk product uit je geïmporteerde prijslijsten, met de prijs erbij.
+                                Tik een paar letters — je ziet elk product uit je prijslijsten én uit je gescande
+                                bestel-catalogus (Bidfood), met de prijs erbij.
                             </div>
                         )}
                     </label>
@@ -2662,9 +2828,12 @@ function InkoopDrawer({
                                 </label>
                             </div>
 
-                            {gekozen.prijs > 0 && !PAK_EENHEDEN.test(gekozen.eenheid || '') && (
+                            {/* Alleen vragen wat nog niet ingevuld is. Zodra de catalogus de
+                                verpakking al kent (gescand product), staat alles er al en is
+                                "vul hierboven in" verwarrend in plaats van behulpzaam. */}
+                            {gekozen.prijs > 0 && !packPrice && !PAK_EENHEDEN.test(gekozen.eenheid || '') && (
                                 <div className="kf-help" style={{ marginTop: 2 }}>
-                                    Je prijslijst geeft €{gekozen.prijs.toFixed(2)} per {gekozen.eenheid || 'eenheid'} —
+                                    Je catalogus geeft {formatEuro(Math.round(gekozen.prijs * 100))} per {gekozen.eenheid || 'eenheid'} —
                                     vul hierboven in wat je voor de héle verpakking betaalt.
                                 </div>
                             )}
@@ -2725,6 +2894,7 @@ function ReceptuurDrawer({
     onSaved: () => void;
 }) {
     const toast = useToast();
+    useEscapeToClose(onClose);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [baseQty, setBaseQty] = useState('100');
@@ -2808,7 +2978,7 @@ function ReceptuurDrawer({
         if (sumC > 0 && (!Number.isFinite(cost) || Math.round(cost * 100) === 0)) {
             cost = sumC / 100;
             setCostEuros(cost.toFixed(2));
-            toast(`Kostprijs overgenomen van je ingrediënten (€${cost.toFixed(2)})`, 'success');
+            toast(`Kostprijs overgenomen van je ingrediënten (${formatEuro(sumC)})`, 'success');
         }
         if (!Number.isFinite(cost) || cost < 0) { toast('Kostprijs ongeldig — tip: gebruik de som van je ingrediënten', 'error'); return; }
 
@@ -2958,6 +3128,7 @@ function ScanDrawer({
     onImported: () => void;
 }) {
     const toast = useToast();
+    useEscapeToClose(onClose);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [step, setStep] = useState<'upload' | 'form'>('upload');
     const [fileDataUrl, setFileDataUrl] = useState<string | null>(null);

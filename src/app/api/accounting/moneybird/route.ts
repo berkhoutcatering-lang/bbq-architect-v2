@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { mergedAccountingConfig, type AccountingConfig } from '@/lib/accountingConfig';
 import { getValidMoneybirdToken } from '@/lib/moneybird';
+import { resolveBtwPct } from '@/lib/btw-rules';
 
 /**
  * Moneybird sales-invoice push. Tenant-specifieke config (administratie-ID,
@@ -119,7 +120,7 @@ function factuurToMoneybirdInvoice(
   contactId: string,
 ): Record<string, any> {
   const detailLines = (factuur.items || []).map(function (item: any) {
-    const btwPercentage = item.btw || 21;
+    const btwPercentage = resolveBtwPct(item.btw);
     return {
       description: item.omschrijving || item.desc || 'Catering',
       price: String(item.prijs || 0),
