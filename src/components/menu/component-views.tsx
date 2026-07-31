@@ -16,7 +16,7 @@
 
 import {
     Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes,
-    ChevronDown, ChevronUp, ShoppingBag, ChefHat, AlertTriangle,
+    ChevronDown, ChevronUp, ShoppingBag, ChefHat, AlertTriangle, Folder,
 } from 'lucide-react';
 import { getComponentVisual } from './component-visuals';
 import { unitPriceLabel, normalizeYield, effectiveBaseCostCents } from '@/lib/unitPrice';
@@ -35,6 +35,8 @@ export interface ComponentViewRow {
     yield_factor?: number | null;
     flavor_tags?: string[] | null;
     ai_suggested?: boolean | null;
+    /** In welke map deze bouwsteen zit. null = nog niet ingedeeld. */
+    folder_id?: string | null;
 }
 
 interface ViewProps {
@@ -43,6 +45,65 @@ interface ViewProps {
     usage: Record<number, number>;
     onSelect: (c: ComponentViewRow) => void;
     density?: 'comfortable' | 'compact';
+    /** map-id → mapnaam. Zonder deze tabel kunnen we een map niet bij naam
+     *  noemen en tonen we alleen "Zonder map" (dat weten we uit folder_id zelf). */
+    folderNamen?: Record<string, string>;
+    /** Klikken op de map springt ernaartoe. Weglaten maakt het label niet-klikbaar. */
+    onFolderSelect?: (folderId: string | null) => void;
+}
+
+/* ── In welke map zit deze bouwsteen? ───────────────────────────
+   Nergens op de kaart of in de lijst stond dat, terwijl "wat moet er nog
+   ingedeeld worden" precies de vraag is waarvoor de mappen bestaan. Zoek je
+   vanuit "Alle componenten" op bavette, dan zag je 'm wel maar niet of hij al
+   ergens in staat — en na een sleepbeurt was de toast weg en kon je niet meer
+   nakijken waar hij beland was.
+
+   Geeft null terug als we het écht niet weten (map-id bekend maar naam niet, of
+   het veld ontbreekt in deze aanroep). Dan liever niets tonen dan een verzonnen
+   of vage mapnaam. */
+export function folderLabel(
+    folderId: string | null | undefined,
+    folderNamen?: Record<string, string>,
+): { id: string | null; tekst: string } | null {
+    if (folderId === undefined) return null;
+    if (folderId === null) return { id: null, tekst: 'Zonder map' };
+    const naam = folderNamen?.[folderId];
+    return naam ? { id: folderId, tekst: naam } : null;
+}
+
+/* Het mapregeltje zelf. Klikbaar als de pagina een sprong-functie meegeeft.
+   pointerDown moet gestopt worden: de kaart hangt in een sleep-laag (dnd-kit),
+   en zonder dat begint een klik op dit label een sleepbeweging. */
+function MapLabel({
+    label, onSelect, fontSize = 10.5,
+}: {
+    label: { id: string | null; tekst: string };
+    onSelect?: (folderId: string | null) => void;
+    fontSize?: number;
+}) {
+    const inhoud = (
+        <>
+            <Folder size={fontSize} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label.tekst}</span>
+        </>
+    );
+    const basis: React.CSSProperties = {
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        fontSize, color: 'var(--muted)', maxWidth: '100%',
+    };
+    if (!onSelect) return <span style={basis}>{inhoud}</span>;
+    return (
+        <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onSelect(label.id); }}
+            title={label.id === null ? 'Toon alles zonder map' : `Ga naar map ${label.tekst}`}
+            style={{ ...basis, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}
+        >
+            {inhoud}
+        </button>
+    );
 }
 
 function euro(cents: number): string {
@@ -119,14 +180,19 @@ function signaal(c: ComponentViewRow, gebruikt: number): { tekst: string; kleur:
 /* ── Grid ──────────────────────────────────────────────────── */
 
 export function ComponentCard({
-    component, gebruikt, onClick, compact,
-}: { component: ComponentViewRow; gebruikt: number; onClick: () => void; compact: boolean }) {
+    component, gebruikt, onClick, compact, folderNamen, onFolderSelect,
+}: {
+    component: ComponentViewRow; gebruikt: number; onClick: () => void; compact: boolean;
+    folderNamen?: Record<string, string>;
+    onFolderSelect?: (folderId: string | null) => void;
+}) {
     const w = compact ? 180 : 200;
     const h = compact ? 230 : 260;
     const photoH = compact ? 100 : 120;   // ~46% — zelfde verhouding als een gerecht
     const sig = signaal(component, gebruikt);
     const y = normalizeYield(component.yield_factor);
     const prijs = unitPriceLabel(component.base_cost_cents, component.base_quantity, component.base_unit);
+    const map = folderLabel(component.folder_id, folderNamen);
 
     return (
         /* Echte knop-semantiek: zonder role/tabIndex/onKeyDown kon je met het
@@ -169,6 +235,7 @@ export function ComponentCard({
                     {component.base_quantity} {component.base_unit}
                     {y < 1 ? ` · ${Math.round(y * 100)}% na snijverlies` : ''}
                 </div>
+                {map && <MapLabel label={map} onSelect={onFolderSelect} />}
                 <div className="mr-grid-card-footer">
                     <span className="mr-grid-card-price">
                         {component.base_cost_cents > 0 ? euro(component.base_cost_cents) : '—'}
@@ -235,7 +302,10 @@ interface ListProps extends ViewProps {
     onSortKeyChange: (k: ComponentSortKey) => void;
 }
 
-export function ComponentListView({ componenten, usage, onSelect, density = 'comfortable', sortKey, onSortKeyChange }: ListProps) {
+export function ComponentListView({
+    componenten, usage, onSelect, density = 'comfortable', sortKey, onSortKeyChange,
+    folderNamen, onFolderSelect,
+}: ListProps) {
     const compact = density === 'compact';
     const stand = kolomStand(sortKey);
 
@@ -266,6 +336,7 @@ export function ComponentListView({ componenten, usage, onSelect, density = 'com
                 <div style={{ width: 50 }} />
                 {th('name', 'Naam')}
                 {th('soort', 'Soort', 100)}
+                <div className="mr-list-th" style={{ width: 110 }}>Map</div>
                 <div className="mr-list-th" style={{ width: 90 }}>Basis</div>
                 {th('prijs', 'Prijs', 100)}
                 {th('gebruik', 'Gebruik', 110)}
@@ -304,6 +375,12 @@ export function ComponentListView({ componenten, usage, onSelect, density = 'com
                             )}
                         </div>
                         <div style={{ width: 100, fontSize: 12, color: 'var(--muted)' }}>{v.label}</div>
+                        <div style={{ width: 110, minWidth: 0, paddingRight: 8 }}>
+                            {(() => {
+                                const map = folderLabel(c.folder_id, folderNamen);
+                                return map ? <MapLabel label={map} onSelect={onFolderSelect} fontSize={12} /> : null;
+                            })()}
+                        </div>
                         <div style={{ width: 90, fontSize: 12, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {c.base_quantity} {c.base_unit}
                         </div>

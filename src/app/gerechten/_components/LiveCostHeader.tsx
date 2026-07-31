@@ -47,7 +47,12 @@ export default async function LiveCostHeader({
 
     // Fallback naar gerechten.total_cost_cents als nog geen snapshot bestaat
     const kostprijsCents = row.kost_now_cents ?? fallbackKostprijsCents;
-    const kostPerPortie = porties > 0 ? kostprijsCents / porties / 100 : kostprijsCents / 100;
+    /* total_cost_cents is de kostprijs PER PORTIE (de trigger telt de doseringen
+       simpelweg op; zie de canon in lib/gerecht-kosten.ts). Hier werd nóg een keer
+       door `porties` gedeeld, waardoor hetzelfde gerecht op het overzicht €11,97
+       kostte en op dit scherm €1,20. `porties` hoort bij de vrije recepttekst, niet
+       bij de componenten. */
+    const kostPerPortie = kostprijsCents / 100;
     const margePct =
         verkoopprijs > 0
             ? Math.round(((verkoopprijs - kostPerPortie) / verkoopprijs) * 100)
@@ -109,17 +114,22 @@ export default async function LiveCostHeader({
                         € {(kostprijsCents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--color-text-muted, #94a3b8)', marginTop: 2 }}>
-                        per {porties} porties
+                        per portie
                     </div>
                 </div>
 
-                {/* KPI 2 — Per portie */}
+                {/* KPI 2 — Wat kost dit gerecht voor het hele recept?
+                    Stond hier eerder "Per portie" met een tweede, gedeeld bedrag —
+                    twee kostprijzen naast elkaar waarvan er één fout was. Nu één
+                    kostprijs (KPI 1, per portie) en hier het totaal voor de
+                    recept-oplage, zodat de twee getallen niet meer met elkaar te
+                    verwarren zijn. */}
                 <div>
                     <div style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--color-text-muted, #94a3b8)', letterSpacing: 0.5 }}>
-                        Per portie
+                        Recept ({porties} porties)
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
-                        € {kostPerPortie.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        € {(kostPerPortie * Math.max(1, porties)).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                 </div>
 

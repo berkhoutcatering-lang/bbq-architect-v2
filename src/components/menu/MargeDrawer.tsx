@@ -137,9 +137,16 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                         {dekkingIncompleet && (
                             <div className="kf-banner kf-banner-warn" style={{ marginBottom: 10 }}>
                                 <AlertTriangle size={14} />
+                                {/* "hebben nog geen kostprijs" was te stellig geworden. Sinds
+                                    dishesMetKostprijs alleen gerechten telt die VOLLEDIG
+                                    doorgerekend zijn, zit hier ook het gerecht bij dat wél een
+                                    kostprijs heeft maar waarvan één bouwsteen nog geen prijs
+                                    kent. Dat gerecht "heeft" een kostprijs — alleen een te lage. */}
                                 <span>
-                                    <strong>{ontbrekend} van de {margins.dishesTotaal} gerechten</strong> hebben nog geen kostprijs.
-                                    Die tellen nu als €0 mee, dus deze marge is te rooskleurig — vul ze aan voor een echt cijfer.
+                                    <strong>{ontbrekend} van de {margins.dishesTotaal} gerechten</strong> zijn nog niet
+                                    volledig doorgerekend: er ontbreekt een kostprijs, of er zit een bouwsteen in
+                                    zonder prijs. Dat deel telt nu als €0 mee, dus deze marge is te rooskleurig —
+                                    vul het aan voor een echt cijfer.
                                 </span>
                             </div>
                         )}

@@ -36,6 +36,24 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     const newBaseCostCents: number = body.new_base_cost_cents;
 
+    /* Ook de NIEUWE basis, eenheid en snijverlies aannemen — optioneel, zodat een
+       oudere client blijft werken.
+       Waarom dit moet: deze route rekende de nieuwe kostprijzen uit met de basis,
+       eenheid en yield_factor zoals die NU in de database staan. Wijzigt Sam in
+       hetzelfde scherm ook de basis (100 g -> 1 kg) of het snijverlies, dan toont
+       het bevestig-scherm een mengsel van het nieuwe bedrag en de oude basis — en
+       dus andere getallen dan er een tel later worden opgeslagen. Hij keurt dan
+       een impact goed die hij niet krijgt. */
+    const nieuweBaseQuantity: number | null =
+        typeof body.new_base_quantity === 'number' && body.new_base_quantity > 0
+            ? body.new_base_quantity : null;
+    const nieuweBaseUnit: string | null =
+        typeof body.new_base_unit === 'string' && body.new_base_unit.trim() !== ''
+            ? body.new_base_unit.trim() : null;
+    const nieuwYieldFactor: number | null =
+        typeof body.new_yield_factor === 'number' && body.new_yield_factor > 0
+            ? body.new_yield_factor : null;
+
     const supabase = await createServerSupabase();
 
     /* Auth + org-scoping */
@@ -59,7 +77,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!comp) return NextResponse.json({ error: 'Component niet gevonden' }, { status: 404 });
 
     const oldBaseCostCents = comp.base_cost_cents as number;
-    const baseQuantity = comp.base_quantity as number;
+    /* De basis waarmee we de NIEUWE kostprijs uitrekenen is de basis die Sam gaat
+       opslaan, niet die er nu staat. Stuurt de client niets mee, dan valt hij terug
+       op de huidige waarde (gedrag van vóór deze fix, voor oudere clients). */
+    const baseQuantity = nieuweBaseQuantity ?? (comp.base_quantity as number);
+    const nieuweEenheid = nieuweBaseUnit ?? ((comp as { base_unit?: string }).base_unit ?? '');
+    const nieuweYield = nieuwYieldFactor ?? ((comp as { yield_factor?: number }).yield_factor ?? 1);
+    /* De OUDE kant hoeven we niet te herrekenen: cost_at_use_cents staat al in
+       gerecht_components en is precies wat er vandaag in de gerechten telt. */
 
     /* 2. Alle gerecht_components-rijen met dit component_id ophalen */
     const { data: gcRows, error: gcErr } = await supabase
@@ -115,9 +140,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             quantityUsed: qtyUsed,
             usedUnit: (row as { unit?: string }).unit,
             baseQuantity,
-            baseUnit: (comp as { base_unit?: string }).base_unit,
+            baseUnit: nieuweEenheid,
             baseCostCents: newBaseCostCents,
-            yieldFactor: (comp as { yield_factor?: number }).yield_factor,
+            yieldFactor: nieuweYield,
         });
 
         const existing = perGerecht.get(gerecht.id);

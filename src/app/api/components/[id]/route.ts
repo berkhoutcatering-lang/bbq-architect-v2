@@ -15,6 +15,42 @@ const ALLOWED_HACCP_TYPES = new Set([
     'handhygiene', 'kruisbesmetting', 'oppervlakte_reiniging', 'overig',
 ]);
 
+type DbFout = { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
+
+/* Rauwe Postgres-tekst is voor een kok geen informatie maar paniek: bij
+   "Could not find the 'pack_unit' column" weet hij niet of hij zelf iets fout
+   deed, of het opgeslagen is, of dat hij door kan werken. Daarom vertalen we
+   elke databasefout naar één zin in mensentaal, en houden we de technische
+   tekst in de serverlog voor onszelf. Zonder deze helper lekt élke nieuwe
+   foutsituatie weer als databasejargon het scherm op. */
+function menselijkeDbFout(err: DbFout, waar: string, actie: 'opslaan' | 'laden' | 'verwijderen' = 'opslaan'): string {
+    const code = String(err?.code ?? '');
+    console.error(`[api/components/[id]] ${waar} — code=${code || 'geen'} :: ${err?.message ?? ''} :: ${err?.details ?? ''}`);
+
+    switch (code) {
+        case '42703':
+        case 'PGRST204':
+            return 'Deze app kent een veld dat de database nog niet heeft. Er moet eerst een database-update gedraaid worden; daarna kun je dit gewoon opslaan.';
+        case '23505':
+            return 'Dit bestaat al — er staat al een bouwsteen met deze gegevens in de bibliotheek.';
+        case '23503':
+            return 'Iets waar deze bouwsteen aan vasthangt bestaat niet (meer) — bijvoorbeeld de map of het gekoppelde inkoopproduct. Ververs de pagina en probeer het opnieuw.';
+        case '23514':
+            return 'Een van de ingevulde waardes mag zo niet. Controleer de hoeveelheid, de kostprijs en het snijverlies.';
+        case '42501':
+        case 'PGRST301':
+            return 'Je hebt geen toegang tot deze bouwsteen.';
+        default: {
+            const staart = code ? ` Geef deze foutcode door als het blijft misgaan: ${code}.` : '';
+            return `Het ${actie} is niet gelukt. Probeer het zo nog een keer.${staart}`;
+        }
+    }
+}
+
+const CONFLICT_MELDING =
+    'Iemand anders — of een automatische prijs-update — heeft deze bouwsteen net gewijzigd. '
+    + 'Sluit dit venster en open de bouwsteen opnieuw, anders overschrijf je die wijziging.';
+
 async function authorize(supabase: Awaited<ReturnType<typeof createServerSupabase>>) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return { error: 'Niet ingelogd', status: 401 as const, user: null, orgId: null as string | null };
@@ -47,8 +83,24 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         supabase.from('component_allergens').select('*').eq('component_id', componentId),
         supabase.from('component_haccp_points').select('*').eq('component_id', componentId).order('id'),
     ]);
-    if (compRes.error) return NextResponse.json({ error: compRes.error.message }, { status: 500 });
+    if (compRes.error) {
+        return NextResponse.json({ error: menselijkeDbFout(compRes.error, 'GET component', 'laden') }, { status: 500 });
+    }
     if (!compRes.data) return NextResponse.json({ error: 'Component niet gevonden' }, { status: 404 });
+
+    /* Een mislukte allergenen- of HACCP-query mag NOOIT als lege lijst het scherm
+       in. De bewerk-lade vult haar vinkjes met wat hier terugkomt en stuurt die
+       lijst bij Opslaan één-op-één terug; een leeg vak zou dan de échte gluten en
+       noten definitief uit de bibliotheek wissen, terwijl Sam alleen de prijs
+       aanpaste. Liever helemaal niet openen dan openen met een leeg allergenenvak. */
+    if (allRes.error || haccpRes.error) {
+        menselijkeDbFout(allRes.error ?? haccpRes.error, 'GET allergenen/HACCP', 'laden');
+        return NextResponse.json({
+            error: 'De allergenen en HACCP-punten van deze bouwsteen konden niet opgehaald worden. '
+                + 'We tonen ze liever niet dan half — anders sla je ze per ongeluk leeg op. Probeer het zo nog een keer.',
+            allergens_unavailable: true,
+        }, { status: 500 });
+    }
 
     /* Gekoppeld aan een leverancier? Geef de ACTUELE rij mee (genormaliseerd)
        zodat de editor de badge toont én de kostprijs kan meebewegen. Twee bronnen:
@@ -95,6 +147,41 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         haccp_points: haccpRes.data ?? [],
         linked_price: linkedPrice,
     });
+}
+
+/* ── Allergenen: verschil-schrijven i.p.v. wissen-en-opnieuw-invoegen ────────
+   Het oude patroon verwijderde eerst álle allergenen en zette daarna de nieuwe
+   terug. Ging dat tweede deel mis (en dat gebeurde structureel: de lade stuurt
+   codes mee die de database niet kent), dan stond een gerecht met noten daarna
+   als allergeenvrij te boek — terwijl het scherm "opgeslagen" zei. Nu voegen we
+   eerst toe en verwijderen we pas daarna wat écht weg moet, zodat er geen moment
+   bestaat waarop de bouwsteen leeg is. Wat ongewijzigd blijft, blijft staan —
+   inclusief de herkomst (AI-voorstel of door een mens bevestigd), want die kan
+   de lade niet doorgeven en mag dus niet overschreven worden. */
+type AllergeenPayload = { allergen_code: string; ai_suggested?: boolean };
+
+function normaliseerAllergenen(input: unknown[]): AllergeenPayload[] {
+    const uniek = new Map<string, AllergeenPayload>();
+    for (const a of input) {
+        if (typeof a !== 'object' || a === null) continue;
+        const rij = a as Record<string, unknown>;
+        if (typeof rij.allergen_code !== 'string') continue;
+        const code = rij.allergen_code.trim().toUpperCase();
+        if (code.length === 0 || code.length > 5) continue;
+        if (!uniek.has(code)) uniek.set(code, { allergen_code: code, ai_suggested: Boolean(rij.ai_suggested) });
+    }
+    return Array.from(uniek.values());
+}
+
+/* ── HACCP-punten: zelfde verschil-gedachte, maar zonder natuurlijke sleutel ──
+   Twee punten zijn "hetzelfde" als soort, grenswaarde, eenheid en notitie
+   gelijk zijn. Zo houden we bestaande rijen (met hun herkomst) in leven en
+   raken we nooit alle punten kwijt door één mislukte invoeging. */
+function haccpSleutel(r: { type: unknown; threshold_value: unknown; threshold_unit: unknown; note: unknown }): string {
+    const waarde = r.threshold_value == null || r.threshold_value === '' ? '' : String(Number(r.threshold_value));
+    const eenheid = typeof r.threshold_unit === 'string' ? r.threshold_unit.trim() : '';
+    const notitie = typeof r.note === 'string' ? r.note.trim() : '';
+    return [String(r.type ?? ''), waarde, eenheid, notitie].join('|');
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -170,107 +257,265 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     const replaceAllergens = Array.isArray(b.allergens) ? b.allergens : null;
     const replaceHaccp = Array.isArray(b.haccp_points) ? b.haccp_points : null;
 
-    /* Bucket-C GP-4 (2026-05-25): bij base_cost_cents-wijziging moet de
-       cost_at_use_cents van alle gerecht_components-rijen herrekend worden
-       en de gerechten.total_cost_cents auto-rollup. Anders blijft de
-       kostprijs in gerechten stale en klopt /q/[id] niet meer.
-       We detecteren de oude base_cost_cents vóór de update. */
-    let oldBaseCostCents: number | null = null;
-    let oldBaseQuantity: number | null = null;
-    let oldYieldFactor: number | null = null;
-    /* Ook bij een SNIJVERLIES-wijziging moet er herrekend worden: die verandert
-       de kostprijs net zo hard als de inkoopprijs zelf. */
-    if (typeof updateData.base_cost_cents === 'number' || typeof updateData.yield_factor === 'number') {
-        const { data: pre } = await supabase
-            .from('components')
-            .select('base_cost_cents, base_quantity, yield_factor')
-            .eq('id', componentId)
-            .eq('organization_id', auth.orgId!)
-            .maybeSingle();
-        oldBaseCostCents = pre?.base_cost_cents ?? null;
-        oldBaseQuantity = pre?.base_quantity ?? null;
-        oldYieldFactor = (pre as { yield_factor?: number } | null)?.yield_factor ?? null;
+    if (Object.keys(updateData).length === 0 && replaceAllergens === null && replaceHaccp === null) {
+        return NextResponse.json({ error: 'Geen wijzigingen' }, { status: 400 });
     }
 
-    // Update component zelf (alleen als er velden zijn) — anders skip + ga door naar joins
-    let componentRow: Record<string, unknown> | null = null;
-    if (Object.keys(updateData).length > 0) {
-        const { data, error } = await supabase
-            .from('components')
-            .update(updateData)
-            .eq('id', componentId)
-            .eq('organization_id', auth.orgId!)
-            .select()
-            .single();
-        if (error) {
-            if (isMissingYieldColumn(error)) {
-                return NextResponse.json({ error: YIELD_MIGRATIE_MELDING }, { status: 409 });
-            }
-            return NextResponse.json({ error: error.message }, { status: 500 });
+    /* Huidige rij ophalen vóór we iets schrijven. Die dient drie doelen:
+       eigenaarschap bevestigen, de oude kostprijs kennen voor het doorrekenen,
+       en de versie (updated_at) vastpakken waarop we straks schrijven. */
+    const { data: huidig, error: huidigErr } = await supabase
+        .from('components')
+        .select('*')
+        .eq('id', componentId)
+        .eq('organization_id', auth.orgId!)
+        .maybeSingle();
+    if (huidigErr) {
+        return NextResponse.json({ error: menselijkeDbFout(huidigErr, 'PATCH pre-read', 'opslaan') }, { status: 500 });
+    }
+    if (!huidig) return NextResponse.json({ error: 'Component niet gevonden of geen toegang' }, { status: 404 });
+
+    const huidigeRij = huidig as Record<string, unknown>;
+    const huidigeVersie = typeof huidigeRij.updated_at === 'string' ? huidigeRij.updated_at : null;
+
+    /* Gelijktijdig opslaan: wie het laatst op Opslaan drukt, won altijd — ook als
+       hij een uur oude gegevens in beeld had. Een prijs-verversing van de
+       leverancier of een collega die net 'noten' aanvinkte werd zo zonder één
+       waarschuwing teruggedraaid, inclusief het doorrekenen naar alle gerechten.
+       De lade stuurt de versie mee die ze bij het openen kreeg; klopt die niet
+       meer, dan slaan we niets op en zeggen we wat er aan de hand is. */
+    if (typeof b.expected_updated_at === 'string' && huidigeVersie) {
+        const verwacht = Date.parse(b.expected_updated_at);
+        const gevonden = Date.parse(huidigeVersie);
+        if (Number.isFinite(verwacht) && Number.isFinite(gevonden) && verwacht !== gevonden) {
+            return NextResponse.json({ error: CONFLICT_MELDING, conflict: true, updated_at: huidigeVersie }, { status: 409 });
         }
-        if (!data) return NextResponse.json({ error: 'Component niet gevonden of geen toegang' }, { status: 404 });
-        componentRow = data;
-    } else if (replaceAllergens === null && replaceHaccp === null) {
-        return NextResponse.json({ error: 'Geen wijzigingen' }, { status: 400 });
-    } else {
-        // Verify ownership voor de joins (read-only check)
-        const { data: own } = await supabase
-            .from('components').select('id').eq('id', componentId).eq('organization_id', auth.orgId!).maybeSingle();
-        if (!own) return NextResponse.json({ error: 'Component niet gevonden of geen toegang' }, { status: 404 });
     }
 
     const now = new Date().toISOString();
     const warnings: string[] = [];
+    let lijstenGewijzigd = false;
 
-    // Replace-strategy: delete-all + insert-new (transactioneel via best-effort)
+    /* Volgorde: eerst de lijsten (allergenen/HACCP), dan pas de velden van de
+       bouwsteen zelf. Loopt er iets mis in een lijst, dan is er nog niets anders
+       geschreven en werkt gewoon opnieuw opslaan — bij de omgekeerde volgorde
+       zou de tweede poging op zijn eigen versie-controle stuklopen. */
     if (replaceAllergens !== null) {
-        const { error: delErr } = await supabase
-            .from('component_allergens').delete().eq('component_id', componentId).eq('organization_id', auth.orgId!);
-        if (delErr) warnings.push(`allergens delete: ${delErr.message}`);
+        const gewenst = normaliseerAllergenen(replaceAllergens);
 
-        const rows = replaceAllergens
-            .filter((a): a is { allergen_code: string } => typeof a === 'object' && a !== null && typeof (a as any).allergen_code === 'string')
-            .map(a => {
-                const code = (a as any).allergen_code.trim().toUpperCase();
-                return {
-                    component_id: componentId,
-                    allergen_code: code,
-                    ai_suggested: Boolean((a as any).ai_suggested),
-                    confirmed_at: now,
-                    confirmed_by: auth.user!.id,
-                    organization_id: auth.orgId!,
-                };
-            })
-            .filter(r => r.allergen_code.length > 0 && r.allergen_code.length <= 5);
-        if (rows.length > 0) {
+        const bestaandRes = await supabase
+            .from('component_allergens')
+            .select('allergen_code')
+            .eq('component_id', componentId)
+            .eq('organization_id', auth.orgId!);
+        if (bestaandRes.error) {
+            return NextResponse.json({
+                error: menselijkeDbFout(bestaandRes.error, 'PATCH allergenen lezen', 'opslaan')
+                    + ' De allergenen staan nog zoals ze waren; er is niets gewijzigd.',
+            }, { status: 500 });
+        }
+        const bestaandeCodes = new Set(
+            (bestaandRes.data ?? []).map(r => String((r as { allergen_code: unknown }).allergen_code)),
+        );
+
+        /* De vinkjes in de lade en de allergenenlijst van de database zijn ooit
+           uit elkaar gelopen (de lade kent codes die daar niet bestaan). Zo'n code
+           liet de invoeging klappen — en in het oude patroon was op dat moment
+           alles al gewist. We controleren het daarom vooraf en raken niets aan. */
+        const toevoegen = gewenst.filter(a => !bestaandeCodes.has(a.allergen_code));
+
+        /* Alleen NIEUWE codes toetsen, niet alles wat er al stond.
+           Toetsten we de hele lijst, dan kon een bouwsteen waar ooit een code op
+           gezet is die de database niet (meer) kent helemaal niet meer opgeslagen
+           worden — ook niet als je alleen de prijs aanpaste. Dan zet je iemand
+           klem op een fout die hij niet gemaakt heeft en niet kán herstellen.
+           Wat er al staat laten we met rust; wat erbij komt moet kloppen. */
+        const masterRes = await supabase.from('allergens').select('code');
+        if (!masterRes.error && masterRes.data && toevoegen.length > 0) {
+            const geldig = new Set((masterRes.data as { code: unknown }[]).map(r => String(r.code)));
+            const onbekend = toevoegen.map(a => a.allergen_code).filter(c => !geldig.has(c));
+            if (onbekend.length > 0) {
+                return NextResponse.json({
+                    error: `Deze allergeen-vinkjes kent de database niet (${onbekend.join(', ')}), dus is er aan de allergenen niets gewijzigd. `
+                        + 'Dit is een fout in de app zelf — geef het even door.',
+                }, { status: 409 });
+            }
+        }
+
+        const verwijderen = Array.from(bestaandeCodes).filter(c => !gewenst.some(a => a.allergen_code === c));
+        if (toevoegen.length > 0 || verwijderen.length > 0) lijstenGewijzigd = true;
+
+        if (toevoegen.length > 0) {
+            const rows = toevoegen.map(a => ({
+                component_id: componentId,
+                allergen_code: a.allergen_code,
+                ai_suggested: Boolean(a.ai_suggested),
+                /* Alleen een mens bevestigt. Een AI-voorstel afstempelen als
+                   "door mens bevestigd" maakt de bewijsketen bij een controle op
+                   etikettering waardeloos — dan staat álles als handmatig gecheckt. */
+                confirmed_at: a.ai_suggested ? null : now,
+                confirmed_by: a.ai_suggested ? null : auth.user!.id,
+                organization_id: auth.orgId!,
+            }));
             const { error: insErr } = await supabase.from('component_allergens').insert(rows);
-            if (insErr) warnings.push(`allergens insert: ${insErr.message}`);
+            if (insErr) {
+                return NextResponse.json({
+                    error: menselijkeDbFout(insErr, 'PATCH allergenen toevoegen', 'opslaan')
+                        + ' De allergenen zijn niet gewijzigd — de oude staan er nog. Er is verder niets opgeslagen.',
+                }, { status: 409 });
+            }
+        }
+
+        if (verwijderen.length > 0) {
+            const { error: delErr } = await supabase
+                .from('component_allergens')
+                .delete()
+                .eq('component_id', componentId)
+                .eq('organization_id', auth.orgId!)
+                .in('allergen_code', verwijderen);
+            if (delErr) {
+                return NextResponse.json({
+                    error: menselijkeDbFout(delErr, 'PATCH allergenen verwijderen', 'opslaan')
+                        + ' De weggehaalde allergenen staan er nog; probeer opnieuw op te slaan.',
+                }, { status: 409 });
+            }
         }
     }
 
     if (replaceHaccp !== null) {
-        const { error: delErr } = await supabase
-            .from('component_haccp_points').delete().eq('component_id', componentId).eq('organization_id', auth.orgId!);
-        if (delErr) warnings.push(`haccp delete: ${delErr.message}`);
-
-        const rows = replaceHaccp
+        const gewenst = replaceHaccp
             .filter((h: unknown): h is Record<string, unknown> => typeof h === 'object' && h !== null)
-            .filter(h => typeof h.type === 'string' && ALLOWED_HACCP_TYPES.has(h.type as string))
-            .map(h => ({
+            .filter(h => typeof h.type === 'string' && ALLOWED_HACCP_TYPES.has(h.type as string));
+
+        const bestaandRes = await supabase
+            .from('component_haccp_points')
+            .select('id, type, threshold_value, threshold_unit, note')
+            .eq('component_id', componentId)
+            .eq('organization_id', auth.orgId!);
+        if (bestaandRes.error) {
+            return NextResponse.json({
+                error: menselijkeDbFout(bestaandRes.error, 'PATCH HACCP lezen', 'opslaan')
+                    + ' De HACCP-punten staan nog zoals ze waren; er is niets gewijzigd.',
+            }, { status: 500 });
+        }
+
+        /* Per sleutel een voorraadje bestaande rij-ids: elke gewenste rij die er
+           al staat, verbruikt er één. Wat overblijft moet weg. */
+        const pool = new Map<string, number[]>();
+        for (const r of (bestaandRes.data ?? []) as Record<string, unknown>[]) {
+            const key = haccpSleutel({ type: r.type, threshold_value: r.threshold_value, threshold_unit: r.threshold_unit, note: r.note });
+            const lijst = pool.get(key) ?? [];
+            lijst.push(Number(r.id));
+            pool.set(key, lijst);
+        }
+
+        const nieuweRijen: Record<string, unknown>[] = [];
+        for (const h of gewenst) {
+            const key = haccpSleutel({ type: h.type, threshold_value: h.threshold_value, threshold_unit: h.threshold_unit, note: h.note });
+            const lijst = pool.get(key);
+            if (lijst && lijst.length > 0) { lijst.shift(); continue; }
+            const aiVoorstel = Boolean(h.ai_suggested);
+            nieuweRijen.push({
                 component_id: componentId,
                 type: h.type as string,
                 threshold_value: typeof h.threshold_value === 'number' ? h.threshold_value : null,
                 threshold_unit: typeof h.threshold_unit === 'string' ? h.threshold_unit : null,
                 note: typeof h.note === 'string' ? h.note : null,
-                ai_suggested: Boolean(h.ai_suggested),
-                confirmed_at: now,
-                confirmed_by: auth.user!.id,
+                ai_suggested: aiVoorstel,
+                /* Zelfde regel als bij allergenen: een AI-voorstel is geen
+                   menselijke bevestiging, anders liegt de rij over zichzelf. */
+                confirmed_at: aiVoorstel ? null : now,
+                confirmed_by: aiVoorstel ? null : auth.user!.id,
                 organization_id: auth.orgId!,
-            }));
-        if (rows.length > 0) {
-            const { error: insErr } = await supabase.from('component_haccp_points').insert(rows);
-            if (insErr) warnings.push(`haccp insert: ${insErr.message}`);
+            });
         }
+        const overbodig = Array.from(pool.values()).flat();
+        if (nieuweRijen.length > 0 || overbodig.length > 0) lijstenGewijzigd = true;
+
+        if (nieuweRijen.length > 0) {
+            const { error: insErr } = await supabase.from('component_haccp_points').insert(nieuweRijen);
+            if (insErr) {
+                return NextResponse.json({
+                    error: menselijkeDbFout(insErr, 'PATCH HACCP toevoegen', 'opslaan')
+                        + ' De HACCP-punten zijn niet gewijzigd — de oude staan er nog. Er is verder niets opgeslagen.',
+                }, { status: 409 });
+            }
+        }
+
+        if (overbodig.length > 0) {
+            const { error: delErr } = await supabase
+                .from('component_haccp_points')
+                .delete()
+                .eq('component_id', componentId)
+                .eq('organization_id', auth.orgId!)
+                .in('id', overbodig);
+            if (delErr) {
+                return NextResponse.json({
+                    error: menselijkeDbFout(delErr, 'PATCH HACCP verwijderen', 'opslaan')
+                        + ' De weggehaalde HACCP-punten staan er nog; probeer opnieuw op te slaan.',
+                }, { status: 409 });
+            }
+        }
+    }
+
+    /* Alleen allergenen of HACCP gewijzigd? Tik dan tóch de versie van de
+       bouwsteen op. Anders "ziet" een lade die al openstond niet dat er net
+       noten zijn bijgezet, en draait de volgende Opslaan dat stil terug. */
+    if (lijstenGewijzigd && Object.keys(updateData).length === 0) {
+        const { error: tikErr } = await supabase
+            .from('components')
+            .update({ updated_at: now })
+            .eq('id', componentId)
+            .eq('organization_id', auth.orgId!);
+        if (tikErr) menselijkeDbFout(tikErr, 'PATCH versie bijwerken', 'opslaan');
+    }
+
+    /* Bucket-C GP-4 (2026-05-25): bij base_cost_cents-wijziging moet de
+       cost_at_use_cents van alle gerecht_components-rijen herrekend worden
+       en de gerechten.total_cost_cents auto-rollup. Anders blijft de
+       kostprijs in gerechten stale en klopt /q/[id] niet meer.
+       De oude waarden komen uit de rij die we hierboven al lazen. */
+    const oldBaseCostCents = (huidigeRij.base_cost_cents as number | null) ?? null;
+    const oldBaseQuantity = (huidigeRij.base_quantity as number | null) ?? null;
+    const oldYieldFactor = (huidigeRij.yield_factor as number | null) ?? null;
+
+    // Update component zelf (alleen als er velden zijn) — anders skip + ga door naar joins
+    let componentRow: Record<string, unknown> | null = null;
+    if (Object.keys(updateData).length > 0) {
+        /* updated_at zetten we zelf: de database doet dat niet (de trigger die
+           het probeert is een AFTER-trigger en heeft geen effect). Zonder deze
+           regel blijft de versie eeuwig staan en betekent de versie-controle
+           hierboven niets. */
+        updateData.updated_at = now;
+
+        let q = supabase
+            .from('components')
+            .update(updateData)
+            .eq('id', componentId)
+            .eq('organization_id', auth.orgId!);
+        /* Schrijven op de versie die we net lazen. Wijzigt er iets tussen lezen
+           en schrijven (bijvoorbeeld de nachtelijke leveranciersprijs), dan raakt
+           deze update 0 rijen in plaats van die wijziging stil te overschrijven. */
+        if (huidigeVersie) q = q.eq('updated_at', huidigeVersie);
+
+        const { data, error } = await q.select().maybeSingle();
+        if (error) {
+            if (isMissingYieldColumn(error)) {
+                return NextResponse.json({ error: YIELD_MIGRATIE_MELDING }, { status: 409 });
+            }
+            return NextResponse.json({ error: menselijkeDbFout(error, 'PATCH update', 'opslaan') }, { status: 500 });
+        }
+        if (!data) {
+            /* Nul rijen geraakt: óf de versie klopte niet meer, óf de bouwsteen
+               is intussen weg. Beide gevallen krijgen hun eigen zin. */
+            const { data: bestaatNog } = await supabase
+                .from('components').select('id').eq('id', componentId).eq('organization_id', auth.orgId!).maybeSingle();
+            if (!bestaatNog) {
+                return NextResponse.json({ error: 'Deze bouwsteen bestaat niet meer.' }, { status: 404 });
+            }
+            return NextResponse.json({ error: CONFLICT_MELDING, conflict: true }, { status: 409 });
+        }
+        componentRow = data;
     }
 
     // Genormaliseerde ingrediënt-koppeling bijwerken zodra de ingredients-JSONB
@@ -355,7 +600,10 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     // Re-fetch full state na replace (kleine extra call, geeft UI clean basis)
     let finalComponent = componentRow;
     if (!finalComponent) {
-        const { data } = await supabase.from('components').select('*').eq('id', componentId).maybeSingle();
+        /* Org-filter erbij: nooit een rij teruggeven die buiten de eigen
+           organisatie valt, ook niet als RLS ooit anders staat afgesteld. */
+        const { data } = await supabase
+            .from('components').select('*').eq('id', componentId).eq('organization_id', auth.orgId!).maybeSingle();
         finalComponent = data;
     }
 
@@ -411,7 +659,7 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
                 gerechten: uniek,
             }, { status: 409 });
         }
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: menselijkeDbFout(error, 'DELETE component', 'verwijderen') }, { status: 500 });
     }
     return NextResponse.json({ ok: true });
 }
