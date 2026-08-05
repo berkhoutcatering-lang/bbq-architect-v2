@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X } from 'lucide-react';
+import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { track, trackOnce } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
@@ -847,6 +847,17 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                             <MRButton variant="ai" icon={<Sparkles size={14} />} onClick={() => setBedenkerOpen(true)}>
                                 Bedenk met AI
                             </MRButton>
+                            {/* Aparte deur: hier kiest de AI ingrediënten uit de échte
+                                leverancier-catalogus, zodat de kostprijs klopt in
+                                plaats van een schatting te zijn. */}
+                            <button
+                                type="button"
+                                onClick={() => router.push('/gerechten/uit-catalogus')}
+                                className="btn btn-ghost btn-sm"
+                                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <Store size={14} /> Uit de groothandel
+                            </button>
                             <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
                         </>
                     ) : (
