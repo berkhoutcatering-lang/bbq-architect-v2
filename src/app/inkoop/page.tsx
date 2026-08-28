@@ -14,7 +14,6 @@
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
-import { getInventoryWithDemand } from '@/lib/dal/inventoryDemand';
 import PageHeader from '@/components/PageHeader';
 import PageGuideNote from '@/components/PageGuideNote';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -40,8 +39,13 @@ export default async function InkoopPage() {
     const orgId = member?.organization_id;
     if (!orgId) redirect('/onboarding');
 
-    // Parallel fetch — bestelvoorstel + leveranciers + events-meta voor empty-state.
-    const [summary, leveranciersRes, demandSnapshot, sentOrdersRes] = await Promise.all([
+    /* Parallel fetch — bestelvoorstel + leveranciers + verzonden orders.
+       Hier stond ook een losse getInventoryWithDemand() voor de empty-state,
+       maar buildBestelvoorstel roept diezelfde functie intern al aan (stap 1).
+       Die draaide dus twee keer naast elkaar, elk goed voor acht queries op een
+       rij. De twee getallen die de empty-state nodig had komen nu mee in
+       summary.demand_meta. */
+    const [summary, leveranciersRes, sentOrdersRes] = await Promise.all([
         buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true }).catch((e) => {
             console.error('[/inkoop] buildBestelvoorstel failed', e);
             return null;
@@ -50,7 +54,6 @@ export default async function InkoopPage() {
             .select('id, naam, type, email, tel')
             .eq('organization_id', orgId)
             .order('naam', { ascending: true }),
-        getInventoryWithDemand(sb, orgId, 14).catch(() => null),
         // Verzonden orders + hun regels voor de "Onderweg"-sectie (ontvangst-loop).
         sb.from('concept_inkoop_orders')
             .select('id, leverancier_id, sent_at, window_end, total_eur, inkoop_order_lines(id, inventory_id, naam, qty_ordered, qty_received, unit, unit_price_eur)')
@@ -67,8 +70,8 @@ export default async function InkoopPage() {
         tel: string | null;
     }>;
 
-    const events_count = demandSnapshot?.events_in_window?.length ?? 0;
-    const has_menu_items = (demandSnapshot?.rows?.some((r) => r.reserved_qty > 0)) ?? false;
+    const events_count = summary?.demand_meta.events_in_window_count ?? 0;
+    const has_menu_items = summary?.demand_meta.has_menu_items ?? false;
 
     // Verzonden orders → "Onderweg"-sectie (leverancier-naam erbij, alleen met regels).
     const levById = new Map(leveranciers.map((l) => [l.id, l.naam]));

@@ -113,6 +113,14 @@ export interface BestelvoorstelSummary {
     message: string;
   };
   window: { start: string; end: string };
+  /* Afgeleid uit de demand-snapshot die hieronder toch al berekend wordt.
+     /inkoop had die snapshot ook zelf opgehaald voor de empty-state, waardoor
+     getInventoryWithDemand — acht queries op een rij — twee keer draaide per
+     paginaload. Deze twee getallen is alles wat de pagina ervan nodig had. */
+  demand_meta: {
+    events_in_window_count: number;
+    has_menu_items: boolean;
+  };
 }
 
 function toIsoDate(d: Date): string {
@@ -130,6 +138,10 @@ export async function buildBestelvoorstel(
   // 1. Demand-snapshot (bevat al derving + par + in-flight in de shortfall).
   const demand = await getInventoryWithDemand(supabase, orgId, windowDays);
   const shortItems = demand.rows.filter(function (r) { return r.shortfall > 0; });
+  const demandMeta = {
+    events_in_window_count: demand.events_in_window?.length ?? 0,
+    has_menu_items: demand.rows.some(function (r) { return r.reserved_qty > 0; }),
+  };
 
   const now = new Date();
   const windowEnd = new Date(now.getTime() + windowDays * 86400000);
@@ -146,6 +158,7 @@ export async function buildBestelvoorstel(
       unmatched_ingredients: demand.unmatched,
       blocking,
       window: { start: windowStartIso, end: windowEndIso },
+      demand_meta: demandMeta,
     };
   }
 
@@ -357,6 +370,7 @@ export async function buildBestelvoorstel(
     unmatched_ingredients: demand.unmatched,
     blocking,
     window: { start: windowStartIso, end: windowEndIso },
+    demand_meta: demandMeta,
   };
 }
 
