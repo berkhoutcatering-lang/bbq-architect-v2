@@ -24,7 +24,7 @@ function footLabel(s: MepStatus): string {
   return s === 'todo' ? 'Start voorbereiding' : s === 'bezig' ? 'Markeer klaar' : 'Zet terug';
 }
 
-const hdr: CSSProperties = { fontFamily: "'Outfit',sans-serif", fontWeight: 500, fontSize: 16, letterSpacing: '.01em', color: '#f0f0f0', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 };
+const hdr: CSSProperties = { fontFamily: "var(--font-outfit), sans-serif", fontWeight: 500, fontSize: 16, letterSpacing: '.01em', color: '#f0f0f0', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 };
 
 export default function MepItemSheet({ open, item, guests, gerecht, onClose, onStatusChange, onSaveNotes, savingNotes = false }: MepItemSheetProps) {
   const [note, setNote] = useState('');
@@ -70,7 +70,7 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
               <span>{isIngekocht ? 'Ingekocht' : 'Bereid'}</span>
               {gerecht ? <><span style={{ color: '#5a5a5e' }}>·</span><span style={{ color: '#83838a', letterSpacing: '.06em' }}>{gerecht}</span></> : null}
             </span>
-            <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 500, fontSize: 27, letterSpacing: '-.015em', margin: 0, color: '#f6f6f6', lineHeight: 1.1 }}>{item.name}</h2>
+            <h2 style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 500, fontSize: 27, letterSpacing: '-.015em', margin: 0, color: '#f6f6f6', lineHeight: 1.1 }}>{item.name}</h2>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 13px 0 11px', borderRadius: 999, background: p.pillBg, border: `1px solid ${p.pillBd}`, color: p.pillFg, fontSize: 12.5, fontWeight: 700, letterSpacing: '.02em', flex: '0 0 auto', whiteSpace: 'nowrap', marginTop: 4 }}>
             <PillIcon size={13} color={p.pillFg} strokeWidth={status === 'klaar' ? 2.4 : 2} {...(status === 'bezig' ? { fill: p.pillFg } : {})} />
@@ -87,8 +87,8 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.2em', textTransform: 'uppercase', color: '#83838a' }}>Te maken</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 52, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 0.9, letterSpacing: '.01em', color: '#ffffff' }}>{q.value}</span>
-                  <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 22, fontWeight: 500, color: '#9aa0a8' }}>{q.unit}</span>
+                  <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 52, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 0.9, letterSpacing: '.01em', color: '#ffffff' }}>{q.value}</span>
+                  <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 22, fontWeight: 500, color: '#9aa0a8' }}>{q.unit}</span>
                 </div>
               </div>
               {tags.length > 0 && (
@@ -108,7 +108,7 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {stappen.map((s, i) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '11px 0', borderBottom: '1px solid rgba(130,130,130,.08)' }}>
-                        <span style={{ flex: '0 0 auto', width: 28, height: 28, borderRadius: 9, background: 'rgba(196,163,90,.12)', border: '1px solid rgba(196,163,90,.28)', color: '#d8c08a', fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
+                        <span style={{ flex: '0 0 auto', width: 28, height: 28, borderRadius: 9, background: 'rgba(196,163,90,.12)', border: '1px solid rgba(196,163,90,.28)', color: '#d8c08a', fontFamily: "var(--font-outfit), sans-serif", fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</span>
                         <span style={{ fontSize: 15, lineHeight: 1.55, color: '#dcdcdc', paddingTop: 2 }}>{s}</span>
                       </div>
                     ))}
@@ -153,7 +153,7 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
                     value={note}
                     onChange={e => { setNote(e.target.value); setJustSaved(false); }}
                     placeholder="Bijv. extra rub op tafel 1 · kerntemp checken om 16:00…"
-                    style={{ width: '100%', minHeight: 84, resize: 'vertical', padding: '12px 14px', borderRadius: 11, background: 'rgba(30,30,34,.6)', border: '1px solid rgba(130,130,130,.18)', color: '#e6e6e6', fontSize: 13.5, lineHeight: 1.5, outline: 'none', fontFamily: "'DM Sans',sans-serif" }}
+                    style={{ width: '100%', minHeight: 84, resize: 'vertical', padding: '12px 14px', borderRadius: 11, background: 'rgba(30,30,34,.6)', border: '1px solid rgba(130,130,130,.18)', color: '#e6e6e6', fontSize: 13.5, lineHeight: 1.5, outline: 'none', fontFamily: "var(--font-dm-sans), sans-serif" }}
                   />
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9 }}>
                     <button
@@ -183,7 +183,7 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
             type="button"
             onClick={() => void onStatusChange(itemId, next)}
             className="mep-cta"
-            style={{ flex: 1, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 15.5, fontWeight: 700, letterSpacing: '.01em' }}
+            style={{ flex: 1, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 15.5, fontWeight: 700, letterSpacing: '.01em' }}
           >
             <FootIcon size={status === 'bezig' ? 21 : status === 'todo' ? 20 : 19} color={bs.fg} strokeWidth={status === 'bezig' ? 2.6 : status === 'todo' ? 2.2 : 2.1} {...(status === 'todo' ? { fill: ACCENT_DARK } : {})} />
             <span>{footLabel(status)}</span>

@@ -745,7 +745,7 @@ export default function DashboardPage() {
                 className="font-semibold truncate"
                 style={{
                   color: 'var(--text)',
-                  fontFamily: "'Outfit', sans-serif",
+                  fontFamily: "var(--font-outfit), sans-serif",
                   fontSize: 'clamp(13px, 4vw, 15px)',
                   letterSpacing: '0.02em',
                 }}

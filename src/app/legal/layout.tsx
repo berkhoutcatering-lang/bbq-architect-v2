@@ -3,7 +3,7 @@ import { Flame } from 'lucide-react';
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-white font-['Outfit']">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] text-white font-[var(--font-outfit)]">
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[var(--color-bg-primary)]/80 border-b border-[var(--card-solid)]">
         <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center justify-between gap-3">

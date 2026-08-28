@@ -312,9 +312,9 @@ export default function Materieel() {
                         </div>
                     ))}
                     <div className="responsive-row" style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                        <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
+                        <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px var(--font-dm-sans), sans-serif' }}
                             placeholder="Actie (bijv. Reiniging)" value={newLog.actie} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLog(Object.assign({}, newLog, { actie: e.target.value }))} />
-                        <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px DM Sans,sans-serif' }}
+                        <input style={{ flex: 1, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 8, font: '400 13px var(--font-dm-sans), sans-serif' }}
                             placeholder="Notitie" value={newLog.notitie} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewLog(Object.assign({}, newLog, { notitie: e.target.value }))} />
                         <button className="btn btn-brand btn-sm" onClick={addLogEntry} aria-label="Logboek item toevoegen"><Plus size={14} /></button>
                     </div>

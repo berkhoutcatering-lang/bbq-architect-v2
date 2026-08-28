@@ -307,7 +307,7 @@ export default function KookbordClient() {
   };
 
   return (
-    <div style={{ height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(150% 120% at 50% -20%, #161518 0%, #0d0d0f 55%, #0a0a0c 100%)', fontFamily: "'DM Sans',sans-serif", color: '#f8f8f8', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ height: '100vh', width: '100%', display: 'flex', flexDirection: 'column', background: 'radial-gradient(150% 120% at 50% -20%, #161518 0%, #0d0d0f 55%, #0a0a0c 100%)', fontFamily: "var(--font-dm-sans), sans-serif", color: '#f8f8f8', overflow: 'hidden', position: 'relative' }}>
       <style>{MEP_CSS}</style>
 
       {melding ? (
@@ -355,7 +355,7 @@ export default function KookbordClient() {
               <div style={{ width: 96, height: 96, borderRadius: 24, background: 'radial-gradient(120% 120% at 50% 25%, rgba(196,163,90,.14), rgba(28,28,32,.6))', border: '1px solid rgba(196,163,90,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22, boxShadow: '0 12px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)' }}>
                 <Flame size={38} color="rgba(216,184,99,.7)" strokeWidth={1.6} />
               </div>
-              <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Geen aankomend event</h2>
+              <h2 style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Geen aankomend event</h2>
               <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#949494', maxWidth: 400, margin: '0 0 22px' }}>Zodra een offerte bevestigd is, verschijnt hier automatisch je mise-en-place — opgesplitst per gerecht en per component.</p>
               <Link href="/agenda" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 46, padding: '0 20px', borderRadius: 11, background: 'rgba(130,130,130,.08)', border: '1px solid rgba(130,130,130,.2)', color: '#cfcfcf', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
                 <Calendar size={16} color="#cfcfcf" strokeWidth={2} /><span>Bekijk de agenda</span>
@@ -368,7 +368,7 @@ export default function KookbordClient() {
               <div style={{ width: 96, height: 96, borderRadius: 24, background: 'radial-gradient(120% 120% at 50% 25%, rgba(196,163,90,.14), rgba(28,28,32,.6))', border: '1px solid rgba(196,163,90,.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 22, boxShadow: '0 12px 40px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)' }}>
                 <ChefHat size={38} color="rgba(216,184,99,.7)" strokeWidth={1.6} />
               </div>
-              <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Nog geen componenten</h2>
+              <h2 style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 300, fontSize: 26, letterSpacing: '-.01em', margin: '0 0 10px', color: '#f3f3f3' }}>Nog geen componenten</h2>
               <p style={{ fontSize: 14.5, lineHeight: 1.6, color: '#949494', maxWidth: 420, margin: '0 0 22px' }}>De gerechten van dit event hebben nog geen onderdelen. Koppel componenten aan een gerecht, dan verschijnen ze hier als MEP-kaarten.</p>
               <Link href="/gerechten" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 46, padding: '0 20px', borderRadius: 11, background: 'rgba(130,130,130,.08)', border: '1px solid rgba(130,130,130,.2)', color: '#cfcfcf', fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>
                 <ChefHat size={16} color="#cfcfcf" strokeWidth={2} /><span>Naar gerechten</span>
@@ -384,7 +384,7 @@ export default function KookbordClient() {
                     <Check size={24} color="#74e29a" strokeWidth={2.6} />
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 500, fontSize: 19, letterSpacing: '-.01em', color: '#f3f3f3' }}>Alles MEP klaar</span>
+                    <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 500, fontSize: 19, letterSpacing: '-.01em', color: '#f3f3f3' }}>Alles MEP klaar</span>
                     <span style={{ fontSize: 13.5, color: '#9fb8a6' }}>{progress.done} van de {progress.total} componenten gereed — klaar voor uitgifte, van het vuur.</span>
                   </div>
                   <span style={{ flex: 1 }} />

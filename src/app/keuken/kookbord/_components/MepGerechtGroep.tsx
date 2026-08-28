@@ -21,7 +21,7 @@ export default function MepGerechtGroep({ gerecht, guests, onItemTap, onStatusTo
   return (
     <section style={{ marginBottom: 32 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 15 }}>
-        <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 500, fontSize: 20, letterSpacing: '-.01em', color: '#f3f3f3' }}>{gerecht.naam}</span>
+        <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 500, fontSize: 20, letterSpacing: '-.01em', color: '#f3f3f3' }}>{gerecht.naam}</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
           <span style={{ width: 80, height: 5, borderRadius: 3, background: 'rgba(130,130,130,.16)', overflow: 'hidden', display: 'block' }}>
             <span style={{ display: 'block', height: '100%', width: `${pct * 100}%`, background: pct === 1 ? '#22c55e' : ACCENT, borderRadius: 3, transition: 'width .4s ease' }} />

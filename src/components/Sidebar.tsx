@@ -277,7 +277,7 @@ export default function Sidebar() {
                         <Flame className="w-4 h-4 text-[var(--brand)]" />
                     </div>
                     <div className="transition-all duration-300 whitespace-nowrap flex flex-col justify-center" style={{ opacity: collapsed && isDesktop ? 0 : 1, width: collapsed && isDesktop ? 0 : 'auto' }}>
-                        <p className="text-[13px] font-semibold tracking-[0.08em] text-[var(--text)] font-['Outfit']">
+                        <p className="text-[13px] font-semibold tracking-[0.08em] text-[var(--text)] font-[var(--font-outfit)]">
                             BBQ ARCHITECT
                         </p>
                         <p className="text-[9px] tracking-[0.25em] text-[var(--muted-light)] uppercase mt-0.5">

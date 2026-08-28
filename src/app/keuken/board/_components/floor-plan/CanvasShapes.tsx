@@ -159,7 +159,7 @@ export default function CanvasShapeRenderer({
             )}
             <Text
                 text={label}
-                fontFamily="Outfit, sans-serif"
+                fontFamily="var(--font-outfit), sans-serif"
                 fontSize={12}
                 fontStyle="bold"
                 fill="#ffffff"

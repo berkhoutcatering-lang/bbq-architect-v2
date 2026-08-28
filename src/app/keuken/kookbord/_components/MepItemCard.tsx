@@ -59,7 +59,7 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
               <TypeIcon size={12} color="#83838a" strokeWidth={2} />
               <span>{isIngekocht ? 'Ingekocht' : 'Bereid'}</span>
             </span>
-            <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 17, fontWeight: 600, lineHeight: 1.22, color: '#f4f4f4' }}>{item.name}</span>
+            <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 17, fontWeight: 600, lineHeight: 1.22, color: '#f4f4f4' }}>{item.name}</span>
           </div>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 10px 0 8px', borderRadius: 999, background: p.pillBg, border: `1px solid ${p.pillBd}`, color: p.pillFg, fontSize: 11, fontWeight: 700, letterSpacing: '.02em', flex: '0 0 auto', whiteSpace: 'nowrap' }}>
             <PillIcon size={12} color={p.pillFg} strokeWidth={status === 'klaar' ? 2.4 : 2} {...(status === 'bezig' ? { fill: p.pillFg } : {})} />
@@ -68,8 +68,8 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
         </div>
 
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginTop: 1 }}>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 36, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 0.92, letterSpacing: '.005em', color: '#ffffff' }}>{q.value}</span>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 16, fontWeight: 500, color: '#9aa0a8' }}>{q.unit}</span>
+          <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 36, fontWeight: 700, fontVariantNumeric: 'tabular-nums', lineHeight: 0.92, letterSpacing: '.005em', color: '#ffffff' }}>{q.value}</span>
+          <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 16, fontWeight: 500, color: '#9aa0a8' }}>{q.unit}</span>
         </div>
 
         {allergenen.length > 0 && (
@@ -91,7 +91,7 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
             if (next === 'klaar') { setFlash(true); window.setTimeout(() => setFlash(false), 600); }
             void onStatusToggle(item.mep_item_id, next);
           }}
-          style={{ height: 56, marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", fontSize: 14.5, fontWeight: 700, letterSpacing: '.01em', width: '100%' }}
+          style={{ height: 56, marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 14.5, fontWeight: 700, letterSpacing: '.01em', width: '100%' }}
         >
           <BtnIcon size={status === 'bezig' ? 20 : status === 'todo' ? 19 : 18} color={bs.fg} strokeWidth={status === 'bezig' ? 2.6 : status === 'todo' ? 2.2 : 2.1} {...(status === 'todo' ? { fill: ACCENT_DARK } : {})} />
           <span>{bs.label}</span>

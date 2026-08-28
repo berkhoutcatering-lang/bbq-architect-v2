@@ -1,3 +1,19 @@
+/* ── Menukaart-lettertypen ────────────────────────────────────────
+   De menukaart laat de gebruiker per template een lettertype kiezen
+   (zie lib/menukaart/registry.ts). Die families werden vroeger
+   meegeladen door de vijf globale @import-regels in globals.css —
+   die zijn weggehaald omdat ze het eerste beeld van de HELE app
+   blokkeerden (nu next/font in app/layout.tsx).
+
+   Hier staan ze opnieuw, maar alleen op de editor-route: dit bestand
+   wordt enkel door MenukaartEditor.tsx geimporteerd. De preview houdt
+   dus exact de lettertypen die hij had, zonder dat de rest van de app
+   ervoor betaalt.
+
+   Los hiervan staan de .ttf's in public/fonts/menukaart/ — die zijn
+   voor het serveren van de PDF (lib/menukaart/pdf-shared.ts). */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700;800&family=Oswald:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
 /* ══════════════════════════════════════════════════════════════════
    Menukaart Editor — Scoped styles
    Geport vanaf /tmp/menukaart-editor-check/.../editor.css
@@ -16,8 +32,8 @@
     --mke-muted-light: #555;
     --mke-border: #2a2a2a;
     --mke-border-light: #333;
-    --mke-font-ui: 'Outfit', 'DM Sans', sans-serif;
-    --mke-font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --mke-font-ui: var(--font-outfit), var(--font-dm-sans), sans-serif;
+    --mke-font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
     --mke-font-body: 'DM Sans', sans-serif;
     --mke-radius: 6px;
     --mke-radius-lg: 10px;

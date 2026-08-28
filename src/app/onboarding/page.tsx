@@ -63,7 +63,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] font-['Outfit']">
+    <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--text)] font-[var(--font-outfit)]">
       {/* Minimal header */}
       <header className="border-b border-[var(--card-solid)]">
         <div className="max-w-[900px] mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">

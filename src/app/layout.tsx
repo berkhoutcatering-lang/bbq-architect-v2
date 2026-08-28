@@ -1,4 +1,5 @@
 import './globals.css';
+import { DM_Sans, Outfit, IBM_Plex_Mono, Playfair_Display, Oswald } from 'next/font/google';
 import React from 'react';
 import { cookies } from 'next/headers';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -15,6 +16,55 @@ import { THEMES, DEFAULT_PRESET_ID } from "@/lib/themes";
 import { themeCssVarsBlock } from "@/lib/themeTokens";
 
 import type { Viewport } from 'next';
+
+/**
+ * Lettertypen via next/font in plaats van vijf @import-regels bovenaan
+ * globals.css. Die imports lieten de browser eerst fonts.googleapis.com en
+ * daarna fonts.gstatic.com bevragen vóórdat er íets op het scherm kwam — een
+ * geserialiseerde DNS + TLS + fetch vóór het eerste beeld.
+ *
+ * next/font haalt de bestanden bij de build op en serveert ze vanaf ons eigen
+ * domein, met `display: swap` zodat tekst meteen leesbaar is. Elke familie
+ * levert een CSS-variabele die globals.css gebruikt.
+ *
+ * Inter stond er ook bij maar werd nergens gebruikt — die is vervallen.
+ * De .ttf's in public/fonts/menukaart/ staan hier los van: die zijn voor de
+ * menukaart-PDF's aan de serverkant (zie lib/menukaart/pdf-shared.ts).
+ */
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+});
+const outfit = Outfit({
+  subsets: ['latin'],
+  weight: ['200', '300', '400', '500', '600', '700'],
+  variable: '--font-outfit',
+  display: 'swap',
+});
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-ibm-plex-mono',
+  display: 'swap',
+});
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['400', '600', '700', '800'],
+  variable: '--font-playfair',
+  display: 'swap',
+});
+const oswald = Oswald({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600'],
+  variable: '--font-oswald',
+  display: 'swap',
+});
+
+const fontVariables = [dmSans, outfit, ibmPlexMono, playfair, oswald]
+  .map(f => f.variable)
+  .join(' ');
 
 export const metadata = {
   title: 'BBQ Architect',
@@ -50,7 +100,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const initialTheme = themeCssVarsBlock(preset);
 
   return (
-    <html lang="nl" data-theme-mode={preset.mode} suppressHydrationWarning>
+    <html lang="nl" data-theme-mode={preset.mode} className={fontVariables} suppressHydrationWarning>
       <head>
         <style dangerouslySetInnerHTML={{ __html: initialTheme }} />
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />

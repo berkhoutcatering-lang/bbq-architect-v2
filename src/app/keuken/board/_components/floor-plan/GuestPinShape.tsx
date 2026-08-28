@@ -88,7 +88,7 @@ export default function GuestPinShape({
             {/* Label — initialen of pin-code */}
             <Text
                 text={guest.label.slice(0, 3).toUpperCase()}
-                fontFamily="Outfit, sans-serif"
+                fontFamily="var(--font-outfit), sans-serif"
                 fontSize={diameter * 0.32}
                 fontStyle="bold"
                 fill="#ffffff"
@@ -104,7 +104,7 @@ export default function GuestPinShape({
             {showName && guest.full_name && (
                 <Text
                     text={guest.full_name}
-                    fontFamily="Outfit, sans-serif"
+                    fontFamily="var(--font-outfit), sans-serif"
                     fontSize={11}
                     fill="#cccccc"
                     align="center"

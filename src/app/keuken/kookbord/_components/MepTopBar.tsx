@@ -58,7 +58,7 @@ export default function MepTopBar({ events, selectedEventId, onEventChange, prog
           <Flame size={18} color="#d8b863" strokeWidth={1.8} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.16 }}>
-          <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 600, fontSize: 13.5, letterSpacing: '.03em', color: '#f3f3f3' }}>Hop &amp; Bites</span>
+          <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontWeight: 600, fontSize: 13.5, letterSpacing: '.03em', color: '#f3f3f3' }}>Hop &amp; Bites</span>
           <span style={{ fontSize: 9, letterSpacing: '.26em', textTransform: 'uppercase', color: '#8b8b8f', fontWeight: 700 }}>Mise · en · place</span>
         </div>
       </div>
@@ -108,7 +108,7 @@ export default function MepTopBar({ events, selectedEventId, onEventChange, prog
           </svg>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
             <span style={{ fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', color: '#8b8b8f', fontWeight: 700 }}>Voortgang</span>
-            <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#f3f3f3' }}>{done}/{total} klaar</span>
+            <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#f3f3f3' }}>{done}/{total} klaar</span>
           </div>
         </div>
         <button

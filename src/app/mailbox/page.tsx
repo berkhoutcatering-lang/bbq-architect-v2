@@ -310,7 +310,7 @@ export default function Mailbox() {
                         <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
                             <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
                             <input
-                                style={{ width: '100%', paddingLeft: 34, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px 8px 34px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                style={{ width: '100%', paddingLeft: 34, background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 12px 8px 34px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                                 placeholder="Zoek op naam, e-mail of onderwerp..."
                                 value={search}
                                 onChange={function (e) { setSearch(e.target.value); }}
@@ -423,7 +423,7 @@ export default function Mailbox() {
                             <select
                                 value={composeKlantId}
                                 onChange={function (e) { selectKlant(e.target.value); }}
-                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                             >
                                 <option value="">— Selecteer een klant —</option>
                                 {klanten.filter(function (k) { return k.email; }).map(function (k) {
@@ -441,7 +441,7 @@ export default function Mailbox() {
                                         value={composeEmail}
                                         onChange={function (e) { setComposeEmail(e.target.value); }}
                                         placeholder="email@voorbeeld.nl"
-                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                                     />
                                 </div>
                                 <div>
@@ -450,7 +450,7 @@ export default function Mailbox() {
                                         value={composeNaam}
                                         onChange={function (e) { setComposeNaam(e.target.value); }}
                                         placeholder="Naam ontvanger"
-                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                                     />
                                 </div>
                             </div>
@@ -462,7 +462,7 @@ export default function Mailbox() {
                             <select
                                 value={composeTemplateId}
                                 onChange={function (e) { selectTemplate(e.target.value); }}
-                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                             >
                                 <option value="">— Geen template —</option>
                                 {templates.map(function (t) {
@@ -478,7 +478,7 @@ export default function Mailbox() {
                                 value={composeOnderwerp}
                                 onChange={function (e) { setComposeOnderwerp(e.target.value); }}
                                 placeholder="Onderwerp van de e-mail"
-                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}
+                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}
                             />
                         </div>
 
@@ -490,7 +490,7 @@ export default function Mailbox() {
                                 value={composeBericht}
                                 onChange={function (e) { setComposeBericht(e.target.value); }}
                                 placeholder="Typ je bericht hier..."
-                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif', resize: 'vertical' }}
+                                style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif', resize: 'vertical' }}
                             />
                         </div>
 
@@ -534,12 +534,12 @@ export default function Mailbox() {
                                     <div>
                                         <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Naam</label>
                                         <input value={tplForm.naam} onChange={function (e) { setTplForm({ ...tplForm, naam: e.target.value }); }} placeholder="Template naam"
-                                            style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }} />
+                                            style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }} />
                                     </div>
                                     <div>
                                         <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Categorie</label>
                                         <select value={tplForm.categorie} onChange={function (e) { setTplForm({ ...tplForm, categorie: e.target.value }); }}
-                                            style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }}>
+                                            style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }}>
                                             <option value="algemeen">Algemeen</option>
                                             <option value="offerte">Offerte</option>
                                             <option value="na-event">Na event</option>
@@ -551,13 +551,13 @@ export default function Mailbox() {
                                     <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Onderwerp</label>
                                     <input value={tplForm.onderwerp} onChange={function (e) { setTplForm({ ...tplForm, onderwerp: e.target.value }); }}
                                         placeholder="Onderwerp (gebruik {{klant_naam}} en {{bedrijfsnaam}})"
-                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif' }} />
+                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif' }} />
                                 </div>
                                 <div>
                                     <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: '0.08em', display: 'block', marginBottom: 6 }}>Inhoud</label>
                                     <textarea rows={10} value={tplForm.body} onChange={function (e) { setTplForm({ ...tplForm, body: e.target.value }); }}
                                         placeholder="Typ de template inhoud... Gebruik {{klant_naam}} en {{bedrijfsnaam}} als variabelen."
-                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px DM Sans,sans-serif', resize: 'vertical' }} />
+                                        style={{ width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)', padding: '10px 12px', borderRadius: 10, font: '400 14px var(--font-dm-sans), sans-serif', resize: 'vertical' }} />
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)', background: 'color-mix(in srgb, var(--color-accent-gold) 6%, transparent)', borderRadius: 8, padding: '8px 12px', border: '1px solid color-mix(in srgb, var(--color-accent-gold) 10%, transparent)' }}>
                                     <strong>Variabelen:</strong> {'{{klant_naam}}'} = naam ontvanger, {'{{bedrijfsnaam}}'} = jouw bedrijfsnaam

@@ -63,7 +63,7 @@ export default function ServiceZoneShape({
                 x={labelX - 80}
                 y={labelY - 9}
                 width={160}
-                fontFamily="Outfit, sans-serif"
+                fontFamily="var(--font-outfit), sans-serif"
                 fontSize={12}
                 fontStyle="bold"
                 fill="#ffffff"

@@ -87,7 +87,7 @@ export default function TemplatePickerSheet({
             style={{
                 position: 'fixed', inset: 0, zIndex: 200,
                 background: '#07090C', overflow: 'auto',
-                fontFamily: "'Space Grotesk', 'Outfit', sans-serif",
+                fontFamily: "'Space Grotesk', var(--font-outfit), sans-serif",
             }}
         >
             {/* Header */}
@@ -100,7 +100,7 @@ export default function TemplatePickerSheet({
                     lineHeight: 0.82, userSelect: 'none',
                 }}>
                     <div style={{
-                        fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                        fontFamily: "'Bebas Neue', var(--font-outfit), sans-serif",
                         fontSize: 'clamp(80px, 16vw, 220px)',
                         color: 'transparent',
                         WebkitTextStroke: `1px ${accent}11`,
@@ -121,7 +121,7 @@ export default function TemplatePickerSheet({
                             Visueel systeem · Brand cascade · EU 1169 compliant
                         </div>
                         <h2 id="template-picker-title" style={{
-                            fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                            fontFamily: "'Bebas Neue', var(--font-outfit), sans-serif",
                             fontSize: 'clamp(44px, 7vw, 96px)', lineHeight: 0.87, color: '#F0EBE0',
                         }}>
                             Menukaart<br />
@@ -136,7 +136,7 @@ export default function TemplatePickerSheet({
                     <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', alignItems: 'flex-start', gap: 24 }}>
                         <div>
                             <div style={{
-                                fontFamily: "'Bebas Neue', 'Outfit', sans-serif",
+                                fontFamily: "'Bebas Neue', var(--font-outfit), sans-serif",
                                 fontSize: 72, lineHeight: 0.88, color: accent,
                             }}>{String(templates.length).padStart(2, '0')}</div>
                             <div style={{
@@ -227,7 +227,7 @@ export default function TemplatePickerSheet({
                                                 style={{
                                                     padding: '11px 26px', borderRadius: 999, border: 'none',
                                                     background: accent, color: '#07090C',
-                                                    fontFamily: "'Space Grotesk', 'Outfit', sans-serif",
+                                                    fontFamily: "'Space Grotesk', var(--font-outfit), sans-serif",
                                                     fontSize: 13, fontWeight: 700,
                                                     letterSpacing: '.07em', textTransform: 'uppercase',
                                                     cursor: 'pointer',

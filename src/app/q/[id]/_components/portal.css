@@ -5,7 +5,6 @@
    the "warm-amber on cream" default.
    ────────────────────────────────────────────────────────────────────────── */
 
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
 
 /* ── Token scaffold ──────────────────────────────────────────────────────
    Base tokens live on :root so a global theme set on <html> cascades into
@@ -44,8 +43,8 @@
 
   /* radii / type per brief */
   --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
-  --f-sans: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --f-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --f-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --f-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
 
   background: var(--surface);
   color: var(--text);
