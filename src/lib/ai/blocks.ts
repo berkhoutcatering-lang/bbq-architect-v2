@@ -82,7 +82,7 @@ export interface NavCardBlock {
     summary: string;                                    // bv "23 items, €847 totaal, 2 dagen voor event"
     route: string;                                      // bv "/inkoop?event=12" — Next.js href
     label: string;                                      // bv "Open inkooplijst" — knop-tekst, max 4 woorden
-    icon?: string;                                      // optioneel lucide-react icon naam (bv "ShoppingCart")
+    icon?: string;                                      // icoon-naam uit AI_ICON_NAMES (components/ai/blocks/icons.ts)
     badge?: { text: string; tone: BadgeTone };          // optionele status-badge rechtsboven
     preview?: string[];                                 // optionele max 5 preview-items onder summary
 }
@@ -168,7 +168,7 @@ export const BLOCK_TOOL_SCHEMA = {
                                     properties: {
                                         text: { type: 'string', description: 'De zichtbare tekst, max 80 chars.' },
                                         route: { type: 'string', description: 'Optionele deep-link, ALLEEN routes uit de page-whitelist.' },
-                                        icon: { type: 'string', description: 'Optionele lucide icon naam.' },
+                                        icon: { type: 'string', description: 'Optioneel icoon. Alleen namen uit de lijst in de systeem-prompt; andere namen vallen terug op een bolletje.' },
                                         badge: {
                                             type: 'object',
                                             properties: {
@@ -195,7 +195,7 @@ export const BLOCK_TOOL_SCHEMA = {
                     summary: { type: 'string', description: 'Korte samenvatting (max 140 chars). Verplicht bij nav_card/action_card.' },
                     route: { type: 'string', description: 'Next.js href, bv "/inkoop?event=12". ALLEEN routes uit PAGE_ROUTE_WHITELIST. Verplicht bij nav_card, optioneel bij metric (maakt hele kaart klikbaar).' },
                     label: { type: 'string', description: 'Knop-tekst, max 4 woorden, bv "Open inkooplijst". Verplicht bij nav_card, optioneel bij metric+route.' },
-                    icon: { type: 'string', description: 'Lucide-react icon naam (bv "ShoppingCart", "ChefHat"). Optioneel.' },
+                    icon: { type: 'string', description: 'Optioneel icoon. Alleen namen uit de lijst in de systeem-prompt; andere namen vallen terug op een pijl.' },
                     badge: {
                         type: 'object',
                         properties: {

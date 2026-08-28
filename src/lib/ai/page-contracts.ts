@@ -16,6 +16,7 @@
 // ============================================================
 
 import type { BlockType } from './blocks';
+import { AI_ICON_NAMES } from '@/components/ai/blocks/icons';
 
 // ─── Allowed tool-names per page ───
 // Lege array of geen entry = alleen respond_with_blocks (default).
@@ -229,7 +230,7 @@ export function buildBlockDirective(pagePath: string): string {
     lines.push('- title: korte zin met concrete entity (bv "Inkooplijst voor Bruiloft Berkhout"), max 60 chars');
     lines.push('- summary: 1 zin met sleutel-cijfers (bv "23 items, €847 totaal, event over 2 dagen"), max 140 chars');
     lines.push('- label: knop-tekst max 4 woorden (bv "Open inkooplijst"), werkwoord-eerst');
-    lines.push('- icon: lucide-react naam in PascalCase (bv "ShoppingCart", "ChefHat", "Calendar", "BarChart3")');
+    lines.push('- icon: kies UITSLUITEND uit deze lijst (andere namen worden genegeerd): ' + AI_ICON_NAMES.join(', '));
     lines.push('- badge.tone: info | warning | success | danger | neutral — alleen bij echte status');
     lines.push('- preview (optioneel): max 5 strings, één regel per item');
     lines.push('');

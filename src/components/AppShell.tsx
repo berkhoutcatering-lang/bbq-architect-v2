@@ -19,7 +19,10 @@ import OfflineIndicator from '@/components/OfflineIndicator';
 import Changelog from '@/components/Changelog';
 import ContextualHelp from '@/components/ContextualHelp';
 import FAB from '@/components/FAB';
-import { MobileCmdKTrigger } from '@/components/mobile';
+// Rechtstreeks uit het bestand, niet uit de barrel: '@/components/mobile'
+// re-exporteert ook Sheet, en dat sleept vaul (58 KB) mee in de gedeelde
+// bundel op élke pagina terwijl AppShell alleen deze trigger nodig heeft.
+import MobileCmdKTrigger from '@/components/mobile/MobileCmdKTrigger';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
 import { useActivityTracker } from '@/lib/useActivityTracker';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import * as Icons from 'lucide-react';
 import { ArrowRight } from 'lucide-react';
+import { resolveIcon } from './icons';
 import type { NavCardBlock as NavCardBlockType, BadgeTone } from '@/lib/ai/blocks';
 
 const badgeTone: Record<BadgeTone, { bg: string; border: string; text: string }> = {
@@ -13,19 +13,8 @@ const badgeTone: Record<BadgeTone, { bg: string; border: string; text: string }>
     neutral: { bg: 'var(--status-neutral-bg)', border: 'var(--status-neutral-border)', text: 'var(--status-neutral-text)' },
 };
 
-// Lucide icon resolver. Onbekende namen vallen terug op ArrowRight (dezelfde
-// als CTA-pijl) zodat de kaart altijd rendert.
-function resolveIcon(name?: string) {
-    if (!name) return ArrowRight;
-    const candidate = (Icons as unknown as Record<string, unknown>)[name];
-    if (typeof candidate === 'function' || (candidate && typeof candidate === 'object')) {
-        return candidate as typeof ArrowRight;
-    }
-    return ArrowRight;
-}
-
 export default function NavCardBlock({ block, onNavigate }: { block: NavCardBlockType; onNavigate?: () => void }) {
-    const Icon = resolveIcon(block.icon);
+    const Icon = resolveIcon(block.icon, ArrowRight);
     const badge = block.badge ? badgeTone[block.badge.tone] : null;
 
     return (

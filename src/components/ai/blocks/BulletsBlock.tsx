@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import * as Icons from 'lucide-react';
 import { ArrowRight } from 'lucide-react';
+import { resolveIcon } from './icons';
 import type { BulletsBlock as BulletsBlockType, BulletItem, BadgeTone } from '@/lib/ai/blocks';
 
 const badgeTone: Record<BadgeTone, { bg: string; text: string }> = {
@@ -12,15 +12,6 @@ const badgeTone: Record<BadgeTone, { bg: string; text: string }> = {
     danger: { bg: 'var(--status-danger-bg)', text: 'var(--status-danger-text)' },
     neutral: { bg: 'var(--status-neutral-bg)', text: 'var(--status-neutral-text)' },
 };
-
-function resolveIcon(name?: string) {
-    if (!name) return null;
-    const candidate = (Icons as unknown as Record<string, unknown>)[name];
-    if (typeof candidate === 'function' || (candidate && typeof candidate === 'object')) {
-        return candidate as typeof ArrowRight;
-    }
-    return null;
-}
 
 function isObjectItem(item: BulletItem): item is { text: string; route?: string; icon?: string; badge?: { text: string; tone: BadgeTone } } {
     return typeof item !== 'string';
@@ -82,7 +73,7 @@ export default function BulletsBlock({ block, onNavigate }: Props) {
                     }
 
                     // Object-item: mogelijk klikbaar (route) + icon + badge
-                    const Icon = resolveIcon(item.icon);
+                    const Icon = resolveIcon(item.icon, null);
                     const tone = item.badge ? badgeTone[item.badge.tone] : null;
 
                     const inner = (
