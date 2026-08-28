@@ -33,11 +33,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth changes
+    /* Supabase vuurt op de achtergrond herhaaldelijk auth-events af (elke ~2
+       seconden een SIGNED_IN, ook als er niets verandert). Werden die één op
+       één doorgezet, dan kreeg `user` telkens een nieuw object — en omdat
+       OrgContext daarop reageert, ging bij élk event opnieuw de organisatie-
+       query de deur uit, waarna de meter weer een maand aan ai_usage-rijen
+       ophaalde. Dat hield zichzelf in stand: een eeuwigdurende cyclus van
+       twee queries per 2 seconden, op élke pagina.
+
+       We schrijven daarom alleen nieuwe state weg als er echt iets veranderd
+       is: een andere gebruiker, of een vers token. Blijft alles gelijk, dan
+       geven we exact hetzelfde object terug en slaat React de re-render over
+       — daarmee is de lus gebroken. */
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       function (_event, s) {
-        setSession(s);
-        setUser(s?.user ?? null);
+        setSession(function (vorige) {
+          return vorige?.access_token === s?.access_token ? vorige : s;
+        });
+        setUser(function (vorige) {
+          const nieuw = s?.user ?? null;
+          return vorige?.id === nieuw?.id ? vorige : nieuw;
+        });
         setLoading(false);
       }
     );

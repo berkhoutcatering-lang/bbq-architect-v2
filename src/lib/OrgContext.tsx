@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/AuthContext';
+import { dedupe } from '@/lib/requestDedupe';
 import type { Organization, OrganizationMember } from '@/types';
 
 interface OrgContextValue {
@@ -48,12 +49,21 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     async function loadOrg() {
       if (!supabase || !user) return;
 
-      // Get all memberships for this user
-      const { data: memberships } = await supabase
-        .from('organization_members')
-        .select('organization_id, role')
-        .eq('user_id', user.id)
-        .eq('status', 'active');
+      /* Lidmaatschappen én de bijbehorende organisatie in één keer. Dit waren
+         twee losse queries ná elkaar: eerst organization_members, dan met dat
+         antwoord organizations. Omdat de hele app achter dit laadscherm wacht,
+         kostte die tweede ronde iedereen een extra netwerkslag. PostgREST kan
+         de organisatie direct meesturen via de foreign key. */
+      const { data: memberships } = await dedupe(
+        'org-bootstrap:' + user.id,
+        function () {
+          return supabase!
+            .from('organization_members')
+            .select('organization_id, role, organizations(*)')
+            .eq('user_id', user!.id)
+            .eq('status', 'active');
+        }
+      );
 
       if (!memberships || memberships.length === 0) {
         // User has no org — will be handled by signup/onboarding
@@ -69,12 +79,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       setOrgId(active.organization_id);
       setUserRole(active.role as 'Admin' | 'Pitmaster' | 'Medewerker');
 
-      // Fetch org details
-      const { data: org } = await supabase
-        .from('organizations')
-        .select('*')
-        .eq('id', active.organization_id)
-        .single();
+      /* De embedded organisatie komt als object binnen (many-to-one). Mocht
+         PostgREST 'm ooit als array teruggeven, dan pakken we het eerste
+         element — anders staat de app zonder organisatie-gegevens. */
+      const embedded = (active as unknown as { organizations?: Organization | Organization[] | null }).organizations;
+      const org = Array.isArray(embedded) ? embedded[0] : embedded;
 
       if (org) setOrganization(org as Organization);
       setLoading(false);
@@ -89,10 +98,12 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const loadMembers = useCallback(async function () {
     if (!supabase || !orgId) return;
 
-    const { data: memberRows } = await supabase
-      .from('organization_members')
-      .select('*')
-      .eq('organization_id', orgId);
+    const { data: memberRows } = await dedupe(
+      'org-members:' + orgId,
+      function () {
+        return supabase!.from('organization_members').select('*').eq('organization_id', orgId);
+      }
+    );
 
     if (!memberRows || memberRows.length === 0) {
       setMembers([]);

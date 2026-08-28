@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
+import { dedupe } from '@/lib/requestDedupe';
 import {
   getActiveOfflineEvent,
   readLocal,
@@ -49,6 +50,17 @@ export interface UseSupabaseOptions {
      * meekomen.
      */
     skipInitialFetch?: boolean;
+    /**
+     * Welke kolommen ophalen. Standaard `*` — alles. Gebruik dit op tabellen
+     * met zware kolommen die de pagina toch niet toont. Concreet geval: oude
+     * `bonnen`-rijen hebben de bonfoto als base64 in `image_url` staan, goed
+     * voor 130 KB op de startpagina terwijl daar alleen bedragen en datums
+     * worden gebruikt.
+     *
+     * Neem `id` altijd mee — insert/update/remove en de realtime-refresh
+     * rekenen erop.
+     */
+    columns?: string;
 }
 
 /* id mag number (bigserial-tabellen) of string (uuid-tabellen zoals
@@ -74,6 +86,7 @@ export function useSupabase<T extends { id: number | string }>(
     setData: React.Dispatch<React.SetStateAction<T[]>>;
 } {
     const skipInitialFetch = options?.skipInitialFetch ?? false;
+    const columns = options?.columns ?? '*';
     const [data, setData] = useState<T[]>(defaultVal || []);
     /* Loading start false als Server Component al data leverde — geen flash. */
     const [loading, setLoading] = useState(!skipInitialFetch);
@@ -106,11 +119,18 @@ export function useSupabase<T extends { id: number | string }>(
         if (!supabase || !orgId) { setLoading(false); return; }
         setLoading(true);
         setError(null);
-        supabase
-            .from(table)
-            .select('*')
-            .eq('organization_id', orgId)
-            .order('id', { ascending: true })
+        /* Meerdere componenten op dezelfde pagina vragen dezelfde tabel op
+           zonder van elkaar te weten — op de startpagina gingen `gerechten` en
+           `offertes` er zo drie keer uit. Gelijktijdige identieke verzoeken
+           delen nu één ronde; na afloop wordt er niets bewaard, dus een
+           refetch (ook die van realtime) haalt gewoon verse data op. */
+        dedupe('tbl:' + table + ':' + orgId + ':' + columns, function () {
+            return supabase!
+                .from(table)
+                .select(columns)
+                .eq('organization_id', orgId)
+                .order('id', { ascending: true });
+        })
             .then(function (res) {
                 if (res.error) {
                     const msg = res.error.message || res.error.code || 'onbekende fout';
@@ -123,10 +143,14 @@ export function useSupabase<T extends { id: number | string }>(
                 } else {
                     setError(null);
                 }
-                if (res.data) setData(res.data as T[]);
+                /* Dubbele cast: met een dynamische kolom-string kan Supabase
+                   de rij-vorm niet afleiden en valt hij terug op
+                   GenericStringError[]. De echte vorm bewaakt de consumer via
+                   het type-argument van useSupabase<T>. */
+                if (res.data) setData(res.data as unknown as T[]);
                 setLoading(false);
             });
-    }, [table, orgId, offlineMode, activeOffline]);
+    }, [table, orgId, offlineMode, activeOffline, columns]);
 
     // Debounced refetch — coalesces rapid-fire realtime events (e.g. bulk inserts)
     const debouncedFetch = useCallback(function () {
@@ -228,7 +252,7 @@ export function useSupabase<T extends { id: number | string }>(
             setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
             return res.data as T;
         });
-    }, [table, orgId, offlineMode, activeOffline]);
+    }, [table, orgId, offlineMode, activeOffline, columns]);
 
     const update = useCallback(function (id: number | string, row: Partial<T>): Promise<T | null> {
         if (!supabase || !orgId) return Promise.resolve(null);
@@ -284,7 +308,7 @@ export function useSupabase<T extends { id: number | string }>(
             }
             return res.data as T;
         });
-    }, [table, orgId, offlineMode, activeOffline]);
+    }, [table, orgId, offlineMode, activeOffline, columns]);
 
     const remove = useCallback(function (id: number | string): Promise<void> {
         if (!supabase || !orgId) return Promise.resolve();
@@ -324,7 +348,7 @@ export function useSupabase<T extends { id: number | string }>(
                 throw res.error;
             }
         });
-    }, [table, orgId, offlineMode, activeOffline]);
+    }, [table, orgId, offlineMode, activeOffline, columns]);
 
     return { data, loading, error, refetch: fetchData, insert, update, remove, setData };
 }
@@ -341,11 +365,9 @@ export function useSettings(): {
 
     useEffect(function () {
         if (!supabase || !orgId) { setLoading(false); return; }
-        supabase
-            .from('settings')
-            .select('*')
-            .eq('organization_id', orgId)
-            .single()
+        dedupe('settings:' + orgId, function () {
+            return supabase!.from('settings').select('*').eq('organization_id', orgId).single();
+        })
             .then(function (res) {
                 if (res.data) setSettings(res.data as import('@/types').Settings);
                 setLoading(false);

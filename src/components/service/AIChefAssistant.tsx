@@ -196,14 +196,22 @@ export default function AIChefAssistant({
         if (!enabled) return;
         fetchDirective();
 
+        /* Elke ophaal is een AI-aanroep, dus ook bij terugkomst op het tabblad
+           houden we minstens het normale interval aan. Anders levert wisselen
+           tussen apps op de tablet een aanroep per wissel op. */
+        let laatsteOphaal = Date.now();
         const tick = () => {
             if (document.visibilityState === 'hidden') return;
+            laatsteOphaal = Date.now();
             fetchDirective();
         };
         const interval = setInterval(tick, refreshIntervalMs);
 
         const onVisible = () => {
-            if (document.visibilityState === 'visible') fetchDirective();
+            if (document.visibilityState !== 'visible') return;
+            if (Date.now() - laatsteOphaal < refreshIntervalMs) return;
+            laatsteOphaal = Date.now();
+            fetchDirective();
         };
         document.addEventListener('visibilitychange', onVisible);
 

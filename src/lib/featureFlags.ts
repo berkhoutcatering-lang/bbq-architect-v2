@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
+import { dedupe } from '@/lib/requestDedupe';
 
 // ═══════════════════════════════════════════════════════════════
 // TIERS & LIMITS
@@ -148,11 +149,9 @@ export function useFeatureFlags() {
   useEffect(function () {
     if (!supabase || !orgId) return;
 
-    supabase
-      .from('organizations')
-      .select('feature_flags')
-      .eq('id', orgId)
-      .single()
+    dedupe('flags:' + orgId, function () {
+      return supabase!.from('organizations').select('feature_flags').eq('id', orgId).single();
+    })
       .then(function ({ data }) {
         if (data?.feature_flags && typeof data.feature_flags === 'object') {
           setFlags({ ...DEFAULT_FLAGS, ...(data.feature_flags as Record<string, boolean>) });

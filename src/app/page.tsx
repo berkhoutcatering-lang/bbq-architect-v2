@@ -63,7 +63,13 @@ export default function DashboardPage() {
   const ger = useSupabase<Gerecht>('gerechten', []);
   const pt = useSupabase<PrepTask>('prep_tasks', []);
   const kl = useSupabase<Klant>('klanten', []);
-  const bnn = useSupabase<Bon>('bonnen', []);
+  /* Alleen de kolommen die deze pagina gebruikt: het aantal nog niet geboekte
+     bonnen en de uitgaven per leverancier. Met `*` kwam ook `image_url` mee —
+     bij oudere bonnen staat de foto daar als base64 in, samen goed voor 130 KB
+     van de 243 KB die deze pagina ophaalde. */
+  const bnn = useSupabase<Bon>('bonnen', [], {
+    columns: 'id, processed_at, leverancier_id, netto_bedrag, totaal_bedrag, bon_items, datum, created_at',
+  });
   const lev = useSupabase<Leverancier>('leveranciers', []);
   const cio = useSupabase<{ id: string; status: string; window_end: string | null; leverancier_id: number | null; sent_at: string | null }>('concept_inkoop_orders', []);
   const crs = useSupabase<DbCourse>('courses', []);

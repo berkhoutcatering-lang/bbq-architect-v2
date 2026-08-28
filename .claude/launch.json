@@ -4,19 +4,37 @@
     {
       "name": "Next.js Dev Server",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
       "name": "Next.js Dev (E2E)",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "dev"
+      ],
       "port": 3002,
       "autoPort": true,
       "env": {
         "NEXT_PUBLIC_E2E": "1"
       }
+    },
+    {
+      "name": "Next.js Productie (meten)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "node_modules/next/dist/bin/next",
+        "start",
+        "-p",
+        "3100"
+      ],
+      "port": 3100,
+      "autoPort": false
     }
   ]
 }

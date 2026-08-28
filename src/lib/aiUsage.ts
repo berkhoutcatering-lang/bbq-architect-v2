@@ -101,11 +101,19 @@ export function useAiUsageThisMonth(): {
 
     const interval = setInterval(function () {
       if (document.visibilityState === 'hidden') return;
+      laatsteOphaal = Date.now();
       fetchCount();
     }, 120_000);
 
+    /* Alleen verversen als het getal echt oud is. Zonder deze rem levert snel
+       heen-en-weer wisselen tussen tabbladen een verzoek per wissel op — en
+       elk Supabase-verzoek zet op zijn beurt weer een auth-event in gang. */
+    let laatsteOphaal = Date.now();
     function onVisible() {
-      if (document.visibilityState === 'visible') fetchCount();
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - laatsteOphaal < 60_000) return;
+      laatsteOphaal = Date.now();
+      fetchCount();
     }
     document.addEventListener('visibilitychange', onVisible);
 
