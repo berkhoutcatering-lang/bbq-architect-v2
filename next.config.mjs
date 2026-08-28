@@ -30,6 +30,32 @@ const nextConfig = {
   outputFileTracingIncludes: {
     '/api/**': ['./node_modules/pdfjs-dist/legacy/build/**'],
   },
+  /**
+   * Barrel-imports van grote pakketten omzetten naar directe imports, zodat
+   * alleen de gebruikte iconen/functies in de bundel komen. lucide-react staat
+   * er ondanks de expliciete icoon-lijst in components/ai/blocks/icons.ts nog
+   * bij: de app importeert op ~349 andere plekken direct uit 'lucide-react'.
+   */
+  experimental: {
+    optimizePackageImports: [
+      'lucide-react',
+      'recharts',
+      'framer-motion',
+      'date-fns',
+      '@tanstack/react-table',
+    ],
+  },
+
+  /**
+   * Er stond helemaal geen images-config, waardoor next/image niets kon
+   * optimaliseren. De hero-PNG's in public/ zijn 321 KB per stuk en gingen
+   * onbewerkt de deur uit. AVIF/WebP scheelt daar het grootste deel van.
+   */
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+  },
+
   async headers() {
     return [
       {
