@@ -12,6 +12,10 @@ interface Article {
   category: string;
 }
 
+/* Contextuele help per pad, voor de duur van de sessie. Artikelen wijzigen
+   alleen als iemand ze in de CMS aanpast; een refresh haalt ze weer op. */
+const helpCache = new Map<string, Article[]>();
+
 export default function ContextualHelp() {
   const pathname = usePathname();
   const [articles, setArticles] = useState<Article[]>([]);
@@ -21,11 +25,29 @@ export default function ContextualHelp() {
 
   useEffect(function () {
     if (!pathname) return;
-    // Fetch articles relevant to current page
+
+    // Deze component hangt in AppShell en vuurde dus bij élke navigatie een
+    // serververzoek af — ook als je voor de tiende keer op dezelfde pagina
+    // kwam, en ook op de vele pagina's waar helemaal geen artikelen bij horen
+    // (dan rendert hij niets). Het antwoord verandert binnen een sessie niet,
+    // dus we onthouden het per pad.
+    const cached = helpCache.get(pathname);
+    if (cached) {
+      setArticles(cached);
+      return;
+    }
+
+    let cancelled = false;
     fetch('/api/help/contextual?page=' + encodeURIComponent(pathname))
       .then(function (r) { return r.json(); })
-      .then(function (d) { setArticles(d.articles || []); })
+      .then(function (d) {
+        const list = (d.articles || []) as Article[];
+        helpCache.set(pathname, list);
+        if (!cancelled) setArticles(list);
+      })
       .catch(function () { /* silent */ });
+
+    return function () { cancelled = true; };
   }, [pathname]);
 
   function handleFeedback(articleId: number, helpful: boolean) {

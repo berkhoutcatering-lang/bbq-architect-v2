@@ -185,12 +185,32 @@ export default function AIChefAssistant({
         setLoading(false);
     }, [context, enabled, voiceOn, voiceSupported, onDirective]);
 
-    /* Initial + interval */
+    /* Initial + interval.
+       Elke tik is een volledige AI-aanroep via /api/chef-coach. Een service van
+       vijf uur met het scherm aan gaf zo ~300 aanroepen per open scherm — ook
+       als de tablet allang op zwart stond of in een andere app. Daarom slaan we
+       een tik over zolang het tabblad verborgen is, en halen we bij terugkomst
+       meteen een verse directive op. Voor wie wél naar het scherm kijkt
+       verandert er niets. */
     useEffect(() => {
         if (!enabled) return;
         fetchDirective();
-        const interval = setInterval(() => fetchDirective(), refreshIntervalMs);
-        return () => clearInterval(interval);
+
+        const tick = () => {
+            if (document.visibilityState === 'hidden') return;
+            fetchDirective();
+        };
+        const interval = setInterval(tick, refreshIntervalMs);
+
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') fetchDirective();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enabled, refreshIntervalMs, context.activeCourseId, context.misePctDone]);
 

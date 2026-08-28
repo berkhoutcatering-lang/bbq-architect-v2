@@ -1,7 +1,7 @@
 // ─── BBQ Architect Service Worker ─────────────────────────────────────────────
 // Offline support, background sync for HACCP records, push notifications
 
-const CACHE_VERSION = 'ec84f6744843';
+const CACHE_VERSION = '614e4c91b365';
 const STATIC_CACHE = 'bbq-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'bbq-dynamic-' + CACHE_VERSION;
 const HACCP_STORE = 'haccp-offline-queue';
@@ -128,6 +128,31 @@ self.addEventListener('activate', function (event) {
   );
 });
 
+// ─── Cache-begrenzing ────────────────────────────────────────────────────────
+// De dynamische cache (navigaties + API-antwoorden) had geen maximum en geen
+// opruiming. Die groeide dus eindeloos door: hoe langer je de app gebruikte,
+// hoe meer entries de browser bij elke cache-lookup moest doorzoeken, en hoe
+// meer schijfruimte we opsouperen. Nu houden we de jongste MAX_DYNAMIC_ENTRIES
+// aan en gooien we de oudste weg (Cache Storage bewaart invoegvolgorde).
+
+var MAX_DYNAMIC_ENTRIES = 60;
+
+function putCapped(cacheName, request, response, maxEntries) {
+  return caches.open(cacheName).then(function (cache) {
+    return cache.put(request, response).then(function () {
+      if (!maxEntries) return;
+      return cache.keys().then(function (keys) {
+        if (keys.length <= maxEntries) return;
+        return Promise.all(
+          keys.slice(0, keys.length - maxEntries).map(function (old) {
+            return cache.delete(old);
+          })
+        );
+      });
+    });
+  });
+}
+
 // ─── Fetch: Cache strategies ─────────────────────────────────────────────────
 
 function isNavigationRequest(request) {
@@ -160,10 +185,7 @@ self.addEventListener('fetch', function (event) {
       fetch(request)
         .then(function (response) {
           // Cache the successful navigation response
-          var responseClone = response.clone();
-          caches.open(DYNAMIC_CACHE).then(function (cache) {
-            cache.put(request, responseClone);
-          });
+          putCapped(DYNAMIC_CACHE, request, response.clone(), MAX_DYNAMIC_ENTRIES);
           return response;
         })
         .catch(function () {
@@ -182,10 +204,7 @@ self.addEventListener('fetch', function (event) {
         .then(function (response) {
           // Only cache successful GET API responses
           if (response.ok) {
-            var responseClone = response.clone();
-            caches.open(DYNAMIC_CACHE).then(function (cache) {
-              cache.put(request, responseClone);
-            });
+            putCapped(DYNAMIC_CACHE, request, response.clone(), MAX_DYNAMIC_ENTRIES);
           }
           return response;
         })

@@ -42,8 +42,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadGlobalData();
     }, [loadGlobalData]);
 
+    /* Vijf realtime-kanalen op élke pagina. Zonder rem deed iedere losse
+       wijziging meteen een volledige loadGlobalData() — vier queries. Bij een
+       bulk-actie (voorraad-import, een offerte met veel regels) leverde dat
+       honderden refetches achter elkaar op, en dat is precies wanneer de app
+       toch al druk is. We wachten nu tot het 400 ms stil is en halen dan één
+       keer op. Voor een enkele wijziging is dat onmerkbaar. */
     useEffect(function () {
         if (!supabase || !orgId) return;
+
+        let debounce: ReturnType<typeof setTimeout> | null = null;
+        function scheduleReload() {
+            if (debounce) clearTimeout(debounce);
+            debounce = setTimeout(function () {
+                debounce = null;
+                loadGlobalData();
+            }, 400);
+        }
 
         const tables = ['events', 'offertes', 'facturen', 'inventory', 'prep_tasks'];
         const channels = tables.map(function (table) {
@@ -54,13 +69,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
                     schema: 'public',
                     table: table,
                     filter: 'organization_id=eq.' + orgId,
-                }, function () {
-                    loadGlobalData();
-                })
+                }, scheduleReload)
                 .subscribe();
         });
 
         return function () {
+            if (debounce) clearTimeout(debounce);
             channels.forEach(function (ch) { supabase!.removeChannel(ch); });
         };
     }, [orgId, loadGlobalData]);

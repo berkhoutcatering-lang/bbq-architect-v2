@@ -91,10 +91,28 @@ export function useAiUsageThisMonth(): {
       });
   }
 
+  /* De teller stond elke 30 seconden een query te doen op élke pagina, ook als
+     het tabblad allang op de achtergrond stond. Twee minuten is ruim genoeg
+     voor een verbruiksmeter, en bij een verborgen tabblad slaan we de tik
+     helemaal over — bij terugkomst wordt meteen ververst, dus wie kijkt ziet
+     nooit een verouderd getal. */
   useEffect(function () {
     fetchCount();
-    const interval = setInterval(fetchCount, 30_000);
-    return function () { clearInterval(interval); };
+
+    const interval = setInterval(function () {
+      if (document.visibilityState === 'hidden') return;
+      fetchCount();
+    }, 120_000);
+
+    function onVisible() {
+      if (document.visibilityState === 'visible') fetchCount();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+
+    return function () {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
 
