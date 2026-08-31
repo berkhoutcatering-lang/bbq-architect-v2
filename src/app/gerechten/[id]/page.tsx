@@ -18,6 +18,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import LiveCostHeader from '../_components/LiveCostHeader';
 import IngredientCostBreakdown from '../_components/IngredientCostBreakdown';
 import GerechtComponentenEditor from '../_components/GerechtComponentenEditor';
+import OntleedKnop from '../_components/OntleedKnop';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,7 @@ export default async function GerechtDetailPage({ params }: PageProps) {
     /* Gerecht ophalen (RLS doet tenant-check, .single() faalt als niet gevonden) */
     const { data: gerecht, error } = await sb
         .from('gerechten')
-        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug')
+        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug, bereidingswijze')
         .eq('id', id)
         .eq('organization_id', orgId)
         .maybeSingle();
@@ -89,6 +90,14 @@ export default async function GerechtDetailPage({ params }: PageProps) {
                         {gerecht.beschrijving}
                     </p>
                 )}
+
+                <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <OntleedKnop
+                        gerechtId={String(gerecht.id)}
+                        gerechtNaam={String(gerecht.naam)}
+                        heeftBereidingswijze={String(gerecht.bereidingswijze ?? '').trim().length > 10}
+                    />
+                </div>
             </header>
 
             <LiveCostHeader

@@ -20,10 +20,20 @@ export function estimateAiCostCents(params: {
 }): number {
     const USD_TO_EUR = 0.93;
 
+    /* Prijzen per miljoen tokens, in dollars. Cache-lezen is ongeveer een tiende
+       van de invoerprijs, cache-schrijven ongeveer een kwart duurder.
+
+       Opus stond hier op $15/$75 en dat is drie keer te hoog — de werkelijke
+       prijs is $5/$25. Daardoor sloeg het kostenplafond te vroeg dicht en leek
+       Opus onbetaalbaar terwijl dat niet zo is. Sonnet 5 toegevoegd: die is
+       nieuwer én een derde goedkoper dan de 4.6 die we op de meeste plekken
+       nog draaien. */
     const PRICING: Record<string, { input: number; output: number; cache_read: number; cache_write: number }> = {
+        'claude-opus-5': { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 },
+        'claude-sonnet-5': { input: 2, output: 10, cache_read: 0.2, cache_write: 2.5 },
         'claude-sonnet-4-6': { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 },
         'claude-sonnet-4-7': { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 },
-        'claude-opus-4-7': { input: 15, output: 75, cache_read: 1.5, cache_write: 18.75 },
+        'claude-opus-4-7': { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 },
         'claude-haiku-4-5': { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 },
     };
 
