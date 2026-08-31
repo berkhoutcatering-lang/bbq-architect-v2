@@ -13,7 +13,8 @@ import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
 import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
-import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload, Boxes } from 'lucide-react';
+import GnBakkenDrawer from './_components/GnBakkenDrawer';
 import { RequireTier } from '@/components/PaywallPrompt';
 
 const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
@@ -40,9 +41,11 @@ export default function Materieel() {
     const [search, setSearch] = useState('');
     // Scan-flow state: foto upload → AI Vision parse → preview → user-keur → insert
     const [scanOpen, setScanOpen] = useState(false);
+    const [gnOpen, setGnOpen] = useState(false);
     const [scanLoading, setScanLoading] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [scanPreview, setScanPreview] = useState<any>(null);
+    const [scanUrl, setScanUrl] = useState('');
     const [scanImageDataUrl, setScanImageDataUrl] = useState<string | null>(null);
     const scanFileInputRef = useRef<HTMLInputElement>(null);
     const { errors, validateAll, clearError, fieldProps } = useFormValidation({
@@ -195,6 +198,35 @@ export default function Materieel() {
         }
     }
 
+    /** Productlink lezen. De server haalt de pagina op, de AI leest de specs.
+     *  Lukt dat niet — sommige winkels bouwen hun pagina pas in de browser op —
+     *  dan zeggen we dat eerlijk en wijzen we naar de screenshot-route. */
+    async function handleScanUrl(): Promise<void> {
+        const url = scanUrl.trim();
+        if (!url) return;
+        setScanLoading(true);
+        setScanError(null);
+        setScanPreview(null);
+        setScanImageDataUrl(null);
+        try {
+            const res = await fetch('/api/materieel/scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productUrl: url, model: 'haiku' }),
+            });
+            const json = await res.json();
+            if (!res.ok || json.error) {
+                throw new Error(json.error || 'Link lezen mislukt');
+            }
+            setScanPreview(json.data);
+            if (json.data?.foto_suggestie) setScanImageDataUrl(json.data.foto_suggestie);
+        } catch (err: any) {
+            setScanError(err.message || 'Onbekende fout');
+        } finally {
+            setScanLoading(false);
+        }
+    }
+
     function updateScanPreview(key: string, value: any): void {
         setScanPreview((prev: any) => prev ? { ...prev, [key]: value } : prev);
     }
@@ -227,6 +259,22 @@ export default function Materieel() {
                 fotos: fotoUrls,
                 scan_source: scanPreview.scan_source,
                 scan_data: scanPreview.scan_data,
+
+                // Apparatuur-velden uit de link-lezer. Alleen meesturen wat
+                // gevuld is: een leeg veld blijft leeg, niets wordt geraden.
+                ...(scanPreview.soort ? { soort: scanPreview.soort } : {}),
+                ...(scanPreview.merk ? { merk: scanPreview.merk } : {}),
+                ...(scanPreview.model ? { model: scanPreview.model } : {}),
+                ...(scanPreview.artikelnummer ? { artikelnummer: scanPreview.artikelnummer } : {}),
+                ...(scanPreview.product_url ? { product_url: scanPreview.product_url } : {}),
+                ...(scanPreview.breedte_mm != null ? { breedte_mm: scanPreview.breedte_mm } : {}),
+                ...(scanPreview.diepte_mm != null ? { diepte_mm: scanPreview.diepte_mm } : {}),
+                ...(scanPreview.hoogte_mm != null ? { hoogte_mm: scanPreview.hoogte_mm } : {}),
+                ...(scanPreview.gewicht_g != null ? { gewicht_g: scanPreview.gewicht_g } : {}),
+                ...(scanPreview.capaciteit_waarde != null ? { capaciteit_waarde: scanPreview.capaciteit_waarde } : {}),
+                ...(scanPreview.capaciteit_eenheid ? { capaciteit_eenheid: scanPreview.capaciteit_eenheid } : {}),
+                ...(scanPreview.temp_min_c != null ? { temp_min_c: scanPreview.temp_min_c } : {}),
+                ...(scanPreview.temp_max_c != null ? { temp_max_c: scanPreview.temp_max_c } : {}),
             };
             const result = await upsertMaterieel(payload);
             if (result.error) {
@@ -339,8 +387,11 @@ export default function Materieel() {
                 title={'Materieel (' + materieel.length + ')'}
                 actions={
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost" onClick={openScan} title="Scan product-screenshot of foto via AI">
-                            <Sparkles size={14} /> Scan product
+                        <button className="btn btn-ghost" onClick={() => setGnOpen(true)} title="Tel je gastronorm-bakken — de maten staan al vast">
+                            <Boxes size={14} /> GN tellen
+                        </button>
+                        <button className="btn btn-ghost" onClick={openScan} title="Lees een productlink, screenshot of foto uit via AI">
+                            <Sparkles size={14} /> Product toevoegen
                         </button>
                         <button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>
                     </div>
@@ -423,6 +474,22 @@ export default function Materieel() {
             </div>
 
             {/* SCAN-MODAL: foto upload → AI Vision parse → preview → user-keur → insert */}
+            <GnBakkenDrawer
+                open={gnOpen}
+                onClose={() => setGnOpen(false)}
+                onSaved={(r) => {
+                    refetch();
+                    /* formaat → formaten, niet "formaaten": de dubbele a wordt
+                       enkel in het meervoud. Losse uitgang erachter plakken
+                       werkt in het Nederlands niet. */
+                    showToast(
+                        `Telling bewaard — ${r.bewaard} ${r.bewaard === 1 ? 'formaat' : 'formaten'}` +
+                            (r.verwijderd ? `, ${r.verwijderd} verwijderd` : ''),
+                        'success'
+                    );
+                }}
+            />
+
             {scanOpen && (
                 <div
                     role="dialog"
@@ -445,8 +512,32 @@ export default function Materieel() {
                         {!scanPreview && !scanLoading && (
                             <div>
                                 <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
-                                    Upload een screenshot van een productpagina (IKEA, Sligro, etc.) of een foto van het echte product. De AI leest naam, type, kleur, materiaal en afmetingen automatisch uit.
+                                    Plak de link van de productpagina — dan leest de AI de specificaties er zelf uit: merk, model, afmetingen, capaciteit. Werkt de link niet, dan kun je altijd nog een foto of screenshot uploaden.
                                 </p>
+
+                                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                                    <input
+                                        value={scanUrl}
+                                        onChange={(e) => setScanUrl(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleScanUrl(); }}
+                                        placeholder="https://…  link van de productpagina"
+                                        style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)', fontSize: 13 }}
+                                    />
+                                    <button
+                                        onClick={handleScanUrl}
+                                        disabled={!scanUrl.trim()}
+                                        style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border)', background: scanUrl.trim() ? 'var(--brand)' : 'var(--card)', color: scanUrl.trim() ? '#000' : 'var(--muted)', fontSize: 13, fontWeight: 600, cursor: scanUrl.trim() ? 'pointer' : 'default', whiteSpace: 'nowrap' }}
+                                    >
+                                        Lees link
+                                    </button>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 14px', color: 'var(--muted)', fontSize: 11 }}>
+                                    <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                                    of
+                                    <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                                </div>
+
                                 <button
                                     onClick={() => scanFileInputRef.current?.click()}
                                     style={{ width: '100%', padding: '40px 20px', borderRadius: 10, border: '1px dashed var(--border)', background: 'var(--card)', color: 'var(--text)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}

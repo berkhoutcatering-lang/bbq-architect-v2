@@ -31,6 +31,13 @@ export const LogboekEntrySchema = z.object({
     notitie: z.string().max(2000).optional(),
 });
 
+/** Vrij tekstveld dat leeg mag zijn. */
+const tekst = (max: number) => z.string().max(max).nullable().optional();
+/** Getal dat leeg mag blijven. Bewust géén default: een ontbrekende maat moet
+ *  leeg blijven en niet stilletjes 0 worden — daar rekent de capaciteitscheck
+ *  later mee. */
+const getal = z.coerce.number().finite().nullable().optional();
+
 export const MaterieelSchema = z.object({
     id: z.coerce.number().int().optional(),
     naam: z.string().min(1, 'Naam is verplicht').max(200),
@@ -41,6 +48,51 @@ export const MaterieelSchema = z.object({
     locatie: z.string().max(200).nullable().optional(),
     fotos: z.array(z.string().url()).max(20, 'Max 20 foto\'s per item').nullable().optional(),
     logboek: z.array(LogboekEntrySchema).max(200, 'Max 200 logboek-entries').optional().default([]),
+
+    /* ── Scan-velden ───────────────────────────────────────────────────
+       Stonden hier niet, terwijl de AI-scan ze wél teruggaf. Zod gooit
+       onbekende sleutels standaard weg, dus kleur, materiaal en afmetingen
+       werden bij elke scan-opslag stilletjes verwijderd. Nu declareerd. */
+    kleur: tekst(200),
+    materiaal: tekst(200),
+    afmetingen: tekst(200),
+    geschikt_voor_gangen: z.array(z.string().max(50)).max(20).nullable().optional(),
+    ai_styling_hint: tekst(1000),
+    scan_source: tekst(100),
+    scan_data: z.unknown().nullable().optional(),
+
+    /* ── Apparatuur ────────────────────────────────────────────────────
+       Zie migratie 20260831140000. Maakt van de spullenlijst een ontwerp-
+       bron: niet alleen "past dit erin?" maar "wat kan ik hiermee maken?" */
+    soort: tekst(50),
+    merk: tekst(120),
+    model: tekst(120),
+    artikelnummer: tekst(120),
+    product_url: z.string().url().max(2000).nullable().optional(),
+
+    breedte_mm: getal,
+    diepte_mm: getal,
+    hoogte_mm: getal,
+    gewicht_g: getal,
+
+    capaciteit_waarde: getal,
+    capaciteit_eenheid: tekst(30),
+    temp_min_c: getal,
+    temp_max_c: getal,
+    concurrent_jobs: getal,
+
+    gn_code: tekst(20),
+    gn_compatibel: z.array(z.string().max(20)).max(50).nullable().optional(),
+    gaat_mee_op_locatie: z.boolean().nullable().optional(),
+
+    maakt_mogelijk: z.array(z.string().max(120)).max(50).nullable().optional(),
+    hulpstukken_aanwezig: z.array(z.string().max(120)).max(100).nullable().optional(),
+    hulpstukken_beschikbaar: z.unknown().nullable().optional(),
+    versnelling_factor: getal,
+    gelijkmatig: z.boolean().nullable().optional(),
+    capaciteit_per_uur: getal,
+    min_porties_rendabel: getal,
+    aanschafprijs_cents: getal,
 });
 
 export type MaterieelInput = z.input<typeof MaterieelSchema>;
