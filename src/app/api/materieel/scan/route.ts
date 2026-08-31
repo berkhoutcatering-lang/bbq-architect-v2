@@ -18,7 +18,7 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
 
 {
   "naam": "string (productnaam zoals zichtbaar — bv 'IKEA OFTAST eetbord wit 25cm' of 'Yoder YS640S smoker')",
-  "type": "BBQ | Servies | Linnen | Koeling | Transport | Meubilair | Apparatuur | Overig",
+  "type": "BBQ | Servies | Linnen | Koeling | Transport | Meubilair | Apparatuur | Gereedschap | Overig",
   "kleur": "string of null (kleur-omschrijving voor foto-prompts, bv 'wit matt', 'zwart hout')",
   "materiaal": "string of null (bv 'porselein', 'stoneware', 'RVS', 'eiken', 'linnen')",
   "afmetingen": "string of null (vrije text, bv '25cm rond', '200x150cm', '60L inhoud')",
@@ -26,7 +26,7 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
   "ai_styling_hint": "string of null (1-2 zinnen: voor welke gerechten of stijl past dit goed bij visualisatie/foto-prompts)",
   "notitie": "string (1 zin samenvatting van bijzonderheden — afgeleid van zichtbare specs)",
 
-  "soort": "servies | apparatuur | accessoire | opslag | meubilair | transport | gn_bak",
+  "soort": "servies | apparatuur | gereedschap | accessoire | opslag | meubilair | transport | gn_bak",
   "merk": "string of null (fabrikant, bv 'Hasegawa', 'Bizerba', 'Robot Coupe')",
   "model": "string of null (typeaanduiding, bv 'FSR20WH', 'CL50 Gourmet')",
   "artikelnummer": "string of null",
@@ -48,8 +48,13 @@ Regels:
 - Voor BBQ/koeling/transport: kleur+materiaal mag null als irrelevant
 - Keukenmachines (vacuümmachine, snijmachine, blender, mixer, groentesnijder, sifon) zijn type 'Apparatuur' — NIET Transport
 - Is het een los onderdeel BIJ een machine (extra kom, snijschijf, opzetstuk,
-  mes, korf)? Dan soort 'accessoire'. Zet in specificaties bij welke machine
-  het hoort. Een reserve-mengkom is geen tweede mixer.
+  korf)? Dan soort 'accessoire'. Zet in specificaties bij welke machine het
+  hoort. Een reserve-mengkom is geen tweede mixer.
+- Handgereedschap en werkvlakken (snijplank, koksmes, pan, garde, spatel,
+  zeef, bolzeef, spuitzak) zijn type 'Gereedschap' en soort 'gereedschap'.
+  Dat is GEEN servies: servies is waar de gast van eet, gereedschap is
+  waarmee jij werkt. En het is geen accessoire, want het hoort niet bij één
+  bepaalde machine.
 - ai_styling_hint alleen invullen voor servies/linnen — leeg laten voor apparatuur
 - Geef NOOIT markdown fences (\`\`\`), geef alleen kale JSON
 - Gebruik Nederlands voor alle tekst-velden
@@ -241,7 +246,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Validatie: type moet één van de toegestane zijn
-        const VALID_TYPES = ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Apparatuur', 'Overig'];
+        const VALID_TYPES = ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Apparatuur', 'Gereedschap', 'Overig'];
         if (!parsed.naam || !parsed.type || !VALID_TYPES.includes(parsed.type)) {
             return NextResponse.json({
                 error: 'AI-output mist verplicht veld (naam/type) of type is ongeldig',

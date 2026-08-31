@@ -18,7 +18,7 @@ import GnBakkenDrawer from './_components/GnBakkenDrawer';
 import GemisRapport from './_components/GemisRapport';
 import { RequireTier } from '@/components/PaywallPrompt';
 
-const CATEGORIES = ['Alles', 'BBQ', 'Apparatuur', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
+const CATEGORIES = ['Alles', 'BBQ', 'Apparatuur', 'Gereedschap', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
 const BUCKET = 'materieel';
 
 interface NewLogEntry {
