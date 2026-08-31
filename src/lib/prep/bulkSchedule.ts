@@ -27,6 +27,7 @@ import {
     resolveOffsetMinutes,
     type RecipePhaseStep,
 } from './recipeTemplates';
+import { planStappenTerug, prepGroupBatchKey, type ReceptStap } from './stapPlanning';
 import type {
     PrepTaskPhase,
     GerechIngredientCost,
@@ -84,6 +85,10 @@ export interface BulkScheduleResult {
     fallbackCount: number;
     /** Hoeveel component-taken gegenereerd zijn (kookbord v2, gebundeld per event). */
     componentCount?: number;
+    /** Hoeveel taken uit ontlede receptstappen komen (golf 2). */
+    stapCount?: number;
+    /** Gerechten waarvoor receptstappen bestonden — die slaan het sjabloon over. */
+    stapDishCount?: number;
     /** Server_recipe-tasks die verwijderd zijn (force-mode). */
     deletedCount: number;
     tasks: ScheduledTaskRow[];
@@ -108,7 +113,20 @@ export interface ScheduledTaskRow {
     component_id: number | null;
     duration_min: number | null;
     batch_key: string | null;
+    /* Golf 2 — uit recipe_steps. NULL waar niemand het heeft opgeschreven:
+       een sjabloon weet niet hoeveel dáárvan handwerk is en verzint het niet. */
+    duur_actief_min: number | null;
+    duur_passief_min: number | null;
+    prep_group: string | null;
+    plaats: 'thuis' | 'bus' | 'locatie' | null;
+    toezicht_nodig: boolean | null;
+    recipe_step_id: string | null;
 }
+
+/** De vijf kolommen die migratie 20260901030000 aanlegt. */
+const STAP_KOLOMMEN = [
+    'duur_actief_min', 'duur_passief_min', 'prep_group', 'plaats', 'toezicht_nodig', 'recipe_step_id',
+] as const;
 
 /**
  * De main entry point. Roept aan vanuit:
@@ -273,11 +291,37 @@ export async function bulkScheduleEventPrep(
         componentsByDish.set(row.gerecht_id, arr);
     }
 
+    /* 6c. Ontlede receptstappen ophalen (golf 2).
+       Een sjabloon is een gok op de naam van het gerecht — "pulled pork" komt
+       uit op pekel→rub→smoke omdat dat meestal klopt. Een ontlede receptstap is
+       geen gok: die staat in dit recept, is door Mathijs goedgekeurd, en weet
+       hoeveel ervan handwerk is en waar het gebeurt. Waar allebei bestaat wint
+       de stap, en het sjabloon blijft liggen voor de gerechten die nog niet
+       ontleed zijn. */
+    const { data: stapData, error: stapErr } = await supabase
+        .from('recipe_steps')
+        .select('id, gerecht_id, step_order, tekst, actie, prep_group, duur_actief_min, duur_passief_min, plaats, toezicht_nodig, station, apparaat, techniek_slug, temp_doel_c, ingredient_ref, hoeveelheid, eenheid')
+        .in('gerecht_id', dishIds)
+        .eq('organization_id', orgId)
+        .order('step_order');
+    /* Een fout hier mag het plannen niet blokkeren: dan valt alles terug op de
+       sjablonen die er altijd al waren. Wel eerlijk melden in het resultaat. */
+    const stappenPerGerecht = new Map<string, ReceptStap[]>();
+    if (!stapErr) {
+        for (const row of ((stapData ?? []) as Array<ReceptStap & { gerecht_id: string | null }>)) {
+            if (!row.gerecht_id) continue;
+            const arr = stappenPerGerecht.get(row.gerecht_id) ?? [];
+            arr.push(row);
+            stappenPerGerecht.set(row.gerecht_id, arr);
+        }
+    }
+
     // 7. Genereer task rows per gerecht
     const taskRows: ScheduledTaskRow[] = [];
     let matchedTemplates = 0;
     let fallbackCount = 0;
     let componentCount = 0;
+    let stapCount = 0;
 
     /* Component-pass — bundeling BINNEN het event: zelfde component voor
        meerdere gerechten → één taak met opgetelde hoeveelheid ("pot mayo is
@@ -351,13 +395,74 @@ export async function bulkScheduleEventPrep(
             component_id: comp.id,
             duration_min: comp.prep_minutes ?? (boughtIn ? 10 : 30),
             batch_key: `comp:${comp.id}:${event.date}`,
+            /* `prep_minutes` zegt hoe lang een component kost, niet hoeveel
+               daarvan handwerk is. Dat splitsen we niet zelf uit. */
+            duur_actief_min: null,
+            duur_passief_min: null,
+            prep_group: null,
+            plaats: null,
+            toezicht_nodig: null,
+            recipe_step_id: null,
         });
+    }
+
+    /* Stap-pass — één taak per ontlede receptstap, teruggerekend over de keten
+       van dít recept in plaats van via de vaste lead-times per fase. */
+    for (const dish of dishes as DishRow[]) {
+        const stappen = stappenPerGerecht.get(dish.id);
+        if (!stappen || stappen.length === 0) continue;
+        const courseId = courseByGerecht.get(dish.id) ?? null;
+        const planning = planStappenTerug(stappen, eventStartISO);
+
+        for (const g of planning.stappen) {
+            const qty = componentHoeveelheidVoorGasten(g.stap.hoeveelheid ?? 0, event.guests);
+            stapCount++;
+            taskRows.push({
+                event_id: eventId,
+                organization_id: orgId,
+                text: `${dish.naam} — ${g.stap.tekst}`,
+                phase: g.fase,
+                scheduled_at: g.startISO,
+                station_id: stationByType.get(g.stationType as KitchenStationType) ?? null,
+                gerecht_id: dish.id,
+                course_id: courseId,
+                /* hoeveelheid is per gast, zelfde canon als quantity_used. */
+                target_qty: qty > 0 ? roundQty(qty) : null,
+                target_unit: qty > 0 ? g.stap.eenheid ?? null : null,
+                qty_source: 'server_recipe',
+                /* Stappen met toezicht mogen niet wegzakken in de lijst. */
+                priority: g.stap.toezicht_nodig ? 30 : 50,
+                status: 'planned',
+                dagen: dagenBeforeEvent(g.startISO, eventStartISO),
+                component_id: null,
+                /* Alleen een opgeschreven duur belandt hier. Bij een schatting
+                   blijft dit leeg: de plaatsingsduur is goed genoeg om de stap
+                   op de tijdlijn te zetten, maar niet goed genoeg om als
+                   werkduur in de keuken te tonen. Het scherm zegt dan "duur
+                   onbekend" in plaats van een kwartier te claimen. */
+                duration_min: g.duur.bron === 'recept' ? g.duur.plaatsingMin : null,
+                /* Dezelfde bewerking over recepten heen binnen één dag. */
+                batch_key: prepGroupBatchKey(g.stap.prep_group, event.date),
+                /* Alleen wat de bron echt zei — een geschatte plaatsingsduur
+                   belandt bewust NIET in deze twee kolommen. */
+                duur_actief_min: g.duur.actiefMin,
+                duur_passief_min: g.duur.passiefMin,
+                prep_group: g.stap.prep_group ?? null,
+                plaats: g.plaats,
+                toezicht_nodig: g.stap.toezicht_nodig ?? null,
+                recipe_step_id: g.stap.id,
+            });
+        }
     }
 
     /* Template-taken (bv. het volledige rook-spoor van een zalm of brisket)
        blijven naast component-taken bestaan — componenten vullen aan.
        Alleen de generieke fallback vervalt als componenten het gerecht dekken. */
     for (const dish of dishes as DishRow[]) {
+        /* Ontleed recept aanwezig → de stap-pass hierboven heeft dit gerecht al
+           gedaan, mét handtijd, plaats en groepeersleutel. Een sjabloon eroverheen
+           zou dezelfde handelingen een tweede keer op het bord zetten. */
+        if ((stappenPerGerecht.get(dish.id)?.length ?? 0) > 0) continue;
         const template = findTemplateForDish(dish.naam);
         const courseId = courseByGerecht.get(dish.id) ?? null;
         const ingredientForDish = productionPlan.filter((p) => p.gerecht_id === dish.id);
@@ -384,6 +489,12 @@ export async function bulkScheduleEventPrep(
                 component_id: null,
                 duration_min: 30,
                 batch_key: null,
+                duur_actief_min: null,
+                duur_passief_min: null,
+                prep_group: null,
+                plaats: null,
+                toezicht_nodig: null,
+                recipe_step_id: null,
             });
             continue;
         }
@@ -420,9 +531,21 @@ export async function bulkScheduleEventPrep(
                 component_id: null,
                 duration_min: templateStepDuration(step),
                 batch_key: null,
+                /* Een sjabloon kent alleen een doorlooptijd per fase. Hoeveel
+                   daarvan handwerk is weet het niet, dus zegt het niets. */
+                duur_actief_min: null,
+                duur_passief_min: null,
+                prep_group: null,
+                plaats: null,
+                toezicht_nodig: null,
+                recipe_step_id: null,
             });
         }
     }
+
+    const stapDishCount = dishes.filter(
+        (d) => (stappenPerGerecht.get((d as DishRow).id)?.length ?? 0) > 0,
+    ).length;
 
     if (options.dryRun) {
         return {
@@ -431,6 +554,8 @@ export async function bulkScheduleEventPrep(
             matchedTemplates,
             fallbackCount,
             componentCount,
+            stapCount,
+            stapDishCount,
             deletedCount,
             tasks: taskRows,
         };
@@ -444,12 +569,21 @@ export async function bulkScheduleEventPrep(
             matchedTemplates,
             fallbackCount,
             componentCount,
+            stapCount,
+            stapDishCount,
             deletedCount,
             tasks: [],
         };
     }
 
-    const { error: insErr } = await supabase.from('prep_tasks').insert(taskRows);
+    /* PostgREST weigert een hele insert zodra één kolomnaam niet bestaat. Op een
+       omgeving waar migratie 20260901030000 nog niet gedraaid is zou dat het
+       plannen volledig stukmaken voor iets wat alleen extra informatie is.
+       Daarom eerst kijken of de kolommen er zijn, en zo niet: zonder verder. */
+    const stapKolommenAanwezig = await heeftStapKolommen(supabase);
+    const teSchrijven = stapKolommenAanwezig ? taskRows : taskRows.map(zonderStapKolommen);
+
+    const { error: insErr } = await supabase.from('prep_tasks').insert(teSchrijven);
     if (insErr) {
         return emptyResult({ ok: false, reason: 'db_error', error: insErr.message });
     }
@@ -460,9 +594,33 @@ export async function bulkScheduleEventPrep(
         matchedTemplates,
         fallbackCount,
         componentCount,
+        stapCount,
+        stapDishCount,
         deletedCount,
         tasks: taskRows,
     };
+}
+
+/**
+ * Bestaan de golf-2-kolommen op deze database?
+ *
+ * Eén select van één rij; PostgREST antwoordt met een fout zodra de kolom niet
+ * in het schema-cache zit. Goedkoper dan information_schema en het meet precies
+ * wat er straks misgaat.
+ */
+async function heeftStapKolommen(supabase: SupabaseClient): Promise<boolean> {
+    const { error } = await supabase
+        .from('prep_tasks')
+        .select(STAP_KOLOMMEN.join(','))
+        .limit(1);
+    return !error;
+}
+
+/** Dezelfde rij zonder de vijf nieuwe kolommen — voor een oude database. */
+function zonderStapKolommen(row: ScheduledTaskRow): Omit<ScheduledTaskRow, typeof STAP_KOLOMMEN[number]> {
+    const kopie: Partial<ScheduledTaskRow> = { ...row };
+    for (const k of STAP_KOLOMMEN) delete kopie[k];
+    return kopie as Omit<ScheduledTaskRow, typeof STAP_KOLOMMEN[number]>;
 }
 
 /* ─── Component-routing (deterministisch, uitlegbaar — geen AI) ─────── */

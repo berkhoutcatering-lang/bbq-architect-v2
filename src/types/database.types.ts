@@ -244,6 +244,17 @@ export interface PrepTask {
   actual_qty?: number | null;        /* door chef ingevuld bij done */
   qty_source?: PrepTaskQtySource;
   phase?: PrepTaskPhase;
+  /* Kookbord v2 — component-gestuurde taken, migration 20260612xxxxxx. */
+  component_id?: number | null;
+  duration_min?: number | null;     /* Totale blokduur; zie duur_actief_min. */
+  batch_key?: string | null;        /* Bundelt dezelfde component over events. */
+  /* Golf 2 — receptstappen, migration 20260901030000. Null = onbekend, niet nul. */
+  duur_actief_min?: number | null;  /* Handtijd — kost een persoon. */
+  duur_passief_min?: number | null; /* Wachttijd — kost een apparaat. */
+  prep_group?: string | null;       /* Bundelt dezelfde bewerking over recepten. */
+  plaats?: 'thuis' | 'bus' | 'locatie' | null;
+  toezicht_nodig?: boolean | null;  /* Moet er iemand bij blijven. */
+  recipe_step_id?: string | null;   /* FK recipe_steps.id — herkomst. */
   updated_at?: string;
   created_at: string;
 }

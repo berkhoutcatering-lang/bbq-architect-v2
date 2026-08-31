@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Flame, Calendar, Check, ChefHat } from 'lucide-react';
+import { Flame, Calendar, Check, ChefHat, LayoutGrid, ListOrdered } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import type { PrepTask } from '@/types/database.types';
 import MepGerechtGroep from './MepGerechtGroep';
 import MepItemSheet from './MepItemSheet';
 import MepTopBar from './MepTopBar';
+import WerklijstView from './WerklijstView';
 import { MEP_CSS } from './mep-ui';
+
+/** Welke kant van het kookbord je aankijkt. */
+type Modus = 'mep' | 'werkvolgorde';
 
 export type MepStatus = 'todo' | 'bezig' | 'klaar';
 
@@ -108,6 +113,9 @@ export default function KookbordClient() {
   const [melding, setMelding] = useState('');
   const [resetting, setResetting] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [modus, setModus] = useState<Modus>('mep');
+  const [prepTaken, setPrepTaken] = useState<PrepTask[]>([]);
+  const [prepLaden, setPrepLaden] = useState(false);
 
   useEffect(() => {
     if (!melding) return;
@@ -178,6 +186,72 @@ export default function KookbordClient() {
     setSheetOpen(false);
     void laadMepData(selectedEventId);
   }, [selectedEventId, laadMepData]);
+
+  /* Prep-taken voor de werkvolgorde-modus.
+     `select('*')` en niet een kolomlijst: PostgREST weigert een hele query
+     zodra één kolomnaam niet bestaat, en de golf-2-kolommen zijn er pas als
+     migratie 20260901030000 gedraaid heeft. Met een ster valt het scherm terug
+     op wat er wél staat in plaats van leeg te blijven.
+
+     Naast de taken van dit event ook die van dezelfde dag bij andere events:
+     bundelen over events heen is precies waar werkvolgorde.ts voor bestaat —
+     de pot mayonaise is toch open. */
+  const laadPrepTaken = useCallback(async (eventId: number) => {
+    if (!supabase) return;
+    setPrepLaden(true);
+    try {
+      const dag = events.find(e => e.id === eventId)?.date ?? '';
+      const eventIds = dag
+        ? events.filter(e => e.date === dag).map(e => e.id)
+        : [eventId];
+      const { data, error } = await supabase
+        .from('prep_tasks')
+        .select('*')
+        .in('event_id', eventIds.length > 0 ? eventIds : [eventId]);
+      if (error) throw new Error(error.message);
+      setPrepTaken((data ?? []) as PrepTask[]);
+    } catch (err) {
+      setPrepTaken([]);
+      setMelding(err instanceof Error ? err.message : 'Prep-taken laden mislukt.');
+    } finally {
+      setPrepLaden(false);
+    }
+  }, [events]);
+
+  useEffect(() => {
+    if (modus !== 'werkvolgorde' || selectedEventId === null) return;
+    void laadPrepTaken(selectedEventId);
+  }, [modus, selectedEventId, laadPrepTaken]);
+
+  /* De twee knoppen onder een taakkaart. Zelfde routes als de rest van de
+     prep-KDS gebruikt, inclusief org-check en audit-log. */
+  const prepActie = useCallback(async (pad: string, task: PrepTask) => {
+    const res = await fetch(pad, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: task.id }),
+    });
+    const payload = await res.json().catch(() => null) as { error?: string } | null;
+    if (!res.ok) throw new Error(String(payload?.error ?? 'Taak bijwerken mislukt.'));
+  }, []);
+
+  const handleStartTask = useCallback(async (task: PrepTask) => {
+    try {
+      await prepActie('/api/prep/start-task', task);
+      setPrepTaken(prev => prev.map(t => t.id === task.id ? { ...t, status: 'in_progress' } : t));
+    } catch (err) {
+      setMelding(err instanceof Error ? err.message : 'Starten mislukt.');
+    }
+  }, [prepActie]);
+
+  const handleCompleteTask = useCallback(async (task: PrepTask) => {
+    try {
+      await prepActie('/api/prep/complete-task', task);
+      setPrepTaken(prev => prev.map(t => t.id === task.id ? { ...t, status: 'done', done: true } : t));
+    } catch (err) {
+      setMelding(err instanceof Error ? err.message : 'Afronden mislukt.');
+    }
+  }, [prepActie]);
 
   // Realtime subscription
   useEffect(() => {
@@ -296,8 +370,14 @@ export default function KookbordClient() {
   const guests = mepData?.event.guests ?? 0;
   const showSkeleton = loadingEvents || loading;
   const showEmptyEvents = !loadingEvents && !loading && events.length === 0;
-  const showEmptyMenu = !loadingEvents && !loading && events.length > 0 && !!mepData && zichtbareGerechten.length === 0;
-  const showBoard = !loadingEvents && !loading && zichtbareGerechten.length > 0;
+  const showEmptyMenu = modus === 'mep' && !loadingEvents && !loading && events.length > 0 && !!mepData && zichtbareGerechten.length === 0;
+  const showBoard = modus === 'mep' && !loadingEvents && !loading && zichtbareGerechten.length > 0;
+  const showWerkvolgorde = modus === 'werkvolgorde' && !loadingEvents && events.length > 0;
+
+  const eventsById = useMemo(
+    () => new Map(events.map(e => [e.id, { name: e.name }])),
+    [events]
+  );
   const allesKlaar = progress.total > 0 && progress.done === progress.total;
 
   const openItem = (item: MepComponentItem, gerechtNaam: string) => {
@@ -331,7 +411,38 @@ export default function KookbordClient() {
             <div style={{ marginBottom: 18, borderRadius: 12, border: '1px solid rgba(239,68,68,.3)', background: 'rgba(239,68,68,.08)', padding: '14px 18px', fontSize: 13.5, color: '#f1b0b0' }}>{fout}</div>
           ) : null}
 
-          {showSkeleton ? (
+          {!loadingEvents && events.length > 0 ? (
+            <div role="tablist" aria-label="Kookbord-modus" style={{ display: 'inline-flex', gap: 4, padding: 4, marginBottom: 20, borderRadius: 12, background: 'rgba(30,30,34,.66)', border: '1px solid rgba(130,130,130,.16)' }}>
+              {([['mep', 'Mise en place', LayoutGrid], ['werkvolgorde', 'Werkvolgorde', ListOrdered]] as const).map(([waarde, label, Icoon]) => (
+                <button
+                  key={waarde}
+                  type="button"
+                  role="tab"
+                  aria-selected={modus === waarde}
+                  onClick={() => setModus(waarde)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 15px', borderRadius: 9, border: '1px solid ' + (modus === waarde ? 'rgba(196,163,90,.42)' : 'transparent'), background: modus === waarde ? 'rgba(196,163,90,.14)' : 'transparent', color: modus === waarde ? '#e8d4a3' : '#9aa0a8', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  <Icoon size={15} strokeWidth={2} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {showWerkvolgorde ? (
+            prepLaden ? (
+              <div style={{ padding: 30, textAlign: 'center', color: '#8b8b8f', fontSize: 13.5 }}>Werkvolgorde laden…</div>
+            ) : (
+              <WerklijstView
+                tasks={prepTaken}
+                eventsById={eventsById}
+                onCompleteTask={handleCompleteTask}
+                onStartTask={handleStartTask}
+              />
+            )
+          ) : null}
+
+          {showSkeleton && modus === 'mep' ? (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
                 <div style={{ width: 180, height: 20, borderRadius: 6, background: 'linear-gradient(90deg,rgba(40,40,46,.5) 25%,rgba(64,64,72,.65) 37%,rgba(40,40,46,.5) 63%)', backgroundSize: '800px 100%', animation: 'mepShimmer 1.25s linear infinite' }} />

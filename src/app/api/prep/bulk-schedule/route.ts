@@ -77,6 +77,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
                 task_count: result.taskCount,
                 matched_templates: result.matchedTemplates,
                 fallback_count: result.fallbackCount,
+                stap_count: result.stapCount,
                 deleted_count: result.deletedCount,
                 force,
             },
@@ -89,6 +90,10 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         taskCount: result.taskCount,
         matchedTemplates: result.matchedTemplates,
         fallbackCount: result.fallbackCount,
+        componentCount: result.componentCount,
+        /* Golf 2 — hoeveel taken uit ontlede receptstappen komen. */
+        stapCount: result.stapCount,
+        stapDishCount: result.stapDishCount,
         deletedCount: result.deletedCount,
         tasks: dryRun ? result.tasks : undefined,
     });

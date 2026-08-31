@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bouwWerkvolgorde, formatMin } from './werkvolgorde';
+import { bouwWerkvolgorde, budgetPerPlaats, taakDuur, formatMin } from './werkvolgorde';
 import type { PrepTask } from '@/types/database.types';
 
 /** Minimale taak-factory — alleen de velden die de motor leest. */
@@ -127,5 +127,137 @@ describe('formatMin', () => {
         expect(formatMin(45)).toBe('45 min');
         expect(formatMin(60)).toBe('1 uur');
         expect(formatMin(90)).toBe('1u30');
+    });
+});
+
+describe('taakDuur — handtijd los van wachttijd (golf 2)', () => {
+    it('gebruikt de splitsing uit de receptstap als die er is', () => {
+        const d = taakDuur(taak({ id: 1, duur_actief_min: 15, duur_passief_min: 720, phase: 'smoke' } as never));
+        expect(d).toEqual({ actiefMin: 15, passiefMin: 720, bekend: true });
+    });
+
+    it('valt terug op de fase-naam voor taken van vóór golf 2', () => {
+        expect(taakDuur(taak({ id: 1, phase: 'smoke', duration_min: 720 } as never)))
+            .toEqual({ actiefMin: 0, passiefMin: 720, bekend: true });
+        expect(taakDuur(taak({ id: 2, phase: 'koud', duration_min: 45 } as never)))
+            .toEqual({ actiefMin: 45, passiefMin: 0, bekend: true });
+    });
+
+    it('meldt het eerlijk als niemand een duur heeft opgeschreven', () => {
+        expect(taakDuur(taak({ id: 1 }))).toEqual({ actiefMin: 30, passiefMin: 0, bekend: false });
+    });
+
+    it('herkent wachten dat buiten de drie oude fases valt — deeg laten rijzen', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Deeg laten rijzen', phase: 'koud', duur_actief_min: 10, duur_passief_min: 120, scheduled_at: '2026-06-20T08:00:00Z' } as never),
+        ]);
+        /* Onder de oude fase-lijst was dit 130 minuten handwerk. */
+        expect(blokken[0].isPassief).toBe(true);
+        expect(blokken[0].passiefMin).toBe(120);
+        expect(blokken[0].actiefMin).toBe(10);
+    });
+});
+
+describe('bouwWerkvolgorde — gat-vulling kijkt naar handtijd, niet naar doorlooptijd', () => {
+    it('vult een wachtmoment met een klus die lang duurt maar weinig werk is', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Smoker opstoken', duur_actief_min: 15, duur_passief_min: 60, scheduled_at: '2026-06-20T10:00:00Z' } as never),
+            // 20 min werk, daarna 2 uur koelen — doorlooptijd 140 min, handtijd 20.
+            taak({ id: 2, text: 'Panna cotta', duur_actief_min: 20, duur_passief_min: 120, scheduled_at: '2026-06-20T10:30:00Z' } as never),
+        ]);
+        const wacht = blokken.find((b) => b.titel === 'Smoker opstoken')!;
+        /* Onder de oude logica paste 140 > 60 niet en bleef het wachtuur leeg. */
+        expect(wacht.ondertussen).toBeUndefined();
+    });
+
+    it('vult met de handtijd van een puur actieve klus', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Smoker opstoken', duur_actief_min: 15, duur_passief_min: 60, scheduled_at: '2026-06-20T10:00:00Z' } as never),
+            taak({ id: 2, text: 'Bosui snijden', duur_actief_min: 25, duur_passief_min: 0, scheduled_at: '2026-06-20T10:30:00Z' } as never),
+        ]);
+        const wacht = blokken.find((b) => b.titel === 'Smoker opstoken')!;
+        expect(wacht.ondertussen?.[0].titel).toBe('Bosui snijden');
+        expect(wacht.ondertussen?.[0].durationMin).toBe(25);
+    });
+
+    it('stelt werk op locatie niet voor tijdens wachten in de keuken thuis', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Jus laten trekken', plaats: 'thuis', duur_actief_min: 5, duur_passief_min: 90, scheduled_at: '2026-06-20T10:00:00Z' } as never),
+            taak({ id: 2, text: 'Borden uitzetten', plaats: 'locatie', duur_actief_min: 30, scheduled_at: '2026-06-20T11:00:00Z' } as never),
+        ]);
+        expect(blokken.find((b) => b.titel === 'Jus laten trekken')!.ondertussen).toBeUndefined();
+    });
+});
+
+describe('bouwWerkvolgorde — bundelen op prep_group (dezelfde bewerking, andere recepten)', () => {
+    it('voegt dezelfde bewerking op dezelfde dag samen tot één blok', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Taco — snijd sjalot', prep_group: 'sjalot-brunoise', plaats: 'thuis', duur_actief_min: 10, scheduled_at: '2026-06-20T09:00:00Z' } as never),
+            taak({ id: 2, text: 'Slider — snijd sjalot', prep_group: 'sjalot-brunoise', plaats: 'thuis', duur_actief_min: 10, scheduled_at: '2026-06-20T11:00:00Z' } as never),
+        ]);
+        expect(blokken.length).toBe(1);
+        expect(blokken[0].titel).toBe('Sjalot-brunoise');
+        expect(blokken[0].prepGroup).toBe('sjalot-brunoise');
+        expect(blokken[0].tasks.length).toBe(2);
+        expect(blokken[0].bundelReden).toContain('dezelfde bewerking');
+        /* Eén keer het mes pakken, niet twee keer. */
+        expect(blokken[0].actiefMin).toBe(10);
+    });
+
+    it('bundelt niet over dagen heen', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'A', prep_group: 'sjalot-brunoise', scheduled_at: '2026-06-19T09:00:00Z' } as never),
+            taak({ id: 2, text: 'B', prep_group: 'sjalot-brunoise', scheduled_at: '2026-06-20T09:00:00Z' } as never),
+        ]);
+        expect(blokken.length).toBe(2);
+    });
+
+    it('bundelt niet over plaatsen heen — thuis en op locatie zijn twee handelingen', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'A', prep_group: 'bosui-julienne', plaats: 'thuis', scheduled_at: '2026-06-20T09:00:00Z' } as never),
+            taak({ id: 2, text: 'B', prep_group: 'bosui-julienne', plaats: 'locatie', scheduled_at: '2026-06-20T15:00:00Z' } as never),
+        ]);
+        expect(blokken.length).toBe(2);
+    });
+
+    it('laat batch_key voorgaan op prep_group', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Mayo — A', batch_key: 'comp:5:2026-06-20', prep_group: 'mayo', scheduled_at: '2026-06-20T09:00:00Z' } as never),
+            taak({ id: 2, text: 'Mayo — B', batch_key: 'comp:5:2026-06-20', prep_group: 'mayo', scheduled_at: '2026-06-20T10:00:00Z' } as never),
+        ]);
+        expect(blokken[0].key).toBe('batch:comp:5:2026-06-20');
+        expect(blokken[0].prepGroup).toBeNull();
+    });
+});
+
+describe('budgetPerPlaats — thuis en op locatie zijn twee budgetten', () => {
+    it('telt handtijd en wachttijd per plaats apart', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Roken', plaats: 'thuis', duur_actief_min: 15, duur_passief_min: 720, scheduled_at: '2026-06-20T04:00:00Z' } as never),
+            taak({ id: 2, text: 'Snijden', plaats: 'thuis', duur_actief_min: 45, scheduled_at: '2026-06-20T09:00:00Z' } as never),
+            taak({ id: 3, text: 'Afwerken', plaats: 'locatie', duur_actief_min: 25, scheduled_at: '2026-06-20T15:30:00Z' } as never),
+        ]);
+        const b = budgetPerPlaats(blokken);
+        expect(b.thuis.actiefMin).toBe(60);
+        expect(b.thuis.passiefMin).toBe(720);
+        expect(b.locatie.actiefMin).toBe(25);
+        expect(b.bus.blokken).toBe(0);
+    });
+
+    it('telt taken zonder plaats bij geen enkel budget', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Oude taak', duration_min: 60, scheduled_at: '2026-06-20T09:00:00Z' } as never),
+        ]);
+        const b = budgetPerPlaats(blokken);
+        expect(b.thuis.blokken).toBe(0);
+        expect(b.thuis.actiefMin).toBe(0);
+    });
+
+    it('markeert blokken waarvan de duur een terugval is', () => {
+        const blokken = bouwWerkvolgorde([
+            taak({ id: 1, text: 'Zonder duur', plaats: 'thuis', scheduled_at: '2026-06-20T09:00:00Z' } as never),
+        ]);
+        expect(blokken[0].duurBekend).toBe(false);
+        expect(budgetPerPlaats(blokken).thuis.geschat).toBe(1);
     });
 });
