@@ -94,6 +94,10 @@ export const MaterieelSchema = z.object({
     capaciteit_per_uur: getal,
     min_porties_rendabel: getal,
     aanschafprijs_cents: getal,
+    nieuwprijs_cents: getal,
+    nieuwprijs_valuta: z.string().regex(/^[A-Z]{3}$/).nullable().optional(),
+    prijs_incl_btw: z.boolean().nullable().optional(),
+    prijs_bijgewerkt_op: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 export type MaterieelInput = z.input<typeof MaterieelSchema>;

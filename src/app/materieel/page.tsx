@@ -278,6 +278,8 @@ export default function Materieel() {
                 ...(scanPreview.temp_min_c != null ? { temp_min_c: scanPreview.temp_min_c } : {}),
                 ...(scanPreview.temp_max_c != null ? { temp_max_c: scanPreview.temp_max_c } : {}),
                 ...(scanPreview.specificaties ? { specificaties: scanPreview.specificaties } : {}),
+                ...(scanPreview.nieuwprijs_cents != null ? { nieuwprijs_cents: scanPreview.nieuwprijs_cents, nieuwprijs_valuta: scanPreview.nieuwprijs_valuta ?? 'EUR', prijs_bijgewerkt_op: today() } : {}),
+                ...(scanPreview.prijs_incl_btw != null ? { prijs_incl_btw: scanPreview.prijs_incl_btw } : {}),
             };
             const result = await upsertMaterieel(payload);
             if (result.error) {

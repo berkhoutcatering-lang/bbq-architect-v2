@@ -38,7 +38,10 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
   "capaciteit_eenheid": "liter | kg | kg_per_uur | korven_per_uur | borden_per_uur | gn_slots | m2 | couverts | null",
   "temp_min_c": "getal of null (laagste bedrijfstemperatuur)",
   "temp_max_c": "getal of null (hoogste bedrijfstemperatuur)",
-  "specificaties": {"sleutel": "waarde"} of null
+  "specificaties": {"sleutel": "waarde"} of null,
+  "nieuwprijs_bedrag": "getal of null — de prijs zoals die op de pagina staat",
+  "nieuwprijs_valuta": "EUR | CZK | GBP | USD | PLN | SEK | DKK | null",
+  "prijs_incl_btw": true/false/null
 }
 
 Regels:
@@ -75,6 +78,25 @@ Maten en capaciteit (belangrijk):
 - capaciteit_waarde is wat het apparaat per keer bevat of per uur verwerkt.
   Past geen enkele eenheid uit de lijst, laat dan allebei de velden leeg —
   liever niets dan een getal in de verkeerde eenheid.
+
+Prijs:
+- nieuwprijs_bedrag is de prijs met decimalen: 1249,95 wordt 1249.95. Niet in
+  centen omrekenen, dat doet de code.
+- LET OP DUIZENDTALLEN. '151 958' en '151.958' zijn honderdeenenvijftigduizend,
+  niet honderdeenenvijftig komma negen. Een spatie of punt tussen groepen van
+  drie cijfers is een duizendtalscheiding, geen decimaalteken. Twijfel je?
+  Kijk of het bedrag logisch is voor dit soort product.
+- VALUTA ALTIJD MEEGEVEN en NOOIT OMREKENEN. Staat er Kč of CZK, dan is de
+  valuta CZK en het bedrag het getal dat er staat. Reken niet naar euro's om;
+  dat doet de code met een actuele koers. Een omgerekend bedrag zonder valuta
+  is een fout die niemand later nog kan terugvinden.
+- Tsjechisch: 's DPH' is inclusief btw, 'bez DPH' is exclusief.
+- Staat er een actieprijs én een oude prijs? Neem de prijs die je vandaag zou
+  betalen, dus de actieprijs.
+- prijs_incl_btw: consumentenwinkels noemen prijzen inclusief btw,
+  groothandels en occasionsites vaak exclusief. Staat het er niet bij, laat
+  dan null — een verkeerd gelabelde prijs scheelt 21%.
+- Geen prijs op de pagina? Allebei null. Nooit een prijs schatten.
 
 specificaties — hier hoort ALLE overige informatie in:
 - Sleutel-waardeparen precies zoals ze op de pagina staan: aansluitwaarde,
@@ -284,6 +306,18 @@ export async function POST(req: NextRequest) {
                     parsed.specificaties && typeof parsed.specificaties === 'object' && !Array.isArray(parsed.specificaties)
                         ? parsed.specificaties
                         : null,
+                /* Euro's naar centen: bedragen als integer, nooit als float —
+                   anders krijg je bij het optellen van een hele keuken de
+                   klassieke afrondingsfout van een paar cent per item. */
+                nieuwprijs_cents: (() => {
+                    const p = getal(parsed.nieuwprijs_bedrag);
+                    return p != null && p > 0 ? Math.round(p * 100) : null;
+                })(),
+                nieuwprijs_valuta:
+                    typeof parsed.nieuwprijs_valuta === 'string' && /^[A-Z]{3}$/.test(parsed.nieuwprijs_valuta)
+                        ? parsed.nieuwprijs_valuta
+                        : null,
+                prijs_incl_btw: typeof parsed.prijs_incl_btw === 'boolean' ? parsed.prijs_incl_btw : null,
                 product_url: bronUrl,
                 foto_suggestie: bronAfbeelding,
 
