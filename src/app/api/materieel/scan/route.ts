@@ -34,10 +34,11 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
   "diepte_mm": "getal of null",
   "hoogte_mm": "getal of null",
   "gewicht_g": "getal of null (in GRAM — reken kg om)",
-  "capaciteit_waarde": "getal of null (bv 250 bij 250 kg/uur, 60 bij 60 liter)",
-  "capaciteit_eenheid": "liter | gn_slots | kg | kg_per_uur | m2 | borden | null",
+  "capaciteit_waarde": "getal of null — hoeveel het apparaat VERWERKT of BEVAT",
+  "capaciteit_eenheid": "liter | kg | kg_per_uur | korven_per_uur | borden_per_uur | gn_slots | m2 | couverts | null",
   "temp_min_c": "getal of null (laagste bedrijfstemperatuur)",
-  "temp_max_c": "getal of null (hoogste bedrijfstemperatuur)"
+  "temp_max_c": "getal of null (hoogste bedrijfstemperatuur)",
+  "specificaties": {"sleutel": "waarde"} of null
 }
 
 Regels:
@@ -55,7 +56,24 @@ Maten en capaciteit (belangrijk):
 - Staat een maat er niet, vul dan null — NOOIT een maat schatten. Een verzonnen
   afmeting laat later een bak niet in de koeling passen.
 - Bij 'l × b × h' zonder duidelijk welke welke is: breedte is de langste kant
-  van het werkvlak, diepte de kortste, hoogte de dikte of de stahoogte.`;
+  van het werkvlak, diepte de kortste, hoogte de dikte of de stahoogte.
+- Een AFMETING is nooit een capaciteit. "Korfafmeting 50x50 cm" zegt hoe groot
+  de korf is, niet hoeveel het apparaat aankan. Zet dat in specificaties en
+  laat capaciteit_waarde leeg als het er niet staat.
+- capaciteit_waarde is wat het apparaat per keer bevat of per uur verwerkt.
+  Past geen enkele eenheid uit de lijst, laat dan allebei de velden leeg —
+  liever niets dan een getal in de verkeerde eenheid.
+
+specificaties — hier hoort ALLE overige informatie in:
+- Sleutel-waardeparen precies zoals ze op de pagina staan: aansluitwaarde,
+  spanning, vermogen, waterverbruik, naspoeltemperatuur, programmaduur,
+  toerental, inhoud ketel, brandstof, rooster-oppervlak, meegeleverde
+  hulpstukken, garantie.
+- Neem liever te veel op dan te weinig; dit is het veld waarin de machine
+  volledig wordt vastgelegd.
+- Nederlandse sleutels in kleine letters, waarde als tekst mét eenheid:
+  {"aansluitwaarde": "6,4 kW", "korven per uur": "30", "naspoeltemperatuur": "82 °C"}
+- Niets gevonden buiten wat al in de velden hierboven staat? Dan null.`;
 
 /** Alleen echte getallen doorlaten. Het model mag null zeggen als een maat niet
  *  op de pagina staat, en dan moet het null blijven — liever een leeg veld dan
@@ -250,6 +268,10 @@ export async function POST(req: NextRequest) {
                 capaciteit_eenheid: parsed.capaciteit_eenheid ?? null,
                 temp_min_c: getal(parsed.temp_min_c),
                 temp_max_c: getal(parsed.temp_max_c),
+                specificaties:
+                    parsed.specificaties && typeof parsed.specificaties === 'object' && !Array.isArray(parsed.specificaties)
+                        ? parsed.specificaties
+                        : null,
                 product_url: bronUrl,
                 foto_suggestie: bronAfbeelding,
 

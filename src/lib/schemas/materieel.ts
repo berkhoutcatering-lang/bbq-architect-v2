@@ -88,6 +88,7 @@ export const MaterieelSchema = z.object({
     maakt_mogelijk: z.array(z.string().max(120)).max(50).nullable().optional(),
     hulpstukken_aanwezig: z.array(z.string().max(120)).max(100).nullable().optional(),
     hulpstukken_beschikbaar: z.unknown().nullable().optional(),
+    specificaties: z.unknown().nullable().optional(),
     versnelling_factor: getal,
     gelijkmatig: z.boolean().nullable().optional(),
     capaciteit_per_uur: getal,

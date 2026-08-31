@@ -277,6 +277,7 @@ export default function Materieel() {
                 ...(scanPreview.capaciteit_eenheid ? { capaciteit_eenheid: scanPreview.capaciteit_eenheid } : {}),
                 ...(scanPreview.temp_min_c != null ? { temp_min_c: scanPreview.temp_min_c } : {}),
                 ...(scanPreview.temp_max_c != null ? { temp_max_c: scanPreview.temp_max_c } : {}),
+                ...(scanPreview.specificaties ? { specificaties: scanPreview.specificaties } : {}),
             };
             const result = await upsertMaterieel(payload);
             if (result.error) {
