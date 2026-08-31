@@ -119,15 +119,27 @@ Bijvangst: dat bestand pint `claude-sonnet-4-5-20250929` terwijl de toelichting 
 
 ## 3. Blokkers — eerst repareren
 
-Drie dingen houden golf 1 tegen zodra hij begint.
+Drie dingen hielden golf 1 tegen. Eén is opgelost, twee staan open.
 
-| Blokker | Wat er is | Waarom het telt |
-|---|---|---|
-| **`mep_items` kan niet aan gerechten koppelen** | `gerecht_id` is `INTEGER`, `gerechten.id` is een UUID. Daarom staat er geen FK op. | De prep-agent moet er juist op aansluiten. |
-| **`gerechten` staat nergens in versiebeheer** | Geen enkele migratie maakt de tabel aan; hij is met de hand gemaakt en migraties doen alleen `ALTER`. | Zes nieuwe tabellen bouwen hierop. Een verse omgeving struikelt meteen. |
-| **`prep_task_dependencies` is leeg** | Bestaat sinds mei, nul gebruik in `src/`. | Wordt opgevoerd als bestaande aansluiting. |
+| Blokker | Stand | Wat er is | Waarom het telt |
+|---|---|---|---|
+| **`mep_items` kon niet aan gerechten koppelen** | **Opgelost — 2026-08-31** | De foreign key ontbrak. Aangebracht met `supabase/migrations/20260901020000_mep_items_koppeling.sql`. | De prep-agent sluit hierop aan. |
+| **`gerechten` staat nergens in versiebeheer** | **Open** | Geen enkele migratie maakt de tabel aan; hij is met de hand gemaakt en migraties doen alleen `ALTER`. | Zes nieuwe tabellen bouwen hierop. Een verse omgeving struikelt meteen. |
+| **`prep_task_dependencies` is leeg** | **Open** | Bestaat sinds mei, nul gebruik in `src/`. Nagemeten: nul rijen. | Wordt opgevoerd als bestaande aansluiting. |
 
-Kleinere waarschuwing: `src/types/database.types.ts` wordt met de hand bijgehouden en is gedrift — het zegt dat een gerecht een genummerd id heeft, terwijl het een UUID is. **De migraties zijn de waarheid, niet dat bestand.**
+### 3.1 Correctie op de eerste blokker
+
+Versie 2.0 schreef dat `mep_items.gerecht_id` een `INTEGER` was terwijl `gerechten.id` een UUID is, en dat koppelen daarom onmogelijk was. Dat klopte maar half, en de helft die niet klopte is leerzamer dan de helft die wel klopte.
+
+**Het type was nooit het probleem.** De kolom ís `uuid` en staat vol geldige verwijzingen. De aanmaakmigratie `20260621120000_create_mep_items.sql` zegt `INTEGER`, maar de kolom is later buiten de migraties om aangepast. Het plan is geschreven op wat het migratiebestand beweerde, niet op wat de database bevatte.
+
+**Wat écht ontbrak was de foreign key.** Zonder sleutel bewaakt de database niets, en — belangrijker voor deze app — kan PostgREST de relatie niet inbedden. Een query als `select('id, gerechten(naam)')` gaf `could not find a relationship`. Dat is precies de vorm die de prep-planning nodig heeft, dus de blokker was echt; alleen de diagnose was verkeerd.
+
+De migratie controleert elke aanname apart (bestaat `gerechten`, is de kolom `uuid`, ligt de sleutel er al) in plaats van ze aan te nemen. Alle negen bestaande rijen wezen al naar bestaande gerechten, dus opschonen was niet nodig. Omdat `gerechten` nog steeds geen `CREATE TABLE` heeft, slaat de migratie zichzelf op een verse omgeving over met een notice — de tweede blokker mag de eerste niet meeslepen.
+
+**De les, en die geldt breder dan deze tabel:** een migratiebestand beschrijft wat er ooit is gevraagd, niet wat er nu staat. Deze codebase is op meer plekken met de hand aangepast — `gerechten` zelf is er het grootste voorbeeld van. Nameten in de database is de enige waarheid; dit plan is op dat punt één keer de mist in gegaan en dat kostte een verkeerd geformuleerde blokker.
+
+Kleinere waarschuwing van dezelfde soort: `src/types/database.types.ts` wordt met de hand bijgehouden en is gedrift — het zegt dat een gerecht een genummerd id heeft, terwijl het een UUID is. Niet de migraties en niet dat bestand zijn hier de waarheid, maar de database.
 
 ---
 
@@ -622,7 +634,7 @@ Afwijzingen worden vastgelegd met reden — vier knoppen: te zwaar, smaken passe
 | **1b** | Kalibratie: balansprofiel van de bestsellers → huisbalans, afgezet tegen het Nederlandse gemiddelde. | Kost geen nieuwe metingen. |
 | **1c** | Lessen afleiden uit eigen recepten (6.1) en ter bevestiging voorleggen. Sjablonen eruit opbouwen. | Dit maakt de motor een kok in plaats van een controleur. |
 | **1d** | Het gerechtenboek (6.4): elke ontlede bereiding wordt een herbruikbare component met vol profiel. | Valt vanzelf uit golf 1; de `components`-tabel bestaat al. |
-| **2** | Handtijd/wachttijd, `prep_group` en `plaats` in de prep-planning. GN- en apparatuurcheck. Apparatuur-tabel uitgebreid (6.8). | Uitbreiding van wat draait. |
+| **2** | Handtijd/wachttijd, `prep_group` en `plaats` in de prep-planning. GN- en apparatuurcheck. Apparatuur-tabel uitgebreid (6.8). | Uitbreiding van wat draait. **Deels gebouwd 2026-08-31** — zie 8.1. GN- en apparatuurcheck staan nog open. |
 | **3** | Keuken-modus: één scherm met receptuur, planning en HACCP. Normen naar de tabel, HACCP gaat vragen. | Hier komt het samen in de keuken. |
 | **4** | Agent 12, stand 1: ontwerpen op aanvraag. Saus- en gerechtsjablonen, compositie, cateringgrens, proeftest-status, afwijzingsredenen. | Vraagt beide bibliotheken en een bewezen goedkeur-flow. |
 | **4b** | Menu-brede controle (6.13). | Kan pas als losse gerechten kloppen. |
@@ -631,6 +643,26 @@ Afwijzingen worden vastgelegd met reden — vier knoppen: te zwaar, smaken passe
 | **5** | Mail-intake afmaken: offerte-concept en opvolging. | Losgekoppeld van al het bovenstaande — **mag naar voren** als het seizoen aantrekt. |
 | **6** | Conceptbestellingen met goedkeuring. | Externe, onomkeerbare stap — laatst, op een bewezen patroon. |
 | **Later** | Aroma-laag (FlavorDB2), R&D (8), microsturing (9), social (10). | Zie 7.3 en hoofdstuk 11. |
+
+### 8.1 Wat golf 2 heeft opgeleverd (2026-08-31)
+
+`recipe_steps` bestond al met handtijd, wachttijd, `prep_group` en `plaats`, maar stond los van de planning die draait. Die brug ligt er nu.
+
+| Wat | Waar |
+|---|---|
+| `prep_tasks` draagt de vijf velden plus `toezicht_nodig` en een verwijzing terug naar de stap | `supabase/migrations/20260901030000_prep_tasks_stappen.sql` |
+| Terugrekenen over de kéten van dít recept in plaats van vaste lead-times per fase | `src/lib/prep/stapPlanning.ts` |
+| Een ontleed gerecht krijgt stap-taken en slaat het sjabloon over; niet-ontlede gerechten houden het sjabloon | `src/lib/prep/bulkSchedule.ts` |
+| Wachttijd is niet langer een lijst van drie fase-namen maar een getal op de taak; gat-vulling meet de hándtijd van de kandidaat | `src/lib/prep/werkvolgorde.ts` |
+| Budget per plaats, en bundels van dezelfde bewerking over recepten heen | `WerklijstView.tsx`, aangesloten op `/keuken/kookbord` |
+
+Drie dingen die bij het bouwen boven kwamen en het vastleggen waard zijn:
+
+1. **De werkvolgorde-motor rendeerde nergens.** `WerklijstView` en `PlanTakenSheet` stonden in de map van `/keuken/board`, en die route is sinds de kookbord-splitsing een doorverwijzing. De motor was getest en werkte, maar geen scherm gebruikte hem. Nu hangt hij als tweede tabblad in het kookbord.
+2. **Een geschatte duur mag niet in een kolom belanden.** Waar de ontleder geen minuten heeft opgeschreven, blijven `duur_actief_min` en `duur_passief_min` leeg en zegt het scherm "duur onbekend". Er is wél een plaatsingsduur nodig om een stap op de tijdlijn te zetten — die leeft alleen in `scheduled_at` en nergens anders.
+3. **De ontleder vult de duren nog niet.** Alle drie de bestaande `recipe_steps` hebben `prep_group` en `plaats`, maar `duur_actief_min` is leeg. De prompt vraagt er nadrukkelijk om. Zolang dat zo is draait golf 2 op de terugval en levert het onderscheid nog geen winst op — dat is de eerste zaak om na te lopen.
+
+---
 
 **Waarom mail-intake niet vooraan staat.** Op zakelijke impact hoort agent 2 eerst: een gemiste aanvraag kost direct omzet. Hij staat later omdat de volgorde ook risico weegt, en dit de eerste agent is die naar buiten praat. De eerdere golven bouwen het patroon — D-berekening onder, model erboven, goedkeuring ertussen — waarna agent 2 dat patroon toepast in plaats van uitvindt. **Maar hij hangt van niets uit hoofdstuk 4 of 5 af en is volledig parallel te bouwen.** Naar voren halen is een toegestane afwijking, geen improvisatie. Enige harde voorwaarde: de goedkeur-lade (0b) moet de externe stap afdekken.
 
