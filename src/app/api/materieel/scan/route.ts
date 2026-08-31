@@ -26,7 +26,7 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
   "ai_styling_hint": "string of null (1-2 zinnen: voor welke gerechten of stijl past dit goed bij visualisatie/foto-prompts)",
   "notitie": "string (1 zin samenvatting van bijzonderheden — afgeleid van zichtbare specs)",
 
-  "soort": "servies | apparatuur | opslag | meubilair | transport | gn_bak",
+  "soort": "servies | apparatuur | accessoire | opslag | meubilair | transport | gn_bak",
   "merk": "string of null (fabrikant, bv 'Hasegawa', 'Bizerba', 'Robot Coupe')",
   "model": "string of null (typeaanduiding, bv 'FSR20WH', 'CL50 Gourmet')",
   "artikelnummer": "string of null",
@@ -47,12 +47,19 @@ Regels:
 - Voor servies/borden: vul kleur+materiaal+afmetingen ALTIJD in (essentieel voor foto-prompts later)
 - Voor BBQ/koeling/transport: kleur+materiaal mag null als irrelevant
 - Keukenmachines (vacuümmachine, snijmachine, blender, mixer, groentesnijder, sifon) zijn type 'Apparatuur' — NIET Transport
+- Is het een los onderdeel BIJ een machine (extra kom, snijschijf, opzetstuk,
+  mes, korf)? Dan soort 'accessoire'. Zet in specificaties bij welke machine
+  het hoort. Een reserve-mengkom is geen tweede mixer.
 - ai_styling_hint alleen invullen voor servies/linnen — leeg laten voor apparatuur
 - Geef NOOIT markdown fences (\`\`\`), geef alleen kale JSON
 - Gebruik Nederlands voor alle tekst-velden
 
 Maten en capaciteit (belangrijk):
-- ALTIJD omrekenen naar millimeter en gram. '20 cm' wordt 200, '1,5 kg' wordt 1500.
+- AFMETINGEN altijd naar millimeter, GEWICHT altijd naar gram. '20 cm' wordt
+  200, '1,5 kg' wordt 1500.
+- CAPACITEIT houdt zijn eigen eenheid en wordt NOOIT omgerekend. Een kom van
+  6,6 liter is capaciteit_waarde 6.6 met eenheid 'liter' — niet 6600. Die
+  omrekenregel geldt alleen voor maten en gewicht.
 - Staat een maat er niet, vul dan null — NOOIT een maat schatten. Een verzonnen
   afmeting laat later een bak niet in de koeling passen.
 - Bij 'l × b × h' zonder duidelijk welke welke is: breedte is de langste kant
