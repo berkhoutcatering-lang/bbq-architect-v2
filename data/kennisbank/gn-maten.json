@@ -1,0 +1,38 @@
+{
+  "$schema": "./README.md",
+  "versie": 1,
+  "toelichting": "Gastronorm volgens EN 631-1. Buitenmaten liggen vast en gelden wereldwijd — dit is naslag, geen bedrijfsdata. De inhoud is nominaal en verschilt een paar procent per fabrikant; reken met vulgraad, niet met de nominale inhoud. Hoeveel bakken jij hebt en waar ze liggen komt NIET hier maar in je materieel-lijst.",
+  "bron": "EN 631-1 (buitenmaten) · inhoud nominaal per fabrikant",
+  "maten": [
+    { "code": "2/1-65",  "naam": "GN 2/1 · 65 mm",  "lengteMm": 650, "breedteMm": 530, "diepteMm": 65,  "inhoudLiter": 19.0, "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "2/1-100", "naam": "GN 2/1 · 100 mm", "lengteMm": 650, "breedteMm": 530, "diepteMm": 100, "inhoudLiter": 28.0, "vulgraad": 0.85, "stapelbaar": true },
+
+    { "code": "1/1-20",  "naam": "GN 1/1 · 20 mm",  "lengteMm": 530, "breedteMm": 325, "diepteMm": 20,  "inhoudLiter": 2.5,  "vulgraad": 0.90, "stapelbaar": true },
+    { "code": "1/1-40",  "naam": "GN 1/1 · 40 mm",  "lengteMm": 530, "breedteMm": 325, "diepteMm": 40,  "inhoudLiter": 5.5,  "vulgraad": 0.88, "stapelbaar": true },
+    { "code": "1/1-65",  "naam": "GN 1/1 · 65 mm",  "lengteMm": 530, "breedteMm": 325, "diepteMm": 65,  "inhoudLiter": 9.0,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/1-100", "naam": "GN 1/1 · 100 mm", "lengteMm": 530, "breedteMm": 325, "diepteMm": 100, "inhoudLiter": 14.0, "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/1-150", "naam": "GN 1/1 · 150 mm", "lengteMm": 530, "breedteMm": 325, "diepteMm": 150, "inhoudLiter": 21.0, "vulgraad": 0.82, "stapelbaar": true },
+    { "code": "1/1-200", "naam": "GN 1/1 · 200 mm", "lengteMm": 530, "breedteMm": 325, "diepteMm": 200, "inhoudLiter": 28.0, "vulgraad": 0.80, "stapelbaar": true },
+
+    { "code": "2/3-65",  "naam": "GN 2/3 · 65 mm",  "lengteMm": 354, "breedteMm": 325, "diepteMm": 65,  "inhoudLiter": 6.0,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "2/3-100", "naam": "GN 2/3 · 100 mm", "lengteMm": 354, "breedteMm": 325, "diepteMm": 100, "inhoudLiter": 9.0,  "vulgraad": 0.85, "stapelbaar": true },
+
+    { "code": "1/2-40",  "naam": "GN 1/2 · 40 mm",  "lengteMm": 325, "breedteMm": 265, "diepteMm": 40,  "inhoudLiter": 2.5,  "vulgraad": 0.88, "stapelbaar": true },
+    { "code": "1/2-65",  "naam": "GN 1/2 · 65 mm",  "lengteMm": 325, "breedteMm": 265, "diepteMm": 65,  "inhoudLiter": 4.0,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/2-100", "naam": "GN 1/2 · 100 mm", "lengteMm": 325, "breedteMm": 265, "diepteMm": 100, "inhoudLiter": 6.5,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/2-150", "naam": "GN 1/2 · 150 mm", "lengteMm": 325, "breedteMm": 265, "diepteMm": 150, "inhoudLiter": 9.5,  "vulgraad": 0.82, "stapelbaar": true },
+
+    { "code": "1/3-40",  "naam": "GN 1/3 · 40 mm",  "lengteMm": 325, "breedteMm": 176, "diepteMm": 40,  "inhoudLiter": 1.5,  "vulgraad": 0.88, "stapelbaar": true },
+    { "code": "1/3-65",  "naam": "GN 1/3 · 65 mm",  "lengteMm": 325, "breedteMm": 176, "diepteMm": 65,  "inhoudLiter": 2.5,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/3-100", "naam": "GN 1/3 · 100 mm", "lengteMm": 325, "breedteMm": 176, "diepteMm": 100, "inhoudLiter": 3.9,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/3-150", "naam": "GN 1/3 · 150 mm", "lengteMm": 325, "breedteMm": 176, "diepteMm": 150, "inhoudLiter": 5.7,  "vulgraad": 0.82, "stapelbaar": true },
+
+    { "code": "1/4-65",  "naam": "GN 1/4 · 65 mm",  "lengteMm": 265, "breedteMm": 162, "diepteMm": 65,  "inhoudLiter": 1.8,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/4-100", "naam": "GN 1/4 · 100 mm", "lengteMm": 265, "breedteMm": 162, "diepteMm": 100, "inhoudLiter": 2.8,  "vulgraad": 0.85, "stapelbaar": true },
+
+    { "code": "1/6-65",  "naam": "GN 1/6 · 65 mm",  "lengteMm": 176, "breedteMm": 162, "diepteMm": 65,  "inhoudLiter": 1.0,  "vulgraad": 0.85, "stapelbaar": true },
+    { "code": "1/6-100", "naam": "GN 1/6 · 100 mm", "lengteMm": 176, "breedteMm": 162, "diepteMm": 100, "inhoudLiter": 1.6,  "vulgraad": 0.85, "stapelbaar": true },
+
+    { "code": "1/9-65",  "naam": "GN 1/9 · 65 mm",  "lengteMm": 176, "breedteMm": 108, "diepteMm": 65,  "inhoudLiter": 0.6,  "vulgraad": 0.85, "stapelbaar": true }
+  ]
+}

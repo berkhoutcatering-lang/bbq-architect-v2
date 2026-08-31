@@ -1,0 +1,43 @@
+{
+  "$schema": "./README.md",
+  "versie": 1,
+  "toelichting": "Wat een kok doet als het niet klopt. Opzoektabel, geen oordeel. Volgorde in voegToe is de volgorde waarin je het probeert.",
+  "correcties": [
+    {
+      "klacht": "vlak",
+      "omschrijving": "Smaakt nergens naar, terwijl de ingrediënten kloppen",
+      "voegToe": ["zout", "zuur"],
+      "toelichting": "Bijna altijd zout, niet meer kruiden. Pas als zout binnen het venster zit en het nog steeds vlak is, is zuur de volgende stap."
+    },
+    {
+      "klacht": "te_zoet",
+      "omschrijving": "Zoet drukt de rest weg",
+      "voegToe": ["zuur", "zout", "bitter"],
+      "toelichting": "Zuur werkt het snelst. Een beetje bitter maakt zoet bovendien interessanter in plaats van alleen minder."
+    },
+    {
+      "klacht": "te_zuur",
+      "omschrijving": "Scherp, bijtend, tandenpijn",
+      "voegToe": ["vet", "zoet"],
+      "toelichting": "Vet dempt zuur zonder de smaak te veranderen; zoet maskeert het maar verschuift het profiel."
+    },
+    {
+      "klacht": "te_zout",
+      "omschrijving": "Boven het zoutvenster",
+      "voegToe": ["zuur", "vet", "volume"],
+      "toelichting": "Volume erbij is de enige echte oplossing — de rest verzacht alleen de waarneming."
+    },
+    {
+      "klacht": "te_bitter",
+      "omschrijving": "Blijft hangen achterin",
+      "voegToe": ["vet", "zoet", "zout"],
+      "toelichting": "Zout onderdrukt bitter verrassend effectief, vaak beter dan zoet."
+    },
+    {
+      "klacht": "te_vet",
+      "omschrijving": "Plakt aan het gehemelte, wordt zwaar",
+      "voegToe": ["zuur"],
+      "toelichting": "Alleen zuur snijdt door vet heen. Dit is waarom een vet hoofdgerecht altijd iets zuurs naast zich nodig heeft."
+    }
+  ]
+}
