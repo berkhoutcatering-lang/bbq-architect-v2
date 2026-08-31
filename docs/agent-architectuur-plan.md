@@ -660,7 +660,7 @@ Drie dingen die bij het bouwen boven kwamen en het vastleggen waard zijn:
 
 1. **De werkvolgorde-motor rendeerde nergens.** `WerklijstView` en `PlanTakenSheet` stonden in de map van `/keuken/board`, en die route is sinds de kookbord-splitsing een doorverwijzing. De motor was getest en werkte, maar geen scherm gebruikte hem. Nu hangt hij als tweede tabblad in het kookbord.
 2. **Een geschatte duur mag niet in een kolom belanden.** Waar de ontleder geen minuten heeft opgeschreven, blijven `duur_actief_min` en `duur_passief_min` leeg en zegt het scherm "duur onbekend". Er is wél een plaatsingsduur nodig om een stap op de tijdlijn te zetten — die leeft alleen in `scheduled_at` en nergens anders.
-3. **De ontleder vult de duren nog niet.** Alle drie de bestaande `recipe_steps` hebben `prep_group` en `plaats`, maar `duur_actief_min` is leeg. De prompt vraagt er nadrukkelijk om. Zolang dat zo is draait golf 2 op de terugval en levert het onderscheid nog geen winst op — dat is de eerste zaak om na te lopen.
+3. **Het enige opgeslagen recept heeft geen duren.** De drie `recipe_steps` die er staan (de gerookte bavette) hebben `prep_group` en `plaats`, maar `duur_actief_min` en `duur_passief_min` zijn leeg. De ontleder kán ze wél leveren — de aardbeienquenelle gaf 62 minuten handtijd tegen 720 minuten wachttijd — dus het is geen systeemfout maar een recept dat het niet opleverde. Zolang er niets in staat draait golf 2 op de terugval en levert het onderscheid geen winst op. Eerste zaak om na te lopen: dat recept opnieuw laten ontleden en kijken of de duren er dan wél in komen.
 
 ---
 
