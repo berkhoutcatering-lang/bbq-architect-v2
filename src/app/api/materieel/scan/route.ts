@@ -18,7 +18,7 @@ Geen uitleg, geen markdown, geen denk-tekst. Direct JSON met dit schema:
 
 {
   "naam": "string (productnaam zoals zichtbaar — bv 'IKEA OFTAST eetbord wit 25cm' of 'Yoder YS640S smoker')",
-  "type": "BBQ | Servies | Linnen | Koeling | Transport | Meubilair | Overig",
+  "type": "BBQ | Servies | Linnen | Koeling | Transport | Meubilair | Apparatuur | Overig",
   "kleur": "string of null (kleur-omschrijving voor foto-prompts, bv 'wit matt', 'zwart hout')",
   "materiaal": "string of null (bv 'porselein', 'stoneware', 'RVS', 'eiken', 'linnen')",
   "afmetingen": "string of null (vrije text, bv '25cm rond', '200x150cm', '60L inhoud')",
@@ -45,6 +45,7 @@ Regels:
 - 'type' is verplicht en moet exact één van de opties zijn
 - Voor servies/borden: vul kleur+materiaal+afmetingen ALTIJD in (essentieel voor foto-prompts later)
 - Voor BBQ/koeling/transport: kleur+materiaal mag null als irrelevant
+- Keukenmachines (vacuümmachine, snijmachine, blender, mixer, groentesnijder, sifon) zijn type 'Apparatuur' — NIET Transport
 - ai_styling_hint alleen invullen voor servies/linnen — leeg laten voor apparatuur
 - Geef NOOIT markdown fences (\`\`\`), geef alleen kale JSON
 - Gebruik Nederlands voor alle tekst-velden
@@ -215,7 +216,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Validatie: type moet één van de toegestane zijn
-        const VALID_TYPES = ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'];
+        const VALID_TYPES = ['BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Apparatuur', 'Overig'];
         if (!parsed.naam || !parsed.type || !VALID_TYPES.includes(parsed.type)) {
             return NextResponse.json({
                 error: 'AI-output mist verplicht veld (naam/type) of type is ongeldig',

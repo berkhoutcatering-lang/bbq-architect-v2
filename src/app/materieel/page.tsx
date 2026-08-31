@@ -15,9 +15,10 @@ import PageHeader from '@/components/PageHeader';
 import type { Materieel as MatType } from '@/types';
 import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload, Boxes } from 'lucide-react';
 import GnBakkenDrawer from './_components/GnBakkenDrawer';
+import GemisRapport from './_components/GemisRapport';
 import { RequireTier } from '@/components/PaywallPrompt';
 
-const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
+const CATEGORIES = ['Alles', 'BBQ', 'Apparatuur', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
 const BUCKET = 'materieel';
 
 interface NewLogEntry {
@@ -42,6 +43,7 @@ export default function Materieel() {
     // Scan-flow state: foto upload → AI Vision parse → preview → user-keur → insert
     const [scanOpen, setScanOpen] = useState(false);
     const [gnOpen, setGnOpen] = useState(false);
+    const [gemisOpen, setGemisOpen] = useState(false);
     const [scanLoading, setScanLoading] = useState(false);
     const [scanError, setScanError] = useState<string | null>(null);
     const [scanPreview, setScanPreview] = useState<any>(null);
@@ -387,6 +389,9 @@ export default function Materieel() {
                 title={'Materieel (' + materieel.length + ')'}
                 actions={
                     <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-ghost" onClick={() => setGemisOpen(true)} title="Welke technieken zijn voor jou gesloten omdat het apparaat ontbreekt">
+                            <Sparkles size={14} /> Wat kan ik niet
+                        </button>
                         <button className="btn btn-ghost" onClick={() => setGnOpen(true)} title="Tel je gastronorm-bakken — de maten staan al vast">
                             <Boxes size={14} /> GN tellen
                         </button>
@@ -474,6 +479,12 @@ export default function Materieel() {
             </div>
 
             {/* SCAN-MODAL: foto upload → AI Vision parse → preview → user-keur → insert */}
+            <GemisRapport
+                open={gemisOpen}
+                onClose={() => setGemisOpen(false)}
+                onGewijzigd={() => { refetch(); }}
+            />
+
             <GnBakkenDrawer
                 open={gnOpen}
                 onClose={() => setGnOpen(false)}
