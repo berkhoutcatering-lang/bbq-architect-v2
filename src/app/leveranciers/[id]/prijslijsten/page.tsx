@@ -13,6 +13,7 @@ import { RequireTier } from '@/components/PaywallPrompt';
 import {
     Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight, Ban, Trash2,
 } from 'lucide-react';
+import FactuurVergelijking from '../../_components/FactuurVergelijking';
 
 const GOLD = '#c4a35a';
 
@@ -386,6 +387,10 @@ export default function PrijslijstenPage() {
                         ))}
                     </div>
                 )}
+
+                {/* De prijslijst hierboven is wat de leverancier zégt. Hieronder
+                    staat wat er op de rekening kwam. */}
+                <FactuurVergelijking levId={levId} />
             </div>
         </RequireTier>
     );
