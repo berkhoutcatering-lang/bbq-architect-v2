@@ -162,8 +162,8 @@ export function vergelijkBonregel(regel: BonRegel, lijst: LijstRegel[]): Vergeli
         stand === 'gelijk'
             ? 'Factuur en prijslijst zeggen hetzelfde.'
             : stand === 'duurder'
-                ? `Je betaalde ${pctNL(pct)}% méér dan de lijst zegt.`
-                : `Je betaalde ${pctNL(Math.abs(pct))}% minder dan de lijst zegt.`;
+                ? `${pctNL(pct)}% boven de lijstprijs — meestal de opslag van je leverancier.`
+                : `${pctNL(Math.abs(pct))}% onder de lijstprijs.`;
 
     return {
         regel, stand, lijstNaam: hit.regel.product_naam, lijstPrijs,

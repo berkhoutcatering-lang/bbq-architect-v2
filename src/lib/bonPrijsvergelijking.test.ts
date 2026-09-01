@@ -23,8 +23,9 @@ describe('vergelijkBonregel — de echte factuurregels', () => {
         expect(v.stand).toBe('duurder');
         expect(v.verschilPct).toBeCloseTo(13.3, 1);
         expect(v.lijstPrijs).toBe(7.15);
-        /* Nederlandse notatie in de tekst die de kok leest. */
+        /* Nederlandse notatie, en geen alarmtaal: een opslag is geen fout. */
         expect(v.toelichting).toContain('13,3%');
+        expect(v.toelichting).toContain('opslag van je leverancier');
     });
 
     it('Brasvar Coppa: factuur en lijst zeggen hetzelfde', () => {
