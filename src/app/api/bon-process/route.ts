@@ -21,7 +21,10 @@ export const maxDuration = 30;
  *   1. Leverancier upsert (fuzzy match op winkel-string)
  *   2. Per item:
  *      a. matchInventory of insert nieuw item met leverancier_id
- *      b. UPDATE inventory.current_stock += aantal, purchase_price = nieuwe
+ *      b. UPDATE inventory.current_stock += aantal (de PRIJS blijft staan — zie
+ *         de toelichting bij die update; een factuurprijs overschrijft nooit een
+ *         catalogusprijs). Alleen een gloednieuw voorraaditem krijgt de
+ *         factuurprijs als startwaarde, want daar valt niets te overschrijven.
  *      c. INSERT stock_movement type='receive' met unit_price + bon_id
  *      d. INSERT price_history (inventory_id, leverancier_id, datum, unit_price)
  *   3. UPDATE bonnen: leverancier_id, bon_items, btw_breakdown, processed_at
@@ -186,10 +189,27 @@ export async function POST(req: NextRequest) {
                 if (matched) {
                     inventoryId = matched.id;
                     action = 'updated';
-                    /* Update voorraad + prijs + leverancier-FK indien nog leeg. */
+                    /* Voorraad bij, prijs niet.
+                       
+                       Deze regel schreef de factuurprijs over `purchase_price`
+                       heen. Dat leek logisch — je hebt het immers net betaald —
+                       maar het is precies wat je niet wilt. De prijs in dit
+                       systeem is de groothandelsprijs uit de catalogus. Wat er
+                       op één factuur stond verschilt per levering: dezelfde
+                       kipdij kwam op de ene bon exact op de lijstprijs uit en op
+                       de andere dertien procent erboven. Een inkoopprijs die met
+                       elke bon meebeweegt is geen prijs meer maar ruis, en hij
+                       lekt door naar de marge op je offertes.
+                       
+                       Mathijs, 2026-09-01: "puur groothandelprijzen, niet van de
+                       bonnen."
+                       
+                       Wat er wél gebeurt met de factuurprijs staat hieronder: hij
+                       gaat als momentopname naar `price_history` en als
+                       `unit_price` op de voorraadmutatie. Daar is hij een
+                       vastlegging van wat je betaalde, en overschrijft hij niets. */
                     const updates: any = {
                         current_stock: newStock,
-                        purchase_price: unit_price > 0 ? unit_price : matched.purchase_price,
                         last_count_at: new Date().toISOString(),
                     };
                     if (leverancier && !matched.leverancier_id) updates.leverancier_id = leverancier.id;
@@ -206,6 +226,9 @@ export async function POST(req: NextRequest) {
                             min_stock: 0,
                             par_level: 0,
                             unit: item.unit || 'stuks',
+                            /* Nieuw item: er is nog geen catalogusprijs om te
+                               bewaren, dus de factuurprijs is beter dan niets.
+                               Overschrijven doet hij niemand. */
                             purchase_price: unit_price,
                             supplier: leverancier?.naam || summary.winkel || '',
                             leverancier_id: leverancier?.id || null,
