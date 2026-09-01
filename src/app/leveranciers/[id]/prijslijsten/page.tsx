@@ -63,6 +63,9 @@ export default function PrijslijstenPage() {
     const [uploading, setUploading] = useState(false);
     const [polling, setPolling] = useState(false);
     const [dragActive, setDragActive] = useState(false);
+    /* Hoeveel regels van deze leverancier wachten écht nog op een oordeel.
+       null = nog niet geteld; dan tonen we de knop niet, want we weten het niet. */
+    const [openstaand, setOpenstaand] = useState<number | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
 
     const load = useCallback(async () => {
@@ -74,6 +77,17 @@ export default function PrijslijstenPage() {
             if (!r.ok) throw new Error(d?.error || 'kon prijslijsten niet laden');
             setLev(d.leverancier || null);
             setUploads((d.uploads || []) as UploadRow[]);
+            /* De review-knop hing tot nu toe alleen aan de parse-status van de
+               PDF. Die blijft voor altijd 'parsed', ook als elke regel al is
+               goedgekeurd — en dan bracht de knop je naar een lade die "Niets
+               te reviewen" zei. Een knop die je naar een leeg scherm stuurt is
+               erger dan geen knop. Daarom tellen we hier wat er echt open staat. */
+            try {
+                const rm = await fetch(`/api/leveranciers/${levId}/mutations`);
+                setOpenstaand(rm.ok ? Number((await rm.json())?.count ?? 0) : null);
+            } catch {
+                setOpenstaand(null);
+            }
         } catch (e) {
             showToast((e as Error).message, 'error');
         } finally {
@@ -312,6 +326,7 @@ export default function PrijslijstenPage() {
                                 key={u.id}
                                 u={u}
                                 levId={levId}
+                                openstaand={openstaand}
                                 onRetry={async () => {
                                     try {
                                         const r = await fetch(
@@ -386,10 +401,12 @@ function fmtAgo(iso: string): string {
 }
 
 function UploadRowItem({
-    u, levId, onRetry, onCancel, onDelete,
+    u, levId, openstaand, onRetry, onCancel, onDelete,
 }: {
     u: UploadRow;
     levId: number;
+    /** Openstaande regels bij deze leverancier; null = onbekend. */
+    openstaand: number | null;
     onRetry: () => Promise<void>;
     onCancel: () => Promise<void>;
     onDelete: () => Promise<void>;
@@ -532,16 +549,32 @@ function UploadRowItem({
                     </button>
                 )}
                 {(u.status === 'parsed' || u.status === 'partial') && (
-                    <Link
-                        href={`/leveranciers?review=${levId}`}
-                        style={{
-                            padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                            background: GOLD, color: '#0a0a0c', textDecoration: 'none',
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                        }}
-                    >
-                        Review <ArrowRight size={11} />
-                    </Link>
+                    openstaand != null && openstaand > 0 ? (
+                        <Link
+                            href={`/leveranciers?review=${levId}`}
+                            title={`${openstaand} regel(s) van deze leverancier wachten nog op jouw oordeel`}
+                            style={{
+                                padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                                background: GOLD, color: '#0a0a0c', textDecoration: 'none',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}
+                        >
+                            Review {openstaand} <ArrowRight size={11} />
+                        </Link>
+                    ) : openstaand === 0 ? (
+                        /* Alles al beoordeeld. Zeg dat, in plaats van een knop
+                           aan te bieden die naar een lege lade leidt. */
+                        <span
+                            title="Alle regels uit deze prijslijst zijn al goedgekeurd"
+                            style={{
+                                padding: '7px 12px', fontSize: 12, fontWeight: 600,
+                                color: '#5cb85c', display: 'inline-flex', alignItems: 'center',
+                                gap: 4, flexShrink: 0, whiteSpace: 'nowrap',
+                            }}
+                        >
+                            <CheckCircle2 size={12} /> Verwerkt
+                        </span>
+                    ) : null
                 )}
                 <button
                     onClick={handleDelete}
