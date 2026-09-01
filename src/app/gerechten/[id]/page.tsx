@@ -19,6 +19,7 @@ import LiveCostHeader from '../_components/LiveCostHeader';
 import IngredientCostBreakdown from '../_components/IngredientCostBreakdown';
 import GerechtComponentenEditor from '../_components/GerechtComponentenEditor';
 import OntleedKnop from '../_components/OntleedKnop';
+import StappenlijstEditor, { type StapRij } from '../_components/StappenlijstEditor';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,6 +57,28 @@ export default async function GerechtDetailPage({ params }: PageProps) {
         .maybeSingle();
 
     if (error || !gerecht) notFound();
+
+    /* Receptstappen erbij. Ze werden tot nu toe door geen enkel scherm getoond:
+       de ontleder schreef ze weg en daarna las alleen de prep-planner ze nog.
+       Een fout hier mag de pagina niet slopen — dan blijft de lijst leeg. */
+    const { data: stapData } = await sb
+        .from('recipe_steps')
+        .select('id, tekst, actie, prep_group, duur_actief_min, duur_passief_min, plaats, toezicht_nodig, bron')
+        .eq('gerecht_id', id)
+        .eq('organization_id', orgId)
+        .order('step_order');
+
+    const stappen: StapRij[] = (stapData ?? []).map((r) => ({
+        id: String(r.id),
+        tekst: String(r.tekst ?? ''),
+        actie: r.actie ?? null,
+        prep_group: r.prep_group ?? null,
+        duur_actief_min: r.duur_actief_min ?? null,
+        duur_passief_min: r.duur_passief_min ?? null,
+        plaats: (r.plaats === 'bus' || r.plaats === 'locatie') ? r.plaats : 'thuis',
+        toezicht_nodig: r.toezicht_nodig === true,
+        bron: r.bron ?? null,
+    }));
 
     return (
         <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
@@ -114,6 +137,8 @@ export default async function GerechtDetailPage({ params }: PageProps) {
             />
 
             <GerechtComponentenEditor gerechtId={String(gerecht.id)} />
+
+            <StappenlijstEditor gerechtId={String(gerecht.id)} beginStappen={stappen} />
 
             <section style={{ marginTop: 32, fontSize: 13, color: 'var(--color-text-muted)' }}>
                 <p>
