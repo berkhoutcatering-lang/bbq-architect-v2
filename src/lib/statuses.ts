@@ -83,6 +83,27 @@ export const EVENT_STATUS = {
 
 export type EventStatus = typeof EVENT_STATUS[keyof typeof EVENT_STATUS];
 
+/**
+ * Welke status-waarden een event-formulier mag insturen.
+ *
+ * Bestaat apart van EVENT_STATUS omdat de database ook NL-vormen uit oudere
+ * schermen bevat, en omdat `upsertEvent` in een 'use server'-module staat — die
+ * mag alleen async functies exporteren, dus de lijst kan daar niet wonen.
+ *
+ * Waarom dit een eigen constante is en geen losse lijst in de Server Action:
+ * daar stond hij eerder wél, en 'optie' en 'in_progress' ontbraken erin. Gevolg
+ * was dat élk event met status 'optie' — en dat is elk event dat uit een concept-
+ * offerte rolt — niet meer op te slaan was vanuit de event-editor. Je vulde de
+ * begintijd in, klikte Opslaan, kreeg een validatie-fout te zien en er veranderde
+ * niets. Zie de test die afdwingt dat elke EVENT_STATUS hier in staat.
+ */
+export const EVENT_STATUS_INVOER = [
+    'pending', 'optie', 'confirmed', 'in_progress', 'completed', 'cancelled',
+    /* NL-vormen uit oudere schermen; blijven geaccepteerd zodat bestaande
+       rijen bewerkbaar blijven. */
+    'concept', 'bevestigd', 'voltooid', 'geannuleerd',
+] as const;
+
 const EVENT_STATUS_ALIASES: Record<string, EventStatus> = {
     geannuleerd: 'cancelled',     // NL alias
 };

@@ -28,10 +28,13 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { applyConsumption } from '@/lib/dal/stockMutation';
+import { EVENT_STATUS_INVOER } from '@/lib/statuses';
 
 /* Schema is bewust ruimhartig — legacy events kennen statussen als
    'completed' en 'confirmed' (Engelse vorm) naast de NL-vorm. We
-   accepteren beide zodat upsertEvent ook bestaande rijen kan updaten. */
+   accepteren beide zodat upsertEvent ook bestaande rijen kan updaten.
+   De lijst zelf staat in statuses.ts naast EVENT_STATUS, met een test die
+   afdwingt dat er geen status buiten valt. */
 const EventSchema = z.object({
   id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
   name: z.string().min(1, 'Naam is verplicht').max(200),
@@ -43,10 +46,7 @@ const EventSchema = z.object({
   client_email: z.string().email().or(z.literal('')).optional().nullable(),
   client_telefoon: z.string().max(50).optional().nullable(),
   type: z.string().max(50).optional().nullable(),
-  status: z.enum([
-    'concept', 'pending', 'bevestigd', 'voltooid', 'geannuleerd',
-    'confirmed', 'completed', 'cancelled', // legacy
-  ]).optional().default('concept'),
+  status: z.enum(EVENT_STATUS_INVOER).optional().default('concept'),
   /* Open velden voor menu, prep, notities — backend valideert deeper als nodig. */
   menu: z.unknown().optional(),
   menu_selectie: z.unknown().optional(),
