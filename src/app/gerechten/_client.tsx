@@ -138,6 +138,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [inspectingGerecht, setInspectingGerecht] = useState<Gerecht | null>(null);
     const [cmdkOpen, setCmdkOpen] = useState(false);
     const [bedenkerOpen, setBedenkerOpen] = useState(false);
+    const [afStatus, setAfStatus] = useState<{
+        gerechten: Array<{ id: string; naam: string; gehaald: number; totaal: number; af: boolean; volgende: { label: string } | null }>;
+        overzicht: { af: number; gerechten: number; eersteGat: { label: string; ontbreekt: number } | null };
+    } | null>(null);
     const [allergenModalRows, setAllergenModalRows] = useState<AllergenRow[]>([]);
     /* AI-allergeen-detectie bij opslaan: standaard aan, maar Sam wil de keuze.
        aiSaving = spinner-state tijdens de (trage) AI-call. */
@@ -157,6 +161,19 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     /* Bucket C — ⌘K opent de Menu Command Palette. */
     useCmdKShortcut(useCallback(() => setCmdkOpen(true), []));
 
+    async function loadAfStatus() {
+        /* Welke gerechten écht af zijn — komt uit vier tabellen, dus uit een
+           eigen route. Faalt hij, dan tonen we de tegel niet: liever niets dan
+           "0 af" terwijl we het niet weten. */
+        try {
+            const r = await fetch('/api/gerechten/af-status');
+            if (!r.ok) { setAfStatus(null); return; }
+            setAfStatus(await r.json());
+        } catch {
+            setAfStatus(null);
+        }
+    }
+
     async function loadData() {
         const g = await supabase.from('gangen').select('*').order('volgorde');
         if (g.data) {
@@ -166,6 +183,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         const r = await supabase.from('gerechten').select('*').order('volgorde');
         if (r.data) setGerechten(r.data);
         await loadMenuTemplates();
+        await loadAfStatus();
     }
 
     async function loadMenuTemplates() {
@@ -875,6 +893,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                     margeBasis={kpiData.margeBasis}
                     allergenenGedekt={kpiData.allergenenGedekt}
                     totaalGerechten={kpiData.totaalGerechten}
+                    afCount={afStatus?.overzicht.af}
+                    afEersteGat={afStatus?.overzicht.eersteGat}
                 />
             )}
             {/* GangFilterPills weg — gang-filter loopt via MRFilterPill in de Bucket-C filter-bar. */}

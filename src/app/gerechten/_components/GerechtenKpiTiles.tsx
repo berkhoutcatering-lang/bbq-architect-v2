@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Layers, Tag, TrendingUp, ShieldAlert } from 'lucide-react';
+import { Layers, Tag, TrendingUp, ShieldAlert, CheckCircle2 } from 'lucide-react';
 
 interface Props {
   totaal: number;
@@ -11,6 +11,12 @@ interface Props {
   margeBasis?: number; // over hoeveel gerechten dat gemiddelde is gerekend
   allergenenGedekt: number; // # gerechten met allergenen ingevuld
   totaalGerechten: number; // noemer voor x/y
+  /* Hoeveel gerechten aan alle vijf de eisen voldoen — zie src/lib/gerechtAf.ts.
+     Undefined = nog niet geladen; dan tonen we de tegel niet in plaats van een
+     nul die als "geen enkele af" gelezen wordt terwijl we het niet weten. */
+  afCount?: number;
+  /* De eerste eis in de keten die nog gerechten mist, met hoeveel. */
+  afEersteGat?: { label: string; ontbreekt: number } | null;
 }
 
 export default function GerechtenKpiTiles({
@@ -21,6 +27,8 @@ export default function GerechtenKpiTiles({
   margeBasis = 0,
   allergenenGedekt,
   totaalGerechten,
+  afCount,
+  afEersteGat,
 }: Props) {
   // APK v3 #32: bij allergen-dekking <80% surface een actionable CTA
   // (link naar gerechten zonder allergens) ipv passieve KPI-display.
@@ -70,6 +78,21 @@ export default function GerechtenKpiTiles({
       href: allergenenWarn ? '/gerechten?queue=allergens' : null,
     },
   ];
+
+  /* De belangrijkste tegel staat vooraan: een gerecht dat er compleet uitziet
+     maar half is, is de reden dat marges en bestellijsten niet klopten. */
+  if (afCount != null && totaalGerechten > 0) {
+    tiles.unshift({
+      label: 'Gerechten af',
+      value: `${afCount}/${totaalGerechten}`,
+      sub: afEersteGat
+        ? `Begin bij: ${afEersteGat.label.toLowerCase()} (${afEersteGat.ontbreekt})`
+        : 'alles compleet',
+      Icon: CheckCircle2,
+      tone: (afCount === totaalGerechten ? 'green' : 'warn') as 'default' | 'warn' | 'green',
+      href: null as string | null,
+    });
+  }
 
   return (
     <div
