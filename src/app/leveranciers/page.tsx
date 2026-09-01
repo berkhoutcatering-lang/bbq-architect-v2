@@ -23,6 +23,7 @@ import {
 import ExtensionConnectPanel from './_components/ExtensionConnectPanel';
 import LeverancierReviewSheet from './_components/LeverancierReviewSheet';
 import MargeAlertBanner from '@/components/voorraad/MargeAlertBanner';
+import { beoordeelVersheid, syncVastgelopen, scanOverzicht } from '@/lib/prijsVersheid';
 
 const GOLD = '#c4a35a';
 
@@ -191,6 +192,45 @@ export default function LeveranciersPage() {
                     </div>
                 </div>
 
+                {/* Prijzen verouderen stil. De app wist hoe oud ze waren maar zei
+                    er niets over; op 1 september was de oudste lijst vier maanden
+                    oud zonder dat iets daarop wees. */}
+                {(() => {
+                    const o = scanOverzicht(leveranciers);
+                    if (o.toeAanScan === 0 && o.vastgelopen === 0) return null;
+                    return (
+                        <div style={{
+                            display: 'flex', alignItems: 'flex-start', gap: 10,
+                            padding: '12px 15px', borderRadius: 11, marginBottom: 14,
+                            background: 'rgba(240,163,94,0.07)',
+                            border: '1px solid rgba(240,163,94,0.26)',
+                        }}>
+                            <Clock size={15} style={{ color: '#f0a35e', flexShrink: 0, marginTop: 1 }} />
+                            <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text)' }}>
+                                {o.toeAanScan > 0 && (
+                                    <>
+                                        <strong>
+                                            {o.toeAanScan} {o.toeAanScan === 1 ? 'leverancier is' : 'leveranciers zijn'} toe aan verse prijzen.
+                                        </strong>{' '}
+                                        <span style={{ color: 'var(--muted)' }}>
+                                            De oudste prijslijst is {o.oudsteDagen} dagen oud. Verse lijstprijzen
+                                            houden je kostprijs vanzelf goed — betere inkoop betekent dan meteen
+                                            een betere marge, zonder dat je iets hoeft bij te werken.
+                                        </span>
+                                    </>
+                                )}
+                                {o.vastgelopen > 0 && (
+                                    <div style={{ marginTop: o.toeAanScan > 0 ? 6 : 0, color: 'var(--muted)' }}>
+                                        {o.vastgelopen === 1 ? 'Eén scan staat' : `${o.vastgelopen} scans staan`}
+                                        {' '}nog op &ldquo;bezig&rdquo; terwijl er niets meer draait — die is destijds
+                                        afgebroken. Gewoon opnieuw starten.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
+
                 {loading && leveranciers.length === 0 ? (
                     <SkeletonList />
                 ) : leveranciers.length === 0 ? (
@@ -264,8 +304,15 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
             showToast('Levertijd opslaan mislukt', 'error');
         }
     }
-    const isRunning = lev.last_sync_status === 'running';
+    /* Een scan van minuten die maanden op 'running' staat, draait niet meer.
+       Vuur & Rook toonde zo 120 dagen een draaiend spinnertje. */
+    const vastgelopen = syncVastgelopen(lev.last_sync_status, lev.last_sync_at);
+    const isRunning = lev.last_sync_status === 'running' && !vastgelopen;
     const isFailed = lev.last_sync_status === 'failed';
+    const versheid = beoordeelVersheid(lev.last_sync_at);
+    const heeftPrijzen = (lev.products_count ?? 0) > 0;
+    /* Alleen zeuren over ouderdom als er ook echt prijzen te verversen zijn. */
+    const toonVersheid = heeftPrijzen && versheid.dagen != null;
     const hasPending = (lev.pendingMutations ?? 0) > 0;
     const methodIcon =
         lev.import_method === 'extension' ? Globe :
@@ -338,8 +385,25 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                             </span>
                         )}
                         <span>{lev.products_count} producten</span>
-                        <span>Laatste sync: {fmtRelative(lev.last_sync_at)}</span>
+                        {toonVersheid ? (
+                            <span
+                                title={`Laatste scan: ${fmtRelative(lev.last_sync_at)}`}
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    fontWeight: versheid.stand === 'oud' ? 700 : 500,
+                                    color: versheid.stand === 'oud' ? '#f0a35e'
+                                        : versheid.stand === 'wordt-oud' ? GOLD : 'var(--muted)',
+                                }}
+                            >
+                                <Clock size={11} />
+                                Prijzen {versheid.tekst}
+                                {versheid.toeAanScan && ' · tijd om te verversen'}
+                            </span>
+                        ) : (
+                            <span>Laatste sync: {fmtRelative(lev.last_sync_at)}</span>
+                        )}
                         {isRunning && <span style={{ color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" /> bezig…</span>}
+                        {vastgelopen && <span style={{ color: '#e57373', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="De scan is destijds afgebroken zonder zich af te melden"><AlertTriangle size={11} /> scan vastgelopen</span>}
                         {isFailed && <span style={{ color: '#e57373', display: 'inline-flex', alignItems: 'center', gap: 4 }}><AlertTriangle size={11} /> mislukt</span>}
                     </div>
                     {lev.portal_url && (
