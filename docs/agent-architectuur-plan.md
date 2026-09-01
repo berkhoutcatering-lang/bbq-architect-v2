@@ -690,7 +690,11 @@ Twee fouten die tijdens het invoeren onopgemerkt door konden, allebei aangetroff
 
 ### 8.3 De vijf stappen
 
-**1. De prijsafleiding repareren.** Eerst, want alles daarna erft de fout. Zolang een pakprijs en een eenheidsprijs door elkaar lopen is elk bedrag verdacht en moet het invoerwerk over. Levert een lijst op van welke componenten van prijs veranderen, zodat de verschuiving zichtbaar is in plaats van stil.
+**1. De prijsafleiding repareren.** *Gedaan op 2026-09-01, en anders dan verwacht.* De afleiding bleek niet stuk: de canon staat vast in de tests van `supplierProductBaseCost` — staat er een pakinhoud bij, dan is `price_cents` de prijs van het héle pak. Wat ontbrak was een controle op de invoer. Die staat er nu (`src/lib/prijsControle.ts`) met twee regels: prijs gelijk aan het pakgewicht, en goedkoper dan een levensmiddel kan zijn (ondergrens €0,75 per kilo — een gekozen drempel, want budget-appels zitten op €0,90 en dat is echt).
+
+Van de **5.238 producten met een pakinhoud zijn er 182 verdacht**, waarvan er twee aan een component hangen. De grootste groep is één import-fout: soep- en sausconcentraten waar de parser de opbrengst uit de naam ("opbrengst 38 ltr, bus 1,52 kg") als pakinhoud heeft genomen.
+
+De controle verandert nooit een bedrag — hij wijst aan en stelt de vraag. Op de gerecht-pagina staat hij bij de betrokken regel, en de kolom "per kg" toont voortaan de afgeleide eenheidsprijs in plaats van een streepje.
 
 **2. "Af" zichtbaar maken.** Vijf eisen per gerecht: ingrediënten uit de catalogus, dosering per gast, afgeleide kostprijs, allergenen, stappen met handtijd. Een balk per gerecht en één werklijst met wat ontbreekt. Zonder dat zie je niet waar je staat. Het bestaande "allergenen-dekking 3/15" op `/gerechten` is precies dit idee, maar op één as.
 
