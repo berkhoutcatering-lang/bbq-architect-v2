@@ -119,12 +119,12 @@ Bijvangst: dat bestand pint `claude-sonnet-4-5-20250929` terwijl de toelichting 
 
 ## 3. Blokkers — eerst repareren
 
-Drie dingen hielden golf 1 tegen. Eén is opgelost, twee staan open.
+Drie dingen hielden golf 1 tegen. Twee zijn opgelost, één staat open.
 
 | Blokker | Stand | Wat er is | Waarom het telt |
 |---|---|---|---|
 | **`mep_items` kon niet aan gerechten koppelen** | **Opgelost — 2026-08-31** | De foreign key ontbrak. Aangebracht met `supabase/migrations/20260901020000_mep_items_koppeling.sql`. | De prep-agent sluit hierop aan. |
-| **`gerechten` staat nergens in versiebeheer** | **Open** | Geen enkele migratie maakt de tabel aan; hij is met de hand gemaakt en migraties doen alleen `ALTER`. | Zes nieuwe tabellen bouwen hierop. Een verse omgeving struikelt meteen. |
+| **`gerechten` staat nergens in versiebeheer** | **Opgelost — 2026-09-01** | `supabase/migrations/001a_gerechten_basis.sql`, uitgelezen uit de draaiende database. Sorteert tussen 001 en 002, dus vóór de eerste `ALTER` in 005. | Zes nieuwe tabellen bouwen hierop. Een verse omgeving struikelde meteen. |
 | **`prep_task_dependencies` is leeg** | **Open** | Bestaat sinds mei, nul gebruik in `src/`. Nagemeten: nul rijen. | Wordt opgevoerd als bestaande aansluiting. |
 
 ### 3.1 Correctie op de eerste blokker
@@ -138,6 +138,12 @@ Versie 2.0 schreef dat `mep_items.gerecht_id` een `INTEGER` was terwijl `gerecht
 De migratie controleert elke aanname apart (bestaat `gerechten`, is de kolom `uuid`, ligt de sleutel er al) in plaats van ze aan te nemen. Alle negen bestaande rijen wezen al naar bestaande gerechten, dus opschonen was niet nodig. Omdat `gerechten` nog steeds geen `CREATE TABLE` heeft, slaat de migratie zichzelf op een verse omgeving over met een notice — de tweede blokker mag de eerste niet meeslepen.
 
 **De les, en die geldt breder dan deze tabel:** een migratiebestand beschrijft wat er ooit is gevraagd, niet wat er nu staat. Deze codebase is op meer plekken met de hand aangepast — `gerechten` zelf is er het grootste voorbeeld van. Nameten in de database is de enige waarheid; dit plan is op dat punt één keer de mist in gegaan en dat kostte een verkeerd geformuleerde blokker.
+
+### 3.2 Wat de tweede blokker blootlegde
+
+De `CREATE TABLE` is uit de draaiende database gelezen en niet gereconstrueerd uit de migraties — precies om de reden die in 3.1 staat. Veertig kolommen, drie foreign keys, twee check-constraints, vijf indexen en vier RLS-policies, allemaal onder een `if not exists` zodat de bestaande productie er niets van merkt.
+
+Twee foreign keys staan onder een extra voorwaarde, en dat wijst op wat er nog ligt: **`gangen` en `ai_conversations` staan evenmin in versiebeheer.** Dezelfde ziekte, twee tabellen verder. Bestaan ze niet, dan slaat de migratie die sleutel over met een notice in plaats van te klappen. Een verse omgeving komt nu veel verder dan eerst, maar is pas compleet als ook die twee er staan.
 
 Kleinere waarschuwing van dezelfde soort: `src/types/database.types.ts` wordt met de hand bijgehouden en is gedrift — het zegt dat een gerecht een genummerd id heeft, terwijl het een UUID is. Niet de migraties en niet dat bestand zijn hier de waarheid, maar de database.
 
