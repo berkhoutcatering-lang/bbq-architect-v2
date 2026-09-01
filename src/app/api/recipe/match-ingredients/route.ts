@@ -40,11 +40,48 @@ export const maxDuration = 30;
 
 interface InIngredient { naam: string; qty_pp?: number; eenheid?: string }
 
+/** Ketent een ilike per woord: alle woorden moeten in de naam voorkomen. */
+function alleWoorden(query: any, kolom: string, woorden: string[]): any {
+    let uit = query;
+    for (const w of woorden) uit = uit.ilike(kolom, `%${w}%`);
+    return uit;
+}
+
 /** Langste betekenisvolle token — de ilike-zoekterm (bv. "verse tijm" → "tijm"). */
 function searchTerm(naam: string): string {
-    const toks = normalizeIngredientName(naam).split(' ').filter((t) => t.length >= 3);
+    const toks = betekenisvolleTokens(naam);
     if (toks.length === 0) return normalizeIngredientName(naam);
-    return toks.sort((a, b) => b.length - a.length)[0];
+    return toks[0];
+}
+
+/**
+ * Woorden uit een ingrediëntnaam die iets over identiteit zeggen, langste eerst.
+ * Getallen en losse eenheden vallen af — "fles 2,35 kg" zegt niets over wát het is.
+ */
+function betekenisvolleTokens(naam: string): string[] {
+    const ruis = new Set(['fles', 'zak', 'bak', 'pot', 'doos', 'pak', 'blik', 'kist', 'per', 'stuk', 'stuks']);
+    return normalizeIngredientName(naam)
+        .split(' ')
+        .filter((t) => t.length >= 3 && !/^\d+$/.test(t) && !ruis.has(t))
+        .sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Eén brede zoekterm is niet genoeg, en dat kost stilletjes geld.
+ *
+ * "Siroop bruine suiker, fles 2,35 kg" leverde de term "siroop" op. Daar staan
+ * 191 producten op in de catalogus; de query pakte er 25 zonder sortering, en
+ * de juiste zat daar niet bij. Het ingrediënt viel dan zonder één melding uit
+ * de kostprijs — precies het soort stilte waar een foutieve foodcost uit
+ * ontstaat.
+ *
+ * Daarom zoeken we er een tweede, veel scherpere query naast: alle
+ * betekenisvolle woorden moeten voorkomen. Die levert bij "siroop bruine
+ * suiker" één rij op in plaats van 191. Additief bedoeld — vindt hij niets,
+ * dan blijft de brede zoektocht gewoon staan.
+ */
+function scherpeTermen(naam: string): string[] {
+    return betekenisvolleTokens(naam).slice(0, 3);
 }
 
 /** components-rij → CostCandidate (centen per base-eenheid). */
@@ -153,8 +190,13 @@ export async function POST(req: NextRequest) {
             const term = searchTerm(naam);
             if (!term) return { naam, qty_pp: qty, eenheid, match: null as any };
 
+            /* Twee zoekslagen per bron: breed op het langste woord, en scherp op
+               alle betekenisvolle woorden samen. Zie scherpeTermen(). */
+            const scherp = scherpeTermen(naam);
+            const meerdereWoorden = scherp.length > 1;
+
             // 4 bronnen parallel doorzoeken, org-scoped (RLS + expliciete filter).
-            const [comp, inv, sup, sprod] = await Promise.all([
+            const [comp, inv, sup, sprod, compS, invS, supS, sprodS] = await Promise.all([
                 sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
                     .eq('organization_id', orgId).ilike('name', `%${term}%`).limit(15),
                 sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
@@ -163,13 +205,30 @@ export async function POST(req: NextRequest) {
                     .eq('organization_id', orgId).eq('actief', true).ilike('product_naam', `%${term}%`).limit(25),
                 sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
                     .eq('organization_id', orgId).eq('active', true).ilike('name', `%${term}%`).limit(25),
+                /* Scherpe slag — alleen zinvol bij meer dan één woord. */
+                meerdereWoorden ? alleWoorden(
+                    sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
+                        .eq('organization_id', orgId), 'name', scherp).limit(10) : null,
+                meerdereWoorden ? alleWoorden(
+                    sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
+                        .eq('organization_id', orgId), 'naam', scherp).limit(10) : null,
+                meerdereWoorden ? alleWoorden(
+                    sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
+                        .eq('organization_id', orgId).eq('actief', true), 'product_naam', scherp).limit(10) : null,
+                meerdereWoorden ? alleWoorden(
+                    sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                        .eq('organization_id', orgId).eq('active', true), 'name', scherp).limit(10) : null,
             ]);
 
             const candidates: CostCandidate[] = [
                 ...(comp.data || []).map(fromComponent),
+                ...(compS?.data || []).map(fromComponent),
                 ...(inv.data || []).map(fromInventory),
+                ...(invS?.data || []).map(fromInventory),
                 ...(sup.data || []).map(fromSupplierPrice),
+                ...(supS?.data || []).map(fromSupplierPrice),
                 ...(sprod.data || []).map((r: any) => fromSupplierProduct(r, levById.get(r.supplier_id) ?? null)),
+                ...(sprodS?.data || []).map((r: any) => fromSupplierProduct(r, levById.get(r.supplier_id) ?? null)),
             ].filter((c): c is CostCandidate => c !== null);
 
             const best = pickBestMatch(naam, candidates);
