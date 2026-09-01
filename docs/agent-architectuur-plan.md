@@ -712,6 +712,20 @@ Bijvangst die zwaarder weegt dan hij lijkt: **allergenen hoeven dan niet meer ge
 
 **5. Pas dan de AI.** De bedenker werkt nu buiten de catalogus om, dus zijn kostprijs is een schatting en zijn marge is geen berekening maar een constante: de verkoopprijs wordt in de client gemaakt als kostprijs × 2,5, waardoor élk voorstel op 60% uitkomt. Laat hem kiezen uit wat er besteld kan worden, dan valt de kostprijs eruit. Daarna de ontleder over de stappen, met de minuten door Mathijs erbij.
 
+### 8.4 Allergenen: drie notaties en een gat (2026-09-01)
+
+Aangetroffen bij het afmaken van het dessert voor Henk en Mirjam. Drie dingen die apart klein lijken en samen betekenen dat het allergenenveld niet betrouwbaar is.
+
+**Er zijn drie notaties in gebruik, in één kolom.** Van de vier gerechten met allergenen staat het er twee keer als lettercode (`["G","E","S"]`), één keer als Nederlands woord met hoofdletter (`["Melk","Eieren"]`) en één keer gemengd. `src/lib/serviceData.ts` leest de lijst als codes en doet `code.toUpperCase()`; "Melk" wordt daar "MELK" en matcht met niets. De allergenen van dat gerecht zijn dus onzichtbaar voor het service-overzicht — precies het scherm waar een gast om vraagt.
+
+**De codelijst dekt de veertien niet.** `/api/detect-allergens` kent G, L, N, V, VE, E, S, F, M. Selderij, sulfiet, sesam, lupine en weekdieren hebben geen code. Wie selderij wil vastleggen kan dat alleen als los woord, en dat valt dus in het gat hierboven.
+
+**V (vegetarisch) is geen allergeen en werd fout voorgesteld.** De regel in de prompt luidt "niet vlees of vis"; het dessert bevat gelatineblaadjes, en gelatine is naar de letter geen van beide. De detector vinkte V dus aan voor een gerecht dat niet vegetarisch is. Dezelfde fout maakte de ontwerper eerder met parmigiano in een vegetarisch gerecht — dierlijk stremsel valt evenmin onder "vlees of vis". De bevestigingsstap ving het, wat precies is waarvoor hij bestaat, maar de regel zelf hoort dierlijke afgeleiden te noemen.
+
+**En de bron ontbreekt volledig.** Nul van de 12.781 catalogusproducten heeft allergeengegevens; beide catalogi hebben een allergenen-kolom en beide zijn leeg. De aanname in 8.3 stap 3 — dat allergenen zouden volgen uit de aangewezen catalogusproducten — klopt vandaag niet. Ze komen uit vakkennis, en de enige waarborg is de mens die tekent.
+
+---
+
 **Scope: niet alle vijftien.** Beginnen bij de acht gerechten van het event op 18 september. Die klus is echt en levert direct een kloppende bestellijst en een werkend kookbord op. Daarna is bekend wat één gerecht kost aan tijd, en pas dan is te beslissen of de rest het waard is.
 
 ---
