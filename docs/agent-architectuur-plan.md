@@ -666,6 +666,46 @@ Drie dingen die bij het bouwen boven kwamen en het vastleggen waard zijn:
 
 ---
 
+### 8.2 Het gerechtenboek is leeg — en dat is de grootste blokker (2026-09-01)
+
+Nagemeten op de live database, alle vijftien actieve gerechten:
+
+| | |
+|---|---|
+| Zonder één gekoppeld ingrediënt | 9 van 15 |
+| Met een kostprijs | 4 van 15 |
+| Met allergenen | 3 van 15 |
+| Met receptstappen | 1 van 15 |
+| Met handtijd | 0 van 15 |
+| **Volledig op alle vijf** | **0 van 15** |
+
+Dit hoofdstuk stond er niet in versie 2.0 en had er wel in gemoeten. Het plan gaat er stilzwijgend van uit dat er een gerechtenboek ligt waar de motor op kan draaien. Dat ligt er niet. Golf 2 rekent met handtijd die nergens staat, hoofdstuk 6 wil sjablonen afleiden uit eigen recepten die geen stappen hebben, en de marge-schermen delen door een kostprijs die bij elf van de vijftien ontbreekt.
+
+**De oorzaak is niet luiheid maar de vorm van het scherm.** Toevoegen en afmaken zijn dezelfde handeling: je maakt een gerecht aan met een naam, het staat meteen op `actief`, en niets brengt je ooit terug. Er bestaat geen begrip van "af". Een half gerecht ziet er precies zo uit als een heel gerecht.
+
+Twee fouten die tijdens het invoeren onopgemerkt door konden, allebei aangetroffen in echte data:
+
+- **De pakgrootte als dosering.** `Gegrilde kippendij` stond op 2,5 kg per gast — dat is de inhoud van het pak. Voor 35 gasten rekende de app 87,5 kilo kip uit, en dat komt zo op de bestellijst.
+- **De pakprijs als eenheidsprijs.** Dezelfde kip komt uit op €0,60 per kilo, omdat een leveranciersprijs van €5,99 met eenheid `kg` is gelezen als de prijs voor de hele doos van tien kilo. Zie 8.3.
+
+### 8.3 De vijf stappen
+
+**1. De prijsafleiding repareren.** Eerst, want alles daarna erft de fout. Zolang een pakprijs en een eenheidsprijs door elkaar lopen is elk bedrag verdacht en moet het invoerwerk over. Levert een lijst op van welke componenten van prijs veranderen, zodat de verschuiving zichtbaar is in plaats van stil.
+
+**2. "Af" zichtbaar maken.** Vijf eisen per gerecht: ingrediënten uit de catalogus, dosering per gast, afgeleide kostprijs, allergenen, stappen met handtijd. Een balk per gerecht en één werklijst met wat ontbreekt. Zonder dat zie je niet waar je staat. Het bestaande "allergenen-dekking 3/15" op `/gerechten` is precies dit idee, maar op één as.
+
+**3. Eén deur in plaats van vier.** Er zijn nu vier ingangen — *Nieuw gerecht*, *Bedenk met AI*, *Uit de groothandel*, en de ontleder — en alle vier leveren ze een ánder half gerecht op. *Uit de groothandel* is de goede, want die pint echte catalogusproducten vast en leidt de kostprijs af in plaats van hem te schatten. Die wordt de standaardroute; de rest worden ingangen naar diezelfde route.
+
+Bijvangst die zwaarder weegt dan hij lijkt: **allergenen hoeven dan niet meer getypt te worden.** Ze volgen uit de aangewezen catalogusproducten. Dat is ook de enige toegestane herkomst — zie de harde regel in hoofdstuk 2.
+
+**4. Vangnetten op de twee fouten die geld kosten.** Deterministisch, geen model: een dosering boven een halve kilo per gast vraagt *bedoel je het pak?*, en een kostprijs onder een ondergrens per productgroep piept. Allebei zouden ze de twee fouten hierboven hebben tegengehouden.
+
+**5. Pas dan de AI.** De bedenker werkt nu buiten de catalogus om, dus zijn kostprijs is een schatting en zijn marge is geen berekening maar een constante: de verkoopprijs wordt in de client gemaakt als kostprijs × 2,5, waardoor élk voorstel op 60% uitkomt. Laat hem kiezen uit wat er besteld kan worden, dan valt de kostprijs eruit. Daarna de ontleder over de stappen, met de minuten door Mathijs erbij.
+
+**Scope: niet alle vijftien.** Beginnen bij de acht gerechten van het event op 18 september. Die klus is echt en levert direct een kloppende bestellijst en een werkend kookbord op. Daarna is bekend wat één gerecht kost aan tijd, en pas dan is te beslissen of de rest het waard is.
+
+---
+
 **Waarom mail-intake niet vooraan staat.** Op zakelijke impact hoort agent 2 eerst: een gemiste aanvraag kost direct omzet. Hij staat later omdat de volgorde ook risico weegt, en dit de eerste agent is die naar buiten praat. De eerdere golven bouwen het patroon — D-berekening onder, model erboven, goedkeuring ertussen — waarna agent 2 dat patroon toepast in plaats van uitvindt. **Maar hij hangt van niets uit hoofdstuk 4 of 5 af en is volledig parallel te bouwen.** Naar voren halen is een toegestane afwijking, geen improvisatie. Enige harde voorwaarde: de goedkeur-lade (0b) moet de externe stap afdekken.
 
 ---

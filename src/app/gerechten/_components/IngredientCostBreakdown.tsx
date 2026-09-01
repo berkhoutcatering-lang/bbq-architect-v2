@@ -10,6 +10,7 @@
 
 import { createServerSupabase } from '@/lib/supabase-server';
 import SubstitutionTrigger from './SubstitutionTrigger';
+import { controleerLeveranciersprijs, type PrijsOordeel } from '@/lib/prijsControle';
 
 interface Props {
     gerechtId: string;
@@ -28,6 +29,10 @@ interface IngredientRow {
     leverancier: string | null;
     prijs_per_kg: number | null;
     last_price_at: string | null;
+    /* Oordeel over de leveranciersprijs achter deze regel. Een fout getal hier
+       loopt door naar de marge, de bestellijst én de offerte, dus het hoort
+       zichtbaar te zijn op de plek waar je het ziet staan. */
+    prijsOordeel: PrijsOordeel | null;
 }
 
 export default async function IngredientCostBreakdown({ gerechtId, organizationId }: Props) {
@@ -81,12 +86,16 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
         .filter((v: any): v is number => typeof v === 'number');
 
     const supplierById = new Map<number, string | null>();
+    const prijsOordeelById = new Map<number, PrijsOordeel>();
     if (boughtInSpIds.length > 0) {
         const { data: sps } = await sb
             .from('supplier_products')
-            .select('id, supplier_id')
+            .select('id, supplier_id, name, price_cents, unit, package_size, package_unit')
             .in('id', Array.from(new Set(boughtInSpIds)))
             .eq('organization_id', organizationId);
+        for (const s of sps ?? []) {
+            prijsOordeelById.set((s as any).id, controleerLeveranciersprijs(s as any));
+        }
         const supplierIds = Array.from(new Set((sps ?? []).map((s: any) => s.supplier_id).filter((v: any): v is number => typeof v === 'number')));
         const levNameById = new Map<number, string>();
         if (supplierIds.length > 0) {
@@ -120,8 +129,10 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
         const comp = r.components || {};
         let leverancier: string | null = null;
         let masterProductId: number | null = null;
+        let oordeel: PrijsOordeel | null = null;
         if (comp.type === 'bought_in' && typeof comp.supplier_product_id === 'number') {
             leverancier = supplierById.get(comp.supplier_product_id) ?? null;
+            oordeel = prijsOordeelById.get(comp.supplier_product_id) ?? null;
         } else if (comp.type === 'prepared') {
             const { leveranciers, masterIds } = pickerLinks(comp.ingredients);
             leverancier = leveranciers.length === 0 ? null
@@ -141,8 +152,12 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
             cost_at_use_cents: Number(r.cost_at_use_cents ?? 0),
             master_product_id: masterProductId,
             leverancier,
-            prijs_per_kg: null,
+            /* Stond altijd op null, dus de kolom toonde altijd een streepje.
+               De prijs per kilo is precies het getal waaraan je ziet dat er iets
+               niet klopt — €0,60 voor kipdij valt op, 5 cent per portie niet. */
+            prijs_per_kg: oordeel?.perBasisEuro ?? null,
             last_price_at: null,
+            prijsOordeel: oordeel,
         };
     });
 
@@ -192,6 +207,18 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
                             ) : (
                                 <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
                                     Nog geen leveranciers-prijs gekoppeld
+                                </div>
+                            )}
+                            {r.prijsOordeel?.verdacht && (
+                                <div
+                                    style={{
+                                        marginTop: 6, padding: '6px 9px', borderRadius: 8,
+                                        background: 'rgba(251, 146, 60, 0.1)',
+                                        border: '1px solid rgba(251, 146, 60, 0.32)',
+                                        color: '#fdba74', fontSize: 11.5, lineHeight: 1.45,
+                                    }}
+                                >
+                                    <strong>Prijs klopt waarschijnlijk niet.</strong> {r.prijsOordeel.toelichting}
                                 </div>
                             )}
                         </div>
