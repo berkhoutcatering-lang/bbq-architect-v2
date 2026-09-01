@@ -59,6 +59,23 @@ interface Recept {
     tags: string[];
     battle_plan: string[];
     service_tip: string;
+    /* De bereiding opgehakt in handelingen, met handtijd/wachttijd en plaats —
+       de vorm waar de prep-planning mee rekent. */
+    stappen: OntworpenStap[];
+}
+
+interface OntworpenStap {
+    step_order: number;
+    tekst: string;
+    actie: string | null;
+    prep_group: string | null;
+    duur_actief_min: number | null;
+    duur_passief_min: number | null;
+    plaats: 'thuis' | 'bus' | 'locatie';
+    toezicht_nodig: boolean;
+    station: string | null;
+    apparaat: string | null;
+    temp_doel_c: number | null;
 }
 
 export default function UitCatalogusClient() {
@@ -109,6 +126,7 @@ export default function UitCatalogusClient() {
                 allergenen: Array.isArray(d.allergenen) ? d.allergenen : [],
                 tags: Array.isArray(d.tags) ? d.tags : [],
                 battle_plan: Array.isArray(d.battle_plan) ? d.battle_plan : [],
+                stappen: Array.isArray(d.stappen) ? d.stappen : [],
                 service_tip: d.service_tip ?? '',
             };
             setRecept(basis);
@@ -169,6 +187,7 @@ export default function UitCatalogusClient() {
             allergenen: recept.allergenen,
             tags: recept.tags,
             battle_plan_steps: recept.battle_plan,
+            stappen: recept.stappen,
             service_tip: recept.service_tip,
             /* Alleen een kostprijs vastleggen als élke regel er één had. */
             kostprijs_pp: compleet && kosten ? kosten.centen / 100 : null,
@@ -321,6 +340,46 @@ export default function UitCatalogusClient() {
                             </div>
                         </>
                     )}
+
+                    {/* Stappen — hier plant de keuken straks mee. Handtijd en
+                        wachttijd apart, en waar het gebeurt. */}
+                    {recept.stappen.length > 0 && (() => {
+                        const handMin = recept.stappen.reduce((t, st) => t + (st.duur_actief_min ?? 0), 0);
+                        const wachtMin = recept.stappen.reduce((t, st) => t + (st.duur_passief_min ?? 0), 0);
+                        const opLocatie = recept.stappen.filter((st) => st.plaats === 'locatie');
+                        const uren = (m: number) => m < 60 ? `${m} min` : `${Math.floor(m / 60)}u${m % 60 ? String(m % 60).padStart(2, '0') : ''}`;
+                        return (
+                            <>
+                                <Kop>Stappen voor de planning</Kop>
+                                <div style={{ ...kaart, padding: 14, marginBottom: 14 }}>
+                                    <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.6 }}>
+                                        {uren(handMin)} handwerk · {uren(wachtMin)} wachten ·{' '}
+                                        {opLocatie.length === 0
+                                            ? 'niets op locatie'
+                                            : `${opLocatie.length} ${opLocatie.length === 1 ? 'stap' : 'stappen'} op locatie`}
+                                    </div>
+                                    <ol style={{ margin: 0, padding: '0 0 0 18px', fontSize: 12.5, lineHeight: 1.65 }}>
+                                        {recept.stappen.map((st) => (
+                                            <li key={st.step_order} style={{ marginBottom: 5 }}>
+                                                {st.tekst}
+                                                <span style={{ color: 'var(--muted)' }}>
+                                                    {' — '}
+                                                    {st.duur_actief_min != null || st.duur_passief_min != null
+                                                        ? [
+                                                            st.duur_actief_min ? `${uren(st.duur_actief_min)} werk` : null,
+                                                            st.duur_passief_min ? `${uren(st.duur_passief_min)} wachten` : null,
+                                                        ].filter(Boolean).join(' · ') || 'geen tijd'
+                                                        : 'duur onbekend'}
+                                                    {st.plaats !== 'thuis' && ` · ${st.plaats}`}
+                                                    {st.toezicht_nodig && ' · blijf erbij'}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                </div>
+                            </>
+                        );
+                    })()}
 
                     {recept.allergenen.length > 0 && (
                         <div style={{

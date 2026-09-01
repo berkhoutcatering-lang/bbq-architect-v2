@@ -29,6 +29,23 @@ const IngredientSchema = z.object({
     regel_cent: z.coerce.number().min(0).nullable().optional(),
 });
 
+/* Eén ontworpen receptstap. Zelfde velden en dezelfde woordenlijst als de
+   ontleder gebruikt, zodat de planning niet hoeft te weten wie de stap
+   geschreven heeft. */
+const StapSchema = z.object({
+    step_order: z.coerce.number().int().min(1),
+    tekst: z.string().trim().min(1).max(300),
+    actie: z.string().max(40).nullable().optional(),
+    prep_group: z.string().max(80).nullable().optional(),
+    duur_actief_min: z.coerce.number().int().min(0).max(10080).nullable().optional(),
+    duur_passief_min: z.coerce.number().int().min(0).max(10080).nullable().optional(),
+    plaats: z.enum(['thuis', 'bus', 'locatie']).default('thuis'),
+    toezicht_nodig: z.boolean().optional().default(false),
+    station: z.string().max(80).nullable().optional(),
+    apparaat: z.string().max(80).nullable().optional(),
+    temp_doel_c: z.coerce.number().nullable().optional(),
+});
+
 const BewaarSchema = z.object({
     naam: z.string().trim().min(1, 'Geef het gerecht een naam').max(200),
     beschrijving: z.string().max(2000).optional().default(''),
@@ -43,6 +60,9 @@ const BewaarSchema = z.object({
     /* Alleen doorgeven als de kostmotor élke regel een prijs kon geven —
        anders is het een ondergrens en zou het als kostprijs liegen. */
     kostprijs_pp: z.coerce.number().min(0).nullable().optional(),
+    /* De bereiding opgehakt in handelingen. Leeg mag: dan heeft dit gerecht
+       gewoon geen stappen en valt de planning terug op fase-lead-times. */
+    stappen: z.array(StapSchema).max(60).optional().default([]),
 });
 
 interface Resultaat { data?: { id: string }; error?: string; fields?: Record<string, string[]> }
@@ -140,6 +160,40 @@ export async function bewaarGerecht(input: unknown): Promise<Resultaat> {
 
     if (error) return { error: error.message };
 
+    /* Receptstappen erbij, zodat de prep-planning meteen weet wat handwerk is,
+       wat wachten is en waar het gebeurt. Tot nu toe moest de ontleder daar
+       achteraf nog een keer overheen; die tweede ronde vervalt voor alles wat
+       de ontwerper zelf bedenkt.
+
+       `bron: 'ontwerper'` en niet 'ontleder': deze tijden zijn niet uit een
+       bestaand recept gelezen maar door de kok bedacht bij het ontwerp. Dat is
+       een voorstel dat Mathijs goedkeurt, geen meting — en dat verschil hoort
+       terug te vinden te zijn.
+
+       Faalt dit, dan blijft het gerecht staan. Een gerecht zonder stappen is
+       bruikbaar; geen gerecht is dat niet. */
+    if (v.stappen.length > 0) {
+        const stapRijen = v.stappen.map((st, i) => ({
+            organization_id: orgId,
+            gerecht_id: data.id,
+            step_order: i + 1,
+            tekst: st.tekst,
+            actie: st.actie ?? null,
+            prep_group: st.prep_group ?? null,
+            duur_actief_min: st.duur_actief_min ?? null,
+            duur_passief_min: st.duur_passief_min ?? null,
+            plaats: st.plaats,
+            toezicht_nodig: st.toezicht_nodig ?? false,
+            station: st.station ?? null,
+            apparaat: st.apparaat ?? null,
+            temp_doel_c: st.temp_doel_c ?? null,
+            bron: 'ontwerper',
+        }));
+        const { error: stapErr } = await supabase.from('recipe_steps').insert(stapRijen);
+        if (stapErr) console.error('[bewaarGerecht] stappen niet bewaard:', stapErr.message);
+    }
+
     revalidatePath('/gerechten');
+    revalidatePath('/gerechten/' + String(data.id));
     return { data: { id: String(data.id) } };
 }

@@ -90,6 +90,13 @@ const ACTIE_FASE: Record<string, PrepTaskPhase> = {
     'uitgifte': 'service',
 };
 
+/**
+ * De toegestane acties, afgeleid uit de fase-tabel hierboven zodat er één lijst
+ * is en niet drie. De ontleder en de ontwerper geven allebei een `actie` op; als
+ * hun woordenlijsten uit elkaar lopen valt de helft stil terug op fase 'other'.
+ */
+export const ACTIES = Object.keys(ACTIE_FASE) as readonly string[];
+
 export function faseVoorActie(actie: string | null | undefined): PrepTaskPhase {
     if (!actie) return 'other';
     return ACTIE_FASE[actie.trim().toLowerCase()] ?? 'other';
