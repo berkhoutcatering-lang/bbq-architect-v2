@@ -78,6 +78,9 @@ export default function LeveranciersPage() {
     const [wizardOpen, setWizardOpen] = useState(false);
     const [extPanelOpen, setExtPanelOpen] = useState(false);
     const [reviewOpen, setReviewOpen] = useState<{ id: number; naam: string } | null>(null);
+    /* Welke leveranciers nog met de oude scanner zijn opgehaald. Afgeleid, geen
+       instelling: de nieuwe runner schrijft naar een andere catalogus. */
+    const [scanStatus, setScanStatus] = useState<Record<number, 'nieuw' | 'oud' | 'geen'>>({});
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -96,6 +99,17 @@ export default function LeveranciersPage() {
                 } catch { return 0; }
             }));
             setLeveranciers(list.map((lev, i) => ({ ...lev, pendingMutations: counts[i] })));
+            try {
+                const rs = await fetch('/api/leveranciers/scan-status');
+                if (rs.ok) {
+                    const ds = await rs.json();
+                    const kaart: Record<number, 'nieuw' | 'oud' | 'geen'> = {};
+                    for (const l of ds.leveranciers ?? []) kaart[l.id] = l.scanner;
+                    setScanStatus(kaart);
+                }
+            } catch {
+                /* Zonder dit oordeel toont de kaart gewoon alleen de ouderdom. */
+            }
         } catch (e) {
             showToast((e as Error).message, 'error');
         } finally {
@@ -197,7 +211,8 @@ export default function LeveranciersPage() {
                     oud zonder dat iets daarop wees. */}
                 {(() => {
                     const o = scanOverzicht(leveranciers);
-                    if (o.toeAanScan === 0 && o.vastgelopen === 0) return null;
+                    const oudeScanner = leveranciers.filter(l => scanStatus[l.id] === 'oud');
+                    if (o.toeAanScan === 0 && o.vastgelopen === 0 && oudeScanner.length === 0) return null;
                     return (
                         <div style={{
                             display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -219,8 +234,21 @@ export default function LeveranciersPage() {
                                         </span>
                                     </>
                                 )}
+                                {oudeScanner.length > 0 && (
+                                    <div style={{ marginTop: o.toeAanScan > 0 ? 6 : 0 }}>
+                                        <strong>
+                                            {oudeScanner.length === 1
+                                                ? `${oudeScanner[0].naam} staat`
+                                                : `${oudeScanner.map(l => l.naam).join(', ')} staan`} nog op de oude scanner.
+                                        </strong>{' '}
+                                        <span style={{ color: 'var(--muted)' }}>
+                                            Die haalt minder producten op dan de nieuwe — opnieuw scannen levert
+                                            daar dus niet alleen verse prijzen op maar ook een vollediger assortiment.
+                                        </span>
+                                    </div>
+                                )}
                                 {o.vastgelopen > 0 && (
-                                    <div style={{ marginTop: o.toeAanScan > 0 ? 6 : 0, color: 'var(--muted)' }}>
+                                    <div style={{ marginTop: (o.toeAanScan > 0 || oudeScanner.length > 0) ? 6 : 0, color: 'var(--muted)' }}>
                                         {o.vastgelopen === 1 ? 'Eén scan staat' : `${o.vastgelopen} scans staan`}
                                         {' '}nog op &ldquo;bezig&rdquo; terwijl er niets meer draait — die is destijds
                                         afgebroken. Gewoon opnieuw starten.
@@ -244,6 +272,7 @@ export default function LeveranciersPage() {
                                 onArchive={() => archive(lev.id, lev.naam)}
                                 onRefresh={load}
                                 onReview={() => setReviewOpen({ id: lev.id, naam: lev.naam })}
+                                scanner={scanStatus[lev.id]}
                             />
                         ))}
                     </div>
@@ -282,7 +311,7 @@ function safeHostname(url: string | null | undefined): string | null {
     }
 }
 
-function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leverancier; onArchive: () => void; onRefresh: () => void; onReview: () => void }) {
+function LeverancierCard({ lev, onArchive, onRefresh, onReview, scanner }: { lev: Leverancier; onArchive: () => void; onRefresh: () => void; onReview: () => void; scanner?: 'nieuw' | 'oud' | 'geen' }) {
     const showToast = useToast();
     /* Levertijd (fix #3): stuurt de 'bestel vóór'-datum per leverancier op /inkoop.
        Bewaart op blur; leeg = wissen (dan valt /inkoop terug op 8 dagen). */
@@ -401,6 +430,17 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                             </span>
                         ) : (
                             <span>Laatste sync: {fmtRelative(lev.last_sync_at)}</span>
+                        )}
+                        {scanner === 'oud' && (
+                            <span
+                                title="Opgehaald met de vorige versie van de scanner — die vond minder producten"
+                                style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                    color: '#f0a35e', fontWeight: 700,
+                                }}
+                            >
+                                <RefreshCw size={11} /> oude scanner
+                            </span>
                         )}
                         {isRunning && <span style={{ color: GOLD, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Loader2 size={11} className="animate-spin" /> bezig…</span>}
                         {vastgelopen && <span style={{ color: '#e57373', display: 'inline-flex', alignItems: 'center', gap: 4 }} title="De scan is destijds afgebroken zonder zich af te melden"><AlertTriangle size={11} /> scan vastgelopen</span>}
