@@ -26,6 +26,7 @@ import EventEditor from '@/components/events/EventEditor';
 import CoursesEditor from '@/components/events/CoursesEditor';
 import AllergiesEditor from '@/components/events/AllergiesEditor';
 import OfflineEventToggle from '@/components/dashboard/OfflineEventToggle';
+import LogistiekChecklistCard from '@/components/logistiek/LogistiekChecklistCard';
 import EventTabs from '@/components/EventTabs';
 import AskPitmasterButton from '@/components/ask-pitmaster/AskPitmasterButton';
 import PitmasterFaseCard from '@/components/ask-pitmaster/PitmasterFaseCard';
@@ -1288,6 +1289,7 @@ export default function EventHubPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
               <EventInkooplijstCard eventId={eventId} eventName={event.name} menuGroups={menuGroups} recepten={recepten} gerechten={gerechten} />
               <EventHaccpCard eventId={eventId} />
+              <LogistiekChecklistCard eventId={eventId} eventName={event.name} />
               <EventDraaiboekCard event={event} onSave={async (draaiboek) => {
                 await supabase.from('events').update({ draaiboek } as any).eq('id', eventId);
                 setEvent({ ...event, draaiboek });
