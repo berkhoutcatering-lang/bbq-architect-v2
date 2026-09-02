@@ -92,14 +92,30 @@ describe('reconcileBon', () => {
         expect(r.status).toBe('ok');
     });
 
-    it('Sligro-scenario zonder ex-BTW flag → mismatch (oude flow)', () => {
+    it('Sligro-scenario zonder ex-BTW flag → wordt zelf uitgerekend, niet gevlagd', () => {
+        /* Zegt het model "regels zijn inclusief" terwijl ze exclusief zijn, dan
+           komt de andere lezing precies op het totaal uit. Dat is een som, geen
+           oordeel — dus rekent de reconciliatie het zelf om in plaats van de bon
+           naar de twijfel-stapel te sturen. Dit gebeurde echt: BBQTime-regels
+           van 252 + 54 = 306 werden opgerekt naar 370,26. */
         const items = [
             mkItem('Schoonmaak', 1, 112.92, 21, 112.92),
             mkItem('Brisket', 1, 159.46, 9, 159.46),
         ];
         const r = reconcileBon(items, 310.44);  // default pricesIncludeBtw=true
+        expect(r.status).toBe('ok');
+        expect(r.btw_interpretatie_omgedraaid).toBe(true);
+        expect(r.explanation).toContain('exclusief BTW');
+    });
+
+    it('draait de lezing NIET om als de andere lezing er ook naast zit', () => {
+        /* Alleen ingrijpen als de omgekeerde lezing echt uitkomt. Mist het model
+           een regel, dan moet dat een mismatch blijven — niet weggepoetst worden
+           door de bedragen anders te interpreteren. */
+        const items = [mkItem('Brisket', 1, 100, 9, 100)];
+        const r = reconcileBon(items, 500);
         expect(r.status).toBe('mismatch');
-        expect(r.mismatch_eur).toBeGreaterThan(35);
+        expect(r.btw_interpretatie_omgedraaid).toBe(false);
     });
 });
 

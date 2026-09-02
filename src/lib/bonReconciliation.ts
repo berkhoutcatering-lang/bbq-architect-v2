@@ -29,6 +29,9 @@ export interface ReconciliationResult {
     negative_items_count: number;
     /** Voor UI-tekst: leesbare omschrijving van de mismatch. */
     explanation: string;
+    /** True als de regelbedragen andersom bleken te staan dan het model zei
+        (factuur-met-inclusieve-regels, of andersom). Zie de uitleg hieronder. */
+    btw_interpretatie_omgedraaid?: boolean;
 }
 
 const TOLERANCE_EXACT_EUR = 0.10;
@@ -55,14 +58,39 @@ export function reconcileBon(
 ): ReconciliationResult {
     /* Reken per regel het bruto-bedrag uit op basis van pricesIncludeBtw.
        In de UI tonen we altijd bruto-som (zodat het naast totaal_bedrag valt). */
-    const sumItems = items.reduce((acc, it) => {
-        const lineTotal = it.totaal ?? it.aantal * it.prijs;
-        if (!Number.isFinite(lineTotal)) return acc;
-        if (pricesIncludeBtw || !it.btw_pct) return acc + lineTotal;
-        /* ex-BTW interpretatie: factuur (Sligro/Hanos) — bruto = netto * (1+btw/100) */
-        return acc + lineTotal * (1 + it.btw_pct / 100);
-    }, 0);
+    const sommeer = (inclusief: boolean) =>
+        items.reduce((acc, it) => {
+            const lineTotal = it.totaal ?? it.aantal * it.prijs;
+            if (!Number.isFinite(lineTotal)) return acc;
+            if (inclusief || !it.btw_pct) return acc + lineTotal;
+            /* ex-BTW interpretatie: factuur (Sligro/Hanos) — bruto = netto * (1+btw/100) */
+            return acc + lineTotal * (1 + it.btw_pct / 100);
+        }, 0);
 
+    /* Staat er incl of excl BTW in de bedrag-kolom? Dat is de meest gemaakte
+       leesfout, en tegelijk een vraag die je kúnt uitrekenen: één van de twee
+       lezingen komt uit op het totaal dat onderaan de bon staat, de andere zit
+       er precies het BTW-percentage naast. Twee echte voorbeelden:
+         - BBQTime: regels 252 + 54 = 306 = het totaal → inclusief, terwijl het
+           model "factuur, dus exclusief" zei en er 21% overheen rekende.
+         - STRATO: kolomkop zegt "EUR bruto", eronder staat "Netto bedrag".
+       We laten de rekensom beslissen in plaats van het model. Klopt de lezing
+       van het model, dan verandert er niets — dit grijpt alleen in als de
+       andere lezing wél op het totaal uitkomt. */
+    let inclusief = pricesIncludeBtw;
+    let omgedraaid = false;
+    if (claimedTotal != null && claimedTotal > 0 && items.length > 0) {
+        const afwijking = (incl: boolean) =>
+            Math.abs(Math.round(sommeer(incl) * 100) / 100 - claimedTotal);
+        const zoalsGelezen = afwijking(pricesIncludeBtw);
+        const andersom = afwijking(!pricesIncludeBtw);
+        if (zoalsGelezen > TOLERANCE_DRIFT_EUR && andersom <= TOLERANCE_DRIFT_EUR) {
+            inclusief = !pricesIncludeBtw;
+            omgedraaid = true;
+        }
+    }
+
+    const sumItems = sommeer(inclusief);
     const sumRounded = Math.round(sumItems * 100) / 100;
     const negativeCount = items.filter(it => (it.totaal ?? it.aantal * it.prijs) < 0).length;
 
@@ -77,6 +105,7 @@ export function reconcileBon(
                 items.length > 0
                     ? `AI kon geen totaal-bedrag lezen. Som van regels: €${sumRounded.toFixed(2)}.`
                     : 'Geen items en geen totaal — controleer of dit wel een bon is.',
+            btw_interpretatie_omgedraaid: false,
         };
     }
 
@@ -88,7 +117,9 @@ export function reconcileBon(
 
     if (mismatchRounded <= TOLERANCE_EXACT_EUR) {
         status = 'ok';
-        explanation = 'Regels en totaal kloppen.';
+        explanation = omgedraaid
+            ? `Regels en totaal kloppen — de bedragen per regel bleken ${inclusief ? 'inclusief' : 'exclusief'} BTW.`
+            : 'Regels en totaal kloppen.';
     } else if (mismatchRounded <= TOLERANCE_DRIFT_EUR) {
         status = 'minor_drift';
         explanation = `Klein verschil €${mismatchRounded.toFixed(2)} — waarschijnlijk BTW-afronding.`;
@@ -109,6 +140,7 @@ export function reconcileBon(
         mismatch_eur: mismatchRounded,
         negative_items_count: negativeCount,
         explanation,
+        btw_interpretatie_omgedraaid: omgedraaid,
     };
 }
 

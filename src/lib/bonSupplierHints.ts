@@ -41,6 +41,8 @@ Sligro-factuur heeft kolommen: [artnr | groep | besteld | geleverd | verpakking 
 - Negeer "Subtotaal", "Totaal", "Gegeven", "Wisselgeld", "TRANSPORT" — geen items.
 - Statiegeld + emballage = wél items, ze staan met L/H aangegeven.
 - Bij "retour"/"creditregel" → totaal negatief teruggeven.
+- Een regel die begint met "GRATIS" hoort bij de regel erboven en heft die op: geef 'm terug
+  met exact HETZELFDE bedrag maar NEGATIEF. Vergeet je die, dan telt het artikel dubbel.
 - Lange artikel-omschrijvingen kunnen over 2 regels gaan (zoals "No waste, 30% korting" of "Van X voor Y") — combineer in 1 item.
 - Footer-rij heeft "goederen hoog % btw" / "btw hoog %" / "goederen laag % btw" / "btw laag %" → dit BEVESTIGT prices_include_btw=false.`,
     },
@@ -107,6 +109,37 @@ export function findSupplierHint(leverancierNaam: string | null | undefined): Su
         }
     }
     return null;
+}
+
+/**
+ * Zoek een bekende leverancier in de RUWE TEKST van een bon (of in de
+ * bestandsnaam), zodat de layout-hint al bij de EERSTE poging meekan.
+ *
+ * Hiervoor werd de hint pas bij poging 2 gebruikt — afgeleid uit de output van
+ * poging 1. Maar poging 2 komt alleen als poging 1 twijfelt, en dat gebeurt bij
+ * de meeste facturen niet. De hint raakte de bon dus vrijwel nooit, terwijl de
+ * leveranciersnaam gewoon boven aan het document staat.
+ *
+ * Er gaat GEEN documenttekst de prompt in — de tekst wordt alleen doorzocht op
+ * onze eigen patronen, en wat de prompt in gaat is de hint-constante hierboven.
+ * Prompt-injectie via een geknoeide factuur blijft daarmee onmogelijk.
+ *
+ * Bij meerdere treffers wint de naam die het VROEGST in het document staat:
+ * de afzender staat in de kop, een naam verderop is meestal een merk of een
+ * bezorgadres.
+ */
+export function findSupplierHintInText(haystack: string | null | undefined): SupplierHint | null {
+    if (!haystack) return null;
+    const norm = haystack.toLowerCase();
+    let best: { hint: SupplierHint; at: number } | null = null;
+    for (const h of SUPPLIER_HINTS) {
+        for (const pat of h.matchPatterns) {
+            const at = norm.indexOf(pat);
+            if (at === -1) continue;
+            if (!best || at < best.at) best = { hint: h, at };
+        }
+    }
+    return best?.hint ?? null;
 }
 
 /**
