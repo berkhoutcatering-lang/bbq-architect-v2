@@ -54,7 +54,15 @@ OUTPUT FORMAT:
 
 REGELS:
 - Geen velden verzinnen. Niet leesbaar = null.
+- totaal_bedrag = het bedrag dat de klant daadwerkelijk BETAALT: het eindtotaal INCLUSIEF BTW.
+  Staan er twee eindtotalen onder elkaar ("Eindtotaal (excl. BTW) € 132,34" en
+  "Eindtotaal (incl. BTW) € 144,85"), neem dan ALTIJD de inclusieve — de hoogste van de twee.
+  Ook "Totaal incl. BTW", "Te betalen", "Totaalbedrag": dat is het bedrag dat we willen.
+  Een subtotaal, een goederentotaal of een totaal exclusief BTW is NOOIT het totaal_bedrag.
 - BTW per regel — kijk naar BTW-kolom op de bon, NIET zelf berekenen.
+- Een minteken ACHTER een getal maakt het NEGATIEF: "27,99-" is -27,99 en een aantal "1-"
+  is -1. Groothandels (Sligro, Hanos) schrijven gratis artikelen, retouren en creditregels
+  zo. Lees je zo'n regel als positief, dan telt het artikel dubbel.
 - Items: alleen tastbare producten/diensten, geen subtotaal- of korting-regels.
 - Datum: YYYY-MM-DD; als alleen "16-04-2026" zichtbaar → "2026-04-16".
 - prices_include_btw: true op KASSABONNEN (Makro/Crisp/AH — bedrag inclusief BTW per regel).
@@ -62,6 +70,20 @@ REGELS:
   Controleer: als onderaan een blok staat met "BTW hoog %" + "BTW laag %" naast goederen-totalen,
   dan is dit een FACTUUR (false). Anders is het een kassabon (true).
 - item.totaal = exact het bedrag uit de "bedrag/totaal"-kolom op de bon — NIET zelf incl-BTW maken.
+- Staan er kolommen [Item prijs | Korting | Subtotaal] (webshop-facturen), neem dan de
+  SUBTOTAAL-kolom als item.totaal. "Item prijs" is de prijs vóór korting; die optellen
+  geeft een te hoog totaal.
+- Een losse kortingsregel ("Kortingscode: X (€17,93)", "Actie", "Korting") is een ITEM met
+  een NEGATIEF totaal — niet weglaten en niet positief maken.
+  UITZONDERING: heeft elke regel al een eigen Korting-kolom die van de Subtotaal is
+  afgetrokken, dan is die losse kortingsregel de OPTELSOM daarvan. Neem 'm dan NIET
+  apart mee, anders gaat dezelfde korting er twee keer af.
+- Regels van €0,00 (verzending gratis, betaalkosten, "Ophalen in de winkel") mag je meenemen
+  of weglaten; ze veranderen het totaal niet.
+- leverancier = de partij die de bon STUURT: de afzender, meestal bovenaan of in de
+  voettekst met KvK- en BTW-nummer. NIET de partij aan wie de factuur gericht is
+  (factuuradres, afleveradres, "t.a.v."). Staan er twee bedrijfsnamen, dan is de
+  geadresseerde de klant en de ander de leverancier.
 - Bij onleesbaar of geen bon: { "error": "korte reden" }.
 
 GEEN andere tekst, geen markdown.`;
@@ -509,9 +531,23 @@ export async function runBonExtractionLadder(
  * Priorities: lowest reconciliation mismatch → highest confidence → most items.
  */
 function pickBetter(a: PassResult, b: PassResult): PassResult {
+    /* Een pass zónder regels verliest altijd van een pass mét regels.
+       Anders won juist de mislukte poging: die heeft geen items, dus ook geen
+       verschil tussen som en totaal, dus mismatch_eur = 0 — en daarmee sloeg
+       hij elke poging die wél regels vond. Zo kwam de STRATO-factuur met 0
+       regels uit de ladder terwijl twee latere pogingen ze gewoon gevonden
+       hadden. */
+    if (a.items.length > 0 && b.items.length === 0) return a;
+    if (b.items.length > 0 && a.items.length === 0) return b;
+
     /* Een pass met 'ok' reconciliation wint altijd. */
     if (a.reconciliation.status === 'ok' && b.reconciliation.status !== 'ok') return a;
     if (b.reconciliation.status === 'ok' && a.reconciliation.status !== 'ok') return b;
+
+    /* Ook zonder items: een pass die geen totaal vond, weet minder dan een
+       pass die een totaal vond maar er net naast zit. */
+    if (a.reconciliation.status === 'no_total' && b.reconciliation.status !== 'no_total') return b;
+    if (b.reconciliation.status === 'no_total' && a.reconciliation.status !== 'no_total') return a;
 
     /* Anders: minder mismatch wint. */
     if (a.reconciliation.mismatch_eur < b.reconciliation.mismatch_eur - 0.10) return a;

@@ -34,6 +34,8 @@ import { checkAiCap } from '@/lib/aiCostCap';
 import { matchInventory } from '@/lib/inventoryDeduction';
 import { matchLeverancier, findLeverancierCandidates } from '@/lib/bonProcessing';
 import { isUsableText } from '@/lib/pdfTextExtract';
+import { extractPdfPageLines, formatPageLinesForPrompt } from '@/lib/server/pdfTextLayer';
+import { findSupplierHintInText } from '@/lib/bonSupplierHints';
 import { parseUbl, isLikelyUbl } from '@/lib/ublIngress';
 import {
     runBonExtractionLadder,
@@ -232,36 +234,39 @@ export async function POST(req: NextRequest) {
         });
     }
 
-    /* ── AI paths: cap-check ─────────────────────────────────────── */
-    const isPdf = body.source_type === 'pdf' || parsed.mediaType === 'application/pdf';
-    const estimatedCost = isPdf ? 0.05 : 0.03;
-    const cap = await checkAiCap(orgId, estimatedCost);
-    if (cap.status === 'hard_block') {
-        return NextResponse.json(
-            {
-                error: 'ai_cap_exceeded',
-                message: cap.message,
-                used_eur: cap.used_eur,
-                hard_eur: cap.hard_eur,
-                tier: cap.tier,
-            },
-            { status: 429 },
-        );
-    }
-
-    const client = new Anthropic({ apiKey });
-
     /* ── Bouw extraction mode ──────────────────────────────────────── */
+    const isPdf = body.source_type === 'pdf' || parsed.mediaType === 'application/pdf';
     let mode: ExtractionMode;
     let pdfBase64ForFallback: string | undefined;
+    /* Ruwe bon-tekst, als we die hebben. Voedt twee dingen: de goedkope
+       tekst-route én het herkennen van de leverancier vóór de eerste poging. */
+    let bonText = '';
 
     if (isPdf) {
         if (body.pdf_text && isUsableText(body.pdf_text)) {
+            bonText = body.pdf_text;
+        } else {
+            /* De browser probeert de tekstlaag ook te lezen, maar faalt daar
+               stil (pdfjs-worker via CDN, catch → ''). Daardoor ging ELKE
+               factuur via de dure vision-route terwijl de tekst er gewoon in
+               zat: ~€0.05 per bon in plaats van ~€0.001, en een model dat een
+               plaatje moet ontcijferen in plaats van kolommen te lezen.
+               Server-side is er geen worker en geen netwerk nodig. */
+            const pages = await extractPdfPageLines(rawBytes);
+            if (pages) {
+                /* Mét regelstructuur: een factuur is een tabel, en een
+                   woordenbrij maakt kolommen onleesbaar. */
+                const text = formatPageLinesForPrompt(pages);
+                if (isUsableText(text)) bonText = text;
+            }
+        }
+
+        if (bonText) {
             /* Pass-1: Haiku op tekst (€0.001). Bij escalatie → Sonnet/Opus document met de PDF base64. */
-            mode = { kind: 'pdf_text', text: body.pdf_text };
+            mode = { kind: 'pdf_text', text: bonText };
             pdfBase64ForFallback = parsed.base64;
         } else {
-            /* Image-PDF / scan: meteen Sonnet document. */
+            /* Echte scan zonder tekstlaag: meteen Sonnet document. */
             mode = { kind: 'pdf_document', base64: parsed.base64 };
         }
     } else {
@@ -278,6 +283,33 @@ export async function POST(req: NextRequest) {
         mode = { kind: 'image', mediaType: parsed.mediaType, base64: parsed.base64 };
     }
 
+    /* ── AI paths: cap-check ─────────────────────────────────────── */
+    /* Schatting volgt de gekozen route: de tekst-route is ~50× goedkoper dan
+       vision, en dat scheelt of iemand tegen z'n maandplafond aan loopt. */
+    const estimatedCost = mode.kind === 'pdf_text' ? 0.005 : isPdf ? 0.05 : 0.03;
+    const cap = await checkAiCap(orgId, estimatedCost);
+    if (cap.status === 'hard_block') {
+        return NextResponse.json(
+            {
+                error: 'ai_cap_exceeded',
+                message: cap.message,
+                used_eur: cap.used_eur,
+                hard_eur: cap.hard_eur,
+                tier: cap.tier,
+            },
+            { status: 429 },
+        );
+    }
+
+    const client = new Anthropic({ apiKey });
+
+    /* ── Layout-hint vóór de EERSTE poging ─────────────────────────
+       Staat de leverancier herkenbaar in de bon-tekst (of anders in de
+       bestandsnaam), dan gaat z'n layout-uitleg meteen mee. Hiervoor kwam die
+       hint pas bij poging 2 — en poging 2 komt alleen als poging 1 twijfelt,
+       wat bij deze facturen zelden gebeurt. */
+    const initialHint = findSupplierHintInText(bonText || body.filename);
+
     /* ── Run ladder ────────────────────────────────────────────────── */
     const ladder = await runBonExtractionLadder({
         client,
@@ -287,6 +319,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         force_model: body.force_model,
         pdf_base64_for_vision_fallback: pdfBase64ForFallback,
+        initial_supplier_hint: initialHint?.hint ?? null,
     });
 
     return buildLadderResponse({

@@ -78,6 +78,12 @@ export async function extractText(
 
 // ── Native PDF text (pdfjs-dist) ──────────────────────────────────────
 
+/* LET OP (2026-09-02): deze functie werkt niet. `workerSrc = ''` laat pdfjs
+   een fake worker opzetten en dan afbreken met «No "GlobalWorkerOptions.
+   workerSrc" specified» — op alle 21 test-facturen. `extractText` hierboven
+   vangt dat op en valt door naar de dure vision-route; niets in de app roept
+   deze code aan, dus het viel niet op. Wie 'm gaat gebruiken: neem
+   lib/server/pdfTextLayer.ts, die is wél goed (en houdt regelstructuur vast). */
 async function extractPdfNative(buffer: Buffer): Promise<string> {
     // pdfjs-dist is ESM; gebruik legacy build voor Node-runtime compatibiliteit.
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
