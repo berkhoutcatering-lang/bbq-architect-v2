@@ -68,6 +68,10 @@ const BodySchema = z.object({
         Mens-blijft-de-baas regel: AI mag nooit zelf aanmaken — alleen
         via deze expliciete user-action. */
     new_leverancier_naam: z.string().min(2).max(120).optional(),
+    /** Her-opslaan van een bon die deze scan-sessie zelf al bewaarde (bv. na
+        escalatie naar een zwaarder model). Alleen dan mogen de bedragen van de
+        bestaande rij overschreven worden — anders wint wat er al stond. */
+    overwrite_totals: z.boolean().optional(),
     /** Bon-scanner v2: pass-historie + reconciliation-status uit extract. */
     reconciliation_status: z.enum(['ok', 'minor_drift', 'mismatch', 'no_total']).optional(),
     ai_passes: z.array(z.object({
@@ -126,7 +130,7 @@ export async function POST(req: NextRequest) {
     if (body.attach_to_bon_id) {
         const { data: target } = await supabase
             .from('bonnen')
-            .select('id, file_path, locked_at')
+            .select('id, file_path, locked_at, image_hash')
             .eq('organization_id', orgId)
             .eq('id', body.attach_to_bon_id)
             .maybeSingle();
@@ -152,7 +156,11 @@ export async function POST(req: NextRequest) {
                 { status: 409 },
             );
         }
-        if (target.file_path) {
+        /* Al een file? Dan alleen doorgaan als het EXACT dezelfde file is
+           (zelfde hash). Dat is de her-opslaan-flow: de scan-pagina bewaarde
+           deze bon net zelf en stuurt nu een betere uitlezing van hetzelfde
+           bestand. Een ander bestand op een bezette bon blijft geweigerd. */
+        if (target.file_path && target.image_hash !== body.image_hash) {
             return NextResponse.json(
                 {
                     ok: false,
@@ -165,7 +173,7 @@ export async function POST(req: NextRequest) {
             );
         }
         existingBonId = target.id;
-        existingHasFile = false;
+        existingHasFile = !!target.file_path;
     }
 
     // Server-side dedup op image_hash. BIJ DUPLICATE: als bestaande bon nog
@@ -238,7 +246,7 @@ export async function POST(req: NextRequest) {
     //   {organization_uuid}/{yyyy-mm}/{uuid}.{ext}
     // Service-role client want auth-RLS heeft moeite met first-write.
     let filePath: string | null = null;
-    if (body.file_data_url) {
+    if (body.file_data_url && !existingHasFile) {
         try {
             const parsed = parseDataUrl(body.file_data_url);
             if (parsed) {
@@ -333,19 +341,38 @@ export async function POST(req: NextRequest) {
         ai_passes: body.ai_passes ?? null,
     };
 
-    // ── Fix-up pad: bestaande bon zonder file → UPDATE met nieuwe file_path ──
-    if (existingBonId && !existingHasFile) {
+    // ── Fix-up pad: bestaande bon bijwerken ipv nieuwe rij ────────────
+    if (existingBonId) {
         // Bij her-scan: alleen leverancier_id overschrijven als er nu een
         // nieuwe leverancier expliciet aangemaakt is (mens-keuze). Anders
         // behoudt de bestaande bon z'n vorige leverancier-koppeling.
         const levUpdate = body.new_leverancier_naam
             ? { leverancier_id: resolvedLeverancierId }
             : {};
+        // Alleen een nieuw geuploade file wegschrijven; had de rij er al een,
+        // dan blijft die staan (filePath is dan bewust null).
+        const fileUpdate = filePath
+            ? { file_path: filePath, file_mime: fileMime }
+            : {};
+        // Bedragen alleen overschrijven als de client daar expliciet om vraagt
+        // (her-opslaan na escalatie). Een gewone her-scan laat bestaande
+        // bedragen met rust — die kunnen handmatig gecorrigeerd zijn.
+        const totalsUpdate = body.overwrite_totals
+            ? {
+                  winkel: body.bon_preview.leverancier_naam,
+                  datum: body.bon_preview.datum,
+                  totaal_bedrag: body.bon_preview.totaal_bedrag,
+                  netto_bedrag: body.bon_preview.netto_bedrag,
+                  btw_laag_bedrag: body.bon_preview.btw_laag_bedrag,
+                  btw_hoog_bedrag: body.bon_preview.btw_hoog_bedrag,
+                  reconciliation_status: body.reconciliation_status ?? null,
+                  ai_passes: body.ai_passes ?? null,
+              }
+            : {};
         const { error: updErr } = await supabase
             .from('bonnen')
             .update({
-                file_path: filePath,
-                file_mime: fileMime,
+                ...fileUpdate,
                 image_hash: body.image_hash,
                 // Verrijken alleen velden die mogelijk leeg waren bij eerdere insert
                 extracted_text: extractedText,
@@ -353,8 +380,10 @@ export async function POST(req: NextRequest) {
                 raw_analysis: body.items,
                 // Status bij her-scan terug op 'pending' zodat AI-output opnieuw bevestigd kan
                 status: 'pending',
+                ...totalsUpdate,
                 ...levUpdate,
             })
+            .eq('organization_id', orgId)
             .eq('id', existingBonId);
 
         if (updErr) {
@@ -375,7 +404,7 @@ export async function POST(req: NextRequest) {
             ok: true,
             bon_id: existingBonId,
             updated: true,
-            file_uploaded: !!filePath,
+            file_uploaded: !!filePath || existingHasFile,
             redirect: `/archief?bon=${existingBonId}`,
         });
     }

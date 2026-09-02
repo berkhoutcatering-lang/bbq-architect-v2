@@ -28,6 +28,7 @@ import MultiFormatDropZone, {
 import { fmt } from '@/lib/utils';
 import { ArrowRight, Check, Archive, ExternalLink, Loader2, Link2, AlertTriangle, Sparkles, Zap } from 'lucide-react';
 import { compressBonImage, blobToDataUrl } from '@/lib/compressBonImage';
+import { setBonLeverancierAction } from '@/app/archief/actions';
 
 interface CompletedExtract {
     id: string;
@@ -36,16 +37,19 @@ interface CompletedExtract {
     /** Originele File-object voor upload naar Storage bij commit.
         Bewaard in memory tot commit lukt; daarna gecleared (memory hygiene). */
     originalFile: File;
-    /** Locale state — has 'm al doorgepushed naar /archief? */
+    /** Staat deze bon al in het kistje? Wordt direct na het uitlezen gezet —
+        de scan-pagina bewaart automatisch, zodat een bon nooit meer verdwijnt
+        omdat je wegklikt of ververst. */
     committed?: boolean;
     committing?: boolean;
     commitError?: string | null;
     archiefBonId?: number;
     /* Leverancier-keuze door Sam:
        - chosenLeverancierId: koppel aan een bestaande (uit dropdown/candidate-klik)
-       - chosenNewLeverancierNaam: nieuwe leverancier-record aanmaken bij commit
+       - chosenNewLeverancierNaam: nieuwe leverancier-record aanmaken
        - leverancierResolved: true wanneer er een keuze gemaakt is (of auto_matched
-         was). Pas dan mag "Bevestig in archief" klikbaar zijn. */
+         was). De keuze blokkeert het bewaren NIET meer — de bon staat al in het
+         kistje en de keuze wordt er los op bijgewerkt. */
     chosenLeverancierId?: number | null;
     chosenNewLeverancierNaam?: string | null;
     leverancierResolved?: boolean;
@@ -84,20 +88,24 @@ function BonnenPageInner() {
         });
     }
 
-    /* Sam kiest een bestaande leverancier voor de scan-resultaten. */
+    /* Sam kiest een bestaande leverancier voor de scan-resultaten.
+       De bon staat op dat moment al in het kistje, dus de keuze wordt meteen
+       op die rij bijgewerkt — niet pas bij een latere knop. */
     function chooseLeverancier(entryId: string, leverancierId: number, _naam: string) {
+        let bonId: number | undefined;
         setCompleted(prev =>
-            prev.map(c =>
-                c.id === entryId
-                    ? {
-                          ...c,
-                          chosenLeverancierId: leverancierId,
-                          chosenNewLeverancierNaam: null,
-                          leverancierResolved: true,
-                      }
-                    : c,
-            ),
+            prev.map(c => {
+                if (c.id !== entryId) return c;
+                bonId = c.archiefBonId;
+                return {
+                    ...c,
+                    chosenLeverancierId: leverancierId,
+                    chosenNewLeverancierNaam: null,
+                    leverancierResolved: true,
+                };
+            }),
         );
+        if (bonId) void persistLeverancier(bonId, { leverancierId });
     }
 
     /* Sam wil een NIEUWE leverancier aanmaken voor deze scan.
@@ -105,50 +113,76 @@ function BonnenPageInner() {
     function chooseNewLeverancier(entryId: string, naam: string) {
         const cleaned = naam.trim();
         if (!cleaned) return;
+        let bonId: number | undefined;
         setCompleted(prev =>
-            prev.map(c =>
-                c.id === entryId
-                    ? {
-                          ...c,
-                          chosenLeverancierId: null,
-                          chosenNewLeverancierNaam: cleaned,
-                          leverancierResolved: true,
-                      }
-                    : c,
-            ),
+            prev.map(c => {
+                if (c.id !== entryId) return c;
+                bonId = c.archiefBonId;
+                return {
+                    ...c,
+                    chosenLeverancierId: null,
+                    chosenNewLeverancierNaam: cleaned,
+                    leverancierResolved: true,
+                };
+            }),
         );
+        if (bonId) void persistLeverancier(bonId, { nieuweNaam: cleaned });
     }
 
-    /* Commit een scan-result naar de bonnen-tabel (POST /api/bonnen/commit).
-       Voorheen was "Bevestig in archief" een Link en kwam de bon nooit in DB.
-       Nu: POST → 200 redirect naar /archief, of 409 duplicate (al gesaved). */
-    async function commitToArchief(entryId: string) {
-        const entry = completed.find((c) => c.id === entryId);
-        if (!entry) return;
-        if (entry.committed || entry.committing) return;
-        if (!entry.leverancierResolved) {
+    /* Werkt de leverancier bij op een bon die al in het kistje staat. Faalt dit,
+       dan zeggen we dat — de bon zelf is niet in gevaar, alleen de koppeling. */
+    async function persistLeverancier(
+        bonId: number,
+        keuze: { leverancierId?: number; nieuweNaam?: string },
+    ) {
+        const res = await setBonLeverancierAction({ bonId, ...keuze });
+        if (!res.ok) {
             showToast({
-                message: 'Kies eerst wat er met de leverancier moet gebeuren.',
-                type: 'warning',
-                title: 'Leverancier-keuze nodig',
+                message: `Leverancier koppelen mislukt: ${res.error}`,
+                type: 'error',
             });
-            return;
         }
+    }
 
-        // Optimistic UI
-        setCompleted((prev) =>
-            prev.map((c) =>
-                c.id === entryId ? { ...c, committing: true, commitError: null } : c,
+    /* Bewaart een scan-result in het bonnenkistje (POST /api/bonnen/commit).
+
+       Waarom dit automatisch gebeurt, direct na het uitlezen: hiervoor leefde
+       een uitgelezen bon alleen in dit tabblad tot je per kaart op "Bevestig"
+       klikte. Verversen, wegklikken of een tab die dichtklapt = bon weg. Op
+       23 augustus zijn zo 5 van de 6 ingelezen facturen verdampt.
+
+       Twee dingen die hier bewust NIET meer gebeuren:
+         - navigeren na een geslaagde opslag. Dat brak de "bewaar alles"-lus:
+           na de eerste bon werd de pagina ontmanteld en de rest nooit bewaard.
+         - wachten op de leverancier-keuze. De bon gaat als 'pending' het
+           kistje in; de keuze wordt er daarna los op bijgewerkt. */
+    async function persistEntry(
+        entry: CompletedExtract,
+        opts: {
+            /* Bestaande bon bijwerken ipv nieuwe rij (her-opslaan na escalatie). */
+            attachTo?: number | null;
+            /* File meesturen? Bij her-opslaan staat 'ie al in Storage. */
+            withFile?: boolean;
+            /* Bedragen van de bestaande rij overschrijven. */
+            overwriteTotals?: boolean;
+            /* Naar het kistje springen na afloop (alleen de ?prefill-flow). */
+            navigate?: boolean;
+        } = {},
+    ): Promise<number | null> {
+        setCompleted(prev =>
+            prev.map(c =>
+                c.id === entry.id ? { ...c, committing: true, commitError: null } : c,
             ),
         );
 
         try {
-            // Read originele file als base64 zodat backend 'm naar Storage kan uploaden.
-            // Pas op commit-klik (lazy) — file blijft niet permanent in client-state.
-            const fileDataUrl = await fileToDataUrl(entry.originalFile);
+            /* Originele file als base64 zodat de backend 'm naar Storage kan
+               uploaden. Bij her-opslaan overslaan — scheelt een megabyte. */
+            const fileDataUrl =
+                opts.withFile === false ? undefined : await fileToDataUrl(entry.originalFile);
 
-            // Leverancier-resolve: gebruik Sam's keuze als die er is, anders
-            // val terug op extract-output (alleen geldig bij auto_matched).
+            /* Leverancier-resolve: gebruik Sam's keuze als die er is, anders
+               val terug op extract-output (alleen geldig bij auto_matched). */
             const finalLeverancierId =
                 entry.chosenLeverancierId ?? entry.result.bon_preview.leverancier_id;
 
@@ -169,51 +203,82 @@ function BonnenPageInner() {
                     ai_cost_eur_cents: entry.result.ai_cost_eur_cents,
                     file_data_url: fileDataUrl,
                     file_name: entry.file_name,
-                    // Wanneer ?prefill=ID actief is: koppel deze scan aan
-                    // die specifieke bon-id ipv nieuwe INSERT.
-                    attach_to_bon_id: attachToBonId ?? undefined,
-                    // Nieuwe leverancier expliciet door Sam aangevraagd.
+                    /* ?prefill=ID koppelt aan een bestaande bon; anders koppelt
+                       een her-opslag aan de rij die we net zelf aanmaakten. */
+                    attach_to_bon_id: opts.attachTo ?? attachToBonId ?? undefined,
+                    overwrite_totals: opts.overwriteTotals ?? undefined,
+                    /* Nieuwe leverancier expliciet door Sam aangevraagd. */
                     new_leverancier_naam: entry.chosenNewLeverancierNaam ?? undefined,
-                    // v2: persist reconciliation + pass-history voor audit
+                    /* v2: persist reconciliation + pass-history voor audit */
                     reconciliation_status: entry.result.reconciliation?.status,
                     ai_passes: entry.result.ai_passes,
                 }),
             });
             const data = await res.json();
 
+            /* Stond 'ie er al? Dan is de bon niet kwijt — koppel de kaart aan
+               de bestaande rij zodat "open in kistje" gewoon werkt. */
             if (res.status === 409 && data.bon_id) {
-                // Al eerder ge-committed — gewoon doorlinken
-                showToast({
-                    message: 'Deze bon stond al in je archief.',
-                    type: 'warning',
-                });
-                router.push(`/archief?bon=${data.bon_id}`);
-                return;
+                setCompleted(prev =>
+                    prev.map(c =>
+                        c.id === entry.id
+                            ? {
+                                  ...c,
+                                  committing: false,
+                                  committed: true,
+                                  archiefBonId: data.bon_id,
+                              }
+                            : c,
+                    ),
+                );
+                return data.bon_id as number;
             }
 
             if (!res.ok || !data.ok) {
-                throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+                throw new Error(data.detail || data.message || data.error || `HTTP ${res.status}`);
             }
 
-            setCompleted((prev) =>
-                prev.map((c) =>
-                    c.id === entryId
-                        ? { ...c, committing: false, committed: true, archiefBonId: data.bon_id }
+            setCompleted(prev =>
+                prev.map(c =>
+                    c.id === entry.id
+                        ? {
+                              ...c,
+                              committing: false,
+                              committed: true,
+                              commitError: null,
+                              archiefBonId: data.bon_id,
+                          }
                         : c,
                 ),
             );
 
-            showToast({ message: 'Bon in archief gezet', type: 'success', title: 'Klaar' });
-            router.push(data.redirect || `/archief?bon=${data.bon_id}`);
+            if (opts.navigate) {
+                router.push(data.redirect || `/archief?bon=${data.bon_id}`);
+            }
+            return data.bon_id as number;
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Onbekende fout';
-            setCompleted((prev) =>
-                prev.map((c) =>
-                    c.id === entryId ? { ...c, committing: false, commitError: msg } : c,
+            setCompleted(prev =>
+                prev.map(c =>
+                    c.id === entry.id ? { ...c, committing: false, commitError: msg } : c,
                 ),
             );
-            showToast({ message: `Opslaan mislukt: ${msg}`, type: 'error' });
+            return null;
         }
+    }
+
+    /* Handmatig opnieuw proberen vanaf een kaart die niet bewaard kreeg. */
+    async function retrySave(entryId: string) {
+        const entry = completed.find(c => c.id === entryId);
+        if (!entry || entry.committing) return;
+        if (entry.committed && entry.archiefBonId) return;
+
+        const bonId = await persistEntry(entry, { navigate: !!attachToBonId });
+        showToast(
+            bonId
+                ? { message: 'Bon staat in je kistje.', type: 'success', title: 'Bewaard' }
+                : { message: 'Opslaan mislukt — probeer het nog een keer.', type: 'error' },
+        );
     }
 
     /* Escaleer een bestaande extractie naar Opus 4.7 voor maximale accuracy.
@@ -263,9 +328,27 @@ function BonnenPageInner() {
                     ? { ...c, result: newResult, escalating: false, leverancierResolved: newResult.leverancier_state === 'auto_matched' }
                     : c,
             ));
+
+            /* Staat de bon al in het kistje? Dan de betere uitlezing daar
+               overheen zetten — anders houdt het kistje de zwakkere lezing. */
+            let bewaard = true;
+            if (entry.archiefBonId) {
+                const bonId = await persistEntry(
+                    { ...entry, result: newResult },
+                    {
+                        attachTo: entry.archiefBonId,
+                        withFile: false,
+                        overwriteTotals: true,
+                    },
+                );
+                bewaard = bonId !== null;
+            }
+
             showToast({
-                message: `Opnieuw gescand met Opus 4.7 (${newResult.items_with_suggestions.length} regels).`,
-                type: 'success',
+                message: bewaard
+                    ? `Opnieuw gescand met Opus 4.7 (${newResult.items_with_suggestions.length} regels) en bijgewerkt in je kistje.`
+                    : `Opnieuw gescand (${newResult.items_with_suggestions.length} regels), maar bijwerken in het kistje mislukte.`,
+                type: bewaard ? 'success' : 'warning',
                 title: 'Klaar',
             });
         } catch (e) {
@@ -277,34 +360,55 @@ function BonnenPageInner() {
         }
     }
 
-    function handleExtracted(result: ExtractResult, originalFile: File) {
+    async function handleExtracted(result: ExtractResult, originalFile: File) {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         /* Auto-resolve voor zekere matches: bij score >= 80 is leverancier_id
            al gezet door extract route → leverancierResolved=true zodat Sam
            niets hoeft te doen. Bij needs_approval/new_suggested/no_leverancier
-           wacht de commit-knop op Sam's keuze. */
+           kiest Sam daarna; dat blokkeert het bewaren niet meer. */
         const autoResolved = result.leverancier_state === 'auto_matched';
-        setCompleted(prev => [
-            {
-                id,
-                file_name: originalFile.name,
-                result,
-                originalFile,
-                chosenLeverancierId: autoResolved ? result.bon_preview.leverancier_id : null,
-                chosenNewLeverancierNaam: null,
-                leverancierResolved: autoResolved,
-            },
-            ...prev,
-        ]);
+        const entry: CompletedExtract = {
+            id,
+            file_name: originalFile.name,
+            result,
+            originalFile,
+            chosenLeverancierId: autoResolved ? result.bon_preview.leverancier_id : null,
+            chosenNewLeverancierNaam: null,
+            leverancierResolved: autoResolved,
+        };
+        setCompleted(prev => [entry, ...prev]);
 
         const lev = result.bon_preview.leverancier_naam || 'onbekende leverancier';
         const totaal = result.bon_preview.totaal_bedrag;
         const itemCount = result.items_with_suggestions.length;
-        showToast({
-            message: `${lev} — ${itemCount} regel${itemCount === 1 ? '' : 's'} · ${fmt(totaal)}`,
-            type: 'success',
-            title: 'Bon uitgelezen',
-        });
+        const regels = `${itemCount} regel${itemCount === 1 ? '' : 's'}`;
+
+        /* De ?prefill-flow koppelt aan één bestaande bon en overschrijft die —
+           dat blijft een bewuste klik van Sam, geen automatische opslag. */
+        if (attachToBonId) {
+            showToast({
+                message: `${lev} — ${regels} · ${fmt(totaal)}`,
+                type: 'success',
+                title: 'Bon uitgelezen',
+            });
+            return;
+        }
+
+        /* Meteen bewaren. Vanaf hier is de bon van Sam, ook als hij wegklikt. */
+        const bonId = await persistEntry(entry, { navigate: false });
+        showToast(
+            bonId
+                ? {
+                      message: `${lev} — ${regels} · ${fmt(totaal)} · staat in je kistje`,
+                      type: 'success',
+                      title: 'Uitgelezen en bewaard',
+                  }
+                : {
+                      message: `${lev} · ${fmt(totaal)} is wél uitgelezen maar NIET bewaard. Klik "Bewaar in kistje" op de kaart.`,
+                      type: 'error',
+                      title: 'Opslaan mislukt',
+                  },
+        );
     }
 
     function handleDuplicate(dup: any, originalFile: File) {
@@ -320,6 +424,23 @@ function BonnenPageInner() {
             },
         });
     }
+
+    /* Wat staat er écht in de database, en wat (nog) niet. */
+    const nietBewaard = completed.filter(c => !c.archiefBonId && !c.committing);
+    const bewaardCount = completed.filter(c => !!c.archiefBonId).length;
+
+    /* Laatste vangnet: is er iets uitgelezen maar niet bewaard, dan mag de
+       browser niet stilletjes dichtklappen. Het opslaan gaat nu automatisch,
+       dus dit slaat alleen aan als een opslag echt gefaald is. */
+    React.useEffect(() => {
+        if (nietBewaard.length === 0) return;
+        const waarschuw = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', waarschuw);
+        return () => window.removeEventListener('beforeunload', waarschuw);
+    }, [nietBewaard.length]);
 
     function handleError(message: string) {
         /* Format-fouten van de extract-route (415 unsupported_mime) komen hier.
@@ -431,39 +552,61 @@ function BonnenPageInner() {
                         flexWrap: 'wrap',
                         gap: 8,
                     }}>
-                        <h2 style={{ fontSize: 16, fontWeight: 600 }}>
-                            Net gescand ({completed.length})
-                        </h2>
-                        {/* Batch-Bevestig knop bovenaan bij meerdere bonnen (Pillar 1) */}
-                        {completed.filter(c => !c.committed && !c.committing).length > 1 && (
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    const toCommit = completed.filter(c => !c.committed && !c.committing);
-                                    for (const c of toCommit) {
-                                        await commitToArchief(c.id);
-                                    }
-                                }}
-                                className="btn btn-brand"
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    minHeight: 36,
-                                }}
-                            >
-                                <Check size={14} /> Bevestig alle{' '}
-                                {completed.filter(c => !c.committed && !c.committing).length} →
-                                archief
-                            </button>
-                        )}
+                        <div>
+                            <h2 style={{ fontSize: 16, fontWeight: 600 }}>
+                                Net gescand ({completed.length})
+                            </h2>
+                            {/* Eerlijke telling: hoeveel staan er écht in de DB. */}
+                            <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }}>
+                                {nietBewaard.length === 0
+                                    ? `${bewaardCount} van ${completed.length} bewaard in je kistje — je kunt gerust wegklikken.`
+                                    : `${bewaardCount} van ${completed.length} bewaard. ${nietBewaard.length} nog niet — die ben je kwijt als je nu wegklikt.`}
+                            </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {nietBewaard.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        for (const c of nietBewaard) {
+                                            /* Sequentieel, en zonder tussentijds
+                                               navigeren — dat brak deze lus eerder. */
+                                            await persistEntry(c, { navigate: false });
+                                        }
+                                    }}
+                                    className="btn btn-brand"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        minHeight: 36,
+                                    }}
+                                >
+                                    <Check size={14} /> Bewaar {nietBewaard.length} alsnog
+                                </button>
+                            )}
+                            {bewaardCount > 0 && (
+                                <Link
+                                    href="/archief"
+                                    className="btn btn-ghost"
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        minHeight: 36,
+                                    }}
+                                >
+                                    <Archive size={14} /> Open bonnenkistje
+                                </Link>
+                            )}
+                        </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {completed.map(c => (
                             <ResultCard
                                 key={c.id}
                                 entry={c}
-                                onCommit={commitToArchief}
+                                onCommit={retrySave}
                                 onChooseLeverancier={chooseLeverancier}
                                 onChooseNewLeverancier={chooseNewLeverancier}
                                 onEscalate={escalateExtract}
@@ -652,9 +795,9 @@ function ResultCard({
             </details>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {entry.committed ? (
+                {entry.archiefBonId ? (
                     <Link
-                        href={`/archief?bon=${entry.archiefBonId ?? ''}`}
+                        href={`/archief?bon=${entry.archiefBonId}`}
                         className="btn btn-brand"
                         style={{
                             display: 'inline-flex',
@@ -663,32 +806,22 @@ function ResultCard({
                             minHeight: 36,
                         }}
                     >
-                        <Check size={14} /> In archief — open
+                        <Check size={14} /> Bewaard — open in kistje
                     </Link>
                 ) : (
                     <button
                         type="button"
                         onClick={() => onCommit(entry.id)}
-                        disabled={entry.committing || !entry.leverancierResolved}
+                        disabled={entry.committing}
                         className="btn btn-brand"
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 6,
                             minHeight: 36,
-                            opacity:
-                                entry.committing || !entry.leverancierResolved ? 0.5 : 1,
-                            cursor: entry.committing
-                                ? 'wait'
-                                : !entry.leverancierResolved
-                                  ? 'not-allowed'
-                                  : 'pointer',
+                            opacity: entry.committing ? 0.5 : 1,
+                            cursor: entry.committing ? 'wait' : 'pointer',
                         }}
-                        title={
-                            !entry.leverancierResolved
-                                ? 'Kies eerst de leverancier hierboven'
-                                : undefined
-                        }
                     >
                         {entry.committing ? (
                             <>
@@ -696,7 +829,7 @@ function ResultCard({
                             </>
                         ) : (
                             <>
-                                Bevestig in archief <ArrowRight size={14} />
+                                Bewaar in kistje <ArrowRight size={14} />
                             </>
                         )}
                     </button>
@@ -722,6 +855,17 @@ function ResultCard({
                         }}
                     >
                         {entry.commitError}
+                    </span>
+                )}
+                {entry.archiefBonId && !entry.leverancierResolved && (
+                    <span
+                        style={{
+                            fontSize: 12,
+                            color: 'var(--amber, #f59e0b)',
+                            alignSelf: 'center',
+                        }}
+                    >
+                        Nog geen leverancier gekozen — de bon staat er wel al in.
                     </span>
                 )}
             </div>

@@ -117,6 +117,79 @@ export async function updateBonTagsAction(input: unknown) {
     }
 }
 
+// ── Leverancier zetten op een al bewaarde bon ─────────────────────────
+//
+// De scan-pagina bewaart een bon meteen na het uitlezen (anders ben je 'm
+// kwijt zodra je wegklikt). De leverancier-keuze komt daarna pas. Deze action
+// werkt die keuze bij op de rij die er al staat, zonder de file opnieuw te
+// uploaden.
+//
+// Mens-blijft-de-baas: een NIEUWE leverancier wordt alleen aangemaakt als de
+// UI expliciet `nieuweNaam` meestuurt — nooit op eigen initiatief van de AI.
+
+const bonLeverancierSchema = z.object({
+    bonId: z.number().int().positive(),
+    leverancierId: z.number().int().positive().nullable().optional(),
+    nieuweNaam: z.string().min(2).max(120).optional(),
+});
+
+export async function setBonLeverancierAction(input: unknown) {
+    try {
+        const { bonId, leverancierId, nieuweNaam } = bonLeverancierSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+
+        let finalId: number | null = leverancierId ?? null;
+
+        if (nieuweNaam) {
+            const naam = nieuweNaam.trim();
+            /* Dedup binnen de org — voorkomt dubbele leveranciers bij tikfouten. */
+            const { data: bestaand } = await sb
+                .from('leveranciers')
+                .select('id')
+                .eq('organization_id', orgId)
+                .ilike('naam', naam)
+                .limit(1)
+                .maybeSingle();
+
+            if (bestaand) {
+                finalId = bestaand.id;
+            } else {
+                const { data: nieuw, error: levErr } = await sb
+                    .from('leveranciers')
+                    .insert({ organization_id: orgId, naam, type: 'inkoop' })
+                    .select('id')
+                    .single();
+                if (levErr || !nieuw) throw new Error(levErr?.message ?? 'Kon leverancier niet aanmaken');
+                finalId = nieuw.id;
+            }
+        } else if (finalId !== null) {
+            /* Bestaat de gekozen leverancier wel, en binnen deze org? */
+            const { data: lev } = await sb
+                .from('leveranciers')
+                .select('id')
+                .eq('organization_id', orgId)
+                .eq('id', finalId)
+                .maybeSingle();
+            if (!lev) throw new Error('Leverancier niet gevonden');
+        }
+
+        const { error } = await sb
+            .from('bonnen')
+            .update({ leverancier_id: finalId })
+            .eq('organization_id', orgId)
+            .eq('id', bonId);
+        if (error) throw new Error(error.message);
+
+        revalidatePath('/archief');
+        return { ok: true as const, leverancierId: finalId };
+    } catch (e) {
+        return {
+            ok: false as const,
+            error: e instanceof Error ? e.message : 'Kon leverancier niet koppelen',
+        };
+    }
+}
+
 // ── Voorbelasting bevestigen (veiligheidsfase F6) ─────────────────────
 //
 // BTW van een bon telt pas mee in rubriek 5b als iemand heeft vastgesteld dat

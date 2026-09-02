@@ -407,6 +407,23 @@ export default function MultiFormatDropZone(props: DropZoneProps) {
         })();
     }, [queue, onExtracted, onDuplicate, onError, announceFmt]);
 
+    /* ── Niet wegklikken terwijl er nog bestanden in de wachtrij staan ──
+       Een wachtrij leeft alleen in dit tabblad. Verversen of wegklikken
+       betekent: die bestanden zijn nooit uitgelezen en er is niets van
+       bewaard. Dus waarschuwen zolang er werk open staat. */
+    const queueBusy = queue.some(
+        it => it.status === 'pending' || it.status === 'compressing' || it.status === 'extracting',
+    );
+    useEffect(() => {
+        if (!queueBusy && !bundleProcessing) return;
+        const waarschuw = (e: BeforeUnloadEvent) => {
+            e.preventDefault();
+            e.returnValue = '';
+        };
+        window.addEventListener('beforeunload', waarschuw);
+        return () => window.removeEventListener('beforeunload', waarschuw);
+    }, [queueBusy, bundleProcessing]);
+
     /* ── Cleanup object-urls ────────────────────────────────────── */
     useEffect(() => {
         return () => {
