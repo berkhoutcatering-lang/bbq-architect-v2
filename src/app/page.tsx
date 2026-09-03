@@ -44,6 +44,7 @@ import BriefingTimeline from '@/components/dashboard/today/BriefingTimeline';
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
 import { localMonthKey } from '@/lib/today/date-keys';
+import { isOpenstaand, isVervallen } from '@/lib/factuurStatus';
 import { compute6MonthRevenue } from '@/lib/today/revenue-buckets';
 import { computeSupplierSpend } from '@/lib/today/supplier-spend';
 import {
@@ -123,7 +124,8 @@ export default function DashboardPage() {
   const today7 = new Date(); today7.setDate(today7.getDate() + 7);
   const today7Iso = today7.toISOString().slice(0, 10);
 
-  const openFacturen = facturen.filter((f) => f.status !== 'betaald' && f.status !== 'geannuleerd');
+  /* Alleen verstuurde facturen zijn een vordering — concepten telden hier mee. */
+  const openFacturen = facturen.filter(isOpenstaand);
   let openFacturenBedrag = 0;
   openFacturen.forEach((f) => {
     (f.items || []).forEach((it) => { openFacturenBedrag += (it.qty || 0) * (it.prijs || 0); });
@@ -161,12 +163,9 @@ export default function DashboardPage() {
   const conflictResult = detectAllConflicts(upcomingForConflict);
   const criticalConflicts = conflictResult.conflicts.filter((c) => c.severity === 'critical');
 
-  const verlopenFacturen = facturen.filter((f) =>
-    f.status !== 'betaald' && f.status !== 'geannuleerd' && f.vervaldatum && f.vervaldatum < today,
-  );
+  const verlopenFacturen = facturen.filter((f) => isVervallen(f, today));
   const binnenkortVervallen = facturen.filter((f) =>
-    f.status !== 'betaald' && f.status !== 'geannuleerd'
-    && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso,
+    isOpenstaand(f) && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso,
   );
   const calcFactuurBedrag = (f) =>
     (f.items || []).reduce((s: number, it) => s + (it.qty || 0) * (it.prijs || 0), 0);

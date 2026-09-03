@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, ty
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import type { DbEvent, Offerte, InventoryItem, Factuur, Notification, KPIs, AppContextValue } from '@/types';
+import { isVervallen } from '@/lib/factuurStatus';
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -120,7 +121,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
 
         const overdueFacturen = openFacturen.filter(function (f) {
-            return f.vervaldatum && f.vervaldatum < today && f.status !== 'betaald';
+            return isVervallen(f, today);
         });
         if (overdueFacturen.length > 0) {
             pushNotification(overdueFacturen.length + ' factuur/facturen over vervaldatum — neem actie', 'error', 8000);

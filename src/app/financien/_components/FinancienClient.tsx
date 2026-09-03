@@ -34,6 +34,7 @@ import BankTab from './tabs/BankTab';
 import AgingPanel from './sections/AgingPanel';
 import ConcentrationBanner from './sections/ConcentrationBanner';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { isOpenstaand } from '@/lib/factuurStatus';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
@@ -252,7 +253,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
         const yearStr = new Date().getFullYear().toString();
 
         const betaald = facturen.filter(function (f) { return f.status === 'betaald'; });
-        const open = facturen.filter(function (f) { return f.status !== 'betaald' && f.status !== 'geannuleerd'; });
+        const open = facturen.filter(isOpenstaand);
 
         let omzet = 0;
         betaald.forEach(function (f) { (f.items || []).forEach(function (item: any) { omzet += (item.qty || 0) * (item.prijs || 0); }); });

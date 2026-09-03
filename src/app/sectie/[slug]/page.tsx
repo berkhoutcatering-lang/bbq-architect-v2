@@ -11,6 +11,7 @@ import {
 import { getSectionBySlug } from '@/lib/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt } from '@/lib/utils';
+import { isOpenstaand } from '@/lib/factuurStatus';
 
 /* ── KPI Card ─────────────────────────────────────────────── */
 
@@ -87,7 +88,7 @@ function DeZaakStats() {
     let revenue = 0;
     betaald.forEach((f: any) => { (f.items || []).forEach((i: any) => { revenue += (i.qty || 0) * (i.prijs || 0); }); });
 
-    const openFact = facturen.filter((f: any) => f.status !== 'betaald' && f.status !== 'geannuleerd');
+    const openFact = facturen.filter(isOpenstaand);
     let openBedrag = 0;
     openFact.forEach((f: any) => { (f.items || []).forEach((i: any) => { openBedrag += (i.qty || 0) * (i.prijs || 0); }); });
 

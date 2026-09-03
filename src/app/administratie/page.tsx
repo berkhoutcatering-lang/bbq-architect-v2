@@ -9,6 +9,7 @@ import { useSupabase } from '@/lib/useSupabase';
 import { fmt } from '@/lib/utils';
 import { aggregeer, filterPeriode } from '@/lib/ritten-aggregaties';
 import type { Rit } from '@/types';
+import { isOpenstaand } from '@/lib/factuurStatus';
 
 interface FactuurRow { id: number; status?: string; datum?: string; items?: Array<{ qty?: number; prijs?: number }> }
 interface KlantRow { id: number; created_at?: string }
@@ -29,7 +30,7 @@ export default function AdministratieHub() {
   const financienStats = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const open = facturen.filter((f) => f.status && f.status !== 'betaald' && f.status !== 'geannuleerd');
+    const open = facturen.filter(isOpenstaand);
     const openBedrag = open.reduce((s, f) => s + (f.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.prijs) || 0), 0), 0);
     const betaaldThisMonth = facturen.filter((f) => f.status === 'betaald' && (f.datum || '') >= monthStart);
     const omzetThisMonth = betaaldThisMonth.reduce((s, f) => s + (f.items || []).reduce((a, i) => a + (Number(i.qty) || 0) * (Number(i.prijs) || 0), 0), 0);
