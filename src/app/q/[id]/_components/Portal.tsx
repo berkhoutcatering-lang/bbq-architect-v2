@@ -529,22 +529,30 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
     return function () { sc.removeEventListener('scroll', onScroll); };
   }, []);
 
+  /* Scrollde naar een container die geen scroll-container is: ppRef wees naar
+     een gewone div, dus scrollTo() deed niets en de knop leek dood.
+     scrollIntoView werkt ongeacht welke voorouder daadwerkelijk scrolt.
+     Smooth-scroll wordt niet overal uitgevoerd (in-app browsers, WebViews en
+     omgevingen met animaties uit doen er niets mee), dus vallen we terug op een
+     directe sprong als er na 350 ms niets is bewogen. Anders lijkt de knop dood. */
+  function scrollNaar(el: HTMLElement | null) {
+    if (!el) return;
+    const voor = window.scrollY || document.documentElement.scrollTop || 0;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(function () {
+      const na = window.scrollY || document.documentElement.scrollTop || 0;
+      if (Math.abs(na - voor) < 8) el.scrollIntoView({ block: 'start' });
+    }, 350);
+  }
+
   function scrollToMenu() {
-    const sc = ppRef.current;
-    const el = menuRef.current;
-    if (!sc || !el) return;
-    const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 12;
-    sc.scrollTo({ top, behavior: 'smooth' });
+    scrollNaar(menuRef.current);
   }
 
   function scrollToAdjust() {
     if (!showAdjust) setShowAdjust(true);
     setTimeout(function () {
-      const sc = ppRef.current;
-      const el = adjustRef.current;
-      if (!sc || !el) return;
-      const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16;
-      sc.scrollTo({ top, behavior: 'smooth' });
+      scrollNaar(adjustRef.current);
     }, 60);
   }
 

@@ -204,6 +204,24 @@ export default function Offertes() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    /* Handoff vanaf /offertes/[id]/view: die pagina heeft geen eigen dupliceer-
+       logica en stuurt door met ?duplicate= of ?version=. Wacht tot de offertes
+       geladen zijn, want duplicateOfferte heeft de nummer-reeks nodig. */
+    const dupHandled = useRef(false);
+    useEffect(() => {
+        if (dupHandled.current) return;
+        const dupId = searchParams?.get('duplicate');
+        const verId = searchParams?.get('version');
+        const id = dupId || verId;
+        if (!id || !offertes.length) return;
+        const bron = offertes.find((o) => String(o.id) === String(id));
+        if (!bron) return;
+        dupHandled.current = true;
+        duplicateOfferte(bron as unknown as Record<string, unknown>, verId ? { versieVan: bron.nummer || ('#' + id) } : undefined);
+        router.replace('/offertes');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [offertes, searchParams]);
+
     function calcOfferteMargeData(offerte: Offerte | Record<string, unknown>) {
         try {
             /* Helper-signature gebruikt `Record<string, any>` om legacy en
@@ -597,21 +615,42 @@ export default function Offertes() {
         }
     }
 
-    function duplicateOfferte(o: Record<string, any>) {
+    function duplicateOfferte(o: Record<string, any>, opts?: { versieVan?: string }) {
         const geldigDagen = (settings && settings.offerte_geldig) || 30;
         const nummer = nextNummer((settings && settings.offerte_prefix) || 'OFF-2026-', offertes.map((o) => o.nummer));
         const copy = JSON.parse(JSON.stringify(o));
         delete copy.id;
         delete copy.created_at;
+        /* public_token is de klant-link. Meekopiëren zou twee offertes dezelfde
+           /q/-URL geven, waardoor de klant de verkeerde te zien krijgt. Ook de
+           handtekening-velden horen niet mee: die gelden voor het origineel. */
+        delete copy.public_token;
+        delete copy.signed_by;
+        delete copy.signed_at;
+        delete copy.signature_url;
+        delete copy.signed_pdf_url;
+        delete copy.signed_ip;
+        delete copy.signed_user_agent;
+        /* Een dupliceer is een nieuwe klus; een nieuwe versie hoort bij hetzelfde
+           event en houdt die koppeling dus wél. */
+        if (!opts?.versieVan) delete copy.event_id;
         copy.nummer = nummer;
         copy.status = 'concept';
         copy.datum = today();
         copy.geldig_tot = addDays(today(), geldigDagen);
+        if (opts?.versieVan) {
+            copy.notitie = ('Nieuwe versie van ' + opts.versieVan + (copy.notitie ? ' — ' + copy.notitie : ''));
+        }
         setPriceModeByRow({});
         setMoneyDraftByCell({});
         setEditing('new');
         setForm(copy);
-        showToast('Offerte gedupliceerd — pas details aan en sla op', 'info');
+        showToast(
+            opts?.versieVan
+                ? 'Nieuwe versie van ' + opts.versieVan + ' — pas aan en sla op'
+                : 'Offerte gedupliceerd — pas details aan en sla op',
+            'info',
+        );
     }
 
     function deleteOfferte() {

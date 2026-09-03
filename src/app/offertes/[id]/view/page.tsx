@@ -9,6 +9,13 @@ import {
   AlertTriangle, Palette,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useSettings } from '@/lib/useSupabase';
+import { useOrg } from '@/lib/OrgContext';
+import { useToast } from '@/components/Toast';
+import { mailOfferte } from '@/lib/emailHelper';
+import { generatePDF } from '@/lib/pdfGenerator';
+import { buildBrandingConfig } from '@/lib/branding';
+import { calcLineTotals } from '@/lib/utils';
 import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
 import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
@@ -359,6 +366,10 @@ function groupItems(items: any[]): { title: string; Ic: typeof Flame; items: any
 export default function OfferteViewPage() {
   const params = useParams();
   const router = useRouter();
+  const { settings } = useSettings();
+  const { orgId } = useOrg();
+  const showToast = useToast();
+  const [versturen, setVersturen] = useState(false);
   const offerteId = parseInt(String(params.id), 10);
 
   const [offerte, setOfferte] = useState<any>(null);
@@ -482,6 +493,65 @@ export default function OfferteViewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offerte, items, gerechten, inventory]);
 
+  /* De knoppen op deze pagina hadden geen onClick — Verstuur, Opslaan, PDF,
+     Dupliceer en Nieuwe versie waren decoratie. Het verzendpad bestond al
+     (mailOfferte → /api/send-email), het was hier alleen nooit aangesloten. */
+
+  async function handleVerstuur() {
+    if (!offerte) return;
+    const adres = offerte.client_email || klant?.email || '';
+    if (!adres) {
+      showToast('Deze klant heeft geen e-mailadres. Vul er een in bij de klant of in de offerte.', 'error');
+      return;
+    }
+    setVersturen(true);
+    try {
+      const res = await mailOfferte(
+        { ...offerte, client_email: adres },
+        settings?.bedrijfsnaam || 'Hop & Bites',
+      );
+      if (!res.success) {
+        showToast('Versturen mislukt: ' + (res.error || 'onbekende fout'), 'error');
+        return;
+      }
+      showToast(
+        res.fallback
+          ? 'Je mailprogramma is geopend — stel RESEND_API_KEY in voor directe verzending'
+          : 'Offerte verstuurd naar ' + adres,
+        'success',
+      );
+      if (!res.fallback && offerte.status !== 'verzonden') {
+        await supabase.from('offertes').update({ status: 'verzonden' }).eq('id', offerte.id);
+        setOfferte(function (o: any) { return o ? { ...o, status: 'verzonden' } : o; });
+      }
+    } finally {
+      setVersturen(false);
+    }
+  }
+
+  function handleKopieerLink() {
+    const token = offerte?.public_token;
+    if (!token) {
+      showToast('Sla de offerte eerst op om een klant-link te maken', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(window.location.origin + '/q/' + token);
+    showToast('Klant-link gekopieerd — plak hem in een mail of WhatsApp.', 'success');
+  }
+
+  function handlePdf() {
+    if (!offerte) return;
+    const items = Array.isArray(offerte.items) ? offerte.items : [];
+    generatePDF({
+      type: 'offerte',
+      form: offerte,
+      settings: settings || undefined,
+      totals: calcLineTotals(items),
+      branding: buildBrandingConfig(settings),
+      orgId: orgId || undefined,
+    });
+  }
+
   const totals = useMemo(() => {
     const subtotaal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0), 0);
     const btw = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (resolveBtwPct(it.btw) / 100), 0);
@@ -569,7 +639,7 @@ export default function OfferteViewPage() {
             >
               <Palette size={14} />Menukaart
             </button>
-            <button className="btn btn-ghost"><Download size={14} />PDF</button>
+            <button className="btn btn-ghost" onClick={handlePdf}><Download size={14} />PDF</button>
             <button className="btn btn-primary" onClick={() => router.push(`/offertes?edit=${offerte.id}`)}><Send size={14} />Bewerken</button>
           </div>
         </div>
@@ -590,8 +660,8 @@ export default function OfferteViewPage() {
                   </div>
                 </div>
                 <div className="hstack" style={{ gap: 8 }}>
-                  <button className="btn btn-ghost btn-sm"><Copy size={14} />Dupliceer</button>
-                  <button className="btn btn-ghost btn-sm"><GitBranch size={14} />Nieuwe versie</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/offertes?duplicate=${offerte.id}`)}><Copy size={14} />Dupliceer</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/offertes?version=${offerte.id}`)}><GitBranch size={14} />Nieuwe versie</button>
                 </div>
               </div>
               <div className="quote-hero-stats">
@@ -689,8 +759,8 @@ export default function OfferteViewPage() {
                 <div className="big">{fmtEur(totals.totaal)} <span className="brand">incl.</span></div>
               </div>
               <div className="actions">
-                <button className="btn btn-ghost"><Save size={14} />Opslaan</button>
-                <button className="btn btn-primary"><Send size={14} />Verstuur</button>
+                <button className="btn btn-ghost" onClick={handleKopieerLink} title="Kopieer de klant-link naar je klembord"><Copy size={14} />Klant-link</button>
+                <button className="btn btn-primary" onClick={handleVerstuur} disabled={versturen}><Send size={14} />{versturen ? 'Versturen…' : 'Verstuur'}</button>
               </div>
             </div>
           </div>
@@ -777,7 +847,13 @@ export default function OfferteViewPage() {
                   <div className="n">{offerte.client_naam || 'Geen klant'}</div>
                   <div className="s">{klant?.email || klant?.telefoon || 'Geen contactgegevens'} · {clientStats.count} eerdere opdracht{clientStats.count === 1 ? '' : 'en'}</div>
                 </div>
-                <button className="icon-btn"><MessageCircle size={14} /></button>
+                {(klant?.email || offerte.client_email) && (
+                  <button
+                    className="icon-btn"
+                    title={'Mail ' + (klant?.email || offerte.client_email)}
+                    onClick={() => window.open('mailto:' + (klant?.email || offerte.client_email), '_blank')}
+                  ><MessageCircle size={14} /></button>
+                )}
               </div>
               <div className="cc-stats">
                 <div><div className="k">Eerdere omzet</div><div className="v">{fmtEur0(clientStats.revenue)}</div></div>

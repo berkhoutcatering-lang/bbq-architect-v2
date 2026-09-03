@@ -8440,8 +8440,16 @@ textarea:focus-visible,
    grote touch-targets, en voorkomen we overflow-x op <body>.
    ═══════════════════════════════════════════════════════════════════ */
 
-/* Hard stop: nooit horizontal scroll op de root. Tablets/telefoons */
-html, body { max-width: 100vw; overflow-x: hidden; }
+/* Hard stop: nooit horizontal scroll op de root. Tablets/telefoons.
+   `clip` en niet `hidden`: bij `overflow-x: hidden` rekent de browser de
+   verticale as om naar `auto`, en samen met `height:100%` hierboven wordt
+   <body> dan de scroll-container in plaats van het venster. Gevolgen daarvan:
+   window.scrollY blijft 0, scrollTo()/scrollIntoView() doen niets (de knop
+   "Bekijk je menu" in /q/[id] deed daardoor niets), de adresbalk op de telefoon
+   klapt niet weg, en overloop wordt stil afgekapt in plaats van scrollbaar
+   (waardoor "Week 36" op 375px las als "Week 3"). `clip` knipt alleen
+   horizontaal af en laat de verticale as met rust. */
+html, body { max-width: 100vw; overflow-x: clip; }
 
 /* Alle tabellen krijgen een scroll-container als ze te breed zijn.
    Werkt doordat tabellen zelf min-width: max-content krijgen. */
@@ -8868,7 +8876,7 @@ html, body { max-width: 100vw; overflow-x: hidden; }
    than the viewport will be clipped, not scrolled. Phone only. */
 @media (max-width: 767px) {
   html, body {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 }
 
