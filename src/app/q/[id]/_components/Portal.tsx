@@ -291,7 +291,6 @@ function MapCard({ locatieNaam, locatieAdres, mapsQuery }: { locatieNaam: string
 
 function EventCard({ offer }: { offer: PortalOffer }) {
   const datum = formatDate(offer.datum);
-  const tijd = '—';
   let regels: PortalOfferItem[] = [];
   if (typeof offer.items === 'string') {
     try { regels = JSON.parse(offer.items); } catch { regels = []; }
@@ -299,16 +298,18 @@ function EventCard({ offer }: { offer: PortalOffer }) {
     regels = offer.items;
   }
   const gastenAantal = offer.aantal_gasten || Number(regels[0]?.qty) || 0;
-  const locatieNaam = offer.evenement_locatie || offer.client_adres || '—';
+  const locatieNaam = offer.evenement_locatie || offer.client_adres || '';
+  /* Een vakje met een streepje erin belooft informatie die er niet is. "Tijd"
+     stond zelfs hard op "—", want er is helemaal geen tijdveld op een offerte.
+     Wat leeg is, laten we weg. */
   const cells = [
-    { ico: 'calendar', k: 'Datum', v: datum || '—' },
-    { ico: 'clock', k: 'Tijd', v: tijd },
+    { ico: 'calendar', k: 'Datum', v: datum },
     { ico: 'pin', k: 'Locatie', v: locatieNaam },
     /* `aantal_gasten` blijft leeg als de offerte via de wizard is gemaakt; die
        vraagt er niet om. Het aantal staat dan wel in de eerste offerteregel,
        precies zoals /offertes/[id]/view het afleidt. */
-    { ico: 'users', k: 'Gasten', v: gastenAantal ? `${gastenAantal} personen` : '—' },
-  ];
+    { ico: 'users', k: 'Gasten', v: gastenAantal ? `${gastenAantal} personen` : '' },
+  ].filter(function (c) { return !!c.v; });
   return (
     <div className="pp-card pp-event">
       <div className="pp-event-grid">
@@ -324,7 +325,7 @@ function EventCard({ offer }: { offer: PortalOffer }) {
           );
         })}
       </div>
-      {locatieNaam && locatieNaam !== '—' && (
+      {locatieNaam && (
         <MapCard locatieNaam={locatieNaam} mapsQuery={locatieNaam} />
       )}
     </div>
@@ -336,12 +337,12 @@ function Dish({ d }: { d: PortalMenuSelDish }) {
   const naam = d.naam || d.gerecht_naam || 'Gerecht';
   return (
     <div className="pp-card pp-dish">
-      {d.foto_url ? (
+      {/* Zonder foto kreeg elk gerecht een leeg grijs vlak van 16:9 met de naam
+          er nog eens in als bijschrift — twee keer dezelfde naam en een gat waar
+          niets is. Een menukaart zet daar gewoon tekst. Heeft een gerecht wel
+          een foto, dan staat die er; heeft het er geen, dan valt het vlak weg. */}
+      {d.foto_url && (
         <div className="pp-dish-media" style={{ backgroundImage: `url(${d.foto_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      ) : (
-        <div className="ph pp-dish-media">
-          <span className="ph-label"><Icon name="image" size={11} stroke={1.6} />{naam}</span>
-        </div>
       )}
       <div className="pp-dish-body">
         <div className="pp-dish-row">
@@ -366,8 +367,10 @@ function Menu({ groups }: { groups: MenuGroup[] }) {
       {groups.map(function (c) {
         return (
           <div className="pp-course" key={c.num + c.course}>
+            {/* Het nummer is weg: "01 Voorgerecht" telt iets wat de klant niet
+                hoeft te tellen, en sprong bij een ontbrekende gang. De naam
+                zegt het al. */}
             <div className="pp-course-head">
-              <span className="pp-course-num">{c.num}</span>
               <span className="pp-course-title">{c.course}</span>
               <span className="pp-course-rule" />
             </div>
@@ -452,10 +455,13 @@ function Co2Card({ carbon }: { carbon: PortalCarbon }) {
           <div className="pp-co2-title">CO₂-voetafdruk</div>
           <div className="pp-co2-sub">Berekend over het hele menu</div>
         </div>
-        <span className="chip" style={{ marginLeft: 'auto' }}>
-          <HueDot hue={150} />
-          {carbon.score || '—'}
-        </span>
+        {/* Geen score? Dan geen leeg chipje met een streepje. */}
+        {carbon.score && (
+          <span className="chip" style={{ marginLeft: 'auto' }}>
+            <HueDot hue={150} />
+            {carbon.score}
+          </span>
+        )}
       </div>
       <div className="pp-co2-score">
         <span className="n">{total}</span>
