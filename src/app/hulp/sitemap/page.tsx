@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Search, ArrowRight } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import { navSections } from '@/lib/navigation';
 
 interface SitemapRoute {
   href: string;
@@ -12,58 +13,66 @@ interface SitemapRoute {
   hub: string;
 }
 
-const ROUTES: SitemapRoute[] = [
-  // Vandaag (Dashboard)
-  { href: '/', label: 'Dashboard', desc: 'Vandaag — wat speelt er nu', hub: 'Vandaag' },
+/* Deze lijst stond met de hand geschreven en liep achter: hij noemde
+   /plannen (een redirect-stub), /gerechten?view=menus (een deur die dicht is)
+   en kende zo'n dertig van de ruim tachtig pagina's. De sidebar wéét al welke
+   pagina's er zijn, dus die is nu de bron — net als bij het kruimelpad. Wat
+   bewust niet in de sidebar staat, staat hieronder als aanvulling. */
+const UIT_NAVIGATIE: SitemapRoute[] = navSections.flatMap(function (sectie) {
+  return sectie.children.map(function (kind) {
+    return {
+      href: kind.href,
+      label: kind.label,
+      desc: kind.description || '',
+      hub: sectie.title,
+    };
+  });
+});
 
-  // Plannen
-  { href: '/plannen', label: 'Plannen-hub', desc: 'Welkomstcanvas voor alle planning-functies', hub: 'Plannen' },
-  { href: '/agenda', label: 'Agenda', desc: 'Week- en maandweergave van events + prep', hub: 'Plannen' },
-  { href: '/events', label: 'Events', desc: 'Lijst en detail van alle events', hub: 'Plannen' },
-  { href: '/klantgesprek', label: 'Klantgesprek', desc: 'Intake-gesprek met AI-ondersteuning', hub: 'Plannen' },
-  { href: '/prep-counter', label: 'Prep Counter', desc: 'Mise-en-place planner met sticker-gen', hub: 'Plannen' },
-
-  // Verkoop
-  { href: '/offertes', label: 'Offertes', desc: 'Offerte-overzicht + AI-wizard', hub: 'Verkoop' },
-  { href: '/facturen', label: 'Facturen', desc: 'Facturen en betalingen', hub: 'Verkoop' },
-  { href: '/klanten', label: 'Klanten', desc: 'Klantbeheer en contact', hub: 'Verkoop' },
-
-  // Keuken
-  { href: '/gerechten', label: 'Gerechten', desc: 'Catalog: gerechten met kostprijzen', hub: 'Keuken' },
-  { href: '/marges', label: 'Marges & analyse', desc: 'BCG-matrix op marges en populariteit', hub: 'Keuken' },
-  { href: '/gerechten?view=menus', label: 'Menu\u2019s', desc: 'Opgeslagen menu-templates voor offertes', hub: 'Keuken' },
-  { href: '/ai-chat', label: 'AI Pitmaster', desc: 'AI-chat voor brainstorm en Q&A', hub: 'Keuken' },
-  { href: '/foto-archief', label: 'Foto-archief', desc: 'Beheer fotos en media', hub: 'Keuken' },
-
-  // Voorraad / Beheer
-  { href: '/voorraad', label: 'Voorraad', desc: 'Huidige voorraad en tracking', hub: 'Voorraad' },
-  { href: '/inkoop', label: 'Inkoop', desc: 'Inkooporders en leveranciers', hub: 'Voorraad' },
-  { href: '/logistiek', label: 'Logistiek', desc: 'Transportplanning en bezorging', hub: 'Voorraad' },
-  { href: '/materieel', label: 'Materieel', desc: 'Smoker, pannen, equipment', hub: 'Voorraad' },
-  { href: '/price-intelligence', label: 'Inkoopprijzen', desc: 'Email-prijslijsten, facturen en bonnen', hub: 'Voorraad' },
-
-  // Geld
-  { href: '/financien', label: 'Financiën', desc: 'Dashboard, W&V, uitgaven, BTW, top klanten (5 tabs)', hub: 'Geld' },
-  { href: '/uren', label: 'Uren', desc: 'Urenregistratie en planning', hub: 'Geld' },
-  { href: '/haccp', label: 'HACCP', desc: 'Voedselveiligheid en kwaliteitscontrole', hub: 'Geld' },
-
-  // Systeem
-  { href: '/instellingen', label: 'Instellingen', desc: 'Systeemconfiguratie en voorkeuren', hub: 'Systeem' },
-  { href: '/instellingen/integraties', label: 'Integraties', desc: 'Koppelingen met externe diensten', hub: 'Systeem' },
-  { href: '/instellingen/data-export', label: 'Data export', desc: 'Exporteer je data', hub: 'Systeem' },
-  { href: '/instellingen/referral', label: 'Referral', desc: 'Verwijs vrienden naar BBQ Architect', hub: 'Systeem' },
-  { href: '/gebruikers', label: 'Gebruikers', desc: 'Gebruikersbeheer en rollen', hub: 'Systeem' },
-  { href: '/mailbox', label: 'Mailbox', desc: 'E-mail, templates, klant-correspondentie', hub: 'Systeem' },
-  { href: '/website', label: 'Website', desc: 'Beheer je website content', hub: 'Systeem' },
-  { href: '/hulp', label: 'Help Center', desc: 'Artikelen, FAQ en support tickets', hub: 'Systeem' },
-  { href: '/admin', label: 'Platform Beheer', desc: 'Organisaties en klanten beheren (admin-only)', hub: 'Systeem' },
-  { href: '/admin/funnel', label: 'Admin Funnel', desc: 'Funnel-analytics (admin-only)', hub: 'Systeem' },
-
-  // Power-features (verstopt)
-  { href: '/offertes', label: 'Margin Doctor', desc: 'Marge-analyse per offerte (open offerte → tab)', hub: 'Power' },
+/* Pagina's die met opzet niet in de sidebar staan: sub-pagina's, tweede
+   deuren en beheerdersschermen. Zonder deze lijst zou de plattegrond juist
+   de plekken missen die je moeilijk vindt. */
+const EXTRA: SitemapRoute[] = [
+  { href: '/', label: 'Vandaag', desc: 'Wat er vandaag speelt, in één lijst', hub: 'Vandaag' },
+  { href: '/gerechten/menukaarten', label: 'Menukaarten', desc: 'Menu\u2019s samenstellen en bewaren als sjabloon', hub: 'Keuken' },
+  { href: '/gerechten/uit-catalogus', label: 'Receptuur uit de groothandel', desc: 'Een gerecht bouwen uit producten van je leveranciers', hub: 'Keuken' },
+  { href: '/gerechten/analyse', label: 'Analyse', desc: 'Populariteit tegen marge, en de kwaliteit van je data', hub: 'Keuken' },
+  { href: '/recepten', label: 'Recepten', desc: 'Bereidingswijzen per gerecht', hub: 'Keuken' },
+  { href: '/ai-chat', label: 'AI Pitmaster', desc: 'Meedenken over menu, techniek en timing', hub: 'Keuken' },
+  { href: '/foto-archief', label: 'Foto-archief', desc: 'Je beeldmateriaal op één plek', hub: 'Keuken' },
+  { href: '/prep-counter', label: 'Prep-counter', desc: 'Mise-en-place per dag voor het event', hub: 'Plannen' },
+  { href: '/klantgesprek', label: 'Klantgesprek', desc: 'Intake bij een potenti\u00eble klant', hub: 'Plannen' },
+  { href: '/haccp', label: 'HACCP', desc: 'Temperaturen en controles vastleggen', hub: 'Plannen' },
+  { href: '/logistiek', label: 'Logistiek', desc: 'Checklists en veldmodus voor de eventdag', hub: 'Plannen' },
+  { href: '/verkoop/leads', label: 'Aanvragen', desc: 'Binnenkomende aanvragen tot gewonnen offerte', hub: 'Verkoop' },
+  { href: '/verkoop/arrangementen', label: 'Arrangementen', desc: 'Wat klanten zelf kunnen samenstellen', hub: 'Verkoop' },
+  { href: '/leveranciers', label: 'Leveranciers', desc: 'Waar je producten en prijzen vandaan komen', hub: 'Inkoop & Voorraad' },
+  { href: '/leveranciers/bulk-upload', label: 'Bulk prijslijsten', desc: 'Meerdere PDF-prijslijsten tegelijk inlezen', hub: 'Inkoop & Voorraad' },
+  { href: '/voorraad/nulmeting', label: 'Keuken tellen', desc: 'Je keuken kast voor kast langs met de telefoon', hub: 'Inkoop & Voorraad' },
+  { href: '/archief', label: 'Bonnenkistje', desc: 'Elke bon terugvinden, tot op het woord', hub: 'Inkoop & Voorraad' },
+  { href: '/bonnen', label: 'Bonnen scannen', desc: 'Foto of PDF van een bon uitlezen', hub: 'Inkoop & Voorraad' },
+  { href: '/geld/boekhouder', label: 'Boekhouder', desc: 'RGS-categorisering en het maandpakket', hub: 'Geld' },
+  { href: '/administratie/rittenregistratie', label: 'Rittenregistratie', desc: 'Kilometeradministratie voor de belasting', hub: 'Geld' },
+  { href: '/template-editor', label: 'Template-editor', desc: 'Je eigen opmaak voor facturen, offertes en menukaarten', hub: 'Systeem' },
+  { href: '/instellingen/integraties', label: 'Integraties', desc: 'Koppelingen met Moneybird, Mollie en agenda', hub: 'Systeem' },
+  { href: '/instellingen/ai-usage', label: 'AI-gebruik en kosten', desc: 'Wat AI je deze maand kost', hub: 'Systeem' },
+  { href: '/instellingen/data-export', label: 'Data & privacy', desc: 'Je data exporteren of verwijderen', hub: 'Systeem' },
+  { href: '/instellingen/referral', label: 'Referral-programma', desc: 'Een collega-cateraar verwijzen', hub: 'Systeem' },
+  { href: '/hulp', label: 'Hulp', desc: 'Antwoorden en contact', hub: 'Systeem' },
 ];
 
-const HUB_ORDER = ['Vandaag', 'Plannen', 'Verkoop', 'Keuken', 'Voorraad', 'Geld', 'Systeem', 'Power'];
+/* Op href ontdubbelen: staat een pagina in de sidebar, dan wint die tekst. */
+const ROUTES: SitemapRoute[] = (function () {
+  const perHref = new Map<string, SitemapRoute>();
+  for (const r of [...UIT_NAVIGATIE, ...EXTRA]) {
+    if (!perHref.has(r.href)) perHref.set(r.href, r);
+  }
+  return [...perHref.values()];
+})();
+
+/* Volgorde uit de sidebar zelf; "Voorraad" en "Power" stonden hier nog terwijl
+   die hubs inmiddels "Inkoop & Voorraad" en "Team & Operatie" heten. */
+const HUB_ORDER = ['Vandaag', ...navSections.map(function (s) { return s.title; })];
 
 export default function SitemapPage() {
   const [query, setQuery] = useState('');
