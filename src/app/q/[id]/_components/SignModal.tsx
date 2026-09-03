@@ -154,9 +154,12 @@ interface SignStepProps {
   setSignatureData: (d: string | null) => void;
   onClose: () => void;
   onNext: () => void;
+  /** Kan deze cateraar online betalen aannemen? Zo niet: geen bankstap. */
+  betalenMogelijk?: boolean;
+  submitting?: boolean;
 }
 
-function SignStep({ tenant, clientNaam, deposit, signedBy, setSignedBy, signatureData, setSignatureData, onClose, onNext }: SignStepProps) {
+function SignStep({ tenant, clientNaam, deposit, signedBy, setSignedBy, signatureData, setSignatureData, onClose, onNext, betalenMogelijk = true, submitting = false }: SignStepProps) {
   const [agreed, setAgreed] = useState(false);
   const canProceed = Boolean(signatureData) && agreed && signedBy.trim().length >= 2;
 
@@ -204,7 +207,7 @@ function SignStep({ tenant, clientNaam, deposit, signedBy, setSignedBy, signatur
             <Icon name="check" size={13} stroke={2.4} />
           </span>
           <span className="pp-check-label">
-            Ik ga akkoord met de offerte, het menu en de betalingsvoorwaarden van {tenant.naam}.
+            Ik ga akkoord met de offerte en het menu van {tenant.naam}.
           </span>
         </div>
       </div>
@@ -216,7 +219,9 @@ function SignStep({ tenant, clientNaam, deposit, signedBy, setSignedBy, signatur
           onClick={function () { if (canProceed) onNext(); }}
           type="button"
         >
-          Naar betaling <Icon name="arrowRight" size={17} />
+          {betalenMogelijk
+            ? <>Naar betaling <Icon name="arrowRight" size={17} /></>
+            : (submitting ? 'Bezig…' : <>Offerte bevestigen <Icon name="arrowRight" size={17} /></>)}
         </button>
       </div>
     </>
@@ -232,6 +237,8 @@ interface IdealStepProps {
   onBack: () => void;
   onClose: () => void;
   onConfirmPay: () => void;
+  /** Zonder betaalprovider slaan we de bankstap over. */
+  betalenMogelijk?: boolean;
 }
 
 function IdealStep({ bank, setBank, deposit, submitting, submitError, onBack, onClose, onConfirmPay }: IdealStepProps) {
@@ -321,6 +328,8 @@ export interface SignModalProps {
   submitError: string | null;
   onClose: () => void;
   onConfirmPay: () => void;
+  /** Zonder betaalprovider slaan we de bankstap over. */
+  betalenMogelijk?: boolean;
 }
 
 export function SignModal(props: SignModalProps) {
@@ -340,7 +349,14 @@ export function SignModal(props: SignModalProps) {
             signatureData={props.signatureData}
             setSignatureData={props.setSignatureData}
             onClose={props.onClose}
-            onNext={function () { props.setStep('ideal'); }}
+            betalenMogelijk={props.betalenMogelijk !== false}
+            submitting={props.submitting}
+            onNext={function () {
+              /* Zonder Mollie is er geen bankstap: direct bevestigen. Anders
+                 kiest de klant een bank voor een betaalscherm dat nooit komt. */
+              if (props.betalenMogelijk === false) props.onConfirmPay();
+              else props.setStep('ideal');
+            }}
           />
         ) : (
           <IdealStep

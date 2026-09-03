@@ -86,6 +86,8 @@ export interface PortalProps {
   settings: PortalSettings | null;
   carbon: PortalCarbon | null;
   showCo2?: boolean;
+  /** Kan deze cateraar online betalingen aannemen (Mollie geconfigureerd)? */
+  betalenMogelijk?: boolean;
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -381,7 +383,7 @@ function Menu({ groups }: { groups: MenuGroup[] }) {
   );
 }
 
-function TotalCard({ t, defaultBtw }: { t: ParsedTotals; defaultBtw: number }) {
+function TotalCard({ t, defaultBtw, betalenMogelijk = true }: { t: ParsedTotals; defaultBtw: number; betalenMogelijk?: boolean }) {
   return (
     <div className="pp-card pp-total">
       <div className="pp-total-head">
@@ -424,7 +426,11 @@ function TotalCard({ t, defaultBtw }: { t: ParsedTotals; defaultBtw: number }) {
         </div>
         {t.depositDeadline && (
           <div className="pp-deposit-sub">
-            Te voldoen voor <b style={{ color: 'var(--text)' }}>{t.depositDeadline}</b> om je datum vast te zetten.
+            {betalenMogelijk
+              ? <>Te voldoen voor <b style={{ color: 'var(--text)' }}>{t.depositDeadline}</b> om je datum vast te zetten.</>
+              /* Zonder betaalprovider kan de klant hier niet afrekenen; dan geen
+                 deadline beloven maar zeggen wat er wél gebeurt. */
+              : <>Je ontvangt hiervoor een factuur zodra je de offerte bevestigt.</>}
           </div>
         )}
         <div className="pp-rest">Resterend bedrag {fmt(t.remaining)} — na afloop van het event.</div>
@@ -515,7 +521,7 @@ function AdjustForm({ open, sent, clientNaam, tenantNaam, onSubmit }: { open: bo
    Orchestrator — manages view state (quote ↔ bedankt) + sign+pay flow.
    ────────────────────────────────────────────────────────────────────── */
 
-export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps) {
+export function Portal({ offer, settings, carbon, showCo2 = true, betalenMogelijk = false }: PortalProps) {
   const tenant = {
     naam: settings?.bedrijfsnaam || 'BBQ Architect',
     telefoon: settings?.telefoon || '',
@@ -605,7 +611,8 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
   /* Single-action acceptance: handtekening posten naar /api/accept-offerte,
      bij success → Mollie payment-create voor de aanbetaling met issuer pre-selected. */
   async function handleAcceptAndPay() {
-    if (!signatureData || !signedBy.trim() || !bank) return;
+    if (!signatureData || !signedBy.trim()) return;
+    if (betalenMogelijk && !bank) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -635,7 +642,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
          Redirect naar Mollie checkout. Bij success: webhook → /q/[id]/bedankt
          via redirect_url. */
       const factuurId = acceptJson?.workflow?.factuur?.factuurId;
-      if (factuurId) {
+      if (factuurId && betalenMogelijk) {
         const payRes = await fetch('/api/payments/mollie', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -731,7 +738,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
             <Menu groups={menuGroups} />
             {!isDesktop && (
               <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <TotalCard t={totals} defaultBtw={defaultBtw} />
+                <TotalCard t={totals} defaultBtw={defaultBtw} betalenMogelijk={betalenMogelijk} />
                 {showCo2 && carbon && carbon.matched_count && carbon.matched_count > 0 ? <Co2Card carbon={carbon} /> : null}
                 <div ref={adjustRef}>
                   <AdjustForm
@@ -747,12 +754,12 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
           </div>
           {isDesktop && (
             <aside className="pp-aside">
-              <TotalCard t={totals} defaultBtw={defaultBtw} />
+              <TotalCard t={totals} defaultBtw={defaultBtw} betalenMogelijk={betalenMogelijk} />
               {showCo2 && carbon && carbon.matched_count && carbon.matched_count > 0 ? <Co2Card carbon={carbon} /> : null}
               <div className="pp-actions">
                 <button className="btn btn-primary" onClick={openSign}>
                   <Icon name="pen" size={17} />
-                  Bevestig &amp; betaal aanbetaling
+                  {betalenMogelijk ? 'Bevestig & betaal aanbetaling' : 'Offerte bevestigen'}
                 </button>
                 <button className="btn btn-ghost" onClick={function () { setShowAdjust(function (s) { return !s; }); }}>
                   <Icon name="edit" size={16} />
@@ -783,10 +790,10 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
       {!isDesktop && (
         <div className="pp-bottombar">
           <div className="pp-bottombar-top">
-            <div className="pp-bottombar-tot">Aanbetaling nu<b>{fmt(totals.deposit)}</b></div>
+            <div className="pp-bottombar-tot">{betalenMogelijk ? 'Aanbetaling nu' : 'Totaal'}<b>{fmt(betalenMogelijk ? totals.deposit : totals.totalIncl)}</b></div>
             <button className="btn btn-primary" onClick={openSign}>
               <Icon name="pen" size={16} />
-              Bevestig &amp; betaal
+              {betalenMogelijk ? 'Bevestig & betaal' : 'Bevestigen'}
             </button>
           </div>
           <div className="pp-bottombar-links">
@@ -823,6 +830,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
           submitError={submitError}
           onClose={closeSign}
           onConfirmPay={handleAcceptAndPay}
+          betalenMogelijk={betalenMogelijk}
         />
       )}
     </div>

@@ -116,5 +116,11 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ offer, settings, carbon });
+  /* Kan deze cateraar online betalingen aannemen? Zonder Mollie-sleutel loopt
+     "Bevestig & betaal aanbetaling" nergens op uit: de klant kiest een bank,
+     krijgt geen betaalscherm, en belandt op de bedankpagina. Het portaal moet
+     dan geen betaling beloven en ook geen bank vragen. */
+  const betalenMogelijk = Boolean(process.env.MOLLIE_API_KEY);
+
+  return NextResponse.json({ offer, settings, carbon, betalenMogelijk });
 }

@@ -15,12 +15,14 @@ interface ApiResponse {
   offer: PortalOffer;
   settings: PortalSettings | null;
   carbon: PortalCarbon | null;
+  betalenMogelijk: boolean;
 }
 
 export default function QuotePage({ params }: { params: Promise<{ id: string }> }) {
   const [offer, setOffer] = useState<PortalOffer | null>(null);
   const [settings, setSettings] = useState<PortalSettings | null>(null);
   const [carbon, setCarbon] = useState<PortalCarbon | null>(null);
+  const [betalenMogelijk, setBetalenMogelijk] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorState, setErrorState] = useState<'404' | 'expired' | null>(null);
 
@@ -53,6 +55,7 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
           setOffer(result.offer);
           setSettings(result.settings || null);
           setCarbon(result.carbon || null);
+          setBetalenMogelijk(Boolean(result.betalenMogelijk));
           setLoading(false);
         }
       } catch {
@@ -132,5 +135,5 @@ export default function QuotePage({ params }: { params: Promise<{ id: string }> 
     );
   }
 
-  return <Portal offer={offer} settings={settings} carbon={carbon} />;
+  return <Portal offer={offer} settings={settings} carbon={carbon} betalenMogelijk={betalenMogelijk} />;
 }
