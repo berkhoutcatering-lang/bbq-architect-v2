@@ -1036,15 +1036,25 @@ export default function EventHubPage() {
                   </div>
                 ) : (() => {
                   /* Bucket tasks by dagen (T-Nd). Sort descending: T-5 → T-0. */
+                  /* `dagen` betekent overal in de app "dagen vóór het event":
+                     prep-fases.ts, /prep-counter, syncEngine en bulkSchedule
+                     schrijven en lezen het allemaal positief. In de database
+                     staan echter oudere rijen met een negatief teken —
+                     "Voorraad check en ingredienten bestellen" stond op -3.
+                     Deze pagina las dat als "3 dagen ná het event" en toonde
+                     "D+3 · NA AFLOOP", dus het advies was om je ingrediënten te
+                     bestellen ná het feest. Geen enkele schrijver maakt taken
+                     ná een event, dus we lezen de afstand tot de eventdag. */
                   const buckets = new Map<number, any[]>();
                   for (const t of prepTasks) {
-                    const d = typeof t.dagen === 'number' ? t.dagen : 0;
+                    const ruw = typeof t.dagen === 'number' ? t.dagen : 0;
+                    const d = Math.abs(ruw);
                     if (!buckets.has(d)) buckets.set(d, []);
                     buckets.get(d)!.push(t);
                   }
                   const sortedDagen = Array.from(buckets.keys()).sort((a, b) => b - a);
                   const today0 = derived?.daysLeft ?? 0;
-                  const dayLabel = (d: number) => d === 0 ? 'D-day' : d < 0 ? `D+${Math.abs(d)}` : `D-${d}`;
+                  const dayLabel = (d: number) => d === 0 ? 'D-day' : `D-${d}`;
                   const dayTitle: Record<number, string> = {
                     5: 'Bestellen & voorcheck',
                     4: 'Rubs & marinades',
@@ -1076,7 +1086,7 @@ export default function EventHubPage() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
                               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16, color: dotColor, letterSpacing: '-.005em' }}>{dayLabel(d)}</span>
-                              <span style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{dayTitle[d] || (d === 0 ? 'Event dag' : d < 0 ? 'Na afloop' : 'Voorbereiding')}</span>
+                              <span style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{dayTitle[d] || (d === 0 ? 'Event dag' : 'Voorbereiding')}</span>
                               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{doneCount}/{tasks.length}</span>
                             </div>
                             <div style={{ height: 3, background: 'rgba(130,130,130,.15)', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
@@ -1085,7 +1095,7 @@ export default function EventHubPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               {tasks.map((c: any) => {
                                 const done = !!prepState[c.id];
-                                const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - c.dagen : null;
+                                const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - Math.abs(c.dagen) : null;
                                 const isKeyStep = !done && daysUntil != null && daysUntil >= 0 && daysUntil <= 1;
                                 const badge = isKeyStep ? 'Key step' : (!done && isPast ? 'Achterstand' : null);
                                 const badgeColor = isKeyStep ? 'var(--amber)' : 'var(--red)';
