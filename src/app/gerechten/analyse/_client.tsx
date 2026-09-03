@@ -21,9 +21,11 @@ interface Props {
     initialView: View;
     gerechten: Gerecht[];
     componentCount: number;
+    /** Echte populariteit per gerecht-id, geteld uit events en offertes. */
+    populariteit?: Record<string, number>;
 }
 
-export default function AnalyseClient({ initialView, gerechten, componentCount }: Props) {
+export default function AnalyseClient({ initialView, gerechten, componentCount, populariteit }: Props) {
     const router = useRouter();
     const pathname = usePathname();
     /* Server doet de eerste split, hier alleen UI-state. We schrijven URL
@@ -64,7 +66,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount }
                 {view === 'performance' ? (
                     <div>
                         <MREyebrow style={{ marginBottom: 16 }}>BCG Matrix — Populariteit vs. Marge</MREyebrow>
-                        <BcgMatrix gerechten={gerechten} />
+                        <BcgMatrix gerechten={gerechten} popularity={populariteit} />
                     </div>
                 ) : (
                     <HealthView gerechten={gerechten} componentCount={componentCount} />

@@ -8,6 +8,7 @@
 import { createServerSupabase } from '@/lib/supabase-server';
 import AnalyseClient from './_client';
 import type { Gerecht } from '@/types';
+import { countDishPopularity } from '@/lib/menu/bcgBerekening';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,24 @@ export default async function AnalysePage({
     const gerechtenRes = await supabase.from('gerechten').select('*').order('volgorde').limit(1000);
     const gerechten: Gerecht[] = gerechtenRes.data ?? [];
 
+    /* Populariteit werd tot nu toe verzonnen uit een hash van het gerecht-id
+       (zie BcgMatrix). Hier halen we op waar hij écht uit blijkt: hoe vaak een
+       gerecht in een eventmenu of op een offerte staat. Precies dezelfde bron
+       die /marges gebruikt — daarom spraken de twee analyses elkaar tegen. */
+    const [eventsRes, offertesRes] = await Promise.all([
+        supabase.from('events').select('menu').limit(1000),
+        supabase.from('offertes').select('menu_selectie').limit(1000),
+    ]);
+
+    const events = eventsRes.data ?? [];
+    const offertes = offertesRes.data ?? [];
+    const populariteit: Record<string, number> = {};
+    for (const g of gerechten) {
+        populariteit[String(g.id)] = countDishPopularity(
+            g.naam, g.id as unknown as number, events, offertes,
+        );
+    }
+
     let componentCount = 0;
     try {
         const compRes = await supabase.from('components').select('id', { count: 'exact', head: true });
@@ -42,5 +61,10 @@ export default async function AnalysePage({
         /* Tabel bestaat niet of geen rechten — KPI valt terug op 0. */
     }
 
-    return <AnalyseClient initialView={view} gerechten={gerechten} componentCount={componentCount} />;
+    return <AnalyseClient
+            initialView={view}
+            gerechten={gerechten}
+            componentCount={componentCount}
+            populariteit={populariteit}
+        />;
 }

@@ -13,7 +13,7 @@
  * van toepassing — dit is pure analytics.
  */
 
-import { calcDishFoodcost, countDishPopularity, median, type DishAnalysis, type Quadrant } from '@/app/marges/BCGMatrix';
+import { calcDishFoodcost, countDishPopularity, median, type DishAnalysis, type Quadrant } from '@/lib/menu/bcgBerekening';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
 export { type DishAnalysis, type Quadrant };
