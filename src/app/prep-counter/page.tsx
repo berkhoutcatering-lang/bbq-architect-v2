@@ -265,7 +265,10 @@ export default function PrepCounter() {
                                         boxShadow: isActive ? `0 0 0 4px ${meta.color}22, 0 0 16px ${meta.color}66` : 'none',
                                         transition: 'all .3s', color: 'white',
                                     }}>
-                                        {allDone ? <Check size={14} /> : <span style={{ fontSize: 10, fontWeight: 800, color: isActive || isPast ? 'white' : meta.color }}>{meta.korte.replace('D', '')}</span>}
+                                        {allDone ? <Check size={14} /> : <span style={{ fontSize: 10, fontWeight: 800, color: isActive || isPast ? 'white' : meta.color }}>{/* Stond op korte.replace('D',''), dus in het bolletje "-3" met
+                                                daaronder "D-3" — hetzelfde twee keer, en "-3"
+                                                op zichzelf leest als min drie. */}
+                                            {meta.korte.replace('D-', '')}</span>}
                                     </div>
                                     <div style={{ textAlign: 'center' }}>
                                         <div style={{ fontSize: 11, fontWeight: 700, color: isActive ? meta.color : 'var(--text)' }}>{meta.korte}</div>

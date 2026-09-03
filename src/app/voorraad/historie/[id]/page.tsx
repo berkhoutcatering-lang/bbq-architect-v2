@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ArrowDown, ArrowUp, Package, Receipt, TrendingDown, TrendingUp, AlertCircle, ShieldCheck, Loader2 } from 'lucide-react';
-import { formatPercent } from '@/lib/format';
+import { formatNumber, formatPercent } from '@/lib/format';
 
 /**
  * Voorraad-item historie page — cross-page koppeling
@@ -149,7 +149,8 @@ export default function InventoryHistoriePage() {
                         <Icon size={12} style={{ color: meta.tone === 'ok' ? 'var(--green)' : meta.tone === 'bad' ? 'var(--red)' : meta.tone === 'warn' ? 'var(--amber)' : 'var(--muted)' }} />
                         <strong>{meta.label}</strong>
                         <span style={{ color: meta.tone === 'ok' ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                          {isPositive ? '+' : '−'}{Math.abs(m.qty).toFixed(2)} {inv.unit}
+                          {/* Was "+20.00 kg": punt-decimaal in een Nederlandse app. */}
+                          {isPositive ? '+' : '−'}{formatNumber(Math.abs(m.qty), 2)} {inv.unit}
                         </span>
                       </span>
                       <span style={{ color: 'var(--muted)', fontSize: 11 }}>{fmtDateTime(m.created_at)}</span>

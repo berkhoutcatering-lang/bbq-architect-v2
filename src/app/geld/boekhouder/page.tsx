@@ -262,6 +262,14 @@ export default function BoekhouderPage() {
 
       {/* KPI strip */}
       {counts && (
+        <>
+        {/* Deze tellingen staan onder het periodefilter hierboven, maar dat
+            stond er niet bij: /geld/boekhouder meldde 1 bon te classificeren
+            terwijl /archief en het dashboard er 21 telden. Beide klopten —
+            over een andere periode. */}
+        <div style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px' }}>
+          Tellingen over {rangeMode === 'last3' ? 'de laatste drie maanden' : `de maand ${month}`}.
+        </div>
         <div className="bh-kpi-strip">
           <KpiTile label="Totaal" value={counts.total} tone="neutral" />
           <KpiTile label="Nog te classificeren" value={counts.pending} tone={counts.pending > 0 ? 'warn' : 'ok'} icon={Sparkles} />
@@ -270,6 +278,7 @@ export default function BoekhouderPage() {
           <KpiTile label="Twijfel" value={counts.twijfel} tone={counts.twijfel > 0 ? 'warn' : 'ok'} icon={AlertCircle} />
           <KpiTile label="Vergrendeld" value={counts.locked} tone="neutral" icon={ShieldCheck} />
         </div>
+        </>
       )}
 
       {/* Tabs */}
