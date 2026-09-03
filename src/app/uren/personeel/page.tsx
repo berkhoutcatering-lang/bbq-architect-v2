@@ -12,6 +12,8 @@ import { usePersoneel } from '@/lib/usePersoneel';
 import PersoneelDrawer from '@/components/uren/PersoneelDrawer';
 import type { Personeel } from '@/types';
 
+import { formatEur } from '@/lib/format';
+
 type Mode = 'closed' | 'new' | 'edit';
 type Filter = 'alle' | 'actief' | 'inactief';
 
@@ -205,7 +207,7 @@ export default function PersoneelPage() {
                         </td>
                         <td style={{ color: 'var(--muted)' }}>{p.functie}</td>
                         <td style={{ color: 'var(--muted)', textTransform: 'capitalize' }}>{p.contract_type}</td>
-                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>€ {p.uurtarief.toFixed(2)}</td>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatEur(p.uurtarief)}</td>
                         <td style={{ color: 'var(--muted)', fontSize: 12 }}>{p.email || '—'}</td>
                         <td style={{ textAlign: 'center' }}>
                           <span style={{

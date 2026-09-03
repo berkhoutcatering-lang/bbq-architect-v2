@@ -1,3 +1,4 @@
+import { formatEur } from '@/lib/format';
 /* ═══════════════════════════════════════════════════════════════════
    PRICE-INTELLIGENCE — pure helpers.
 
@@ -12,7 +13,7 @@
 export function fmt2(n: number | string | null | undefined) {
     if (n === null || n === undefined || n === '') return '€ 0,00';
     const v = parseFloat(String(n));
-    return isNaN(v) ? '€ 0,00' : '€ ' + v.toFixed(2).replace('.', ',');
+    return isNaN(v) ? '€ 0,00' : formatEur(v);
 }
 
 /* ─── Naam-normalisatie ──────────────────────────────────────── */

@@ -8,7 +8,7 @@ import HBarList from '@/components/charts/HBarList';
 import type { RevenueMixSlice } from '@/lib/today/revenue-mix';
 import type { RevenueMonthBucket } from '@/lib/today/revenue-buckets';
 import type { SupplierSpendRow } from '@/lib/today/supplier-spend';
-import { formatEurInt } from '@/lib/format';
+import { formatEurInt, formatPercent } from '@/lib/format';
 
 interface Props {
   revenueMix: RevenueMixSlice[];
@@ -145,7 +145,7 @@ export default function BusinessCharts({
                 fontWeight: 600,
               }}
             >
-              {monthGrowth > 0 ? '▲' : '▼'} {Math.abs(monthGrowth).toFixed(0)}%
+              {monthGrowth > 0 ? '▲' : '▼'} {formatPercent(Math.abs(monthGrowth), 0)}
             </span>{' '}
             vs vorige maand
           </span>

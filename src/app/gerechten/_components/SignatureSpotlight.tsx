@@ -2,6 +2,8 @@
 
 import { Star } from 'lucide-react';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
   name: string;
   tagline?: string;
@@ -94,7 +96,7 @@ export default function SignatureSpotlight({
           }}
           className="signature-stats"
         >
-          <Stat label="Verkoop" value={verkoop !== undefined ? `€${verkoop.toFixed(2)}` : '—'} />
+          <Stat label="Verkoop" value={verkoop !== undefined ? `${formatEur(verkoop)}` : '—'} />
           <Stat
             label="Marge"
             value={margePct !== undefined ? `${Math.round(margePct)}%` : '—'}

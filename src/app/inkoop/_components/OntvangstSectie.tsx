@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import { receiveOrderAction } from '../actions';
 
+import { formatEur } from '@/lib/format';
+
 export interface SentOrderLine {
     id: string;
     inventory_id: number | null;
@@ -98,7 +100,7 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
                                     {o.sent_at ? `verstuurd ${fmtDate(o.sent_at)} · ` : ''}
                                     {o.lines.length} regel{o.lines.length === 1 ? '' : 's'}
                                     {open < o.lines.length ? ` · ${o.lines.length - open} al geboekt` : ''}
-                                    {o.total_eur != null ? ` · € ${o.total_eur.toFixed(2).replace('.', ',')}` : ''}
+                                    {o.total_eur != null ? ` · ${formatEur(o.total_eur)}` : ''}
                                 </div>
                             </div>
                             <button

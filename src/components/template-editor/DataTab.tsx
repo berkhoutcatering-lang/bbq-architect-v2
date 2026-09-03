@@ -2,6 +2,8 @@
 
 import { buildPreviewContext } from '@/lib/templateContext';
 
+import { formatEur } from '@/lib/format';
+
 const numberStyle: React.CSSProperties = {
   fontVariantNumeric: 'tabular-nums',
 };
@@ -108,7 +110,7 @@ export default function DataTab({ documentType, previewData, onUpdatePreviewData
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{item.omschrijving}</td>
                       <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'center', ...numberStyle }}>{item.qty}</td>
-                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'right', ...numberStyle }}>{'€ ' + item.prijs.toFixed(2)}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'right', ...numberStyle }}>{formatEur(item.prijs)}</td>
                       <td style={{ padding: '6px 8px', color: 'var(--text)', textAlign: 'center', ...numberStyle }}>{item.btw}%</td>
                     </tr>
                   );

@@ -28,6 +28,8 @@ import {
 import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
 import { InkoopOrderPdf, determineBtwPct } from '@/lib/pdf/InkoopOrderPdf';
 
+import { formatEur } from '@/lib/format';
+
 // ── Auth helper ───────────────────────────────────────────────────────
 async function getAuthContext() {
     const sb = await createServerSupabase();
@@ -458,7 +460,7 @@ function buildEmailHtml(p: {
   <p style="margin:4px 0 0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Bestelling ${escH(p.ordernummer)}</p>
 </div>
 <p>Beste ${escH(p.leverancierNaam)},</p>
-<p>In de bijlage vindt u de bestelling voor de komende events. Totaalbedrag incl. BTW: <strong>€ ${p.totaal.toFixed(2).replace('.', ',')}</strong>.</p>
+<p>In de bijlage vindt u de bestelling voor de komende events. Totaalbedrag incl. BTW: <strong>${formatEur(p.totaal)}</strong>.</p>
 ${p.notitie ? `<div style="background:#fafafa;border-left:3px solid ${p.brandColor};padding:12px 16px;margin:18px 0;font-size:13px;color:#333;">${escH(p.notitie)}</div>` : ''}
 <p>Mocht een item niet leverbaar zijn, neem dan even contact op zodat we kunnen aanpassen.</p>
 <p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${escH(p.bedrijfsnaam)}</strong></p>

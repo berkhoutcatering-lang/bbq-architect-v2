@@ -16,7 +16,7 @@ import { useState, useTransition } from 'react';
 import { Drawer } from 'vaul';
 import { Sparkles, ChevronRight, Zap, X, AlertCircle } from 'lucide-react';
 import { suggestSubstitutions, type SuggestionResult } from '@/app/price-intelligence/_actions';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatPercent } from '@/lib/format';
 
 interface Props {
     open: boolean;
@@ -104,7 +104,7 @@ export default function SubstitutionDrawer({
                                 {currentSupplier && (
                                     <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
                                         Nu: {currentSupplier}
-                                        {currentPrice !== null && ` — € ${currentPrice.toFixed(2)} / kg`}
+                                        {currentPrice !== null && ` — ${formatEur(currentPrice)} / kg`}
                                     </div>
                                 )}
                             </div>
@@ -321,7 +321,7 @@ function SuggestionRow({
                     {s.leverancier && (
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
                             via {s.leverancier}
-                            {s.prijs_per_kg !== null && ` — € ${Number(s.prijs_per_kg).toFixed(2)} / kg`}
+                            {s.prijs_per_kg !== null && ` — ${formatEur(Number(s.prijs_per_kg))} / kg`}
                         </div>
                     )}
                     {(s.cut_groep || s.soort) && (
@@ -352,7 +352,7 @@ function SuggestionRow({
                     )}
                     {savingsEur !== null && savingsEur > 0 && (
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                            € {savingsEur.toFixed(2)} / kg
+                            {formatEur(savingsEur)} / kg
                         </div>
                     )}
                 </div>

@@ -19,6 +19,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+import { formatEur } from '@/lib/format';
+
 export type Tier = 'starter' | 'pro' | 'enterprise';
 
 interface TierCap {
@@ -169,7 +171,7 @@ export async function checkAiCap(orgId: string, estimatedCallEur: number = 0.02)
       soft_eur: caps.soft_eur,
       hard_eur: caps.hard_eur,
       projected_eur: projected,
-      message: `AI-budget voor deze maand is op. Je ${tier}-abonnement heeft hard-cap €${caps.hard_eur.toFixed(2)} bereikt (gebruikt: €${used.toFixed(2)}). AI-features pauzeren tot maand-eind of upgrade je abonnement.`,
+      message: `AI-budget voor deze maand is op. Je ${tier}-abonnement heeft hard-cap ${formatEur(caps.hard_eur)} bereikt (gebruikt: ${formatEur(used)}). AI-features pauzeren tot maand-eind of upgrade je abonnement.`,
     };
   }
 
@@ -181,7 +183,7 @@ export async function checkAiCap(orgId: string, estimatedCallEur: number = 0.02)
       soft_eur: caps.soft_eur,
       hard_eur: caps.hard_eur,
       projected_eur: projected,
-      message: `AI-budget bijna op. Je ${tier}-abonnement is op €${used.toFixed(2)} van €${caps.soft_eur.toFixed(2)} soft-cap; bij €${caps.hard_eur.toFixed(2)} schakelen AI-features uit tot maand-eind.`,
+      message: `AI-budget bijna op. Je ${tier}-abonnement is op ${formatEur(used)} van ${formatEur(caps.soft_eur)} soft-cap; bij ${formatEur(caps.hard_eur)} schakelen AI-features uit tot maand-eind.`,
     };
   }
 

@@ -6,6 +6,8 @@ import { Settings, Users } from 'lucide-react';
 import type { DbEvent, Personeel, TimeLog } from '@/types';
 import { fmtTimer, shiftDurationMs } from '@/lib/uren-format';
 
+import { formatEurInt } from '@/lib/format';
+
 interface Props {
   personeel: Personeel[];
   activeLogsByPersoneelId: Record<string, TimeLog | undefined>;
@@ -121,7 +123,7 @@ export default function CrewBlock({ personeel, activeLogsByPersoneelId, events, 
                   {active ? fmtTimer(elapsed) : '—'}
                 </div>
                 <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 50, textAlign: 'right' }}>
-                  €{p.uurtarief.toFixed(0)}/u
+                  {formatEurInt(p.uurtarief)}/u
                 </span>
                 <button
                   onClick={function () { handleToggle(p); }}

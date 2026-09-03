@@ -214,7 +214,7 @@ export function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>
-                            {d.margePct.toFixed(0)}% marge
+                            {formatPercent(d.margePct, 0)} marge
                           </div>
                           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
                             {d.popularity}x {'\u00b7'} {'\u20ac'}{d.foodcostPP.toFixed(2)}/pp

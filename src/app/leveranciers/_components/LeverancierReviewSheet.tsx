@@ -13,7 +13,7 @@ import {
     X, Check, Loader2, TrendingUp, TrendingDown, Search, Sparkles,
 } from 'lucide-react';
 import CutChip, { cutFromNotes, type CutInfo } from '@/components/voorraad/CutChip';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatPercent } from '@/lib/format';
 
 const GOLD = '#c4a35a';
 const PAGE_SIZE = 100;
@@ -503,7 +503,7 @@ function MutationRowItem({
 
     function fmtPrice(p: number | null | undefined): string {
         if (p == null) return '—';
-        return '€' + Number(p).toFixed(2);
+        return formatEur(Number(p));
     }
 
     return (

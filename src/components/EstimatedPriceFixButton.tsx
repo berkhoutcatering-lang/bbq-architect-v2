@@ -14,6 +14,8 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Camera, Upload, X, Loader2, Check, AlertTriangle, Package } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 
+import { formatEur } from '@/lib/format';
+
 const GOLD = '#c4a35a';
 
 interface ExtractedPrice {
@@ -133,7 +135,7 @@ export default function EstimatedPriceFixButton({
       supplier: extracted.supplier,
       addToInventory,
     });
-    showToast(`Prijs bijgewerkt: €${extracted.prijs.toFixed(2)}${addToInventory ? ' + toegevoegd aan voorraad' : ''}`, 'success');
+    showToast(`Prijs bijgewerkt: ${formatEur(extracted.prijs)}${addToInventory ? ' + toegevoegd aan voorraad' : ''}`, 'success');
     closeModal();
   }
 
@@ -201,7 +203,7 @@ export default function EstimatedPriceFixButton({
             </h2>
             <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 16px' }}>
               {estimatedPrice != null
-                ? `Geschat op €${estimatedPrice.toFixed(2)} — sleep een screenshot of foto erin voor de echte prijs.`
+                ? `Geschat op ${formatEur(estimatedPrice)} — sleep een screenshot of foto erin voor de echte prijs.`
                 : 'Sleep een screenshot van Sligro/Makro of foto van bon erin.'}
             </p>
 
@@ -285,7 +287,7 @@ export default function EstimatedPriceFixButton({
                   <span style={{ fontWeight: 600, color: 'var(--text)' }}>{extracted.naam || '—'}</span>
                   <span style={{ color: 'var(--muted)' }}>Prijs:</span>
                   <span style={{ fontWeight: 700, color: 'var(--text)' }}>
-                    €{extracted.prijs.toFixed(2)}{extracted.unit ? ` / ${extracted.unit}` : ''}
+                    {formatEur(extracted.prijs)}{extracted.unit ? ` / ${extracted.unit}` : ''}
                   </span>
                   {extracted.supplier && (
                     <>
@@ -297,7 +299,7 @@ export default function EstimatedPriceFixButton({
                     <>
                       <span style={{ color: 'var(--muted)' }}>Was geschat:</span>
                       <span style={{ color: 'var(--muted)', textDecoration: 'line-through' }}>
-                        €{estimatedPrice.toFixed(2)}
+                        {formatEur(estimatedPrice)}
                       </span>
                     </>
                   )}

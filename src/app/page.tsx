@@ -53,7 +53,7 @@ import {
 } from '@/lib/today/kpi-trends';
 import { computeTimelineItems } from '@/lib/today/timeline-items';
 import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rules';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatPercent } from '@/lib/format';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -1085,7 +1085,7 @@ function EventDetailDrawer({ event, onClose }: { event: DbEvent; onClose: () => 
               {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(revenue)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-              {event.guests || 0} gasten × €{(event.ppp || 0).toFixed(2)} per persoon
+              {event.guests || 0} gasten × {formatEur((event.ppp || 0))} per persoon
             </div>
           </div>
           {event.client_naam ? <DrawerStat label="Klant" value={event.client_naam} /> : null}

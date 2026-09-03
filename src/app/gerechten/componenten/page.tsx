@@ -37,6 +37,8 @@ import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
 import { packToBase, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, PACK_UNITS, type PackUnit, type BaseFields, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
+import { formatEur } from '@/lib/format';
+
 import {
     ingredientRowCostCents,
     resolvePricingFromSupplierPrice,
@@ -2302,7 +2304,7 @@ function SupplierImportDrawer({
                                         <button type="button" onClick={() => toggleAll(false)} className="kf-add" style={{ padding: '3px 9px' }}>Alles uit</button>
                                     </div>
                                 </div>
-                                <div className="kf-help" style={{ marginTop: 6 }}>Selectie: {keepCount} × · Totale prijs: €{(totalCents / 100).toFixed(2)}</div>
+                                <div className="kf-help" style={{ marginTop: 6 }}>Selectie: {keepCount} × · Totale prijs: {formatEur((totalCents / 100))}</div>
                             </div>
 
                             <div style={{ maxHeight: '46vh', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg,12px)' }}>
@@ -2322,7 +2324,7 @@ function SupplierImportDrawer({
                                                 <td className="mr-table-td"><input type="checkbox" checked={keepFlags[i]} onChange={() => toggleKeep(i)} /></td>
                                                 <td className="mr-table-td">{p.name}</td>
                                                 <td className="mr-table-td" style={{ color: 'var(--muted)' }}>{p.supplier_sku ?? '—'}</td>
-                                                <td className="mr-table-td" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>€{(p.price_cents / 100).toFixed(2)}</td>
+                                                <td className="mr-table-td" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatEur((p.price_cents / 100))}</td>
                                                 <td className="mr-table-td" style={{ color: 'var(--muted)' }}>
                                                     {p.unit}{p.package_size ? ` (${p.package_size} ${p.package_unit ?? ''})` : ''}
                                                 </td>

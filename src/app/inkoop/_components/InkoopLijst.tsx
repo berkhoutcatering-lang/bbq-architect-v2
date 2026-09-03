@@ -49,6 +49,8 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
 import InkoopEmpty from './InkoopEmpty';
 import MissingSupplierBanner from './MissingSupplierBanner';
+import { formatEur } from '@/lib/format';
+
 import {
     updateOverrideAction,
     sendOrderToSupplierAction,
@@ -1173,9 +1175,9 @@ function fmtEur(n: number): string {
     return (Number(n) || 0).toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' });
 }
 function sugPerUnit(s: { per_kg: number | null; per_liter: number | null; per_piece: number | null }): string {
-    if (s.per_kg != null) return `€${Number(s.per_kg).toFixed(2).replace('.', ',')}/kg`;
-    if (s.per_liter != null) return `€${Number(s.per_liter).toFixed(2).replace('.', ',')}/l`;
-    if (s.per_piece != null) return `€${Number(s.per_piece).toFixed(2).replace('.', ',')}/st`;
+    if (s.per_kg != null) return `${formatEur(Number(s.per_kg))}/kg`;
+    if (s.per_liter != null) return `${formatEur(Number(s.per_liter))}/l`;
+    if (s.per_piece != null) return `${formatEur(Number(s.per_piece))}/st`;
     return '—';
 }
 function fmtQty(n: number, unit: string): string {

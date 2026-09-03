@@ -13,7 +13,7 @@ import { X, RefreshCw, Loader2, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { MenuMargins } from '@/lib/dal/menuTemplates';
 import { getMenuMarginsAction, refreshRecipePricesAction, setDoelMargeAction } from '@/app/menu-templates/actions';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatPercent } from '@/lib/format';
 import '@/components/redesign/redesign.css';
 
 export default function MargeDrawer({ templateId, onClose }: { templateId: number; onClose: () => void }) {
@@ -97,11 +97,11 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                                 <div style={{ minWidth: 0 }}>
                                     <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--muted)' }}>Menu-marge</div>
                                     <div style={{ fontSize: 28, fontWeight: 700, color: menuColor }}>
-                                        {!margins.hasMenuPrice || margins.menuMargePct == null ? '—' : `${margins.menuMargePct.toFixed(0)}%`}
+                                        {!margins.hasMenuPrice || margins.menuMargePct == null ? '—' : `${formatPercent(margins.menuMargePct, 0)}`}
                                     </div>
                                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                                         {margins.hasMenuPrice
-                                            ? `€${margins.foodcostPP.toFixed(2)} kostprijs op €${margins.menuPricePP.toFixed(2)} p.p.${margins.foodcostPct != null ? ` · food cost ${margins.foodcostPct.toFixed(0)}%` : ''}`
+                                            ? `${formatEur(margins.foodcostPP)} kostprijs op ${formatEur(margins.menuPricePP)} p.p.${margins.foodcostPct != null ? ` · food cost ${formatPercent(margins.foodcostPct, 0)}` : ''}`
                                             : 'Stel een menu-prijs (basisprijs p.p.) in om de menu-marge te zien.'}
                                     </div>
                                     {margins.hasMenuPrice && (
@@ -154,7 +154,7 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                         {menuBelow && !dekkingIncompleet && (
                             <div className="kf-banner kf-banner-warn" style={{ marginBottom: 10 }}>
                                 <AlertTriangle size={14} />
-                                <span>Menu-marge <strong>{margins.menuMargePct?.toFixed(0)}%</strong> ligt onder je doel van {margins.target}%.</span>
+                                <span>Menu-marge <strong>{formatPercent(margins.menuMargePct, 0)}</strong> ligt onder je doel van {margins.target}%.</span>
                             </div>
                         )}
                         {!menuBelow && !dekkingIncompleet && outliers.length > 0 && (
@@ -177,12 +177,12 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
                                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.naam}</div>
                                         <div style={{ fontSize: 11, color: d.heeftKostprijs ? 'var(--muted)' : 'var(--amber, #f59e0b)' }}>
                                             {d.heeftKostprijs
-                                                ? `kost €${d.kostPP.toFixed(2)}${d.costSharePct != null ? ` · ${d.costSharePct.toFixed(0)}% van menu` : ''}`
+                                                ? `kost ${formatEur(d.kostPP)}${d.costSharePct != null ? ` · ${formatPercent(d.costSharePct, 0)} van menu` : ''}`
                                                 : 'nog geen kostprijs — koppel componenten aan dit gerecht'}
                                         </div>
                                     </div>
                                     <div style={{ fontSize: 13, fontWeight: 700, flexShrink: 0, color: !d.heeftKostprijs ? 'var(--amber, #f59e0b)' : d.costOutlier ? 'var(--amber, #f59e0b)' : 'var(--muted)' }}>
-                                        {!d.heeftKostprijs ? '—' : d.costOutlier ? 'zwaar' : (d.costSharePct != null ? `${d.costSharePct.toFixed(0)}%` : `€${d.kostPP.toFixed(2)}`)}
+                                        {!d.heeftKostprijs ? '—' : d.costOutlier ? 'zwaar' : (d.costSharePct != null ? `${formatPercent(d.costSharePct, 0)}` : `${formatEur(d.kostPP)}`)}
                                     </div>
                                 </div>
                             ))}

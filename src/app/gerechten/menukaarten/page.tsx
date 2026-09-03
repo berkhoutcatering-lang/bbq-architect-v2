@@ -11,6 +11,8 @@ import Link from 'next/link';
 import { Plus, BookOpen, Star, Pencil } from 'lucide-react';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { listMenuTemplatesShallow } from '@/lib/dal/menuTemplates';
+import { formatEur } from '@/lib/format';
+
 /* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered —
    niet opnieuw mounten hier (gaf dubbele tablist). */
 
@@ -130,12 +132,12 @@ export default async function MenukaartenListPage() {
                                         </div>
                                     )}
                                     <div className="menukaarten-list__meta-mobile" style={{ display: 'none', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                                        {t.item_count} gerechten · € {t.basis_prijs_pp.toFixed(2)} p.p. · {t.aantal_gasten} gasten
+                                        {t.item_count} gerechten · {formatEur(t.basis_prijs_pp)} p.p. · {t.aantal_gasten} gasten
                                         {t.is_default && <> · <span style={{ color: 'var(--brand, #c4a35a)', fontWeight: 600 }}>★ Default</span></>}
                                     </div>
                                 </div>
                                 <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.item_count}</div>
-                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>€ {t.basis_prijs_pp.toFixed(2)}</div>
+                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{formatEur(t.basis_prijs_pp)}</div>
                                 <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.aantal_gasten}</div>
                                 <div className="menukaarten-list__col">
                                     {t.is_default && (

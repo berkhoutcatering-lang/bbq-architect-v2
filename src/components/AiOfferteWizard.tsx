@@ -8,6 +8,8 @@ import CarbonScoreCard from '@/components/CarbonScoreCard';
 import AiBadge from '@/components/ai/AiBadge';
 import { track } from '@/lib/track';
 
+import { formatEur, formatPercent } from '@/lib/format';
+
 /* localStorage key voor draft-autosave. TTL: 7 dagen — daarna stale draft
    weggooien zodat een vergeten concept niet eeuwig blijft hangen. */
 const DRAFT_KEY = 'bbq_ai_offerte_wizard_draft';
@@ -437,8 +439,8 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                                 <Stat icon={Users} label="Gasten" value={`${gasten}`} />
                                 <Stat icon={Calendar} label="Datum" value={eventDate} />
-                                <Stat icon={Euro} label="Kost/p" value={generated.totale_kostprijs_pp ? `€${Number(generated.totale_kostprijs_pp).toFixed(2)}` : '—'} />
-                                <Stat icon={Euro} label="Advies/p" value={generated.adviesprijs_pp ? `€${Number(generated.adviesprijs_pp).toFixed(2)}` : '—'} highlight />
+                                <Stat icon={Euro} label="Kost/p" value={generated.totale_kostprijs_pp ? `${formatEur(Number(generated.totale_kostprijs_pp))}` : '—'} />
+                                <Stat icon={Euro} label="Advies/p" value={generated.adviesprijs_pp ? `${formatEur(Number(generated.adviesprijs_pp))}` : '—'} highlight />
                             </div>
 
                             {(() => {
@@ -456,7 +458,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                             <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', letterSpacing: '.15em' }}>Prijs per persoon</div>
                                             {kost > 0 && (
                                                 <div style={{ fontSize: 11, fontWeight: 700, color: margeColor, fontVariantNumeric: 'tabular-nums' }}>
-                                                    Marge {margePct.toFixed(0)}% (€{margePp.toFixed(2)}/p)
+                                                    Marge {formatPercent(margePct, 0)} ({formatEur(margePp)}/p)
                                                 </div>
                                             )}
                                         </div>
@@ -483,15 +485,15 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                             <div>
                                                 <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted, #999)', textTransform: 'uppercase', letterSpacing: '.15em' }}>Totaal offerte</div>
                                                 <div style={{ fontSize: 24, fontFamily: 'Outfit, sans-serif', fontWeight: 500, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>
-                                                    €{(huidig * gasten).toFixed(2)}
+                                                    {formatEur((huidig * gasten))}
                                                 </div>
                                             </div>
                                             <div style={{ fontSize: 11, color: 'var(--muted, #999)', textAlign: 'right' }}>
-                                                {gasten} gasten × €{huidig.toFixed(2)}
+                                                {gasten} gasten × {formatEur(huidig)}
                                                 {aangepast && (
                                                     <button type="button" onClick={() => setPrijsPp(aiSuggest)}
                                                         style={{ display: 'block', marginLeft: 'auto', marginTop: 4, padding: '2px 6px', borderRadius: 4, border: 'none', background: 'transparent', color: GOLD, fontSize: 10, cursor: 'pointer', textDecoration: 'underline' }}>
-                                                        ↺ AI-advies (€{aiSuggest.toFixed(2)})
+                                                        ↺ AI-advies ({formatEur(aiSuggest)})
                                                     </button>
                                                 )}
                                             </div>
@@ -568,7 +570,7 @@ export default function AiOfferteWizard({ open, onClose, onSaved }: Props) {
                                                     )}
                                                 </div>
                                                 {g.geschatte_kostprijs_pp && (
-                                                    <span style={{ fontSize: 11, color: GOLD, fontVariantNumeric: 'tabular-nums', fontWeight: 700, whiteSpace: 'nowrap' }}>€{Number(g.geschatte_kostprijs_pp).toFixed(2)}/p</span>
+                                                    <span style={{ fontSize: 11, color: GOLD, fontVariantNumeric: 'tabular-nums', fontWeight: 700, whiteSpace: 'nowrap' }}>{formatEur(Number(g.geschatte_kostprijs_pp))}/p</span>
                                                 )}
                                             </div>
                                         );

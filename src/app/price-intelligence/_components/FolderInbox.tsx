@@ -23,7 +23,7 @@ import {
     ShieldAlert,
 } from 'lucide-react';
 import { MailFilterButton } from './MailFilterSheet';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatPercent } from '@/lib/format';
 
 const GOLD = '#c4a35a';
 
@@ -107,11 +107,11 @@ type InboxWithStats = InboxRow & {
 
 function fmtEuro(c: number | null | undefined): string {
     if (c == null) return '—';
-    return '€' + (c / 100).toFixed(2);
+    return formatEur((c / 100));
 }
 function fmtPrice(p: number | null | undefined): string {
     if (p == null) return '—';
-    return '€' + Number(p).toFixed(2);
+    return formatEur(Number(p));
 }
 function fmtRelative(iso: string): string {
     const d = new Date(iso);

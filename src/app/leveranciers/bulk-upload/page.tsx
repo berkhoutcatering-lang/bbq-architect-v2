@@ -11,6 +11,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
+import { formatEur } from '@/lib/format';
+
 import {
     Upload, FileText, Loader2, CheckCircle2, AlertTriangle, ArrowRight, X, FileCheck2, RefreshCw,
 } from 'lucide-react';
@@ -305,7 +307,7 @@ export default function BulkUploadPage() {
                         }}>
                             <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                                 <strong style={{ color: 'var(--text)' }}>{queue.length}</strong> PDFs ·
-                                geschat <strong style={{ color: 'var(--text)' }}>€{(totalEstimateCents / 100).toFixed(2)}</strong>
+                                geschat <strong style={{ color: 'var(--text)' }}>{formatEur((totalEstimateCents / 100))}</strong>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 {queue.some(q => q.status === 'parsing') && (

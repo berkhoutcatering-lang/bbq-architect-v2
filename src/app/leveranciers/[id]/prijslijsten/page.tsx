@@ -10,6 +10,8 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
+import { formatEur } from '@/lib/format';
+
 import {
     Upload, FileText, Loader2, CheckCircle2, AlertTriangle, X, FileCheck2, RefreshCw, ArrowRight, Ban, Trash2,
 } from 'lucide-react';
@@ -484,7 +486,7 @@ function UploadRowItem({
                             </>
                         )}
                         {u.ai_cost_cents != null && u.ai_cost_cents > 0 && (
-                            <><span>·</span><span>€{(u.ai_cost_cents / 100).toFixed(2)}</span></>
+                            <><span>·</span><span>{formatEur((u.ai_cost_cents / 100))}</span></>
                         )}
                         {u.status === 'failed' && u.parse_error && (
                             <><span>·</span><span style={{ color: '#e57373' }}>{u.parse_error.slice(0, 80)}</span></>

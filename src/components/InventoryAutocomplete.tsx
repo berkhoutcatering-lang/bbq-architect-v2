@@ -21,6 +21,8 @@ import React, {
 } from 'react';
 import { Package, Search, AlertTriangle, Plus, CheckCircle2, XCircle } from 'lucide-react';
 
+import { formatEur } from '@/lib/format';
+
 export interface InventoryRow {
   id: number;
   naam: string;
@@ -279,7 +281,7 @@ export default function InventoryAutocomplete({
                     {price > 0 ? (
                       <>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-                          €{price.toFixed(2)}
+                          {formatEur(price)}
                           <span style={{ fontSize: 10, color: 'var(--muted)', marginLeft: 2 }}>/{it.unit || 'st'}</span>
                         </div>
                         <div

@@ -13,6 +13,8 @@ import {
 } from '@tanstack/react-table';
 import type { ArchiefBon, ArchiefFilters } from '../_lib/types';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
     initialBonnen: ArchiefBon[];
     initialTotaal: number;
@@ -111,7 +113,7 @@ export default function ArchiefClient({ initialBonnen, initialTotaal, leverancie
                     const v = info.getValue();
                     return (
                         <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: 'var(--text)' }}>
-                            € {Number(v ?? 0).toFixed(2)}
+                            {formatEur(Number(v ?? 0))}
                         </span>
                     );
                 },
@@ -228,7 +230,7 @@ export default function ArchiefClient({ initialBonnen, initialTotaal, leverancie
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                     <strong style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{initialBonnen.length}</strong> bonnen
-                    {' · '}totaal <strong style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>€ {initialTotaal.toFixed(2)}</strong>
+                    {' · '}totaal <strong style={{ color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{formatEur(initialTotaal)}</strong>
                 </div>
                 {activeFilterCount > 0 && (
                     <button
@@ -454,7 +456,7 @@ function PreviewModal({ bon, leverancierNaam, onClose }: { bon: ArchiefBon; leve
                 <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <KvField label="Datum" value={bon.datum ? new Date(bon.datum).toLocaleDateString('nl-NL') : '—'} />
-                        <KvField label="Totaal" value={`€ ${Number(bon.totaal_bedrag ?? 0).toFixed(2)}`} mono />
+                        <KvField label="Totaal" value={`${formatEur(Number(bon.totaal_bedrag ?? 0))}`} mono />
                         <KvField label="BTW" value={bon.btw_pct != null ? `${bon.btw_pct}%` : '—'} />
                         <KvField label="Categorie" value={bon.categorie ?? '—'} />
                         <KvField label="Status" value={bon.status ?? '—'} />

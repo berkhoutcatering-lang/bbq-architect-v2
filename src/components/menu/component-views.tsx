@@ -21,6 +21,8 @@ import {
 import { getComponentVisual } from './component-visuals';
 import { unitPriceLabel, normalizeYield, effectiveBaseCostCents } from '@/lib/unitPrice';
 
+import { formatEur } from '@/lib/format';
+
 const SOORT_ICONS: Record<string, typeof Beef> = { Beef, Fish, Leaf, Milk, Droplet, Wheat, Candy, Package, Boxes };
 
 export interface ComponentViewRow {
@@ -107,7 +109,7 @@ function MapLabel({
 }
 
 function euro(cents: number): string {
-    return `€ ${((cents || 0) / 100).toFixed(2).replace('.', ',')}`;
+    return `${formatEur(((cents || 0) / 100))}`;
 }
 
 /* ── Het beeldvlak ─────────────────────────────────────────────

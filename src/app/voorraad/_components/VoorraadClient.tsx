@@ -965,7 +965,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                         {hov ? <>
                             <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>{hov.name}</div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, color: hov.color, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt(hov.value)}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{(hov.pct * 100).toFixed(1)}% · {hov.count} items</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{formatPercent((hov.pct * 100))} · {hov.count} items</div>
                         </> : <>
                             <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>Totaal</div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</div>
@@ -993,7 +993,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                                 </div>
                             </div>
                             <div style={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(s.value)}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', minWidth: 42, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{(s.pct * 100).toFixed(1)}%</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', minWidth: 42, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatPercent((s.pct * 100))}</div>
                         </div>
                     ))}
                 </div>

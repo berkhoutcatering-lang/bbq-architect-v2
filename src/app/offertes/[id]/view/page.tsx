@@ -21,7 +21,7 @@ import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
 import { resolveBtwPct } from '@/lib/btw-rules';
-import { formatPercent } from '@/lib/format';
+import { formatEur, formatEurInt, formatPercent } from '@/lib/format';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -667,7 +667,7 @@ export default function OfferteViewPage() {
               </div>
               <div className="quote-hero-stats">
                 <div className="qhs"><div className="l">Gasten</div><div className="v">{totals.guests}</div></div>
-                <div className="qhs"><div className="l">Per hoofd</div><div className="v">{totals.guests > 0 ? '€ ' + (totals.subtotaal / totals.guests).toFixed(2).replace('.', ',') : '—'}</div></div>
+                <div className="qhs"><div className="l">Per hoofd</div><div className="v">{totals.guests > 0 ? formatEur((totals.subtotaal / totals.guests)) : '—'}</div></div>
                 <div className="qhs">
                   <div className="l">Brutomarge</div>
                   <div className={`v ${totals.margin != null ? 'gold' : ''}`} style={totals.margin == null ? { color: 'var(--muted)' } : undefined}>
@@ -811,7 +811,7 @@ export default function OfferteViewPage() {
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0', color: 'var(--muted)' }}>
                       Marge <strong style={{ color: 'var(--brand-gold)' }}>{formatPercent(m)}</strong> zit op target.
-                      {weakLine && <> Zwakste regel: <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> op {(weakLine.marge as number).toFixed(0)}%. Overweeg prijs +€{((weakLine.prijs * 0.05) || 1).toFixed(2)} of alternatieve inkoop.</>}
+                      {weakLine && <> Zwakste regel: <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> op {formatPercent((weakLine.marge as number), 0)}. Overweeg prijs +{formatEur(((weakLine.prijs * 0.05) || 1))} of alternatieve inkoop.</>}
                     </div>
                   );
                 }
@@ -821,8 +821,8 @@ export default function OfferteViewPage() {
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
                       <div style={{ marginBottom: 8, color: 'var(--muted)' }}>Marge <strong style={{ color: 'var(--amber)' }}>{formatPercent(m)}</strong> ligt onder target. Concrete hefbomen:</div>
                       <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
-                        {weakLine && <li>Zwakste regel <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> ({(weakLine.marge as number).toFixed(0)}%) — verhogen met €{Math.ceil(weakLine.prijs * 0.1)}</li>}
-                        <li>Prijs p/p +€{Math.ceil(upliftPerGuest)} over {guests} gasten = +€{(upliftPerGuest * guests).toFixed(0)}</li>
+                        {weakLine && <li>Zwakste regel <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> ({formatPercent((weakLine.marge as number), 0)}) — verhogen met €{Math.ceil(weakLine.prijs * 0.1)}</li>}
+                        <li>Prijs p/p +€{Math.ceil(upliftPerGuest)} over {guests} gasten = +{formatEurInt((upliftPerGuest * guests))}</li>
                         <li>Schrap laagste-marge regel, maak optioneel</li>
                       </ul>
                     </div>
@@ -833,7 +833,7 @@ export default function OfferteViewPage() {
                     <div style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Marge <strong>{formatPercent(m)}</strong> is kritisch laag. Prioriteer:</div>
                     <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                       <li>Controleer crew-uren — vaak de grootste kostenpost die wegvalt</li>
-                      {weakLine && weakLine.cost != null && <li><strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> verliest geld (cost €{weakLine.cost.toFixed(2)} vs prijs €{weakLine.prijs.toFixed(2)})</li>}
+                      {weakLine && weakLine.cost != null && <li><strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> verliest geld (cost {formatEur(weakLine.cost)} vs prijs {formatEur(weakLine.prijs)})</li>}
                       <li>Minimaal {Math.ceil((60 - m))}% omzetverhoging nodig voor target (60%)</li>
                     </ul>
                   </div>

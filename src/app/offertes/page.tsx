@@ -38,6 +38,8 @@ import StatusBadge from '@/components/StatusBadge';
 import StickyActionBar from '@/components/StickyActionBar';
 import type { Offerte, Factuur, Gerecht, InventoryItem, Gang, MenuTemplateRow } from '@/types';
 
+import { formatEur, formatPercent } from '@/lib/format';
+
 /* ── Offerte-bewerk UI-primitieven (nagebouwd uit Sam's design-zip) ──────────
    Lichtgewicht dropdown + BTW-picker. De rest van de kaart-layout staat inline
    in de edit-view; alleen deze twee hebben eigen open-state + outside-click. */
@@ -1104,7 +1106,7 @@ export default function Offertes() {
                                 <div className="off-marge">
                                     <div className="off-marge-track"><div className="off-marge-fill" style={{ width: (costKnown ? Math.max(0, Math.min(100, marge.margePct)) : 0) + '%', background: margeHex }} /></div>
                                     <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />{costKnown
-                                        ? `Marge ${marge.margePct.toFixed(0)}% · ${margeLabel(marge.margePct)}`
+                                        ? `Marge ${formatPercent(marge.margePct, 0)} · ${margeLabel(marge.margePct)}`
                                         : marge.gerechtenZonderKostprijs > 0 && marge.gerechtenTotaal > 0
                                             ? `Kostprijs onvolledig — ${marge.gerechtenZonderKostprijs} van ${marge.gerechtenTotaal} gerechten mist er nog een`
                                             : 'Nog geen kostprijs — kies een menu'}</span>
@@ -1207,7 +1209,7 @@ export default function Offertes() {
                                                         {t.naam}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                                                        {dishCount} gerechten · {t.basis_prijs_pp > 0 ? '€' + Number(t.basis_prijs_pp).toFixed(2) + ' p.p.' : 'Geen vaste prijs'}
+                                                        {dishCount} gerechten · {t.basis_prijs_pp > 0 ? formatEur(Number(t.basis_prijs_pp)) + ' p.p.' : 'Geen vaste prijs'}
                                                     </div>
                                                 </div>
                                             </button>
@@ -1348,7 +1350,7 @@ export default function Offertes() {
                             <div style={{ flex: 1 }}>
                                 <div style={{ fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8 }}>{o.nummer}
                                     {hasMenu && m.gasten > 0 && (margeCostKnown(m)
-                                        ? <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {m.margePct.toFixed(0)}%</span>
+                                        ? <span className={'marge-badge marge-badge-sm marge-' + margeColor(m.margePct)}>{margeEmoji(m.margePct)} {formatPercent(m.margePct, 0)}</span>
                                         : <span className="marge-badge marge-badge-sm marge-grey" title="Nog geen kostprijs bekend — voeg gerechten met kostprijs toe">· kostprijs?</span>)}
                                 </div>
                                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>{o.client_naam} — {fmtNl(o.datum)}</div>

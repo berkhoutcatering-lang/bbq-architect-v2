@@ -8,6 +8,8 @@ import type { Gerecht, Gang } from '@/types';
 import { MENU_PRICE_REF } from '@/lib/menuMargin';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 
+import { formatEur } from '@/lib/format';
+
 /* ── Gang gradients + icons (per categorie kleur + Lucide icon-naam) ───
    Bucket C: na review-iteratie waar Sam zei "Voorgerecht ↔ Dessert lijken
    op elkaar" — Dessert iets warmer/roziger getrokken. */
@@ -93,7 +95,7 @@ export function shouldShowPhoto(gerecht: { foto_url?: string | null }, mode: Pho
 /* ── Formatters ─────────────────────────────────────────────── */
 export const fmtEuro = (n: number | null | undefined): string => {
     if (n == null || isNaN(Number(n))) return '€ 0,00';
-    return '€ ' + Number(n).toFixed(2).replace('.', ',');
+    return formatEur(Number(n));
 };
 
 export const fmtPct = (n: number | null | undefined): string => {

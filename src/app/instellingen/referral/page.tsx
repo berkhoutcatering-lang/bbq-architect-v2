@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 
+import { formatEurInt } from '@/lib/format';
+
 /**
  * Referral-programma UI (playbook §L)
  *
@@ -142,7 +144,7 @@ export default function ReferralPage() {
                     <StatusBadge status={r.status} />
                   </div>
                   <div className="text-[11px] text-[var(--muted)]">
-                    Aangemaakt {new Date(r.created_at).toLocaleDateString('nl-NL')} · Tegoed €{(r.credit_amount_cents / 100).toFixed(0)}
+                    Aangemaakt {new Date(r.created_at).toLocaleDateString('nl-NL')} · Tegoed {formatEurInt((r.credit_amount_cents / 100))}
                     {r.paid_at && ` · Uitbetaald ${new Date(r.paid_at).toLocaleDateString('nl-NL')}`}
                   </div>
                 </div>

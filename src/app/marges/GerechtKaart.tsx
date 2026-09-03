@@ -3,6 +3,8 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 
+import { formatEur } from '@/lib/format';
+
 export const GANGEN = [
   { slug: 'bite', label: 'Bites', icon: '🍢', kleur: '#a78bfa' },
   { slug: 'voorgerecht', label: 'Voorgerechten', icon: '🥗', kleur: '#60a5fa' },
@@ -134,7 +136,7 @@ export default function GerechtKaart({ gerecht, onMoveToMap, geselecteerd, onVie
           <div style={{ height: 3, background: 'rgba(255,255,255,.08)', borderRadius: 2, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: (marge || 0) + '%', background: scoreColor(marge || 0), borderRadius: 2, transition: 'width .4s' }} />
           </div>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>€{Number(gerecht.kostprijs_pp).toFixed(2)} / persoon</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,.5)', marginTop: 4 }}>{formatEur(Number(gerecht.kostprijs_pp))} / persoon</div>
         </div>
       )}
 

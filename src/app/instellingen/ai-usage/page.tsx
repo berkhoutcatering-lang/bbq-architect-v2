@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { TIER_LIMITS, type Tier } from '@/lib/featureFlags';
 
+import { formatEur, formatPercent } from '@/lib/format';
+
 /**
  * /instellingen/ai-usage
  *
@@ -47,7 +49,7 @@ function monthKey(iso: string): string {
     return iso.slice(0, 7); // YYYY-MM
 }
 
-function formatEur(cents: number): string {
+function formatEurCents(cents: number): string {
     return '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -179,7 +181,7 @@ export default function AiUsagePage() {
                     {/* KPI cards */}
                     <div className="grid sm:grid-cols-4 gap-3">
                         <KpiCard icon={<Activity className="w-4 h-4" />} label="Calls deze maand" value={String(stats.callsThisMonth)} accent={GOLD} />
-                        <KpiCard icon={<Database className="w-4 h-4" />} label="Totale spend" value={formatEur(stats.totalCostCents)} accent="#22c55e" />
+                        <KpiCard icon={<Database className="w-4 h-4" />} label="Totale spend" value={formatEurCents(stats.totalCostCents)} accent="#22c55e" />
                         <KpiCard
                             icon={<Cpu className="w-4 h-4" />}
                             label="Cache-hit ratio"
@@ -217,10 +219,10 @@ export default function AiUsagePage() {
                                     })}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                                         <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} />
-                                        <YAxis stroke="var(--muted)" fontSize={11} tickFormatter={function (v: number) { return '€' + v.toFixed(2); }} />
+                                        <YAxis stroke="var(--muted)" fontSize={11} tickFormatter={function (v: number) { return formatEur(v); }} />
                                         <Tooltip
                                             contentStyle={{ background: 'var(--card)', border: '1px solid var(--card-solid)', borderRadius: 8, fontSize: 12 }}
-                                            formatter={function (v: number) { return '€ ' + Number(v).toFixed(2); }}
+                                            formatter={function (v: number) { return formatEur(Number(v)); }}
                                         />
                                         <Legend wrapperStyle={{ fontSize: 11 }} formatter={function (v: string) { return actionLabel(v); }} />
                                         {stats.actionTypes.map(function (at) {
@@ -257,7 +259,7 @@ export default function AiUsagePage() {
                                 </ResponsiveContainer>
                             </div>
                             <div className="text-center -mt-12 mb-4 text-[28px] font-extralight text-[var(--text)] font-mono">
-                                {(stats.cacheHitRatio * 100).toFixed(0)}%
+                                {formatPercent((stats.cacheHitRatio * 100), 0)}
                             </div>
                         </section>
                     )}
@@ -298,7 +300,7 @@ export default function AiUsagePage() {
                                                     <td className="py-2 pr-3 text-right text-[var(--muted)] tabular-nums">
                                                         {cacheTotal > 0 ? (cacheRatio * 100).toFixed(0) + '%' : '—'}
                                                     </td>
-                                                    <td className="py-2 pr-3 text-right text-[var(--text)] tabular-nums font-bold">{formatEur(r.cost_eur_cents)}</td>
+                                                    <td className="py-2 pr-3 text-right text-[var(--text)] tabular-nums font-bold">{formatEurCents(r.cost_eur_cents)}</td>
                                                 </tr>
                                             );
                                         })}

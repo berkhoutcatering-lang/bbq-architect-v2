@@ -12,6 +12,8 @@ import Link from 'next/link';
 import { useToast } from '@/components/Toast';
 import { ArrowLeft, Search, Package, Loader2, RefreshCw, X, ExternalLink, History, Plus, Scale } from 'lucide-react';
 
+import { formatEur } from '@/lib/format';
+
 const BRAND = 'var(--brand)';
 
 interface ProductRow {
@@ -48,12 +50,12 @@ interface PriceHistoryRow {
 }
 
 const euro = (n: number | null | undefined) =>
-    n === null || n === undefined || !Number.isFinite(n) ? '—' : `€${n.toFixed(2).replace('.', ',')}`;
+    n === null || n === undefined || !Number.isFinite(n) ? '—' : `${formatEur(n)}`;
 
 function perUnitLabel(p: ProductRow): string {
-    if (p.per_kg != null) return `€${p.per_kg.toFixed(2).replace('.', ',')} / kg`;
-    if (p.per_liter != null) return `€${p.per_liter.toFixed(2).replace('.', ',')} / liter`;
-    if (p.per_piece != null) return `€${p.per_piece.toFixed(2).replace('.', ',')} / stuk`;
+    if (p.per_kg != null) return `${formatEur(p.per_kg)} / kg`;
+    if (p.per_liter != null) return `${formatEur(p.per_liter)} / liter`;
+    if (p.per_piece != null) return `${formatEur(p.per_piece)} / stuk`;
     return '—';
 }
 function verpakking(p: ProductRow): string {
@@ -67,9 +69,9 @@ function fmtDate(iso: string | null | undefined): string {
     return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 function histPerUnit(h: PriceHistoryRow): string {
-    if (h.price_per_kg_ex_vat != null) return `€${h.price_per_kg_ex_vat.toFixed(2).replace('.', ',')}/kg`;
-    if (h.price_per_liter_ex_vat != null) return `€${h.price_per_liter_ex_vat.toFixed(2).replace('.', ',')}/l`;
-    if (h.price_per_piece_ex_vat != null) return `€${h.price_per_piece_ex_vat.toFixed(2).replace('.', ',')}/st`;
+    if (h.price_per_kg_ex_vat != null) return `${formatEur(h.price_per_kg_ex_vat)}/kg`;
+    if (h.price_per_liter_ex_vat != null) return `${formatEur(h.price_per_liter_ex_vat)}/l`;
+    if (h.price_per_piece_ex_vat != null) return `${formatEur(h.price_per_piece_ex_vat)}/st`;
     return '—';
 }
 

@@ -5,6 +5,8 @@ import { CalendarDays, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import type { Personeel, TimeLog } from '@/types';
 import { fmtDuration, monthLabelNL, shiftDurationMs } from '@/lib/uren-format';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
   month: string; // YYYY-MM
   setMonth: (m: string) => void;
@@ -144,7 +146,7 @@ export default function MonthBlock({ month, setMonth, logs, personeel }: Props) 
                   <td style={{ color: 'var(--muted)' }}>{r.personeel?.functie || '—'}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.count}</td>
                   <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtDuration(r.hours)}</td>
-                  <td style={{ textAlign: 'right', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>€{avgRate.toFixed(2)}</td>
+                  <td style={{ textAlign: 'right', color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{formatEur(avgRate)}</td>
                   <td style={{ textAlign: 'right', color: 'var(--brand-gold)', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
                     €{r.cost.toLocaleString('nl-NL', { maximumFractionDigits: 0 })}
                   </td>

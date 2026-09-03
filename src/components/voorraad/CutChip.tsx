@@ -9,6 +9,8 @@
 import React from 'react';
 import { Beef, Drumstick, Fish, Sparkles } from 'lucide-react';
 
+import { formatPercent } from '@/lib/format';
+
 export interface CutInfo {
     soort: string | null;
     cutGroep: string | null;
@@ -73,8 +75,8 @@ export default function CutChip({ cut, onClick, size = 'sm' }: CutChipProps) {
         <span
             onClick={onClick}
             title={cut.matchedAlias
-                ? `Gematcht via "${cut.matchedAlias}" (${(cut.confidence * 100).toFixed(0)}%, ${cut.source})`
-                : `${(cut.confidence * 100).toFixed(0)}% match (${cut.source})`}
+                ? `Gematcht via "${cut.matchedAlias}" (${formatPercent((cut.confidence * 100), 0)}, ${cut.source})`
+                : `${formatPercent((cut.confidence * 100), 0)} match (${cut.source})`}
             style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
                 padding: size === 'sm' ? '2px 8px' : '4px 10px',

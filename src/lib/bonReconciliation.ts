@@ -13,6 +13,8 @@
  */
 import type { BonItemRow } from '@/types';
 
+import { formatEur } from '@/lib/format';
+
 export type ReconciliationStatus =
     | 'ok'              // mismatch ≤ €0.10 — exacte match (afrondings-ruis)
     | 'minor_drift'     // mismatch ≤ €0.50 — acceptabel, BTW-afronding
@@ -103,7 +105,7 @@ export function reconcileBon(
             negative_items_count: negativeCount,
             explanation:
                 items.length > 0
-                    ? `AI kon geen totaal-bedrag lezen. Som van regels: €${sumRounded.toFixed(2)}.`
+                    ? `AI kon geen totaal-bedrag lezen. Som van regels: ${formatEur(sumRounded)}.`
                     : 'Geen items en geen totaal — controleer of dit wel een bon is.',
             btw_interpretatie_omgedraaid: false,
         };
@@ -122,14 +124,14 @@ export function reconcileBon(
             : 'Regels en totaal kloppen.';
     } else if (mismatchRounded <= TOLERANCE_DRIFT_EUR) {
         status = 'minor_drift';
-        explanation = `Klein verschil €${mismatchRounded.toFixed(2)} — waarschijnlijk BTW-afronding.`;
+        explanation = `Klein verschil ${formatEur(mismatchRounded)} — waarschijnlijk BTW-afronding.`;
     } else {
         status = 'mismatch';
         const diff = sumRounded - claimedTotal;
         if (diff > 0) {
-            explanation = `Som van regels is €${mismatchRounded.toFixed(2)} hoger dan totaal — mogelijk dubbel-getelde subtotaal-regel.`;
+            explanation = `Som van regels is ${formatEur(mismatchRounded)} hoger dan totaal — mogelijk dubbel-getelde subtotaal-regel.`;
         } else {
-            explanation = `Som van regels is €${mismatchRounded.toFixed(2)} lager dan totaal — mogelijk gemiste regel.`;
+            explanation = `Som van regels is ${formatEur(mismatchRounded)} lager dan totaal — mogelijk gemiste regel.`;
         }
     }
 

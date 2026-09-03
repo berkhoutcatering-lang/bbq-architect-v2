@@ -10,6 +10,8 @@
 import { useMemo } from 'react';
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 
+import { formatEur } from '@/lib/format';
+
 export interface SparkPoint {
     day: string;          // ISO date (YYYY-MM-DD)
     kost_cents: number;
@@ -50,7 +52,7 @@ export default function PriceTrendSparkline({ data, height = 80, accentColor }: 
                     <YAxis hide domain={['dataMin', 'dataMax']} />
                     <Tooltip
                         formatter={(value: number) => [
-                            `€ ${(value / 100).toFixed(2)}`,
+                            `${formatEur((value / 100))}`,
                             'Kostprijs',
                         ]}
                         labelFormatter={(label: string) =>
