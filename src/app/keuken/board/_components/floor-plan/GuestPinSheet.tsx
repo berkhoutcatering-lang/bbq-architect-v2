@@ -220,7 +220,7 @@ export default function GuestPinSheet({
                                 type="text"
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
-                                placeholder="bv. EpiPen in jas, naast Lars"
+                                placeholder="bv. EpiPen in jas, naast de gastvrouw"
                                 maxLength={500}
                             />
                         </label>

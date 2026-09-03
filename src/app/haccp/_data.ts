@@ -202,14 +202,14 @@ export const HACCP_AI_CHECKS: HaccpCheck[] = [
 ];
 
 export const HACCP_LOG_ENTRIES: Record<string, HaccpLogEntry> = {
-    c1:  { at: '02:05', val: '4.2°C',                status: 'ok',        by: 'Mathijs B.' },
+    c1:  { at: '02:05', val: '4.2°C',                status: 'ok',        by: 'Demo-chef' },
     c2:  { at: '08:12', val: 'THT OK · visueel OK',  status: 'ok',        by: 'Thomas K.' },
-    c3:  { at: '02:35', val: '3.1°C',                status: 'ok',        by: 'Mathijs B.' },
-    c4:  { at: '16:08', val: '96°C',                 status: 'ok',        by: 'Mathijs B.' },
+    c3:  { at: '02:35', val: '3.1°C',                status: 'ok',        by: 'Demo-chef' },
+    c4:  { at: '16:08', val: '96°C',                 status: 'ok',        by: 'Demo-chef' },
     c5:  { at: '16:42', val: '91°C',                 status: 'ok',        by: 'Thomas K.' },
     c6:  { at: '15:15', val: '78°C',                 status: 'ok',        by: 'Thomas K.' },
-    c7:  { at: '16:40', val: '79°C',                 status: 'ok',        by: 'Mathijs B.' },
-    c8:  { at: '17:05', val: '68°C',                 status: 'ok',        by: 'Mathijs B.' },
+    c7:  { at: '16:40', val: '79°C',                 status: 'ok',        by: 'Demo-chef' },
+    c8:  { at: '17:05', val: '68°C',                 status: 'ok',        by: 'Demo-chef' },
     c9:  { at: '16:50', val: '8.1°C',                status: 'afwijking', by: 'Thomas K.', anomaly: 'Koeling 8.1°C — wijkt af van jouw gemiddelde 3.4°C. Sensor check?' },
     c10: { at: '16:48', val: '5°C',                  status: 'ok',        by: 'Thomas K.' },
 };

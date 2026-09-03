@@ -216,7 +216,7 @@ export default function IntegratiesPage() {
         actions={[
           { lead: 'Klik een integratie open', text: 'om te zien hoe je hem koppelt — meestal 1 knop en een redirect terug.' },
           { lead: 'De groene puntjes', text: 'naast elke integratie laten zien of de koppeling actief en gezond is.' },
-          { lead: 'Webhooks bovenin', text: 'gebruiken developers om eigen automatiseringen te maken — Lars hoeft hier niets mee.' },
+          { lead: 'Webhooks bovenin', text: 'gebruiken developers om eigen automatiseringen te maken — voor dagelijks gebruik heb je ze niet nodig.' },
         ]}
       />
       {/* Header */}

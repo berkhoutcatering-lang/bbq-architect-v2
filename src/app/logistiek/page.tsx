@@ -277,8 +277,8 @@ function LogistiekInner() {
                         {[
                             'Offerte geaccepteerd',
                             'AI genereert voorstel',
-                            'Mathijs reviewt per sectie',
-                            'Checks live → Lars pakt af in veld',
+                            'Jij reviewt per sectie',
+                            'Checks live → je crew pakt af in het veld',
                         ].map((t, i) => (
                             <div key={i} className="flex items-center gap-2 text-[11px] py-1" style={{ color: 'var(--muted)' }}>
                                 <div className="w-4 h-4 rounded grid place-items-center text-[9px] font-bold flex-shrink-0"
