@@ -232,7 +232,8 @@ export default function Offertes() {
             return calcOfferteMarge(offerte as Record<string, unknown>, gerechtenData, inventoryData);
         } catch (e) {
             console.error('[MARGE] calcOfferteMargeData error:', e);
-            return { gasten: 0, prijsPP: 38.50, omzet: 0, foodcostPP: 0, foodcostTotaal: 0, vasteKosten: 0, nettoWinst: 0, margePct: 0 };
+            /* prijsPP 0, niet 38.50: een vangnet hoort geen prijs te verzinnen. */
+            return { gasten: 0, prijsPP: 0, omzet: 0, foodcostPP: 0, foodcostTotaal: 0, vasteKosten: 0, nettoWinst: 0, margePct: 0, gerechtenZonderKostprijs: 0, gerechtenTotaal: 0 };
         }
     }
 
@@ -249,8 +250,13 @@ export default function Offertes() {
     function margeLabel(pct: number) { return pct > 70 ? 'Sterk' : pct >= 60 ? 'Aandacht' : 'Lage marge'; }
     function margeEmoji(pct: number) { return pct > 70 ? '🟢' : pct >= 60 ? '🟡' : '🔴'; }
     /* Zonder foodcost is een marge-% betekenisloos: (omzet − 0)/omzet = 100% zou
-       ten onrechte "Sterk" tonen. Alleen oordelen als er écht een kostprijs is. */
-    function margeCostKnown(m: { foodcostTotaal?: number }) { return (m.foodcostTotaal || 0) > 0; }
+       ten onrechte "Sterk" tonen. Alleen oordelen als er écht een kostprijs is —
+       én als die compleet is. Met 1 van de 5 gerechten geprijsd is foodcost wel
+       groter dan nul, maar het oordeel ("Marge 92% · Sterk") is dan misleidend:
+       de ontbrekende gerechten tellen als € 0 mee. */
+    function margeCostKnown(m: { foodcostTotaal?: number; gerechtenZonderKostprijs?: number }) {
+        return (m.foodcostTotaal || 0) > 0 && (m.gerechtenZonderKostprijs || 0) === 0;
+    }
 
     /* Sinds 2026-06-02: OfferteMenuPicker vervangt MenuWizard. De picker geeft
        alleen de gerechten-selectie (menu_selectie + template_naam) — een menukaart
@@ -1090,14 +1096,18 @@ export default function Offertes() {
                         </div>
                         <div className="off-stats">
                             <div className="off-stat"><span className="lab">Omzet</span><span className="val">{fmt(marge.omzet)}</span><span className="note">excl. btw</span></div>
-                            <div className="off-stat"><span className="lab">Foodcost</span><span className="val">{fmt(marge.foodcostTotaal)}</span><span className="note">{!costKnown ? 'nog geen kostprijs' : Math.round(marge.foodcostTotaal / marge.omzet * 100) + '% van omzet'}</span></div>
+                            <div className="off-stat"><span className="lab">Foodcost</span><span className="val">{fmt(marge.foodcostTotaal)}</span><span className="note">{marge.omzet <= 0 ? 'nog geen omzet' : !costKnown ? `onvolledig — ${marge.gerechtenZonderKostprijs} van ${marge.gerechtenTotaal} zonder kostprijs` : Math.round(marge.foodcostTotaal / marge.omzet * 100) + '% van omzet'}</span></div>
                             <div className="off-stat"><span className="lab">Vaste kosten</span><span className="val">{fmt(marge.vasteKosten)}</span><span className="note">eenmalig</span></div>
                             <div className="off-stat off-stat-net">
                                 <span className="lab">Netto winst</span>
                                 <span className="val">{fmt(marge.nettoWinst)}</span>
                                 <div className="off-marge">
                                     <div className="off-marge-track"><div className="off-marge-fill" style={{ width: (costKnown ? Math.max(0, Math.min(100, marge.margePct)) : 0) + '%', background: margeHex }} /></div>
-                                    <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />{costKnown ? `Marge ${marge.margePct.toFixed(0)}% · ${margeLabel(marge.margePct)}` : 'Nog geen kostprijs — kies een menu'}</span>
+                                    <span className="off-marge-txt"><span className="off-marge-dot" style={{ background: margeHex }} />{costKnown
+                                        ? `Marge ${marge.margePct.toFixed(0)}% · ${margeLabel(marge.margePct)}`
+                                        : marge.gerechtenZonderKostprijs > 0 && marge.gerechtenTotaal > 0
+                                            ? `Kostprijs onvolledig — ${marge.gerechtenZonderKostprijs} van ${marge.gerechtenTotaal} gerechten mist er nog een`
+                                            : 'Nog geen kostprijs — kies een menu'}</span>
                                 </div>
                             </div>
                         </div>

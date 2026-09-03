@@ -173,6 +173,12 @@ export interface OfferteMargeData {
     vasteKosten: number;
     nettoWinst: number;
     margePct: number;
+    /** Aantal gerechten in het menu waarvan geen kostprijs bekend is. Zolang dit
+     *  boven nul staat is de foodcost onvolledig en is een marge-oordeel
+     *  ("Sterk") misleidend — de UI hoort dan te zeggen wat er mist. */
+    gerechtenZonderKostprijs: number;
+    /** Totaal aantal gerechten in het menu. */
+    gerechtenTotaal: number;
 }
 
 export function calcOfferteMarge(
@@ -181,8 +187,23 @@ export function calcOfferteMarge(
     inventory: InventoryLookup[]
 ): OfferteMargeData {
     const gasten = offerte.aantal_gasten || (offerte.items?.[0]?.qty) || 0;
-    const prijsPP = offerte.basis_prijs_pp || 38.50;
-    const omzet = gasten * prijsPP;
+
+    /* Omzet komt uit de offerteregels — dat is wat de klant daadwerkelijk
+       betaalt en wat het portaal en de factuur tonen. Eerder werd hier
+       `basis_prijs_pp` gebruikt: typte je € 42,50 in de regel, dan rekende dit
+       blok stug door met de basisprijs van de menukaart (€ 1.155 in plaats van
+       € 1.275). Er stond bovendien een hardgecodeerde terugval van € 38,50 —
+       een verzonnen prijs voor een offerte zonder basisprijs.
+       Zonder regels valt het terug op gasten × basisprijs; ontbreekt die ook,
+       dan is de omzet 0 en oordeelt de UI niet. */
+    const rawItems = Array.isArray(offerte.items) ? offerte.items : [];
+    const regelOmzet = rawItems.reduce(
+        (s: number, it: any) => s + (parseFloat(it.qty) || 0) * (parseFloat(it.prijs) || 0),
+        0,
+    );
+    const basisPP = Number(offerte.basis_prijs_pp) || 0;
+    const omzet = regelOmzet > 0 ? regelOmzet : gasten * basisPP;
+    const prijsPP = gasten > 0 ? omzet / gasten : basisPP;
 
     // menu_selectie kan drie vormen hebben:
     //  - legacy array van objects: [{gerecht_naam}, ...]
@@ -193,11 +214,17 @@ export function calcOfferteMarge(
         ? ms
         : (ms && typeof ms === 'object' ? Object.values(ms).flat() : []);
     let foodcostPP = 0;
+    let gerechtenTotaal = 0;
+    let gerechtenZonderKostprijs = 0;
     menuGerechten.forEach((sel: any) => {
         const naam = typeof sel === 'string'
             ? sel
             : (sel && (sel.gerecht_naam || sel.naam)) || '';
-        if (naam) foodcostPP += calcDishCostPP(gerechten, inventory, naam);
+        if (!naam) return;
+        gerechtenTotaal += 1;
+        const kost = calcDishCostPP(gerechten, inventory, naam);
+        if (kost <= 0) gerechtenZonderKostprijs += 1;
+        foodcostPP += kost;
     });
     const foodcostTotaal = foodcostPP * gasten;
 
@@ -207,5 +234,5 @@ export function calcOfferteMarge(
     const nettoWinst = omzet - foodcostTotaal - vasteKosten;
     const margePct = omzet > 0 ? (nettoWinst / omzet) * 100 : 0;
 
-    return { gasten, prijsPP, omzet, foodcostPP, foodcostTotaal, vasteKosten, nettoWinst, margePct };
+    return { gasten, prijsPP, omzet, foodcostPP, foodcostTotaal, vasteKosten, nettoWinst, margePct, gerechtenZonderKostprijs, gerechtenTotaal };
 }
