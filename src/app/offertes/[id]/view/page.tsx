@@ -21,6 +21,7 @@ import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { formatPercent } from '@/lib/format';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -146,7 +147,7 @@ function InteractiveMarginDoctor({ value, total, totalCost }: { value: number; t
         marginBottom: 14,
       }}>
         {delta >= 0
-          ? <>✓ <strong style={{ color: 'var(--green)' }}>{delta.toFixed(1)}%</strong> boven target. Ruimte van <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> voor korting of extra upsell.</>
+          ? <>✓ <strong style={{ color: 'var(--green)' }}>{formatPercent(delta)}</strong> boven target. Ruimte van <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> voor korting of extra upsell.</>
           : <>Om target te halen: verhoog omzet met <strong style={{ color: 'var(--brand-gold)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> of verlaag inkoop met <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded) * (1 - target / 100))}</strong>.</>}
       </div>
       <div className="mdoc-split">
@@ -242,7 +243,7 @@ function MarginScenarioSimulator({ total, totalCost, target }: { total: number; 
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 300, fontSize: 24, color: toneColor }}>
-              {newMargin.toFixed(1)}%
+              {formatPercent(newMargin)}
             </span>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>
               {targetDelta >= 0 ? `+${targetDelta.toFixed(1)}pp` : `${targetDelta.toFixed(1)}pp`} t.o.v. target
@@ -672,7 +673,7 @@ export default function OfferteViewPage() {
                   <div className={`v ${totals.margin != null ? 'gold' : ''}`} style={totals.margin == null ? { color: 'var(--muted)' } : undefined}>
                     {totals.margin != null ? fmtEur(totals.subtotaal - totals.totalCost) : '—'}
                   </div>
-                  {totals.margin != null && <div className="delta"><TrendingUp size={11} />{totals.margin.toFixed(1)}%</div>}
+                  {totals.margin != null && <div className="delta"><TrendingUp size={11} />{formatPercent(totals.margin)}</div>}
                 </div>
                 <div className="qhs">
                   <div className="l">COGS ratio</div>
@@ -797,7 +798,7 @@ export default function OfferteViewPage() {
                 if (m > 65) {
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                      <div style={{ marginBottom: 8 }}>Marge <strong style={{ color: 'var(--green)' }}>{m.toFixed(1)}%</strong> zit ruim boven target. Ruimte voor:</div>
+                      <div style={{ marginBottom: 8 }}>Marge <strong style={{ color: 'var(--green)' }}>{formatPercent(m)}</strong> zit ruim boven target. Ruimte voor:</div>
                       <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                         <li>Premium upsell (dessert, saus-pakket) voor extra omzet</li>
                         <li>Vroegboek-korting richting klant als onderhandel-ruimte</li>
@@ -809,7 +810,7 @@ export default function OfferteViewPage() {
                 if (m >= 55 && m <= 65) {
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0', color: 'var(--muted)' }}>
-                      Marge <strong style={{ color: 'var(--brand-gold)' }}>{m.toFixed(1)}%</strong> zit op target.
+                      Marge <strong style={{ color: 'var(--brand-gold)' }}>{formatPercent(m)}</strong> zit op target.
                       {weakLine && <> Zwakste regel: <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> op {(weakLine.marge as number).toFixed(0)}%. Overweeg prijs +€{((weakLine.prijs * 0.05) || 1).toFixed(2)} of alternatieve inkoop.</>}
                     </div>
                   );
@@ -818,7 +819,7 @@ export default function OfferteViewPage() {
                   const upliftPerGuest = guests > 0 ? ((totals.subtotaal - totals.totalCost) * 0.15 / guests) : 0;
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                      <div style={{ marginBottom: 8, color: 'var(--muted)' }}>Marge <strong style={{ color: 'var(--amber)' }}>{m.toFixed(1)}%</strong> ligt onder target. Concrete hefbomen:</div>
+                      <div style={{ marginBottom: 8, color: 'var(--muted)' }}>Marge <strong style={{ color: 'var(--amber)' }}>{formatPercent(m)}</strong> ligt onder target. Concrete hefbomen:</div>
                       <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                         {weakLine && <li>Zwakste regel <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> ({(weakLine.marge as number).toFixed(0)}%) — verhogen met €{Math.ceil(weakLine.prijs * 0.1)}</li>}
                         <li>Prijs p/p +€{Math.ceil(upliftPerGuest)} over {guests} gasten = +€{(upliftPerGuest * guests).toFixed(0)}</li>
@@ -829,7 +830,7 @@ export default function OfferteViewPage() {
                 }
                 return (
                   <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                    <div style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Marge <strong>{m.toFixed(1)}%</strong> is kritisch laag. Prioriteer:</div>
+                    <div style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Marge <strong>{formatPercent(m)}</strong> is kritisch laag. Prioriteer:</div>
                     <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                       <li>Controleer crew-uren — vaak de grootste kostenpost die wegvalt</li>
                       {weakLine && weakLine.cost != null && <li><strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> verliest geld (cost €{weakLine.cost.toFixed(2)} vs prijs €{weakLine.prijs.toFixed(2)})</li>}

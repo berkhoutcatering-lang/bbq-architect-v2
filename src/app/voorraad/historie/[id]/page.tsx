@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ArrowDown, ArrowUp, Package, Receipt, TrendingDown, TrendingUp, AlertCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import { formatPercent } from '@/lib/format';
 
 /**
  * Voorraad-item historie page — cross-page koppeling
@@ -188,7 +189,7 @@ export default function InventoryHistoriePage() {
                         <strong>{fmtEur(p.unit_price)}</strong>/{p.unit}
                         {pct != null && Math.abs(pct) > 0.5 && (
                           <span style={{ marginLeft: 6, color: up ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                            {up ? '+' : ''}{pct.toFixed(1)}%
+                            {up ? '+' : ''}{formatPercent(pct)}
                           </span>
                         )}
                       </span>
@@ -219,7 +220,7 @@ export default function InventoryHistoriePage() {
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {up ? <TrendingUp size={12} style={{ color: 'var(--red)' }} /> : <TrendingDown size={12} style={{ color: 'var(--green)' }} />}
                         <strong>{a.leverancier_naam || 'onbekend'}</strong>
-                        <span style={{ color: up ? 'var(--red)' : 'var(--green)' }}>{up ? '+' : ''}{a.pct_change.toFixed(1)}%</span>
+                        <span style={{ color: up ? 'var(--red)' : 'var(--green)' }}>{up ? '+' : ''}{formatPercent(a.pct_change)}</span>
                         <span style={{ color: 'var(--muted)' }}>({fmtEur(a.old_price)} → {fmtEur(a.new_price)})</span>
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11 }}>

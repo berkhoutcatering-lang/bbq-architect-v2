@@ -53,6 +53,7 @@ import {
 } from '@/lib/today/kpi-trends';
 import { computeTimelineItems } from '@/lib/today/timeline-items';
 import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rules';
+import { formatPercent } from '@/lib/format';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -359,7 +360,7 @@ export default function DashboardPage() {
     {
       id: 'margin',
       label: 'Marge gemiddeld',
-      value: avgMarge > 0 ? `${avgMarge.toFixed(1)}%` : '—',
+      value: avgMarge > 0 ? `${formatPercent(avgMarge)}` : '—',
       sub: 'Doel ≥ 60%',
       tone: avgMarge >= 60 ? 'ok' : avgMarge >= 40 ? 'warn' : avgMarge > 0 ? 'bad' : 'default',
       trend: trendMargin(avgMarge),
@@ -725,8 +726,8 @@ export default function DashboardPage() {
       icon: 'percent',
       title: `${margeAlerts.length} prijsshift${margeAlerts.length === 1 ? '' : 's'} raken open offertes`,
       detail: totalImpact !== 0
-        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
-        : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
+        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${formatPercent(pct)}.`
+        : `Top-shift ${pct > 0 ? '+' : ''}${formatPercent(pct)}.`,
       cta: 'Bekijk impact',
       href: '/price-intelligence?filter=alerts',
     });

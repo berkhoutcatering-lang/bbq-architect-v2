@@ -16,7 +16,8 @@
     "enable-leaked-password-protection": "tsx scripts/enable-leaked-password-protection.ts",
     "lint:contrast": "tsx scripts/contrast-audit.ts",
     "btw:afwijkingen": "tsx scripts/btw-afwijkingsrapport.ts",
-    "seed-help": "node scripts/seed-help-articles.mjs"
+    "seed-help": "node scripts/seed-help-articles.mjs",
+    "lint:notatie": "node scripts/nl-notatie-audit.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",

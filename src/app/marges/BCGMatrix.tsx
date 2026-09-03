@@ -5,6 +5,7 @@ import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Responsive
 import MetallicCard from '@/components/MetallicCard';
 import { safeJsonParse } from '@/lib/utils';
 import { getGang } from './GerechtKaart';
+import { formatPercent } from '@/lib/format';
 
 export type Quadrant = 'star' | 'puzzle' | 'plowhorse' | 'dog';
 
@@ -42,7 +43,7 @@ function CustomTooltip({ active, payload }: any) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Marge</span>
-          <span style={{ color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 600 }}>{d.margePct.toFixed(1)}%</span>
+          <span style={{ color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 600 }}>{formatPercent(d.margePct)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Foodcost p.p.</span>

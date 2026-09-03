@@ -19,6 +19,7 @@ import {
     Cpu,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatPercent } from '@/lib/format';
 
 interface MutationRow {
     id: string;
@@ -320,7 +321,7 @@ function DeltaBadge({ pct }: { pct: number | null }) {
             }}
         >
             {isPositive ? '+' : ''}
-            {v.toFixed(1)}%
+            {formatPercent(v)}
         </span>
     );
 }

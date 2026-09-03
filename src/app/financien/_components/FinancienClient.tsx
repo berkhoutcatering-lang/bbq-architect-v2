@@ -35,6 +35,7 @@ import AgingPanel from './sections/AgingPanel';
 import ConcentrationBanner from './sections/ConcentrationBanner';
 import { resolveBtwPct } from '@/lib/btw-rules';
 import { isOpenstaand } from '@/lib/factuurStatus';
+import { formatPercent } from '@/lib/format';
 
 export interface Leverancier { id: number; naam: string; type?: string }
 
@@ -449,7 +450,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                                 <div className="stat-val" style={{ color: 'var(--green)' }}>{fmt(forecast.totalNetto)}</div>
                                 <div className="stat-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                                     <span>Netto Winst</span>
-                                    <span style={{ fontWeight: 800 }}>{forecast.overalMarge.toFixed(1)}%</span>
+                                    <span style={{ fontWeight: 800 }}>{formatPercent(forecast.overalMarge)}</span>
                                 </div>
                             </div>
                         </div>
@@ -533,7 +534,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                                             </span>
                                         </div>
                                         <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: currentMonthData.margePct >= 60 ? 'var(--green)' : currentMonthData.margePct >= 30 ? 'var(--brand)' : 'var(--red)' }}>
-                                            Marge: {currentMonthData.margePct.toFixed(1)}%
+                                            Marge: {formatPercent(currentMonthData.margePct)}
                                         </div>
                                     </div>
                                 </div>
@@ -580,7 +581,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0 4px', marginTop: 4 }}>
                                 <span style={{ fontSize: 16, fontWeight: 800 }}>Resultaat</span>
                                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: resultaat.marge_pct >= 30 ? 'var(--green)' : resultaat.marge_pct >= 0 ? 'var(--brand)' : 'var(--red)' }}>{resultaat.marge_pct.toFixed(1)}% marge</span>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: resultaat.marge_pct >= 30 ? 'var(--green)' : resultaat.marge_pct >= 0 ? 'var(--brand)' : 'var(--red)' }}>{formatPercent(resultaat.marge_pct)} marge</span>
                                     <span style={{ fontSize: 22, fontWeight: 800, fontVariantNumeric: 'tabular-nums', color: resultaat.resultaat >= 0 ? 'var(--green)' : 'var(--red)' }}>{fmt(resultaat.resultaat)}</span>
                                 </span>
                             </div>
@@ -788,7 +789,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                                             <span style={{ fontSize: 12, fontWeight: 900, color: 'var(--brand)', width: 20 }}>#{i + 1}</span>
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ fontSize: 13, fontWeight: 600 }}>{s.naam}</div>
-                                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.bonCount} {s.bonCount === 1 ? 'bon' : 'bonnen'} · {pct.toFixed(1)}% van uitgaven</div>
+                                                <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.bonCount} {s.bonCount === 1 ? 'bon' : 'bonnen'} · {formatPercent(pct)} van uitgaven</div>
                                             </div>
                                             <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--red)' }}>−{fmt(s.totaal)}</span>
                                         </div>
@@ -912,7 +913,7 @@ export default function FinancienClient({ initial }: { initial?: FinancienInitia
                                             <div key={c.naam} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                                                 <span style={{ fontSize: 12, fontWeight: 900, color: 'var(--brand)', width: 20 }}>#{i + 1}</span>
                                                 <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{c.naam}</span>
-                                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{pct.toFixed(1)}%</span>
+                                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{formatPercent(pct)}</span>
                                                 <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--brand)' }}>{fmt(c.omzet)}</span>
                                             </div>
                                         );

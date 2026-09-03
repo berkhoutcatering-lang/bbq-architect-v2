@@ -16,6 +16,7 @@ import { useState, useTransition } from 'react';
 import { Drawer } from 'vaul';
 import { Sparkles, ChevronRight, Zap, X, AlertCircle } from 'lucide-react';
 import { suggestSubstitutions, type SuggestionResult } from '@/app/price-intelligence/_actions';
+import { formatPercent } from '@/lib/format';
 
 interface Props {
     open: boolean;
@@ -346,7 +347,7 @@ function SuggestionRow({
                     )}
                     {Number(s.savings_pct) > 0 && (
                         <div style={{ fontSize: 18, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>
-                            -{Number(s.savings_pct).toFixed(1)}%
+                            -{formatPercent(Number(s.savings_pct))}
                         </div>
                     )}
                     {savingsEur !== null && savingsEur > 0 && (

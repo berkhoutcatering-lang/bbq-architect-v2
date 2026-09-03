@@ -13,6 +13,7 @@ import { X, RefreshCw, Loader2, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import type { MenuMargins } from '@/lib/dal/menuTemplates';
 import { getMenuMarginsAction, refreshRecipePricesAction, setDoelMargeAction } from '@/app/menu-templates/actions';
+import { formatPercent } from '@/lib/format';
 import '@/components/redesign/redesign.css';
 
 export default function MargeDrawer({ templateId, onClose }: { templateId: number; onClose: () => void }) {
@@ -40,7 +41,7 @@ export default function MargeDrawer({ templateId, onClose }: { templateId: numbe
         setRefreshing(false);
         if ('error' in res) { toast(res.error, 'error'); return; }
         const r = res.data;
-        const delta = r.pctDelta == null ? '' : ` · ${r.pctDelta >= 0 ? '+' : ''}${r.pctDelta.toFixed(1)}%`;
+        const delta = r.pctDelta == null ? '' : ` · ${r.pctDelta >= 0 ? '+' : ''}${formatPercent(r.pctDelta)}`;
         const extra = (r.overgeslagenHandmatig ? ` · ${r.overgeslagenHandmatig} handmatig overgeslagen` : '')
             + (r.ongekoppeld.length ? ` · ${r.ongekoppeld.length} zonder actuele prijs` : '');
         toast(`${r.receptenBijgewerkt} recept(en) bijgewerkt${delta}${extra}`, 'success');

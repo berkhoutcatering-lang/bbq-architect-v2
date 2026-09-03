@@ -39,6 +39,7 @@ import { findGerechtMatch } from '@/lib/gerechtMatch';
 import { PreviewFor } from '@/components/menukaart/templates';
 import type { MenuData } from '@/lib/menukaart/menu-data';
 import MenuMenukaartCanvas, { type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
+import { formatPercent } from '@/lib/format';
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -744,7 +745,7 @@ export default function EventHubPage() {
             <div className="eh-hero-stat">
               <div className="l">Marge</div>
               <div className={`v ${derived?.margin != null && derived.margin >= 55 ? 'ok' : derived?.margin != null && derived.margin >= 40 ? 'warn' : 'muted'}`}>
-                {derived?.margin != null ? `${derived.margin.toFixed(1)}%` : '—'}
+                {derived?.margin != null ? `${formatPercent(derived.margin)}` : '—'}
               </div>
               <div className="s">
                 {derived?.margin != null

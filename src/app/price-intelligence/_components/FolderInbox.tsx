@@ -23,6 +23,7 @@ import {
     ShieldAlert,
 } from 'lucide-react';
 import { MailFilterButton } from './MailFilterSheet';
+import { formatPercent } from '@/lib/format';
 
 const GOLD = '#c4a35a';
 
@@ -800,7 +801,7 @@ function MutationRowItem({ mutation, selected, onToggle }: { mutation: MutationR
                 {delta != null && Math.abs(delta) >= 0.5 && (
                     <div style={{ fontSize: 10, color: deltaColor, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
                         {isUp ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                        {delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+                        {delta > 0 ? '+' : ''}{formatPercent(delta)}
                     </div>
                 )}
             </div>

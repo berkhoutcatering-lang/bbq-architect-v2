@@ -27,6 +27,7 @@ import {
     MetalCard, Eyebrow, Hint, BtnPrimary, BtnGhost, ModelToggle, Pill, SectionExplain,
 } from './_atoms';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { formatPercent } from '@/lib/format';
 import {
     fmt2, normalizeLeverancier, normalizeFactuurnummer,
     detectDuplicates, fuzzyScore, matchInventoryItem,
@@ -941,13 +942,13 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
             } else if (pct > 20 && pct < 22) {
                 checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 21% (standaard)', detail: 'Niet-food / dranken / verpakking' });
             } else if (isMixed && pct > 8 && pct < 22) {
-                checks.push({ id: 'btw', status: 'ok', label: `BTW ${pct.toFixed(1)}% — mix van 9% en 21%`, detail: 'Gewogen gemiddelde van voedsel en non-food regels' });
+                checks.push({ id: 'btw', status: 'ok', label: `BTW ${formatPercent(pct)} — mix van 9% en 21%`, detail: 'Gewogen gemiddelde van voedsel en non-food regels' });
             } else if (allValidRates && uniqueRates.length === 1) {
                 // Alle regels hebben zelfde tarief maar blended klopt niet met totalen — mogelijk rondafwijking
                 const onlyRate = uniqueRates[0];
-                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% wijkt af van verwachte ${onlyRate}%`, detail: 'Check totaal BTW of regel-subtotalen' });
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${formatPercent(pct)} wijkt af van verwachte ${onlyRate}%`, detail: 'Check totaal BTW of regel-subtotalen' });
             } else {
-                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${formatPercent(pct)} is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
             }
         }
 
@@ -1963,7 +1964,7 @@ function CategoryPriceGrid({ invoices }: { invoices: any[] }) {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                                 <div>
                                     <div className="tabular" style={{ fontSize: 15, fontWeight: 600, color, fontFamily: 'Outfit, sans-serif' }}>
-                                        {flat ? '±0.0%' : `${r.delta > 0 ? '+' : ''}${r.delta.toFixed(1)}%`}
+                                        {flat ? '±0.0%' : `${r.delta > 0 ? '+' : ''}${formatPercent(r.delta)}`}
                                     </div>
                                     <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>€{Math.round(r.spend).toLocaleString('nl-NL')}</div>
                                 </div>
@@ -4296,7 +4297,7 @@ function SupplierAnalysisDrawer({ supplierName, bySupplier, totalSpend, onClose 
                                                         <span style={{ color: 'var(--red)' }}>{supplierName} {fmt2(c.selfPrice)}</span> → <span style={{ color: 'var(--green)' }}>{c.bestLev} {fmt2(c.bestPrice)}</span>
                                                     </div>
                                                 </div>
-                                                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>−{c.savingsPct.toFixed(1)}%</span>
+                                                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>−{formatPercent(c.savingsPct)}</span>
                                                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>per {c.eenheid || 'eenheid'}</span>
                                             </div>
                                         ))}

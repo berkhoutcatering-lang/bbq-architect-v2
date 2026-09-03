@@ -5,6 +5,7 @@ import { Route, Receipt, Fuel, UserRound } from 'lucide-react';
 import type { Rit } from '@/types';
 import { aggregeer, fmtKm, fmtEur, type Periode } from '@/lib/ritten-aggregaties';
 import { tariefVoorJaar } from '@/lib/ritten-tarieven';
+import { formatEur } from '@/lib/format';
 
 interface Props {
   ritten: Rit[];
@@ -25,7 +26,7 @@ export default function TotalenStrip({ ritten, periode, onPeriode }: Props) {
     {
       label: 'Fiscaal aftrekbaar',
       value: fmtKm(agg.aftrekKm),
-      sub: `× €${tarief.toFixed(2)} = ${fmtEur(agg.aftrekEur)}`,
+      sub: `× ${formatEur(tarief)} = ${fmtEur(agg.aftrekEur)}`,
       Icon: Receipt,
       tone: 'ok' as const,
     },
@@ -57,7 +58,7 @@ export default function TotalenStrip({ ritten, periode, onPeriode }: Props) {
           <div>
             <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Rittenadministratie</div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              Belastingdienst-conform · €{tarief.toFixed(2)}/km vergoeding {new Date().getFullYear()}
+              Belastingdienst-conform · {formatEur(tarief)}/km vergoeding {new Date().getFullYear()}
             </div>
           </div>
         </div>

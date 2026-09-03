@@ -15,6 +15,7 @@ import { TrendingUp, TrendingDown, Lock, Info, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { setMarketPulseOptIn } from '@/app/price-intelligence/_actions';
+import { formatPercent } from '@/lib/format';
 
 interface MarktPulseRow {
     bucket_id: number;
@@ -229,7 +230,7 @@ function PulseRow({ row }: { row: MarktPulseRow }) {
             >
                 <Icon size={12} />
                 {isUp ? '+' : ''}
-                {delta.toFixed(1)}%
+                {formatPercent(delta)}
             </div>
             <div
                 style={{

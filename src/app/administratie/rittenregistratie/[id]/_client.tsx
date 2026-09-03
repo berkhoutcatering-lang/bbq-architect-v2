@@ -34,6 +34,7 @@ import type { Rit, Voertuig, DbEvent } from '@/types';
 import { fmtKm, fmtEur, fmtDateR, categoriseerRit, CAT_BY_ID } from '@/lib/ritten-aggregaties';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 import RealRouteMap from '../_components/RealRouteMap';
+import { formatEur } from '@/lib/format';
 
 type Tab = 'route' | 'kosten' | 'fiscaal' | 'log';
 
@@ -314,7 +315,7 @@ export default function RitDetailClient({ id }: Props) {
             {
               label: 'Aftrekbaar',
               value: rit.zakelijk ? fmtEur(aftrekEur) : 'Niet aftrekbaar',
-              sub: rit.zakelijk ? `× €${tarief.toFixed(2)}/km` : '—',
+              sub: rit.zakelijk ? `× ${formatEur(tarief)}/km` : '—',
               color: rit.zakelijk ? 'var(--green)' : 'var(--muted)',
             },
             (() => {
@@ -604,7 +605,7 @@ export default function RitDetailClient({ id }: Props) {
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
                       {rit.zakelijk
-                        ? `Zakelijke rit · €${tarief.toFixed(2)}/km vergoeding`
+                        ? `Zakelijke rit · ${formatEur(tarief)}/km vergoeding`
                         : 'Privé-rit valt buiten zakelijk gebruik'}
                     </div>
                   </div>
@@ -629,7 +630,7 @@ export default function RitDetailClient({ id }: Props) {
                       {fmtEur(aftrekEur)}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                      {fmtKm(Math.max(0, km - rit.prive_omleiding_km))} × €{tarief.toFixed(2)}
+                      {fmtKm(Math.max(0, km - rit.prive_omleiding_km))} × {formatEur(tarief)}
                     </div>
                   </div>
                 </div>
@@ -676,7 +677,7 @@ export default function RitDetailClient({ id }: Props) {
                   }}
                 >
                   <Info size={11} style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--brand)' }} />
-                  Volgens de regeling {new Date(rit.datum).getFullYear()} mag je €{tarief.toFixed(2)} per zakelijke kilometer
+                  Volgens de regeling {new Date(rit.datum).getFullYear()} mag je {formatEur(tarief)} per zakelijke kilometer
                   onbelast vergoeden of aftrekken. Houd rittenadministratie 7 jaar bewaren.
                 </div>
               </div>

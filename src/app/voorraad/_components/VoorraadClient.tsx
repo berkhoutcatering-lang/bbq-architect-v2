@@ -22,6 +22,7 @@ import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 import { upsertInventory, deleteInventory, adjustStock } from '../actions';
 import { useIsPhone } from '@/hooks/useIsMobile';
+import { formatPercent } from '@/lib/format';
 
 const GOLD = '#c4a35a';
 
@@ -1496,7 +1497,7 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceH
                                                 </div>
                                                 <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(a.prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/ {a.eenheid}</span></div>
                                                 <div style={{ fontSize: 11, color: diffPct === 0 ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums', minWidth: 50, textAlign: 'right' }}>
-                                                    {diffPct === 0 ? '—' : `+${diffPct.toFixed(1)}%`}
+                                                    {diffPct === 0 ? '—' : `+${formatPercent(diffPct)}`}
                                                 </div>
                                             </div>
                                         );

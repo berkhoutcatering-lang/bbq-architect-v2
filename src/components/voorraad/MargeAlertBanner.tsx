@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, TrendingUp, TrendingDown, X, ChevronRight, Check, EyeOff } from 'lucide-react';
+import { formatPercent } from '@/lib/format';
 
 /**
  * MargeAlertBanner
@@ -149,7 +150,7 @@ export default function MargeAlertBanner() {
                   <span>{a.leverancier?.naam || 'leverancier onbekend'}</span>
                   {' '}<span style={{ color: 'var(--muted)' }}>·</span>{' '}
                   <span className={up ? 'marge-alert__pct--up' : 'marge-alert__pct--down'}>
-                    {up ? '+' : ''}{a.pct_change.toFixed(1)}%
+                    {up ? '+' : ''}{formatPercent(a.pct_change)}
                   </span>
                 </div>
                 <div className="marge-alert__price">

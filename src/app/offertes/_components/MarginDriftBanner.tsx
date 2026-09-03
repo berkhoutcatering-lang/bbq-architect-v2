@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { AlertTriangle, Clock, X, TrendingDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { snoozeMarginAlert, resolveMarginAlert } from '@/app/price-intelligence/_actions';
+import { formatPercent } from '@/lib/format';
 
 interface AlertRow {
     id: number;
@@ -89,7 +90,7 @@ export default function MarginDriftBanner() {
                     </div>
                     <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
                         Totale impact: € {(totalImpactCents / 100).toFixed(2)} · ergste:{' '}
-                        {worst?.offerte_nummer ?? `Offerte ${worst?.offerte_id}`} ({worst?.delta_pct?.toFixed(1)}%)
+                        {worst?.offerte_nummer ?? `Offerte ${worst?.offerte_id}`} ({formatPercent(worst?.delta_pct)})
                     </div>
                 </div>
                 <button
@@ -131,7 +132,7 @@ export default function MarginDriftBanner() {
                                     {a.offerte_client && <span style={{ opacity: 0.7, fontWeight: 400 }}> · {a.offerte_client}</span>}
                                 </div>
                                 <div style={{ fontSize: 11, opacity: 0.8, marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <TrendingDown size={11} />€ {(a.delta_cents / 100).toFixed(2)} · {a.delta_pct?.toFixed(1)}%
+                                    <TrendingDown size={11} />€ {(a.delta_cents / 100).toFixed(2)} · {formatPercent(a.delta_pct)}
                                 </div>
                             </div>
                             <Link
