@@ -113,7 +113,7 @@ export default function RittenregistratieClient() {
                 const jaar = new Date().getFullYear();
                 window.location.href = `/api/ritten/export?start=${jaar}-01-01&eind=${jaar}-12-31`;
               }}
-              title="Belastingdienst-conforme CSV downloaden voor heel ${jaar}"
+              title={`Belastingdienst-conforme CSV downloaden voor heel ${new Date().getFullYear()}`}
             >
               Export {new Date().getFullYear()}
             </Button>

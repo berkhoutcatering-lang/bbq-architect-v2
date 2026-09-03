@@ -1,22 +1,34 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabase } from '@/lib/supabase-server';
 
 function escapeIcal(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
 }
 
 export async function GET() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  /* Stond hier met een eigen anon-client zónder sessie. RLS gaf dan niets terug,
+     dus het .ics-bestand bevatte alleen de VCALENDAR-kop en nul afspraken —
+     terwijl er gewoon events waren. Er zat bovendien geen filter op organisatie
+     in; de enige reden dat er niets lekte was dat de query toch al leeg bleef.
+     Nu de sessie van de gebruiker, plus een expliciete org-filter. */
+  const supabase = await createServerSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Niet ingelogd' }, { status: 401 });
 
-  if (!supabaseUrl || !supabaseKey) {
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
+  const { data: memberships } = await supabase
+    .from('organization_members')
+    .select('organization_id')
+    .eq('user_id', user.id)
+    .eq('status', 'active');
+  const orgIds = (memberships || []).map((m) => m.organization_id);
+  if (orgIds.length === 0) {
+    return NextResponse.json({ error: 'Geen organisatie' }, { status: 403 });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
   const { data: events, error } = await supabase
     .from('events')
     .select('id,name,date,guests,status,location,client_naam')
+    .in('organization_id', orgIds)
     .neq('status', 'geannuleerd')
     .order('date', { ascending: true })
     .limit(100);

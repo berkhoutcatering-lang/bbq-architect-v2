@@ -16,7 +16,11 @@ import type { Materieel as MatType } from '@/types';
 import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
 
-const CATEGORIES = ['Alles', 'BBQ', 'Servies', 'Linnen', 'Koeling', 'Transport', 'Meubilair', 'Overig'] as const;
+/* Vaste volgorde voor de categorieën die we kennen; alles wat de tenant verder
+   in `type` heeft staan komt daarachter. Deze lijst stond hardgecodeerd, en
+   miste "Gereedschap" (9 items) en "Apparatuur" (6) — 15 van de 41 items waren
+   daardoor niet te filteren — terwijl Linnen, Meubilair en Overig leeg bleven. */
+const VOORKEURSVOLGORDE = ['BBQ', 'Servies', 'Apparatuur', 'Gereedschap', 'Koeling', 'Transport', 'Linnen', 'Meubilair', 'Overig'];
 const BUCKET = 'materieel';
 
 interface NewLogEntry {
@@ -60,9 +64,18 @@ export default function Materieel() {
     const counts = useMemo(() => {
         const list = (materieel || []) as any[];
         const byType: Record<string, number> = {};
-        list.forEach(m => { byType[m.type] = (byType[m.type] || 0) + 1; });
+        list.forEach(m => { if (m.type) byType[m.type] = (byType[m.type] || 0) + 1; });
         return { total: list.length, byType };
     }, [materieel]);
+
+    /* Chips uit de data, niet uit een vaste lijst: dan kan een categorie nooit
+       meer onzichtbaar blijven omdat iemand vergat hem toe te voegen. */
+    const CATEGORIES = useMemo(() => {
+        const aanwezig = Object.keys(counts.byType);
+        const bekend = VOORKEURSVOLGORDE.filter(c => aanwezig.includes(c));
+        const rest = aanwezig.filter(c => !VOORKEURSVOLGORDE.includes(c)).sort();
+        return ['Alles', ...bekend, ...rest];
+    }, [counts.byType]);
 
     function newItem() {
         setEditing('new');
