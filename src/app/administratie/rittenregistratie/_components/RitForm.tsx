@@ -235,10 +235,10 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
         </Link>
       </div>
 
-      <h1 style={{ fontWeight: 300, fontSize: 30, margin: '0 0 6px 0', letterSpacing: '-0.02em' }}>
+      <h1 className="chassis-titel" style={{ margin: '0 0 6px 0' }}>
         {rit ? `Rit r-${String(rit.id).padStart(3, '0')} bewerken` : 'Nieuwe rit'}
       </h1>
-      <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 24px 0' }}>
+      <p className="chassis-onderschrift" style={{ margin: '0 0 24px 0' }}>
         {rit ? 'Pas de gegevens aan en bewaar.' : 'Vul de rit in. Belastingdienst-velden zijn vereist.'}
       </p>
 

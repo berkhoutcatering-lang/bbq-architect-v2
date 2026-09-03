@@ -272,19 +272,7 @@ export default function RitDetailClient({ id }: Props) {
                 </span>
               )}
             </div>
-            <h1
-              style={{
-                fontWeight: 300,
-                fontSize: 32,
-                margin: 0,
-                lineHeight: 1.1,
-                letterSpacing: '-0.02em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
+            <h1 className="chassis-titel" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <span>{rit.vertrek_adres.split(',')[0]}</span>
               <ArrowRight size={20} color="var(--brand-gold)" />
               <span style={{ color: 'var(--brand)' }}>{rit.aankomst_adres.split(',')[0]}</span>

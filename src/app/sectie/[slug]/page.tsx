@@ -173,9 +173,7 @@ export default function SectiePage() {
                     <span className="text-[var(--blue)]">
                         {React.cloneElement(section.icon as React.ReactElement<any>, { size: 28 })}
                     </span>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[var(--text)] tracking-tight">
-                        {section.title}
-                    </h1>
+                    <h1 className="chassis-titel">{section.title}</h1>
                 </div>
                 <p className="text-[var(--muted)] text-sm mt-1 ml-[42px]">
                     {section.description}

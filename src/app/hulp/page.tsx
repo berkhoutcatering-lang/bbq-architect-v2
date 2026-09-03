@@ -199,7 +199,7 @@ export default function HelpCenter() {
               {CATEGORY_LABELS[openArticle.category] || openArticle.category}
             </span>
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', marginBottom: 16, lineHeight: 1.3 }}>{openArticle.title}</h1>
+          <h1 className="chassis-titel" style={{ marginBottom: 16 }}>{openArticle.title}</h1>
           <div
             style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--text)' }}
             dangerouslySetInnerHTML={{ __html: renderMarkdown(openArticle.content) }}
@@ -216,8 +216,8 @@ export default function HelpCenter() {
         <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, var(--color-accent-gold) 0%, #8b6914 100%)', marginBottom: 12 }}>
           <HelpCircle size={28} style={{ color: 'var(--text)' }} />
         </div>
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text)', marginBottom: 4 }}>Help Center</h1>
-        <p style={{ fontSize: 14, color: 'var(--muted)' }}>Vind antwoorden of neem contact op</p>
+        <h1 className="chassis-titel">Hulp</h1>
+        <p className="chassis-onderschrift">Vind antwoorden of neem contact op</p>
       </div>
 
       <PageGuideNote

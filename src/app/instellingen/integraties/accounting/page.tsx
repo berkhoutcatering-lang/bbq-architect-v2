@@ -75,8 +75,8 @@ export default function AccountingConfigPage() {
                     <Receipt className="w-4 h-4 text-[var(--color-accent-gold)]" />
                 </div>
                 <div>
-                    <h1 className="text-2xl font-extralight text-[var(--text)]">Boekhouding-instellingen</h1>
-                    <p className="text-[13px] text-[var(--muted)] mt-1">
+                    <h1 className="chassis-titel">Boekhouding-instellingen</h1>
+                    <p className="chassis-onderschrift">
                         Tenant-specifieke defaults voor Moneybird, Exact en factuur-templates van{' '}
                         <strong className="text-[var(--text)]">{organization?.name || '...'}</strong>.
                     </p>

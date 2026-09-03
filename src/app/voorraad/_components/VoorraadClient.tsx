@@ -626,8 +626,8 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
                 <div>
-                    <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Voorraad</h1>
-                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
+                    <h1 className="chassis-titel">Voorraad</h1>
+                    <div className="chassis-onderschrift">
                         {totalItems} producten · live gesynct · altijd zicht op wat je nodig hebt
                     </div>
                 </div>
@@ -1801,7 +1801,7 @@ function EditItemView({ editForm, setEditForm, editing, recepten, leveranciers, 
                     <ArrowLeft size={14} /> Terug
                 </button>
                 <div>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>
+                    <h1 className="chassis-titel" style={{ margin: 0 }}>
                         {editing === 'new' ? 'Nieuw item' : editForm.naam || 'Item bewerken'}
                     </h1>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>

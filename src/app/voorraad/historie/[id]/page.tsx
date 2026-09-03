@@ -121,10 +121,8 @@ export default function InventoryHistoriePage() {
       </button>
 
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 30, letterSpacing: '-.015em', margin: 0, marginBottom: 4 }}>
-          {inv.naam}
-        </h1>
-        <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+        <h1 className="chassis-titel">{inv.naam}</h1>
+        <div className="chassis-onderschrift">
           Huidige stock: <strong>{inv.current_stock} {inv.unit}</strong>
           {inv.last_price_eur != null && <> · laatste prijs <strong>{fmtEur(inv.last_price_eur)}</strong>/{inv.unit} ({fmtDate(inv.last_price_at)})</>}
         </div>

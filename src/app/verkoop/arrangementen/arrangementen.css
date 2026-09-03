@@ -6,7 +6,8 @@
 
 .arr-page-head { margin-bottom: 22px; }
 .arr-eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brand-gold, var(--brand)); }
-.arr-page-title { margin: 6px 0 0; font-size: 26px; font-weight: 700; letter-spacing: -.02em; color: var(--text); }
+/* Maat van .chassis-titel; was 26/700 waar de rest 28/200 zet. */
+.arr-page-title { margin: 6px 0 0; font-family: var(--font-display); font-size: 28px; font-weight: 200; letter-spacing: -.01em; line-height: 1.15; color: var(--text); }
 .arr-page-sub { margin: 7px 0 0; max-width: 62ch; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
 
 /* ── Cards ─────────────────────────────────────────────────────────────────── */

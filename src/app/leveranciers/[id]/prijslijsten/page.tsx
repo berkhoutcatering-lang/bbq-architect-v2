@@ -196,12 +196,7 @@ export default function PrijslijstenPage() {
                     marginBottom: 18, marginTop: 8, flexWrap: 'wrap', gap: 12,
                 }}>
                     <div>
-                        <h1 style={{
-                            fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200,
-                            fontSize: 30, letterSpacing: '-.015em', margin: 0, marginBottom: 4,
-                        }}>
-                            Prijslijsten — {lev?.naam ?? '…'}
-                        </h1>
+                        <h1 className="chassis-titel">Prijslijsten · {lev?.naam ?? '…'}</h1>
                         <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                             PDF-imports. AI extract producten + classificeert vlees-cuts.
                         </div>

@@ -121,9 +121,7 @@ export default function LeverancierHistoriePage() {
       </button>
 
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 30, letterSpacing: '-.015em', margin: 0, marginBottom: 4 }}>
-          {lev.naam}
-        </h1>
+        <h1 className="chassis-titel">{lev.naam}</h1>
         <div style={{ color: 'var(--muted)', fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           <span><Store size={11} style={{ verticalAlign: 'middle' }} /> {lev.type}</span>
           {lev.factuur_cyclus && <span>Facturen: {lev.factuur_cyclus}</span>}

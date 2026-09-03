@@ -175,8 +175,8 @@ export default function LeverancierProductenPage() {
                         <Package size={20} style={{ color: BRAND }} />
                     </div>
                     <div>
-                        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', margin: 0, letterSpacing: '-.01em' }}>{lev?.naam || 'Leverancier'}</h1>
-                        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '3px 0 0' }}>
+                        <h1 className="chassis-titel">{lev?.naam || 'Leverancier'}</h1>
+                        <p className="chassis-onderschrift">
                             {loading ? 'laden…' : `${count.toLocaleString('nl-NL')} product${count === 1 ? '' : 'en'} · prijzen excl. BTW`}
                         </p>
                     </div>

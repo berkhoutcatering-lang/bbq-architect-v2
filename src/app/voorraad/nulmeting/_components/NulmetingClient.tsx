@@ -212,9 +212,7 @@ function ZoneKeuze({ perZone, zonderZone, totaal, onKies }: {
                 <ArrowLeft size={15} /> Voorraad
             </Link>
 
-            <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 30, margin: '0 0 6px' }}>
-                Keuken tellen
-            </h1>
+            <h1 className="chassis-titel" style={{ margin: '0 0 6px' }}>Keuken tellen</h1>
             <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.6, margin: '0 0 22px' }}>
                 Loop je keuken kast voor kast langs. Kies waar je staat, zoek het product,
                 en vul in hoeveel pakken je ziet. Klaar is klaar — je kunt altijd verder

@@ -213,10 +213,7 @@ export default function PriceIntelligenceClient() {
         <RequireTier feature="price_intelligence">
         <div className="page-container-compact mobile-safe-bottom pi-inkoopprijzen" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ marginBottom: 20, minWidth: 0 }}>
-                <h1 style={{
-                    fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200,
-                    fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px',
-                }}>
+                <h1 className="chassis-titel" style={{ margin: '0 0 4px' }}>
                     Inkoopprijzen
                 </h1>
                 <div style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.5 }}>

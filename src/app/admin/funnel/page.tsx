@@ -173,8 +173,8 @@ export default function FunnelDashboardPage() {
   return (
     <div className="max-w-[1100px] mx-auto p-6">
       <header className="mb-8">
-        <h1 className="text-2xl font-extralight text-[var(--text)]">Activation-funnel</h1>
-        <p className="text-[13px] text-[var(--muted)] mt-1">SF-6 — sign-up tot eerste verstuurde offerte. Doel: ≥50% binnen 60 min.</p>
+        <h1 className="chassis-titel">Activation-funnel</h1>
+        <p className="chassis-onderschrift">SF-6 — sign-up tot eerste verstuurde offerte. Doel: ≥50% binnen 60 min.</p>
       </header>
 
       {/* KPIs */}
