@@ -72,6 +72,8 @@ export default function EventHubPage() {
   const [recepten, setRecepten] = useState<any[]>([]);
   const [gerechten, setGerechten] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  /* Bedrijfsadres uit Instellingen — vertrekpunt voor route en rit. */
+  const bedrijfsAdres: string = (settings?.adres || '').trim();
   const [klant, setKlant] = useState<any>(null);
   const [haccpRecords, setHaccpRecords] = useState<any[]>([]);
   const [serviceLogs, setServiceLogs] = useState<any[]>([]);
@@ -1259,8 +1261,24 @@ export default function EventHubPage() {
                 )}
                 <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}></div>
                 <div style={{ color: 'var(--muted)' }}>{event.location || 'Locatie onbekend'}</div>
+                {/* Heette "Route plannen" maar opende een Google Maps-zoekopdracht
+                    op het adres: geen vertrekpunt, geen richtingen, geen afstand.
+                    Nu een echte route vanaf het bedrijfsadres uit Instellingen —
+                    dat kent de app gewoon. Zonder bedrijfsadres laat Maps de
+                    gebruiker zelf een vertrekpunt kiezen. */}
                 {event.location && (
-                  <a className="btn btn-ghost btn-sm" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`} target="_blank" rel="noopener" style={{ marginTop: 4, width: '100%', justifyContent: 'center' } as CSSProperties}>
+                  <a
+                    className="btn btn-ghost btn-sm"
+                    href={
+                      'https://www.google.com/maps/dir/?api=1'
+                      + (bedrijfsAdres ? '&origin=' + encodeURIComponent(bedrijfsAdres) : '')
+                      + '&destination=' + encodeURIComponent(event.location.trim())
+                      + '&travelmode=driving'
+                    }
+                    target="_blank"
+                    rel="noopener"
+                    style={{ marginTop: 4, width: '100%', justifyContent: 'center' } as CSSProperties}
+                  >
                     <Navigation size={14} />Route plannen
                   </a>
                 )}

@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, Camera, Plus, Trash2 } from 'lucide-react';
 import Button from '@/components/Button';
-import { useSupabase } from '@/lib/useSupabase';
+import { useSupabase, useSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import type { Rit, Voertuig, DbEvent } from '@/types';
 import VoertuigModal from './VoertuigModal';
@@ -28,6 +28,7 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
   const { data: voertuigen } = useSupabase<Voertuig>('voertuigen', []);
   const { data: ritten, insert, update, remove } = useSupabase<Rit>('ritten', []);
   const { data: events } = useSupabase<DbEvent>('events', []);
+  const { settings } = useSettings();
 
   const [voertuigModalOpen, setVoertuigModalOpen] = useState(false);
   const [scanLoading, setScanLoading] = useState(false);
@@ -45,13 +46,14 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
   const [datum, setDatum] = useState(rit?.datum || new Date().toISOString().slice(0, 10));
   const [vertrekTijd, setVertrekTijd] = useState(rit?.vertrek_tijd?.slice(0, 5) || '');
   const [duurMinuten, setDuurMinuten] = useState<string>(rit?.duur_minuten ? String(rit.duur_minuten) : '');
-  /* Default vertrek-adres: meest recente rit > leeg. Een hardcoded default
-     hoort niet in een multi-tenant app (toonde "Hop & Bites HQ, Borger" voor
-     elke tenant). */
+  /* Default vertrek-adres: meest recente rit > bedrijfsadres uit Instellingen >
+     leeg. Een hardcoded default hoort niet in een multi-tenant app (toonde
+     "Hop & Bites HQ, Borger" voor elke tenant). Het bedrijfsadres staat er wél
+     per tenant in, dus dat is een betere terugval dan een leeg veld. */
   const lastVertrekAdres = useMemo(() => {
     const recent = [...ritten].sort((a, b) => (a.datum < b.datum ? 1 : -1))[0];
-    return recent?.vertrek_adres || '';
-  }, [ritten]);
+    return recent?.vertrek_adres || (settings?.adres || '').trim();
+  }, [ritten, settings]);
   const [vertrekAdres, setVertrekAdres] = useState(rit?.vertrek_adres || lastVertrekAdres);
   const [aankomstAdres, setAankomstAdres] = useState(rit?.aankomst_adres || prefilledEvent?.location || '');
   const [routeOmleiding, setRouteOmleiding] = useState(rit?.route_omleiding || '');
@@ -74,6 +76,17 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
     if (lastVertrekAdres) setVertrekAdres(lastVertrekAdres);
   }, [lastVertrekAdres, rit, vertrekAdres]);
 
+  /* `prefilledEvent` komt uit een async query, dus bij de eerste render is hij
+     nog null en blijven de velden leeg — de reden dat "Rit toevoegen" vanaf een
+     event een leeg formulier gaf terwijl de app het adres gewoon kende. */
+  useEffect(() => {
+    if (rit || !prefilledEvent) return;
+    setEventId((huidig) => huidig ?? prefilledEvent.id);
+    if (prefilledEvent.location) setAankomstAdres((huidig) => huidig || prefilledEvent.location || '');
+    if (prefilledEvent.name) setDoel((huidig) => huidig || prefilledEvent.name || '');
+    if (prefilledEvent.date) setDatum((huidig) => (huidig === new Date().toISOString().slice(0, 10) ? prefilledEvent.date : huidig));
+  }, [prefilledEvent, rit]);
+
   // Auto-vullen km_begin vanuit laatste rit van geselecteerd voertuig (alleen nieuwe rit)
   useEffect(() => {
     if (rit) return;
@@ -89,10 +102,15 @@ export default function RitForm({ rit, prefilledEvent }: Props) {
     }
   }, [voertuigId, ritten, voertuigen, kmBegin, rit]);
 
-  const upcomingEvents = useMemo(
-    () => events.filter((e) => e.date >= new Date().toISOString().slice(0, 10)).slice(0, 50),
-    [events],
-  );
+  /* Toonde alleen toekomstige events, maar een rit registreer je juist ná
+     afloop: vanaf een event van vorige maand was er niets te kiezen. Nu alle
+     events, recentste eerst, met de aankomende bovenaan. */
+  const upcomingEvents = useMemo(() => {
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const toekomst = events.filter((e) => e.date >= vandaag).sort((a, b) => (a.date < b.date ? -1 : 1));
+    const verleden = events.filter((e) => e.date < vandaag).sort((a, b) => (a.date < b.date ? 1 : -1));
+    return [...toekomst, ...verleden].slice(0, 50);
+  }, [events]);
 
   const km = useMemo(() => {
     const b = parseInt(kmBegin) || 0;
