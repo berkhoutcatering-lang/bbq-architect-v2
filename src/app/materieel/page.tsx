@@ -11,7 +11,7 @@ import { useFormValidation } from '@/hooks/useFormValidation';
 import FieldError from '@/components/FieldError';
 import EmptyState from '@/components/EmptyState';
 import MetallicCard from '@/components/MetallicCard';
-import PageHeader from '@/components/PageHeader';
+import HubHeader from '@/components/chassis/HubHeader';
 import type { Materieel as MatType } from '@/types';
 import { ArrowLeft, Calendar, ClipboardList, Loader2, Plus, Save, Trash2, MapPin, Camera, X, Search, Sparkles, Upload } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -348,16 +348,17 @@ export default function Materieel() {
     return (
         <RequireTier feature="materieel">
         <>
-            <PageHeader
-                title={'Materieel (' + materieel.length + ')'}
-                actions={
-                    <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost" onClick={openScan} title="Scan product-screenshot of foto via AI">
-                            <Sparkles size={14} /> Scan product
-                        </button>
-                        <button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>
-                    </div>
-                }
+            {/* Eerste adoptie van het pagina-chassis: kruimelpad, één zin wat dit
+                is, één primaire knop en de rest in het overloopmenu. Zie
+                docs/design-brief-chassis-2026-09-03.md. */}
+            <HubHeader
+                kruimels={[{ label: 'Team & Operatie', href: '/uren' }]}
+                titel="Materieel"
+                onderschrift={`${materieel.length} stuks — wat je bezit, waar het staat en wat er onderhoud nodig heeft.`}
+                actie={<button className="btn btn-brand" onClick={newItem}><Plus size={14} /> Nieuw</button>}
+                meer={[
+                    { label: 'Scan product uit foto', onClick: openScan },
+                ]}
             />
 
             {/* ZOEKBALK */}
