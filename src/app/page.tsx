@@ -36,10 +36,10 @@ const AIPromptDrawer = dynamic(() => import('@/components/dashboard/today/AIProm
 const BusinessCharts = dynamic(() => import('@/components/dashboard/today/BusinessCharts'), { ssr: false });
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
 import KPIStripEmpty from '@/components/dashboard/today/KPIStripEmpty';
-import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';
 import AttentionPanel, { type AttentionItem, type AttentionSeverity } from '@/components/dashboard/today/AttentionPanel';
 import QuickActions from '@/components/dashboard/today/QuickActions';
-import BriefingTimeline from '@/components/dashboard/today/BriefingTimeline';
+import TakenLijst from '@/components/dashboard/today/TakenLijst';
+import { voegTakenSamen, type Taak, type TaakUrgentie } from '@/lib/today/taken-samenvoegen';
 
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
@@ -56,6 +56,7 @@ import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rule
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [alleTakenOpen, setAlleTakenOpen] = useState(false);
   const brand = useBrandLogo();
   const ev = useSupabase<DbEvent>('events', []);
   const fac = useSupabase<Factuur>('facturen', []);
@@ -485,11 +486,7 @@ export default function DashboardPage() {
     [briefingInput, briefingBronnenGeladen],
   );
 
-  const firstName = user?.user_metadata?.name
-    ? String(user.user_metadata.name).split(' ')[0]
-    : undefined;
-
-  // ─── BriefingTimeline items ───────────────────────────────────────────
+  // ─── Taken uit de planning (voedt de takenlijst) ──────────────────────
   const timelineItems = useMemo(() => computeTimelineItems({
     verlopenFacturen: briefingInput.verlopenFacturen,
     verlopenTotaal,
@@ -513,6 +510,22 @@ export default function DashboardPage() {
     unbookedReceiptsCount,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [briefingInput, verlopenTotaal, upcomingZonderPrepMonth, heroEvent?.id, heroEvent?.daysAway, unbookedReceiptsCount]);
+
+  /* ─── Eén takenlijst ────────────────────────────────────────────────────
+     De drie briefings blijven de bron, maar komen samen op het scherm. Zie
+     src/lib/today/taken-samenvoegen.ts voor waarom. */
+  const takenUitShift: Taak[] = timelineItems.map((i) => ({
+    id: 'shift-' + i.id,
+    urgentie: (i.when === 'Vandaag' ? (i.tone === 'red' ? 'nu' : 'vandaag')
+      : i.when === 'Morgen' ? 'vandaag'
+      : i.when === 'Deze week' ? 'deze-week' : 'later') as TaakUrgentie,
+    tijd: i.duration || '',
+    titel: i.title,
+    detail: i.body || '',
+    actie: i.action || 'Open',
+    href: i.href || '/',
+    bron: 'shift',
+  }));
 
   // ─── AttentionPanel items ─────────────────────────────────────────────
   // Pillar 4 Vandaag-hub: elke kaart heeft een query-param zodat de target-page
@@ -724,6 +737,34 @@ export default function DashboardPage() {
     return <LoadingState label="Vandaag laden" />;
   }
 
+  const takenUitAandacht: Taak[] = attentionItems.map((a) => ({
+    id: 'att-' + a.id,
+    urgentie: (a.severity === 'high' ? 'nu' : a.severity === 'medium' ? 'vandaag' : 'deze-week') as TaakUrgentie,
+    tijd: '',
+    titel: a.title,
+    detail: a.detail,
+    actie: a.cta,
+    href: a.href,
+    bron: 'aandacht',
+  }));
+
+  const takenUitDagbriefing: Taak[] = briefingCandidates.map((c) => ({
+    id: 'brief-' + c.id,
+    urgentie: (c.priority === 'critical' ? 'nu' : c.priority === 'today' ? 'vandaag' : 'deze-week') as TaakUrgentie,
+    tijd: '',
+    titel: c.fallbackText,
+    detail: '',
+    actie: 'Bekijk',
+    href: c.href,
+    bron: 'dagbriefing',
+  }));
+
+  const alleTaken = voegTakenSamen({
+    dagbriefing: takenUitDagbriefing,
+    aandacht: takenUitAandacht,
+    shift: takenUitShift,
+  });
+
   return (
     <div
       className="mobile-safe-bottom min-h-screen text-[var(--text)] selection:bg-[var(--color-accent-gold)]/30"
@@ -865,6 +906,17 @@ export default function DashboardPage() {
         />
 
         {/* ── 2. AIQuickPrompts ── Pillar 2 Vandaag: context-aware prompts obv heroEvent */}
+        {/* Wat er te doen is, staat boven de cijfers: je opent deze pagina om te
+            weten wat je moet doen, niet om een grafiek te lezen. */}
+        <div style={{ marginBottom: 18 }}>
+          <TakenLijst
+            taken={alleTaken}
+            zichtbaar={6}
+            allesTonen={alleTakenOpen}
+            onMeer={function () { setAlleTakenOpen(true); }}
+          />
+        </div>
+
         <AIQuickPrompts onPrompt={setAiPrompt} heroEvent={heroEvent} />
 
         {/* Pillar #5 — Empty-state never blank. Voor een nieuwe tenant zonder
@@ -890,28 +942,13 @@ export default function DashboardPage() {
             {/* ── 4. KPIStrip ── */}
             <KPIStrip kpis={kpis} updatedAt={currentTime.toISOString()} />
 
-            {/* ── 5. CompactDagbriefing + Attention ── */}
-            <div
-              className="dagbrief-grid"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.5fr 1fr',
-                gap: 16,
-                marginBottom: 18,
-              }}
-            >
-              <CompactDagbriefing candidates={briefingCandidates} firstName={firstName} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <AttentionPanel items={attentionItems} />
-              </div>
-            </div>
           </>
         )}
 
         <QuickActions />
 
-        {/* ── 6. BriefingTimeline ── alleen tonen voor tenants met data */}
-        {!isFreshTenant && <BriefingTimeline items={timelineItems} />}
+        {/* De shift-briefing zat hier als derde lijst met dezelfde taken erin.
+            Die items lopen nu mee in "Vandaag te doen" hierboven. */}
 
         <style>{`
           @media (max-width: 1024px) {

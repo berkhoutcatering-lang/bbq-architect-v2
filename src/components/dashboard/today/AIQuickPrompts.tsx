@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Sparkles, Beef, Snowflake, ClipboardList,
   Thermometer, Percent, ShoppingCart, MailWarning,
@@ -87,8 +87,17 @@ export default function AIQuickPrompts({ onPrompt, heroEvent = null }: Props): R
   const eventPrompts = useMemo(() => buildEventAwarePrompts(heroEvent), [heroEvent]);
   const eventKeuken = eventPrompts.filter((q) => q.category === 'keuken');
   const eventZaak = eventPrompts.filter((q) => q.category === 'zaak');
-  const keuken = [...eventKeuken, ...QUICK_PROMPTS.filter((q) => q.category === 'keuken')];
-  const zaak = [...eventZaak, ...QUICK_PROMPTS.filter((q) => q.category === 'zaak')];
+  const keukenAlles = [...eventKeuken, ...QUICK_PROMPTS.filter((q) => q.category === 'keuken')];
+  const zaakAlles = [...eventZaak, ...QUICK_PROMPTS.filter((q) => q.category === 'zaak')];
+
+  /* Er stonden twaalf prompts in twee kolommen bovenaan de startpagina — op de
+     plek waar je juist wilt zien wát er te doen is. Standaard tonen we er drie
+     (de meest contextuele eerst, want die kennen het aankomende event); de rest
+     staat één klik verderop. */
+  const [allesTonen, setAllesTonen] = useState(false);
+  const keuken = allesTonen ? keukenAlles : keukenAlles.slice(0, 2);
+  const zaak = allesTonen ? zaakAlles : zaakAlles.slice(0, 1);
+  const verborgen = (keukenAlles.length - keuken.length) + (zaakAlles.length - zaak.length);
 
   return (
     <div
@@ -119,6 +128,19 @@ export default function AIQuickPrompts({ onPrompt, heroEvent = null }: Props): R
         <Column items={keuken} title="Keuken" accent="#86efac" onPrompt={onPrompt} />
         <Column items={zaak} title="Zaak" accent="var(--brand)" onPrompt={onPrompt} />
       </div>
+
+      {verborgen > 0 && (
+        <button
+          type="button"
+          onClick={function () { setAllesTonen(true); }}
+          style={{
+            marginTop: 8, background: 'none', border: 'none', color: 'var(--brand)',
+            font: '600 12px var(--font-sans)', cursor: 'pointer', padding: 0, minHeight: 32,
+          }}
+        >
+          Nog {verborgen} vragen tonen
+        </button>
+      )}
 
       <style>{`
         @media (max-width: 640px) {
