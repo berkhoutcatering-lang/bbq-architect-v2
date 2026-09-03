@@ -8912,7 +8912,27 @@ html, body { max-width: 100vw; overflow-x: clip; }
     padding-top: 14px !important;
     padding-bottom: 14px !important;
     min-height: 44px;
+    /* Stond op wrap: "PLANNEN > Events > cor Berkhout - 16 aug" viel op een
+       telefoon over drie regels en at 95 van de 812 px op vóór de pagina begon.
+       Nu één regel die zijwaarts schuift; het staartje is het belangrijkst en
+       staat rechts, dus we scrollen daar standaard naartoe. */
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
   }
+
+  .breadcrumb-nav::-webkit-scrollbar { display: none; }
+  .breadcrumb-nav > * { flex-shrink: 0; }
+}
+
+/* Heeft de pagina zelf al een terug-knop van 44 px met een label, dan zegt de
+   kruimelbalk erboven hetzelfde in 11 px naast de hamburger. Op een telefoon
+   kost dat 73 van de 812 px voor iets wat je slechter kunt raken. Eén van de
+   twee is genoeg, en dat is de knop. */
+@media (max-width: 767px) {
+  /* !important omdat het component zelf `display: flex` inline zet. */
+  body:has(.chassis-terug) .breadcrumb-nav { display: none !important; }
 }
 
 /* Price-intelligence inbox banner: button onder email-block stacken op mobile
@@ -10833,6 +10853,22 @@ html, body { max-width: 100vw; overflow-x: clip; }
      de knop plat, of andersom. */
   .chassis-hubheader-rij { flex-direction: column; align-items: stretch; gap: 10px; }
   .chassis-acties > :first-child { flex: 1; justify-content: center; min-height: 44px; }
+}
+
+/* KPI-rij van het chassis. Vijf tegels op desktop, twee op de telefoon —
+   niet één per rij, want dan duw je de inhoud een scherm naar beneden. */
+.chassis-kpi-rij {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .chassis-kpi-rij { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .chassis-kpi-rij { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 
 /* Eén takenlijst op Vandaag — vervangt drie briefings die hetzelfde vertelden. */

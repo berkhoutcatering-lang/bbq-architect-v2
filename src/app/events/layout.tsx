@@ -13,6 +13,16 @@ export default function EventsLayout({ children }: { children: ReactNode }) {
     return <>{children}</>;
   }
 
+  /* Binnen één event schakel je niet tussen Agenda en Events — daar heb je het
+     kruimelpad voor. Deze balk stond mee te tellen in de vijf navigatierijen
+     die op de event-hub boven de eerste inhoud stonden. Op de lijst zelf blijft
+     hij staan, want daar dóé je die keuze. */
+  const isEventDetail = /^\/events\/[^/]+(\/.*)?$/.test(pathname || '');
+
+  if (isEventDetail) {
+    return <>{children}</>;
+  }
+
   return (
     <>
       <div style={{ padding: '16px 32px 0' }}>

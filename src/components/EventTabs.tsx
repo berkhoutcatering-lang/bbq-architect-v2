@@ -7,6 +7,12 @@ import { Calendar, MessageSquare, ClipboardList, ShieldCheck, ChefHat, Star, Tru
 interface Props {
   eventId: number | string;
   eventName?: string;
+  /**
+   * De regel "Event #10 · cor Berkhout" boven de tabs. Uit op pagina's die de
+   * naam al in hun kop hebben staan — daar was het de vierde rij die hetzelfde
+   * zei als de eerste drie.
+   */
+  toonKop?: boolean;
 }
 
 /**
@@ -14,7 +20,7 @@ interface Props {
  * en /haccp wanneer een ?event=<id> query-string aanwezig is. Maakt de event-as-container
  * filosofie zichtbaar: alle tab-routes horen bij hetzelfde event en wijken niet af.
  */
-export default function EventTabs({ eventId, eventName }: Props) {
+export default function EventTabs({ eventId, eventName, toonKop = true }: Props) {
   const pathname = usePathname() || '';
   const search = useSearchParams();
   const queryEventId = search?.get('event');
@@ -67,19 +73,21 @@ export default function EventTabs({ eventId, eventName }: Props) {
 
   return (
     <div style={{ marginBottom: 16 }}>
-      <div
-        style={{
-          fontSize: 11,
-          fontWeight: 600,
-          color: 'var(--muted)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-          marginBottom: 8,
-        }}
-      >
-        Event #{eventId}
-        {eventName ? ' · ' + eventName : ''}
-      </div>
+      {toonKop && (
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: 'var(--muted)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            marginBottom: 8,
+          }}
+        >
+          Event #{eventId}
+          {eventName ? ' · ' + eventName : ''}
+        </div>
+      )}
       <div className="tab-bar" role="tablist" aria-label="Event-navigatie">
         {tabs.map((t) => {
           const Icon = t.icon;
