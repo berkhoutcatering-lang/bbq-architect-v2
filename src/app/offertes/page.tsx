@@ -40,6 +40,7 @@ import type { Offerte, Factuur, Gerecht, InventoryItem, Gang, MenuTemplateRow } 
 
 import { formatEur, formatPercent } from '@/lib/format';
 
+import { klantTypeVoor } from '@/lib/klantType';
 /* ── Offerte-bewerk UI-primitieven (nagebouwd uit Sam's design-zip) ──────────
    Lichtgewicht dropdown + BTW-picker. De rest van de kaart-layout staat inline
    in de edit-view; alleen deze twee hebben eigen open-state + outside-click. */
@@ -485,7 +486,8 @@ export default function Offertes() {
                     }
                 }
                 payload.offerte_id = qid;
-                payload.type = 'Zakelijk';
+                /* Stond hard op 'Zakelijk', voor elke bruiloft en verjaardag. */
+                payload.type = await klantTypeVoor(supabase, orgId, quoteData.client_naam);
                 payload.menu = [];
                 payload.organization_id = orgId;
                 const ins = await supabase.from('events').insert(payload).select();

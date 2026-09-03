@@ -71,8 +71,9 @@ export const navSections: NavSection[] = [
         children: [
             { label: "Gerechten", icon: <ChefHat size={16} />, href: "/gerechten", description: "Wat je verkoopt: samengesteld uit componenten, met marge en allergenen-cascade" },
             { label: "Componenten", icon: <Boxes size={16} />, href: "/gerechten/componenten", description: "Atomaire bouwstenen — zelf-bereid of inkoop. Wijzig één keer, alle gerechten passen mee" },
+            { label: "Menukaarten", icon: <BookOpen size={16} />, href: "/gerechten/menukaarten", description: "Per gang kiezen wat erop staat; als sjabloon in één klik in een offerte" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
-            { label: "Menu-analyse", icon: <TrendingUp size={16} />, href: "/gerechten/analyse", description: "Welke gerechten verdienen hun plek — populariteit × marge" },
+            { label: "Analyse", icon: <TrendingUp size={16} />, href: "/gerechten/analyse", description: "Welke gerechten verdienen hun plek — populariteit × marge" },
         ],
     },
     {

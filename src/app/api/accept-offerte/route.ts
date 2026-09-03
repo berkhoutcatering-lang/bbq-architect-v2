@@ -8,6 +8,7 @@ import { mailOfferteGeaccepteerd, mailFactuurServer } from '@/lib/serverMail';
 import { isOfferteAccepted, OFFERTE_STATUS, EVENT_STATUS } from '@/lib/statuses';
 import { resolveClientEmail } from '@/lib/resolveClientEmail';
 
+import { klantTypeVoor } from '@/lib/klantType';
 /* Zod-schema voor accept-payload — voorkomt XSS in signedBy (komt in
    audit-PDF + email), DoS via mega-signatureUrl, en string-injection
    in publicToken. Klant-facing endpoint: liberaal genoeg om geldige
@@ -191,7 +192,8 @@ export async function POST(req: NextRequest) {
                 eventId = existing.id;
             } else {
                 payload.offerte_id = offerteId;
-                payload.type = 'Zakelijk';
+                /* Stond hard op 'Zakelijk', voor elke bruiloft en verjaardag. */
+                payload.type = await klantTypeVoor(sb, orgId, offerte.client_naam);
                 payload.menu = [];
                 const ins = await sb.from('events').insert(payload).select();
                 eventId = ins.data && ins.data[0] ? ins.data[0].id : null;

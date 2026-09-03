@@ -1,5 +1,6 @@
 'use client';
 
+import { notFound } from 'next/navigation';
 import BlockRenderer from '@/components/ai/BlockRenderer';
 import type { Block } from '@/lib/ai/blocks';
 
@@ -132,6 +133,10 @@ const SAMPLE_BLOCKS: Block[] = [
 ];
 
 export default function AiBlocksPreviewPage() {
+    /* Ontwikkelhulp. Werd meegebouwd en was bereikbaar in productie; hoort
+       daar niet. */
+    if (process.env.NODE_ENV === 'production') notFound();
+
     return (
         <main
             style={{
