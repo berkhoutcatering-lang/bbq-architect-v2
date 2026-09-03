@@ -299,7 +299,9 @@ export default function RitDetailClient({ id }: Props) {
         {/* Big stats */}
         <div className="hero-stats">
           {[
-            { label: 'Afstand', value: fmtKm(km), sub: 'gemeten heen', color: 'var(--text)' },
+            /* "gemeten heen" zei niet waar het getal vandaan komt. Dit is de
+               kilometerstand, en dat is het getal dat fiscaal telt. */
+            { label: 'Afstand', value: fmtKm(km), sub: 'volgens je km-standen', color: 'var(--text)' },
             {
               label: 'Aftrekbaar',
               value: rit.zakelijk ? fmtEur(aftrekEur) : 'Niet aftrekbaar',

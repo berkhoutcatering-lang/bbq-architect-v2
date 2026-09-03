@@ -12,6 +12,8 @@ import { useOrg } from '@/lib/OrgContext';
 import { useAuth } from '@/lib/AuthContext';
 import { useToast } from '@/components/Toast';
 
+import { fmtNl } from '@/lib/utils';
+import { statusLabel } from '@/components/StatusBadge';
 /**
  * SF-4 — Event-day field view (mobile-first)
  * Telefoon-context: 1 hand, vluchtige aandacht. Alle targets ≥ 56px.
@@ -183,7 +185,8 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
           </Link>
           <div className="flex-1 min-w-0">
             <div className="text-[15px] font-bold truncate">{event.name}</div>
-            <div className="text-[11px] text-[var(--muted)]">Veldmodus • {event.date}</div>
+            {/* Stond op de rauwe databasedatum: "2026-08-16". */}
+            <div className="text-[11px] text-[var(--muted)]">Veldmodus • {fmtNl(event.date)}</div>
           </div>
           <OfflineEventToggle eventId={parseInt(id, 10)} variant="compact" />
         </div>
@@ -199,7 +202,9 @@ export default function EventFieldPage({ params }: { params: Promise<{ id: strin
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-[0.15em] text-[var(--muted)] mb-1">Status</div>
-              <div className="text-[14px] font-medium">{event.status ?? '—'}</div>
+              {/* Stond op de rauwe Engelse databasewaarde "confirmed", terwijl
+                  de rest van de app "Bevestigd" schrijft. statusLabel bestond al. */}
+              <div className="text-[14px] font-medium">{event.status ? statusLabel(event.status) : '—'}</div>
             </div>
           </div>
           {event.location && (

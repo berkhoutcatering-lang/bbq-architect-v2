@@ -34,11 +34,19 @@ import { searchBonnen, type SearchInput } from '@/lib/dal/bonnen';
 import { fmtEur, fmtDate } from '@/app/archief/_components/format';
 import { Archive, FileText, ShieldCheck } from 'lucide-react';
 
-export const metadata = {
-    title: 'Boekhouder-pakket — BBQ Architect',
-    description: 'Read-only deellink voor boekhouder.',
-    robots: { index: false, follow: false },  // niet in search-engines
-};
+/* Was een vaste titel, dus /share/<onzin> kreeg in het tabblad
+   "Boekhouder-pakket" te zien terwijl de pagina zelf zegt dat de link niet
+   werkt. Een deel-token is 64 hex-tekens; die vorm controleren kost geen
+   databasequery en dekt precies dat geval. */
+export async function generateMetadata({ params }: PageProps) {
+    const { token } = await params;
+    const vormKlopt = /^[a-f0-9]{64}$/.test(token || '');
+    return {
+        title: vormKlopt ? 'Boekhouder-pakket — BBQ Architect' : 'Link werkt niet — BBQ Architect',
+        description: 'Deellink voor je boekhouder, alleen om te lezen.',
+        robots: { index: false, follow: false },  // niet in search-engines
+    };
+}
 
 export const dynamic = 'force-dynamic';
 
