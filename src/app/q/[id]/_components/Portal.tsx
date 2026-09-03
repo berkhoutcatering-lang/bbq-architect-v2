@@ -121,7 +121,14 @@ interface ParsedTotals {
 /* BTW-split: 9% over food-items (default), 21% over service-items.
    Server-side BTW-rate per item heeft voorrang als beschikbaar (item.btw).
    Items zonder expliciete btw vallen onder settings.default_btw (default 9%). */
-function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string): ParsedTotals {
+/** De vroegste van twee ISO-datums; slaat lege waarden over. */
+function vroegste(a?: string, b?: string): string | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string, eventDatum?: string): ParsedTotals {
   let items: PortalOfferItem[] = [];
   if (typeof offer.items === 'string') {
     try { items = JSON.parse(offer.items); } catch { items = []; }
@@ -167,7 +174,10 @@ function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string):
   const remaining = totalIncl - deposit;
   return {
     food, service, btwFood, btwService, subtotalExcl, totalIncl, deposit, remaining,
-    depositDeadline: formatDate(geldigTot, { day: 'numeric', month: 'long', year: 'numeric' }),
+    /* De aanbetaling zet de datum vast, dus de uiterste betaaldatum kan nooit
+       ná het event liggen. Hier stond alleen `geldig_tot`, waardoor er op een
+       offerte voor 18 september "te voldoen voor 20 september" kwam te staan. */
+    depositDeadline: formatDate(vroegste(geldigTot, eventDatum), { day: 'numeric', month: 'long', year: 'numeric' }),
   };
 }
 
@@ -179,7 +189,13 @@ interface MenuGroup {
   dishes: PortalMenuSelDish[];
 }
 
+/* `num` is puur de sorteervolgorde van de gangen — niet het nummer dat de klant
+   ziet. Dat werd het eerder wél, met als resultaat een menukaart die begon bij
+   "00" en een gat liet vallen ("00, 01, 02, 04") zodra een gang ontbrak. De
+   klant krijgt nu een doorlopende telling vanaf 01. */
 const COURSE_LABELS: Record<string, { num: string; label: string }> = {
+  bites:           { num: '00', label: 'Bites' },
+  hapjes:          { num: '00', label: 'Hapjes' },
   voorgerecht:     { num: '01', label: 'Voorgerecht' },
   voorgerechten:   { num: '01', label: 'Voorgerecht' },
   hoofdgerecht:    { num: '02', label: 'Hoofdgerecht' },
@@ -188,9 +204,20 @@ const COURSE_LABELS: Record<string, { num: string; label: string }> = {
   bijgerechten:    { num: '03', label: 'Bijgerecht' },
   dessert:         { num: '04', label: 'Dessert' },
   desserts:        { num: '04', label: 'Dessert' },
-  bites:           { num: '00', label: 'Bites' },
-  hapjes:          { num: '00', label: 'Hapjes' },
 };
+
+/* Een gerecht komt binnen als losse string of als object. Beide vormen moeten
+   hier hetzelfde uit komen, anders mist de tegel zijn naam. */
+function normaliseerGerechten(arr: unknown[]): PortalMenuSelDish[] {
+  return arr
+    .map(function (item) {
+      if (typeof item === 'string') return { naam: item } as PortalMenuSelDish;
+      return item as PortalMenuSelDish;
+    })
+    .filter(function (d) {
+      return !!(d && (d.naam || d.gerecht_naam));
+    });
+}
 
 function parseMenu(menuSel: PortalOffer['menu_selectie']): MenuGroup[] {
   if (!menuSel) return [];
@@ -204,23 +231,23 @@ function parseMenu(menuSel: PortalOffer['menu_selectie']): MenuGroup[] {
       return na.localeCompare(nb);
     });
     for (const k of keys) {
-      const arr = (menuSel as Record<string, PortalMenuSelDish[]>)[k];
+      const arr = (menuSel as Record<string, unknown[]>)[k];
       if (!Array.isArray(arr) || arr.length === 0) continue;
       const meta = COURSE_LABELS[k.toLowerCase()] || { num: '–', label: k };
-      groups.push({ num: meta.num, course: meta.label, dishes: arr });
+      /* In de database staan de gerechten per gang als losse strings
+         ({"bites": ["Crispy zalm", ...]}). Alleen shape 2 hieronder zette die om
+         naar { naam }; hier ging de array ongewijzigd door, waardoor `d.naam`
+         niet bestond en elke tegel terugviel op het woord "Gerecht". */
+      groups.push({ num: meta.num, course: meta.label, dishes: normaliseerGerechten(arr) });
     }
-    return groups;
+    /* Doorlopend nummeren vanaf 01, zodat er nooit een gat valt of op 00 wordt
+       begonnen als een gang ontbreekt. */
+    return groups.map((g, i) => ({ ...g, num: String(i + 1).padStart(2, '0') }));
   }
 
   // shape 2: flat array of dishes (no course grouping) → bucket onder "Menu"
   if (Array.isArray(menuSel)) {
-    const dishes: PortalMenuSelDish[] = menuSel.map(function (item) {
-      if (typeof item === 'string') {
-        return { naam: item } as PortalMenuSelDish;
-      }
-      return item;
-    });
-    return [{ num: '–', course: 'Menu', dishes }];
+    return [{ num: '01', course: 'Menu', dishes: normaliseerGerechten(menuSel) }];
   }
 
   return [];
@@ -263,12 +290,22 @@ function MapCard({ locatieNaam, locatieAdres, mapsQuery }: { locatieNaam: string
 function EventCard({ offer }: { offer: PortalOffer }) {
   const datum = formatDate(offer.datum);
   const tijd = '—';
+  let regels: PortalOfferItem[] = [];
+  if (typeof offer.items === 'string') {
+    try { regels = JSON.parse(offer.items); } catch { regels = []; }
+  } else if (Array.isArray(offer.items)) {
+    regels = offer.items;
+  }
+  const gastenAantal = offer.aantal_gasten || Number(regels[0]?.qty) || 0;
   const locatieNaam = offer.evenement_locatie || offer.client_adres || '—';
   const cells = [
     { ico: 'calendar', k: 'Datum', v: datum || '—' },
     { ico: 'clock', k: 'Tijd', v: tijd },
     { ico: 'pin', k: 'Locatie', v: locatieNaam },
-    { ico: 'users', k: 'Gasten', v: offer.aantal_gasten ? `${offer.aantal_gasten} personen` : '—' },
+    /* `aantal_gasten` blijft leeg als de offerte via de wizard is gemaakt; die
+       vraagt er niet om. Het aantal staat dan wel in de eerste offerteregel,
+       precies zoals /offertes/[id]/view het afleidt. */
+    { ico: 'users', k: 'Gasten', v: gastenAantal ? `${gastenAantal} personen` : '—' },
   ];
   return (
     <div className="pp-card pp-event">
@@ -485,7 +522,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
     email: settings?.email || '',
   };
   const defaultBtw = settings?.default_btw ?? 9;
-  const totals = calcTotals(offer, defaultBtw, offer.geldig_tot);
+  const totals = calcTotals(offer, defaultBtw, offer.geldig_tot, offer.datum);
   const menuGroups = parseMenu(offer.menu_selectie);
   const themeStyle = themeStyleVars(settings?.brand_theme);
   const themeMode = getThemeMode(settings?.brand_theme);
