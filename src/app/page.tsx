@@ -469,9 +469,20 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [today, events, facturen, offertes, inventory, prepTasks, klanten, gerechtenData, btwDeadline?.daysUntil]);
 
+  /* De briefing leunt op zeven bronnen die elk op een eigen moment binnenkomen.
+     Zolang er nog één laadt, verandert de kandidatenlijst per render — en omdat
+     CompactDagbriefing zijn cache-sleutel over die lijst hasht, miste de cache
+     altijd en ging er bij élke dashboard-lading opnieuw een AI-call af (gemeten:
+     4 per lading). Erger nog: de briefing adviseerde dan op halve data, dus twee
+     keer kijken gaf twee verschillende adviezen over dezelfde situatie.
+     Pas rekenen als alles binnen is. */
+  const briefingBronnenGeladen =
+    !ev.loading && !fac.loading && !off.loading && !inv.loading
+    && !pt.loading && !kl.loading && !ger.loading;
+
   const briefingCandidates = useMemo(
-    () => computeCandidates(briefingInput),
-    [briefingInput],
+    () => (briefingBronnenGeladen ? computeCandidates(briefingInput) : []),
+    [briefingInput, briefingBronnenGeladen],
   );
 
   const firstName = user?.user_metadata?.name
