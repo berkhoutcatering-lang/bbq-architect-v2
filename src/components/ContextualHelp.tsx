@@ -15,6 +15,11 @@ interface Article {
 /* Contextuele help per pad, voor de duur van de sessie. Artikelen wijzigen
    alleen als iemand ze in de CMS aanpast; een refresh haalt ze weer op. */
 const helpCache = new Map<string, Article[]>();
+/* De cache hierboven wordt pas gevuld als het antwoord binnen is. React roept
+   effecten in ontwikkelmodus twee keer aan, en de tweede aanroep zag dan nog
+   een lege cache — twee verzoeken voor hetzelfde pad. Hier houden we ook de
+   lopende belofte vast, zodat de tweede aanroep meelift. */
+const helpInFlight = new Map<string, Promise<Article[]>>();
 
 export default function ContextualHelp() {
   const pathname = usePathname();
@@ -38,13 +43,21 @@ export default function ContextualHelp() {
     }
 
     let cancelled = false;
-    fetch('/api/help/contextual?page=' + encodeURIComponent(pathname))
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        const list = (d.articles || []) as Article[];
-        helpCache.set(pathname, list);
-        if (!cancelled) setArticles(list);
-      })
+    const pad = pathname;
+    let belofte = helpInFlight.get(pad);
+    if (!belofte) {
+      belofte = fetch('/api/help/contextual?page=' + encodeURIComponent(pad))
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          const list = (d.articles || []) as Article[];
+          helpCache.set(pad, list);
+          return list;
+        })
+        .finally(function () { helpInFlight.delete(pad); });
+      helpInFlight.set(pad, belofte);
+    }
+    belofte
+      .then(function (list) { if (!cancelled) setArticles(list); })
       .catch(function () { /* silent */ });
 
     return function () { cancelled = true; };

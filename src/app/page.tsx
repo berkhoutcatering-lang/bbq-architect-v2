@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Bell, Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
+import { Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useSupabase } from '@/lib/useSupabase';
 import { useAuth } from '@/lib/AuthContext';
@@ -823,19 +823,6 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3 shrink-0">
-            <button
-              aria-label="Notificaties"
-              className="relative p-2 md:p-2.5 rounded-xl transition-colors min-w-touch min-h-touch flex items-center justify-center"
-              style={{ background: '#111115', border: '1px solid var(--card-solid)' }}
-            >
-              <Bell className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
-              {(verlopenFacturen.length > 0 || criticalConflicts.length > 0) && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                  style={{ background: 'var(--red)', border: '2px solid var(--color-bg-primary)' }}
-                />
-              )}
-            </button>
             <div className="dashboard-header__time ml-1 md:ml-2 text-right">
               <p
                 className="text-[11px] md:text-[11px] font-medium capitalize whitespace-nowrap"

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Layers, Trash2, Search, Plus, Check } from 'lucide-react';
 import { compatibleUnits } from '@/lib/unitPrice';
@@ -501,7 +502,7 @@ export default function GerechtenBouwEditor({
                 />
               </div>
 
-              {openResults && filteredOptions.length > 0 && (
+              {openResults && (filteredOptions.length > 0 || query.trim().length > 1) && (
                 <div
                   style={{
                     position: 'absolute',
@@ -512,7 +513,7 @@ export default function GerechtenBouwEditor({
                     background: 'var(--card)',
                     border: '1px solid var(--border)',
                     borderRadius: 8,
-                    maxHeight: 220,
+                    maxHeight: 260,
                     overflowY: 'auto',
                   }}
                 >
@@ -538,12 +539,40 @@ export default function GerechtenBouwEditor({
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ fontWeight: 600 }}>{opt.name}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <span style={{ fontWeight: 600, minWidth: 0 }}>{opt.name}</span>
+                        {/* De prijs stond hier niet, dus je koos blind een
+                            bouwsteen en zag de kostprijs pas ná het koppelen. */}
+                        <span style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {opt.base_cost_cents > 0 ? fmtEuroFromCents(opt.base_cost_cents) : 'geen prijs'}
+                        </span>
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                         {typeLabel(opt.type)} · basis {opt.base_quantity} {opt.base_unit}
                       </div>
                     </button>
                   ))}
+
+                  {/* Deze picker doorzoekt je eigen bouwstenen. De duizenden
+                      producten uit je prijslijsten zitten op
+                      /gerechten/uit-catalogus, en dat pad was vanuit dit scherm
+                      nergens zichtbaar — terwijl inkoop juist bij de groothandel
+                      begint. */}
+                  {query.trim().length > 1 && filteredOptions.length < 3 && (
+                    <Link
+                      href="/gerechten/uit-catalogus"
+                      style={{
+                        display: 'block', padding: '10px 12px', fontSize: 12,
+                        color: 'var(--muted)', textDecoration: 'none',
+                        background: 'var(--bg-subtle)',
+                      }}
+                    >
+                      {filteredOptions.length === 0 && `Geen bouwsteen "${query.trim()}" gevonden. `}
+                      <span style={{ color: 'var(--brand)', fontWeight: 600 }}>
+                        Zoek in je prijslijsten →
+                      </span>
+                    </Link>
+                  )}
                 </div>
               )}
             </div>
