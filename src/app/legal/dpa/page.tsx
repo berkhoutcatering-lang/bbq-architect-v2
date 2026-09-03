@@ -1,11 +1,15 @@
+import ConceptMelding from '@/components/legal/ConceptMelding';
+import { aanbieder } from '@/lib/legal';
+
 export default function DpaPage() {
   return (
     <>
       <h1>Verwerkersovereenkomst (DPA)</h1>
       <p className="text-[12px] uppercase tracking-[0.15em] text-[var(--muted)]">Versie 1.0 · 2026-04-21</p>
 
+      <ConceptMelding />
+
       <p>
-        <strong className="text-[var(--color-accent-gold)]">Concept — nog te reviewen door jurist.</strong>
         Deze verwerkersovereenkomst (DPA) hoort bij de algemene voorwaarden van BBQ Architect en is van kracht
         zodra Klant en Aanbieder een overeenkomst aangaan voor de Dienst. Klant is Verwerkingsverantwoordelijke,
         Aanbieder is Verwerker in de zin van artikel 28 AVG.
