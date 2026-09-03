@@ -129,13 +129,20 @@ export default function AiUsagePage() {
             d.setDate(1); d.setHours(0, 0, 0, 0);
             return d.toISOString();
         })();
-        const callsThisMonth = rows.filter(function (r) { return r.created_at >= startOfMonthIso; }).length;
+        const rijenDezeMaand = rows.filter(function (r) { return r.created_at >= startOfMonthIso; });
+        const callsThisMonth = rijenDezeMaand.length;
+        /* "Totale spend" stond naast "Calls deze maand" maar telde álle regels
+           op. Daardoor zei deze pagina € 1,39 waar /systeem en /geld € 0,31
+           meldden — twee getallen voor dezelfde vraag, en het label loog.
+           Nu allebei over deze maand, met het totaal apart. */
+        const costThisMonthCents = rijenDezeMaand.reduce(function (som, r) { return som + r.cost_eur_cents; }, 0);
         const capProgress = cap > 0 ? callsThisMonth / cap : 0;
 
         return {
             monthly,
             actionTypes: Array.from(actionTypes),
             totalCostCents,
+            costThisMonthCents,
             totalCalls,
             cacheHitRatio,
             cap,
@@ -174,7 +181,13 @@ export default function AiUsagePage() {
                     {/* KPI cards */}
                     <div className="grid sm:grid-cols-4 gap-3">
                         <KpiCard icon={<Activity className="w-4 h-4" />} label="Calls deze maand" value={String(stats.callsThisMonth)} accent={GOLD} />
-                        <KpiCard icon={<Database className="w-4 h-4" />} label="Totale spend" value={formatEurCents(stats.totalCostCents)} accent="#22c55e" />
+                        <KpiCard
+                            icon={<Database className="w-4 h-4" />}
+                            label="Kosten deze maand"
+                            value={formatEurCents(stats.costThisMonthCents)}
+                            accent="#22c55e"
+                            hint={stats.totalCostCents > stats.costThisMonthCents ? `${formatEurCents(stats.totalCostCents)} sinds het begin` : undefined}
+                        />
                         <KpiCard
                             icon={<Cpu className="w-4 h-4" />}
                             label="Cache-hit ratio"

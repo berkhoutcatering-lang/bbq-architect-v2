@@ -201,10 +201,18 @@ function ZoneKeuze({ perZone, zonderZone, totaal, onKies }: {
     totaal: number;
     onKies: (z: Zone) => void;
 }) {
-    const waarde = useMemo(
-        () => Object.values(perZone).flat().reduce((s, i) => s + i.current_stock * (i.purchase_price ?? 0), 0),
-        [perZone],
-    );
+    /* Dit vakje heette "Voorraadwaarde" en stond op € 0,00 terwijl /voorraad
+       € 1.544,45 meldde. Het meet iets anders: de waarde van wat je in deze
+       ronde geteld hebt. Staat er geen inkoopprijs bij een product, dan telt
+       het voor niets mee — dus zeggen we ook hoeveel producten dat zijn in
+       plaats van een bedrag te tonen dat te laag is zonder uitleg. */
+    const { waarde, zonderPrijs } = useMemo(() => {
+        const items = Object.values(perZone).flat();
+        return {
+            waarde: items.reduce((s, i) => s + i.current_stock * (i.purchase_price ?? 0), 0),
+            zonderPrijs: items.filter((i) => !i.purchase_price).length,
+        };
+    }, [perZone]);
 
     return (
         <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge) 40px', maxWidth: 720, margin: '0 auto' }}>
@@ -220,9 +228,16 @@ function ZoneKeuze({ perZone, zonderZone, totaal, onKies }: {
             </p>
 
             {totaal > 0 && (
-                <div style={{ ...kaartStyle, padding: 14, marginBottom: 18, display: 'flex', gap: 20 }}>
+                <div style={{ ...kaartStyle, padding: 14, marginBottom: 18, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
                     <Stat label="Geteld" waarde={String(totaal)} />
-                    <Stat label="Voorraadwaarde" waarde={fmt(waarde)} kleur={GOLD} />
+                    <Stat
+                        label="Waarde van je telling"
+                        waarde={zonderPrijs === totaal ? '—' : fmt(waarde)}
+                        kleur={GOLD}
+                        onder={zonderPrijs > 0
+                            ? `${zonderPrijs} van de ${totaal} zonder inkoopprijs`
+                            : undefined}
+                    />
                 </div>
             )}
 
@@ -284,7 +299,7 @@ function ZoneKeuze({ perZone, zonderZone, totaal, onKies }: {
     );
 }
 
-function Stat({ label, waarde, kleur }: { label: string; waarde: string; kleur?: string }) {
+function Stat({ label, waarde, kleur, onder }: { label: string; waarde: string; kleur?: string; onder?: string }) {
     return (
         <div>
             <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em' }}>{label}</div>
@@ -292,6 +307,9 @@ function Stat({ label, waarde, kleur }: { label: string; waarde: string; kleur?:
                 fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300,
                 color: kleur ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2,
             }}>{waarde}</div>
+            {onder && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{onder}</div>
+            )}
         </div>
     );
 }
