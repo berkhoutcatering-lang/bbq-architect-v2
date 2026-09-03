@@ -43,6 +43,7 @@ import BriefingTimeline from '@/components/dashboard/today/BriefingTimeline';
 
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
+import { localMonthKey } from '@/lib/today/date-keys';
 import { compute6MonthRevenue } from '@/lib/today/revenue-buckets';
 import { computeSupplierSpend } from '@/lib/today/supplier-spend';
 import {
@@ -145,8 +146,11 @@ export default function DashboardPage() {
 
   const heroRow = nextEventsList[0] || null;
 
-  const curMonthPrefix = new Date().toISOString().slice(0, 7);
-  const monthEvents = events.filter((e) => e.date?.startsWith(curMonthPrefix));
+  const curMonthPrefix = localMonthKey(new Date());
+  const monthEvents = events.filter(
+    (e) => e.date?.startsWith(curMonthPrefix)
+      && e.status !== 'cancelled' && (e.status as string) !== 'geannuleerd',
+  );
   const monthRevenue = monthEvents.reduce((s: number, e) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
   const heroRevenue = heroRow ? (heroRow.guests || 0) * (heroRow.ppp || 0) : 0;
 

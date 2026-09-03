@@ -8,6 +8,7 @@ import HBarList from '@/components/charts/HBarList';
 import type { RevenueMixSlice } from '@/lib/today/revenue-mix';
 import type { RevenueMonthBucket } from '@/lib/today/revenue-buckets';
 import type { SupplierSpendRow } from '@/lib/today/supplier-spend';
+import { formatEurInt } from '@/lib/format';
 
 interface Props {
   revenueMix: RevenueMixSlice[];
@@ -18,13 +19,13 @@ interface Props {
   onOpenFinancien?: () => void;
 }
 
-function formatEuro(v: number): string {
-  return `€ ${v.toLocaleString('nl-NL')}`;
-}
+/* Geld-canon is src/lib/format.ts. De lokale variant hier rondde niet af,
+ * waardoor een maandtotaal van 3567.3 als "€ 3.567,3" op het dashboard stond. */
+const formatEuro = formatEurInt;
 
 function formatEuroShort(v: number): string {
   if (v >= 1000) return `€ ${(v / 1000).toFixed(1)}k`;
-  return `€ ${v}`;
+  return formatEurInt(v);
 }
 
 export default function BusinessCharts({
