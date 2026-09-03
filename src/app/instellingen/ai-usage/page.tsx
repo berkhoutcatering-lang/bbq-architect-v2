@@ -162,8 +162,8 @@ export default function AiUsagePage() {
             <div className="mb-6 p-3 rounded-lg border border-[var(--card-solid)] bg-[var(--card)]/40 flex items-start gap-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-                    Pillar 5 — geen concurrent toont cache-hit-ratio per tenant. Cache-reads zijn 10x goedkoper dan
-                    fresh tokens; hoe hoger de hit-ratio, hoe efficiënter onze prompts.
+                    Een aanroep die uit de cache komt kost tien keer minder dan een verse. Hoe hoger dit
+                    percentage, hoe goedkoper je AI-gebruik uitpakt.
                 </p>
             </div>
 

@@ -32,6 +32,9 @@ export default function BlockRenderer({ block, documentType }: { block: Template
     return text.replace(/\{\{(\w+)\}\}/g, function (_m, key) {
       // Live event-data wint van EXAMPLE_DATA wanneer TemplatePreview een context levert
       if (liveVars && key in liveVars) return liveVars[key];
+      // Daarna je eigen bedrijfsgegevens uit Instellingen — nooit een verzonnen
+      // IBAN of KvK-nummer in een factuurvoorbeeld.
+      if (branding.bedrijfsgegevens && key in branding.bedrijfsgegevens) return branding.bedrijfsgegevens[key];
       return EXAMPLE_DATA[key] || key;
     });
   }
@@ -89,7 +92,7 @@ export default function BlockRenderer({ block, documentType }: { block: Template
           <div>
             {block.fields.filter(function (f) { return f.visible && ['client_naam', 'client_adres'].includes(f.key); }).map(function (f) {
               return <div key={f.key} style={{ fontSize: (f.bold ? 11 : 9) * PT, fontWeight: f.bold ? 700 : 400, color: isDark ? '#e8e0d0' : '#333', marginBottom: 1 * MM }}>
-                {f.label ? f.label + ': ' : ''}{EXAMPLE_DATA[f.key] || f.key}
+                {f.label ? f.label + ': ' : ''}{branding.bedrijfsgegevens?.[f.key] || EXAMPLE_DATA[f.key] || f.key}
               </div>;
             })}
           </div>

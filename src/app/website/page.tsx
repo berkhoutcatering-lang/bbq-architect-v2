@@ -134,7 +134,7 @@ export default function WebsiteBeheer() {
                 <div className="mt-3 p-3 rounded-lg bg-yellow-900/20 border border-yellow-700/30">
                     <p className="text-yellow-400 text-xs">
                         <AlertTriangle size={14} />
-                        De Next.js website draait voorlopig op <strong>localhost</strong>. Wijzigingen worden direct in Supabase opgeslagen en binnen 60 sec opgepikt.
+                        Je wijzigingen worden meteen bewaard en staan binnen een minuut op de site.
                     </p>
                 </div>
             </div>

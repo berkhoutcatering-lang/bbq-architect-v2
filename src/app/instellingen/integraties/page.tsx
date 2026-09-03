@@ -216,7 +216,7 @@ export default function IntegratiesPage() {
         actions={[
           { lead: 'Klik een integratie open', text: 'om te zien hoe je hem koppelt — meestal 1 knop en een redirect terug.' },
           { lead: 'De groene puntjes', text: 'naast elke integratie laten zien of de koppeling actief en gezond is.' },
-          { lead: 'Webhooks bovenin', text: 'gebruiken developers om eigen automatiseringen te maken — voor dagelijks gebruik heb je ze niet nodig.' },
+          { lead: 'Webhooks bovenin', text: 'zijn er om je eigen automatiseringen aan te hangen. Voor dagelijks gebruik heb je ze niet nodig.' },
         ]}
       />
       {/* Header */}
@@ -267,7 +267,7 @@ export default function IntegratiesPage() {
           <div className="hidden md:flex items-center gap-2">
             <Shield size={14} className="text-[var(--muted)]" />
             <span className="text-[11px] text-[var(--muted)]">
-              Credentials via .env.local
+              Sleutels staan op de server, niet in je browser
             </span>
           </div>
         </div>
