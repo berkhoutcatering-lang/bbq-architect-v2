@@ -261,9 +261,7 @@ export default function ReflectiePage() {
                 <button className="btn btn-ghost btn-sm" onClick={function () { router.push(`/events/${eventId}/hub`); }}>
                     <ArrowLeft size={14} /> Event-hub
                 </button>
-                <h1 style={{ fontSize: 18, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Flame size={15} style={{ color: 'var(--brand)' }} /> Reflectie · {event.name}
-                </h1>
+                <h1 className="chassis-titel" style={{ fontSize: 22 }}>Reflectie · {event.name}</h1>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtNl(event.date)} · {event.guests} gasten</span>
             </div>
 

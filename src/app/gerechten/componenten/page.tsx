@@ -878,7 +878,7 @@ export default function ComponentenPage() {
                     style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border)' }}
                 >
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-                        <h1 className="mr-page-title" style={{ fontSize: 22 }}>Componenten</h1>
+                        <h1 className="chassis-titel">Componenten</h1>
                         <span style={{ fontSize: 13, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
                             {telling}
                         </span>

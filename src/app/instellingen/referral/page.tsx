@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 
 import { formatEurInt } from '@/lib/format';
 
+import HubHeader from '@/components/chassis/HubHeader';
 /**
  * Referral-programma UI (playbook §L)
  *
@@ -94,10 +95,10 @@ export default function ReferralPage() {
         Terug naar Instellingen
       </Link>
 
-      <h1 className="text-2xl font-extralight text-[var(--text)] mb-2">Referral-programma</h1>
-      <p className="text-[13px] text-[var(--muted)] mb-8">
-        Verwijs een collega-caterier en jullie krijgen beiden <strong className="text-[var(--color-accent-gold)]">€50 tegoed</strong> op het abonnement zodra zij hun eerste betaling doen.
-      </p>
+      <HubHeader
+        titel="Referral-programma"
+        onderschrift={<>Verwijs een collega-cateraar en jullie krijgen beiden <strong style={{ color: 'var(--brand-gold)' }}>€ 50 tegoed</strong> op het abonnement zodra zij hun eerste betaling doen.</>}
+      />
 
       {/* Hoe werkt het */}
       <section className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] p-6 mb-6">

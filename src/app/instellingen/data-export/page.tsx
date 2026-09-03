@@ -7,6 +7,7 @@ import { useOrg } from '@/lib/OrgContext';
 import { removeDemoData } from '@/lib/demoData';
 import { useToast } from '@/components/Toast';
 
+import HubHeader from '@/components/chassis/HubHeader';
 /**
  * SF-11 — Data-export & -verwijdering voor AVG-compliance.
  *
@@ -70,10 +71,10 @@ export default function DataExportPage() {
         Terug naar Instellingen
       </Link>
 
-      <h1 className="text-2xl font-extralight text-[var(--text)] mb-2">Data &amp; privacy</h1>
-      <p className="text-[13px] text-[var(--muted)] mb-8">
-        Exporteer of verwijder data voor de organisatie <strong className="text-[var(--text)]">{organization?.name || '...'}</strong>.
-      </p>
+      <HubHeader
+        titel="Data & privacy"
+        onderschrift={<>Exporteer of verwijder data voor de organisatie <strong style={{ color: 'var(--text)' }}>{organization?.name || '...'}</strong>.</>}
+      />
 
       {/* ───── Data export ───── */}
       <section className="rounded-2xl border border-[var(--card-solid)] bg-[var(--card)] p-6 mb-6">

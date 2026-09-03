@@ -127,8 +127,8 @@ export default function WebsiteBeheer() {
                         <Globe size={14} className="text-[var(--blue)]" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-[var(--text)]">Website Beheer</h1>
-                        <p className="text-[var(--muted)] text-sm">Content beheren voor hopbites.nl</p>
+                        <h1 className="chassis-titel">Website</h1>
+                        <p className="chassis-onderschrift">Content beheren voor hopbites.nl</p>
                     </div>
                 </div>
                 <div className="mt-3 p-3 rounded-lg bg-yellow-900/20 border border-yellow-700/30">

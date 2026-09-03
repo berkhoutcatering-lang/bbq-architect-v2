@@ -10,6 +10,7 @@ import { TIER_LIMITS, type Tier } from '@/lib/featureFlags';
 
 import { formatEur, formatPercent } from '@/lib/format';
 
+import HubHeader from '@/components/chassis/HubHeader';
 /**
  * /instellingen/ai-usage
  *
@@ -153,18 +154,10 @@ export default function AiUsagePage() {
                 Terug naar Instellingen
             </Link>
 
-            <div className="flex items-start gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-gold)]/10 border border-[var(--color-accent-gold)]/20 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4 text-[var(--color-accent-gold)]" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-extralight text-[var(--text)]">AI-gebruik en kosten</h1>
-                    <p className="text-[13px] text-[var(--muted)] mt-1">
-                        Transparant: zie precies wat AI je deze maand kost en welke calls cache-hit hadden.
-                        Voor <strong className="text-[var(--text)]">{organization?.name || '...'}</strong>.
-                    </p>
-                </div>
-            </div>
+            <HubHeader
+                titel="AI-gebruik en kosten"
+                onderschrift={<>Wat AI je deze maand kost en welke aanroepen uit de cache kwamen. Voor <strong style={{ color: 'var(--text)' }}>{organization?.name || '...'}</strong>.</>}
+            />
 
             <div className="mb-6 p-3 rounded-lg border border-[var(--card-solid)] bg-[var(--card)]/40 flex items-start gap-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />

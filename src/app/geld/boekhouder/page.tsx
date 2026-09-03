@@ -167,12 +167,8 @@ export default function BoekhouderPage() {
     <div className="boekhouder-page" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: 0, marginBottom: 4 }}>
-            Boekhouder
-          </h1>
-          <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-            RGS-categorisering · maandelijks pakket dat je boekhouder zo importeert
-          </div>
+          <h1 className="chassis-titel">Boekhouder</h1>
+          <div className="chassis-onderschrift">RGS-categorisering · maandelijks pakket dat je boekhouder zo importeert</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button

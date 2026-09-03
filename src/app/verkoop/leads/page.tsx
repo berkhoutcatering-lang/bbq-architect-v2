@@ -319,14 +319,14 @@ export default function LeadsPage() {
     <div className="leads-root" style={{ padding: '8px 28px 40px', maxWidth: 1340, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div>
-          <h1 style={{ fontSize: 27, fontWeight: 800, color: 'var(--text)', margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 className="chassis-titel" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             Aanvragen
             {!isEmpty && total > 0 && (
               <span className="mono" style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted-light)', background: 'var(--card-solid)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 10px' }}>{total}</span>
             )}
           </h1>
-          <p style={{ color: 'var(--muted)', fontSize: 14, marginTop: 5, maxWidth: 540, lineHeight: 1.45 }}>Inkomende aanvragen — van eerste contact tot gewonnen offerte.</p>
+          <p className="chassis-onderschrift" style={{ maxWidth: 540, lineHeight: 1.45 }}>Inkomende aanvragen — van eerste contact tot gewonnen offerte.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           {!isEmpty && (

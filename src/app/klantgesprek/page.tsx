@@ -316,8 +316,8 @@ export default function KlantGesprek() {
           <HeartHandshake className="w-5 h-5 text-[var(--color-accent-gold)]" />
         </div>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 300, color: 'white', letterSpacing: '-0.02em' }}>Klantgesprek</h1>
-          <p style={{ fontSize: 12, color: 'var(--muted)' }}>Intake bij potentiële klant</p>
+          <h1 className="chassis-titel">Klantgesprek</h1>
+          <p className="chassis-onderschrift">Intake bij een potentiële klant</p>
         </div>
       </div>
 

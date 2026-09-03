@@ -14,6 +14,7 @@ import { BcgMatrix } from '@/components/menu/analyse/BcgMatrix';
 import { HealthView } from '@/components/menu/analyse/HealthView';
 import { MREyebrow } from '@/components/menu/atoms';
 
+import HubHeader from '@/components/chassis/HubHeader';
 type View = 'performance' | 'health';
 
 interface Props {
@@ -37,10 +38,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount }
 
     return (
         <div className="mr-content" style={{ padding: '24px 32px 80px', maxWidth: 1500, width: '100%', margin: '0 auto' }}>
-            <h1 className="mr-page-title" style={{ marginBottom: 4 }}>Analyse</h1>
-            <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
-                Hoe presteert je menu — populariteit, marge en data-kwaliteit op één plek.
-            </p>
+            <HubHeader titel="Analyse" onderschrift="Hoe presteert je menu — populariteit, marge en data-kwaliteit op één plek." />
 
             {/* Sub-tabs */}
             <div className="mr-analyse-tabs" role="tablist" aria-label="Analyse weergave">

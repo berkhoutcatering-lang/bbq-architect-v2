@@ -33,6 +33,7 @@ import { useAgendaFilter, applyFilter } from './_lib/useAgendaFilter';
 import { useAgendaCategories, type AgendaCategoryRow } from './_lib/useAgendaCategories';
 import { useAgendaView, type AgendaViewMode } from './_lib/useAgendaView';
 
+import HubHeader from '@/components/chassis/HubHeader';
 const GOLD = '#c4a35a';
 const BRAND = '#FFBF00';
 
@@ -97,26 +98,16 @@ function AgendaHero({ kpis, onAiClick }: { kpis: AgendaKpis; onAiClick: () => vo
             background: `linear-gradient(135deg, ${BRAND}0a 0%, ${GOLD}05 50%, rgba(28,28,32,.7) 100%)`,
             border: `1px solid ${GOLD}30`, overflow: 'hidden',
         }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
-                <div style={{ minWidth: 0 }}>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Agenda</h1>
-                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        {kpis.isEmpty
-                            ? 'Nog geen events — maak er een aan via /events om je agenda op te bouwen'
-                            : 'Live agenda · gevoed door je events + prep-taken'}
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <HubHeader
+                titel="Agenda"
+                onderschrift={kpis.isEmpty
+                    ? 'Nog geen events — maak er een aan via Events om je agenda op te bouwen'
+                    : 'Live agenda · gevoed door je events en prep-taken'}
+                actie={<>
                     <SyncBadge live={!kpis.isEmpty} />
-                    <button onClick={onAiClick} style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 8,
-                        background: `linear-gradient(180deg, ${GOLD}, #9e781c)`, color: '#0a0a0c',
-                        fontWeight: 600, fontSize: 13, border: 'none', cursor: 'pointer',
-                    }}>
-                        <Sparkles size={14} /> AI Insights
-                    </button>
-                </div>
-            </div>
+                    <button className="btn btn-primary" onClick={onAiClick}><Sparkles size={14} /> AI Insights</button>
+                </>}
+            />
 
             <div className="agenda-kpi-grid">
                 <KpiTile Icon={PartyPopper} color={BRAND} label="Komende 30d" value={kpis.upcoming30d.toString()} sub="events bevestigd" />

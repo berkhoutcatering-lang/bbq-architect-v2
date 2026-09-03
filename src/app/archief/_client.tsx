@@ -113,14 +113,8 @@ export function ArchiefClient({
                 {/* Page header */}
                 <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                        <h1
-                            className="flex items-center gap-3 text-[28px] font-extralight tracking-tight md:text-[32px]"
-                            style={{ fontFamily: 'var(--font-display)' }}
-                        >
-                            <Archive size={28} style={{ color: 'var(--brand-gold)' }} />
-                            Bonnenkistje
-                        </h1>
-                        <p className="mt-1 text-[13px] text-[var(--muted)]">
+                        <h1 className="chassis-titel">Bonnenkistje</h1>
+                        <p className="chassis-onderschrift">
                             Typ <strong className="font-mono text-[var(--brand-gold)]">baktotaal</strong> —
                             vind elke bon over 7 jaar heen, tot op het woord.
                         </p>

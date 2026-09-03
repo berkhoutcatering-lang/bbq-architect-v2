@@ -7258,18 +7258,10 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   margin-bottom: 24px;
 }
 
-.page-header h1 {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.page-header .page-desc {
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: 4px;
-  max-width: 600px;
-}
+/* De h1- en .page-desc-regels die hier stonden (22px/700) zijn weg: PageHeader
+   zet nu de chassis-klassen, en `.page-header h1` won anders van
+   `.chassis-titel` op specificiteit. Alleen de maximale breedte blijft. */
+.page-header .page-desc { max-width: 600px; }
 
 .page-actions {
   display: flex;

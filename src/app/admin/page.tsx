@@ -215,8 +215,8 @@ export default function AdminPortal() {
               <Building2 size={20} style={{ color: 'var(--text)' }} />
             </div>
             <div>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text)', lineHeight: 1.2 }}>Platform Beheer</h1>
-              <p style={{ fontSize: 12, color: 'var(--muted)' }}>Ingelogd als {currentUser}</p>
+              <h1 className="chassis-titel">Platformbeheer</h1>
+              <p className="chassis-onderschrift">Ingelogd als {currentUser}</p>
             </div>
           </div>
           <a

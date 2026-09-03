@@ -141,15 +141,8 @@ export default function LeveranciersPage() {
                     marginBottom: 22, flexWrap: 'wrap', gap: 16,
                 }}>
                     <div>
-                        <h1 style={{
-                            fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34,
-                            letterSpacing: '-.015em', margin: 0, marginBottom: 4,
-                        }}>
-                            Leveranciers
-                        </h1>
-                        <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                            Beheer waar je producten + prijzen vandaan komen.
-                        </div>
+                        <h1 className="chassis-titel">Leveranciers</h1>
+                        <div className="chassis-onderschrift">Waar je producten en prijzen vandaan komen.</div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                         <Link
