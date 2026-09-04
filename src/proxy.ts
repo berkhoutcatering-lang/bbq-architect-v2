@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/q/', '/aanvraag/', '/arrangement/', '/invite', '/api/accept-offerte', '/api/public-offerte', '/api/public-lead-form', '/api/public-arrangement', '/api/billing/webhook', '/api/email/inbound', '/api/extension/', '/api/cron/', '/welkom', '/pricing', '/legal'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/q/', '/aanvraag/', '/arrangement/', '/invite', '/contact', '/api/contact', '/api/accept-offerte', '/api/public-offerte', '/api/public-lead-form', '/api/public-arrangement', '/api/billing/webhook', '/api/email/inbound', '/api/extension/', '/api/cron/', '/welkom', '/pricing', '/legal'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
