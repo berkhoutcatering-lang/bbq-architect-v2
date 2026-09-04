@@ -3,7 +3,9 @@ import { useState } from 'react';
 import MetallicCard from '@/components/MetallicCard';
 import PageHint from '@/components/PageHint';
 import FieldError from '@/components/FieldError';
-import { Send, CheckCircle, Mail, Phone, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Send, CheckCircle, Mail, Phone, Loader2, ArrowLeft } from 'lucide-react';
+import { useAuth } from '@/lib/AuthContext';
 
 /* Support-email + telefoon komen uit env zodat een tenant deze kan
    overschrijven zonder code-deploy. Fallbacks zijn de Hop & Bites
@@ -12,6 +14,9 @@ const SUPPORT_EMAIL = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || 'support@bbqarchi
 const SUPPORT_PHONE = process.env.NEXT_PUBLIC_SUPPORT_PHONE || '';
 
 export default function Contact() {
+    /* Alleen om te weten of er iemand is ingelogd — de pagina zelf leest niets
+       uit de database en werkt net zo goed zonder sessie. */
+    const { user } = useAuth();
     const [form, setForm] = useState({
         naam: '',
         email: '',
@@ -87,8 +92,31 @@ export default function Contact() {
                 description="Neem contact op met het BBQ Architect team voor support en feedback"
             />
 
+            {/* Zonder sessie rendert AppShell deze pagina kaal: geen zijbalk,
+                geen weg terug. Juist wie hier komt omdat inloggen niet lukt,
+                moet daarna weer bij het inlogscherm kunnen. */}
+            {!user && (
+                <div style={{ marginBottom: 16, padding: '18px 0 0' }}>
+                    <Link
+                        href="/login"
+                        style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6,
+                            fontSize: 13, color: 'var(--muted)', textDecoration: 'none', minHeight: 44,
+                        }}
+                    >
+                        <ArrowLeft size={14} /> Terug naar inloggen
+                    </Link>
+                </div>
+            )}
+
             <div style={{ marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Contact</h2>
+                <h1 className="chassis-titel">Contact</h1>
+                {!user && (
+                    <p className="chassis-onderschrift">
+                        Lukt inloggen niet, of heb je nog geen account? Stuur hier een bericht;
+                        we antwoorden op het e-mailadres dat je opgeeft.
+                    </p>
+                )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, maxWidth: 800 }}>
