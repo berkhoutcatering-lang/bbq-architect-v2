@@ -296,9 +296,10 @@ export function HealthView({ gerechten, componentCount = 0, componentenZonderVer
                 </div>
             </div>
 
-            {/* Recipe completeness */}
+            {/* Hoe compleet je gerechten zijn */}
             <div className="mr-analyse-card">
-                <MREyebrow style={{ marginBottom: 14 }}>Recipe completeness</MREyebrow>
+                {/* Stond in het Engels op een Nederlands scherm. */}
+                <MREyebrow style={{ marginBottom: 14 }}>Hoe compleet zijn je gerechten</MREyebrow>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {completenessRows.map((c, i) => {
                         const color = c.pct >= 75 ? 'var(--green, #22c55e)' : c.pct >= 50 ? 'var(--amber, #f59e0b)' : 'var(--red, #ef4444)';

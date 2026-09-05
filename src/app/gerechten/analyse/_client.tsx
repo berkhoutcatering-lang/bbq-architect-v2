@@ -52,7 +52,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount, 
                     className={`mr-analyse-tab ${view === 'performance' ? 'active' : ''}`}
                     onClick={() => setView('performance')}
                 >
-                    <Target size={14} /> Performance
+                    <Target size={14} /> Prestatie
                 </button>
                 <button
                     role="tab"
@@ -60,7 +60,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount, 
                     className={`mr-analyse-tab ${view === 'health' ? 'active' : ''}`}
                     onClick={() => setView('health')}
                 >
-                    <HeartPulse size={14} /> Health
+                    <HeartPulse size={14} /> Gezondheid
                 </button>
             </div>
 
