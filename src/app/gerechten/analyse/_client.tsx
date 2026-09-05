@@ -21,11 +21,13 @@ interface Props {
     initialView: View;
     gerechten: Gerecht[];
     componentCount: number;
+    /** Componenten die nog op 100% opbrengst staan — zie de gezondheidsweergave. */
+    componentenZonderVerlies?: number;
     /** Echte populariteit per gerecht-id, geteld uit events en offertes. */
     populariteit?: Record<string, number>;
 }
 
-export default function AnalyseClient({ initialView, gerechten, componentCount, populariteit }: Props) {
+export default function AnalyseClient({ initialView, gerechten, componentCount, componentenZonderVerlies, populariteit }: Props) {
     const router = useRouter();
     const pathname = usePathname();
     /* Server doet de eerste split, hier alleen UI-state. We schrijven URL
@@ -50,7 +52,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount, 
                     className={`mr-analyse-tab ${view === 'performance' ? 'active' : ''}`}
                     onClick={() => setView('performance')}
                 >
-                    <Target size={14} /> Performance
+                    <Target size={14} /> Prestatie
                 </button>
                 <button
                     role="tab"
@@ -58,7 +60,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount, 
                     className={`mr-analyse-tab ${view === 'health' ? 'active' : ''}`}
                     onClick={() => setView('health')}
                 >
-                    <HeartPulse size={14} /> Health
+                    <HeartPulse size={14} /> Gezondheid
                 </button>
             </div>
 
@@ -69,7 +71,7 @@ export default function AnalyseClient({ initialView, gerechten, componentCount, 
                         <BcgMatrix gerechten={gerechten} popularity={populariteit} />
                     </div>
                 ) : (
-                    <HealthView gerechten={gerechten} componentCount={componentCount} />
+                    <HealthView gerechten={gerechten} componentCount={componentCount} componentenZonderVerlies={componentenZonderVerlies} />
                 )}
             </div>
         </div>
