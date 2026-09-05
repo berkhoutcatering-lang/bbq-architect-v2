@@ -9,11 +9,16 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, ChefHat, UtensilsCrossed } from 'lucide-react';
 import type { Gerecht } from '@/types';
 import { MREyebrow } from '@/components/menu/atoms';
+import Link from 'next/link';
 import { getMargin } from '@/components/menu/helpers';
+import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
+import { formatPercent } from '@/lib/format';
 
 interface Props {
     gerechten: Gerecht[];
     componentCount?: number;
+    /** Componenten die nog op opbrengst 1,000 staan (de standaardwaarde). */
+    componentenZonderVerlies?: number;
 }
 
 /* ── Donut chart (SVG) ────────────────────────────────────── */
@@ -104,7 +109,7 @@ function MRBarChart({ items, maxVal }: { items: BarItem[]; maxVal: number }) {
 }
 
 /* ── Health View (main) ───────────────────────────────────── */
-export function HealthView({ gerechten, componentCount = 0 }: Props) {
+export function HealthView({ gerechten, componentCount = 0, componentenZonderVerlies = 0 }: Props) {
     const stats = useMemo(() => {
         const allergenCount: Record<string, number> = {};
         let totalKostprijs = 0;
@@ -124,7 +129,13 @@ export function HealthView({ gerechten, componentCount = 0 }: Props) {
             if ((g.ingredienten?.length ?? 0) > 0) withIngredienten++;
         });
 
-        const margins = gerechten.map(getMargin);
+        /* Gerechten zonder kostprijs gaven marge 0 en belandden in de rode bak.
+           Dan leest "13 gerechten onder de 50%" terwijl de waarheid is: van 13
+           gerechten weten we het niet. Alleen meten wat te meten valt, en het
+           aantal onbekende er los naast zetten. */
+        const meetbaar = gerechten.filter(function (g) { return effectieveKostprijsPP(g) > 0; });
+        const zonderKostprijs = gerechten.length - meetbaar.length;
+        const margins = meetbaar.map(function (g) { return getMargin(g); });
         const buckets = {
             lt50:    margins.filter((m) => m < 50).length,
             r50_65:  margins.filter((m) => m >= 50 && m < 65).length,
@@ -135,13 +146,17 @@ export function HealthView({ gerechten, componentCount = 0 }: Props) {
 
         return {
             allergenCount,
-            avgMargin: gerechten.length > 0 ? Math.round(margins.reduce((s, m) => s + m, 0) / gerechten.length) : 0,
+            zonderKostprijs,
+            meetbaar: meetbaar.length,
+            avgMargin: margins.length > 0 ? Math.round(margins.reduce((s, m) => s + m, 0) / margins.length) : null,
             buckets,
             completeness: {
                 foto:          gerechten.length > 0 ? Math.round((withFoto / gerechten.length) * 100) : 0,
                 beschrijving:  gerechten.length > 0 ? Math.round((withBeschrijving / gerechten.length) * 100) : 0,
                 ingredienten:  gerechten.length > 0 ? Math.round((withIngredienten / gerechten.length) * 100) : 0,
                 allergens:     gerechten.length > 0 ? Math.round((withAllergens / gerechten.length) * 100) : 0,
+                /* De enige regel hier die je geld raakt, en juist die ontbrak. */
+                kostprijs:     gerechten.length > 0 ? Math.round((meetbaar.length / gerechten.length) * 100) : 0,
             },
         };
     }, [gerechten]);
@@ -161,6 +176,7 @@ export function HealthView({ gerechten, componentCount = 0 }: Props) {
     const bucketMax = Math.max(...bucketBars.map((b) => b.value), 1);
 
     const completenessRows = [
+        { label: 'Kostprijs bekend',        pct: stats.completeness.kostprijs },
         { label: 'Foto toegevoegd',         pct: stats.completeness.foto },
         { label: 'Beschrijving ingevuld',   pct: stats.completeness.beschrijving },
         { label: 'Ingrediënten gekoppeld',  pct: stats.completeness.ingredienten },
@@ -196,9 +212,65 @@ export function HealthView({ gerechten, componentCount = 0 }: Props) {
                 <div className="mr-analyse-card">
                     <MREyebrow style={{ marginBottom: 14 }}>Marge-verdeling</MREyebrow>
                     <MRBarChart items={bucketBars} maxVal={bucketMax} />
-                    <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)' }}>
-                        Gemiddelde marge: <strong style={{ color: 'var(--text)' }}>{stats.avgMargin}%</strong>
+                    <div style={{ marginTop: 12, fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 }}>
+                        {stats.avgMargin == null ? (
+                            <>Nog geen enkele kostprijs bekend, dus er valt geen marge te berekenen.</>
+                        ) : (
+                            <>
+                                Gemiddelde marge: <strong style={{ color: 'var(--text)' }}>{formatPercent(stats.avgMargin, 0)}</strong>
+                                {' '}over {stats.meetbaar} van de {gerechten.length} gerechten.
+                            </>
+                        )}
+                        {stats.zonderKostprijs > 0 && (
+                            <div style={{ marginTop: 6 }}>
+                                {/* Deze telden eerder mee als 0% marge — als slechte gerechten
+                                    in plaats van als onbekende. */}
+                                <strong style={{ color: 'var(--amber, #f59e0b)' }}>
+                                    {stats.zonderKostprijs} {stats.zonderKostprijs === 1 ? 'gerecht heeft' : 'gerechten hebben'} nog geen kostprijs
+                                </strong>{' '}
+                                en {stats.zonderKostprijs === 1 ? 'staat' : 'staan'} hier niet in.{' '}
+                                <Link href="/gerechten" style={{ color: 'var(--brand)', fontWeight: 600 }}>Naar de gerechten →</Link>
+                            </div>
+                        )}
                     </div>
+                </div>
+
+                <div className="mr-analyse-card">
+                    <MREyebrow style={{ marginBottom: 14 }}>Snijverlies</MREyebrow>
+                    {/* De opbrengstfactor bestaat al en wordt overal doorgerekend,
+                        maar staat standaard op 1,0. Zolang die blijft staan rekent
+                        de app alsof je van een kilo bavette een kilo op het bord
+                        krijgt, en leest je marge structureel te gunstig. */}
+                    {componentCount === 0 ? (
+                        <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+                            Nog geen componenten. Zodra je bouwstenen aanmaakt kun je per stuk
+                            vastleggen hoeveel je van je inkoop overhoudt.
+                        </p>
+                    ) : componentenZonderVerlies === 0 ? (
+                        <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+                            Alle {componentCount} componenten hebben een opbrengst ingevuld.
+                        </p>
+                    ) : (
+                        <>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+                                    {componentenZonderVerlies}
+                                </span>
+                                <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                                    van de {componentCount} componenten
+                                </span>
+                            </div>
+                            <p style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55, marginTop: 8 }}>
+                                staan op 100% opbrengst: de app rekent dan alsof je van een kilo
+                                inkoop een kilo op het bord krijgt. Voor een fles saus klopt dat.
+                                Voor vlees dat je zelf uitsnijdt niet, en dan valt je kostprijs te
+                                laag uit.
+                            </p>
+                            <Link href="/gerechten/componenten" style={{ fontSize: 12, fontWeight: 600, color: 'var(--brand)', display: 'inline-flex', marginTop: 10, minHeight: 32, alignItems: 'center' }}>
+                                Opbrengst per component invullen →
+                            </Link>
+                        </>
+                    )}
                 </div>
 
                 <div className="mr-analyse-card">
