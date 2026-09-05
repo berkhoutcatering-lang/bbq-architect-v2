@@ -30,6 +30,8 @@ import { ArrowRight, Check, Archive, ExternalLink, Loader2, Link2, AlertTriangle
 import { compressBonImage, blobToDataUrl } from '@/lib/compressBonImage';
 import { setBonLeverancierAction } from '@/app/archief/actions';
 
+import { formatEur } from '@/lib/format';
+
 interface CompletedExtract {
     id: string;
     file_name: string;
@@ -1012,7 +1014,7 @@ function ReconciliationBanner({
                 <div style={{ flex: 1 }} />
                 {rec.claimed_total_eur != null && (
                     <div style={{ fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-mono, monospace)' }}>
-                        Σ €{rec.sum_items_eur.toFixed(2)} vs totaal €{rec.claimed_total_eur.toFixed(2)}
+                        Σ {formatEur(rec.sum_items_eur)} vs totaal {formatEur(rec.claimed_total_eur)}
                     </div>
                 )}
             </div>

@@ -9,11 +9,19 @@ import {
   AlertTriangle, Palette,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useSettings } from '@/lib/useSupabase';
+import { useOrg } from '@/lib/OrgContext';
+import { useToast } from '@/components/Toast';
+import { mailOfferte } from '@/lib/emailHelper';
+import { generatePDF } from '@/lib/pdfGenerator';
+import { buildBrandingConfig } from '@/lib/branding';
+import { calcLineTotals } from '@/lib/utils';
 import { calcDishCostPP as sharedCalcDishCostPP } from '@/lib/costCalculations';
 import { kostprijsBron } from '@/lib/gerecht-kosten';
 import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { useActiveResource } from '@/lib/ActiveResourceContext';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { formatEur, formatEurInt, formatPercent } from '@/lib/format';
 import '@/components/redesign/redesign.css';
 
 type Tone = 'ok' | 'warn' | 'bad';
@@ -139,7 +147,7 @@ function InteractiveMarginDoctor({ value, total, totalCost }: { value: number; t
         marginBottom: 14,
       }}>
         {delta >= 0
-          ? <>✓ <strong style={{ color: 'var(--green)' }}>{delta.toFixed(1)}%</strong> boven target. Ruimte van <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> voor korting of extra upsell.</>
+          ? <>✓ <strong style={{ color: 'var(--green)' }}>{formatPercent(delta)}</strong> boven target. Ruimte van <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> voor korting of extra upsell.</>
           : <>Om target te halen: verhoog omzet met <strong style={{ color: 'var(--brand-gold)' }}>{fmtEur0(Math.abs(upliftNeeded))}</strong> of verlaag inkoop met <strong style={{ color: 'var(--text)' }}>{fmtEur0(Math.abs(upliftNeeded) * (1 - target / 100))}</strong>.</>}
       </div>
       <div className="mdoc-split">
@@ -235,7 +243,7 @@ function MarginScenarioSimulator({ total, totalCost, target }: { total: number; 
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 300, fontSize: 24, color: toneColor }}>
-              {newMargin.toFixed(1)}%
+              {formatPercent(newMargin)}
             </span>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>
               {targetDelta >= 0 ? `+${targetDelta.toFixed(1)}pp` : `${targetDelta.toFixed(1)}pp`} t.o.v. target
@@ -359,6 +367,10 @@ function groupItems(items: any[]): { title: string; Ic: typeof Flame; items: any
 export default function OfferteViewPage() {
   const params = useParams();
   const router = useRouter();
+  const { settings } = useSettings();
+  const { orgId } = useOrg();
+  const showToast = useToast();
+  const [versturen, setVersturen] = useState(false);
   const offerteId = parseInt(String(params.id), 10);
 
   const [offerte, setOfferte] = useState<any>(null);
@@ -482,6 +494,65 @@ export default function OfferteViewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offerte, items, gerechten, inventory]);
 
+  /* De knoppen op deze pagina hadden geen onClick — Verstuur, Opslaan, PDF,
+     Dupliceer en Nieuwe versie waren decoratie. Het verzendpad bestond al
+     (mailOfferte → /api/send-email), het was hier alleen nooit aangesloten. */
+
+  async function handleVerstuur() {
+    if (!offerte) return;
+    const adres = offerte.client_email || klant?.email || '';
+    if (!adres) {
+      showToast('Deze klant heeft geen e-mailadres. Vul er een in bij de klant of in de offerte.', 'error');
+      return;
+    }
+    setVersturen(true);
+    try {
+      const res = await mailOfferte(
+        { ...offerte, client_email: adres },
+        settings?.bedrijfsnaam || 'Hop & Bites',
+      );
+      if (!res.success) {
+        showToast('Versturen mislukt: ' + (res.error || 'onbekende fout'), 'error');
+        return;
+      }
+      showToast(
+        res.fallback
+          ? 'Je mailprogramma is geopend — stel RESEND_API_KEY in voor directe verzending'
+          : 'Offerte verstuurd naar ' + adres,
+        'success',
+      );
+      if (!res.fallback && offerte.status !== 'verzonden') {
+        await supabase.from('offertes').update({ status: 'verzonden' }).eq('id', offerte.id);
+        setOfferte(function (o: any) { return o ? { ...o, status: 'verzonden' } : o; });
+      }
+    } finally {
+      setVersturen(false);
+    }
+  }
+
+  function handleKopieerLink() {
+    const token = offerte?.public_token;
+    if (!token) {
+      showToast('Sla de offerte eerst op om een klant-link te maken', 'error');
+      return;
+    }
+    navigator.clipboard.writeText(window.location.origin + '/q/' + token);
+    showToast('Klant-link gekopieerd — plak hem in een mail of WhatsApp.', 'success');
+  }
+
+  function handlePdf() {
+    if (!offerte) return;
+    const items = Array.isArray(offerte.items) ? offerte.items : [];
+    generatePDF({
+      type: 'offerte',
+      form: offerte,
+      settings: settings || undefined,
+      totals: calcLineTotals(items),
+      branding: buildBrandingConfig(settings),
+      orgId: orgId || undefined,
+    });
+  }
+
   const totals = useMemo(() => {
     const subtotaal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0), 0);
     const btw = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0) * (resolveBtwPct(it.btw) / 100), 0);
@@ -569,7 +640,7 @@ export default function OfferteViewPage() {
             >
               <Palette size={14} />Menukaart
             </button>
-            <button className="btn btn-ghost"><Download size={14} />PDF</button>
+            <button className="btn btn-ghost" onClick={handlePdf}><Download size={14} />PDF</button>
             <button className="btn btn-primary" onClick={() => router.push(`/offertes?edit=${offerte.id}`)}><Send size={14} />Bewerken</button>
           </div>
         </div>
@@ -590,19 +661,19 @@ export default function OfferteViewPage() {
                   </div>
                 </div>
                 <div className="hstack" style={{ gap: 8 }}>
-                  <button className="btn btn-ghost btn-sm"><Copy size={14} />Dupliceer</button>
-                  <button className="btn btn-ghost btn-sm"><GitBranch size={14} />Nieuwe versie</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/offertes?duplicate=${offerte.id}`)}><Copy size={14} />Dupliceer</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/offertes?version=${offerte.id}`)}><GitBranch size={14} />Nieuwe versie</button>
                 </div>
               </div>
               <div className="quote-hero-stats">
                 <div className="qhs"><div className="l">Gasten</div><div className="v">{totals.guests}</div></div>
-                <div className="qhs"><div className="l">Per hoofd</div><div className="v">{totals.guests > 0 ? '€ ' + (totals.subtotaal / totals.guests).toFixed(2).replace('.', ',') : '—'}</div></div>
+                <div className="qhs"><div className="l">Per hoofd</div><div className="v">{totals.guests > 0 ? formatEur((totals.subtotaal / totals.guests)) : '—'}</div></div>
                 <div className="qhs">
                   <div className="l">Brutomarge</div>
                   <div className={`v ${totals.margin != null ? 'gold' : ''}`} style={totals.margin == null ? { color: 'var(--muted)' } : undefined}>
                     {totals.margin != null ? fmtEur(totals.subtotaal - totals.totalCost) : '—'}
                   </div>
-                  {totals.margin != null && <div className="delta"><TrendingUp size={11} />{totals.margin.toFixed(1)}%</div>}
+                  {totals.margin != null && <div className="delta"><TrendingUp size={11} />{formatPercent(totals.margin)}</div>}
                 </div>
                 <div className="qhs">
                   <div className="l">COGS ratio</div>
@@ -689,8 +760,8 @@ export default function OfferteViewPage() {
                 <div className="big">{fmtEur(totals.totaal)} <span className="brand">incl.</span></div>
               </div>
               <div className="actions">
-                <button className="btn btn-ghost"><Save size={14} />Opslaan</button>
-                <button className="btn btn-primary"><Send size={14} />Verstuur</button>
+                <button className="btn btn-ghost" onClick={handleKopieerLink} title="Kopieer de klant-link naar je klembord"><Copy size={14} />Klant-link</button>
+                <button className="btn btn-primary" onClick={handleVerstuur} disabled={versturen}><Send size={14} />{versturen ? 'Versturen…' : 'Verstuur'}</button>
               </div>
             </div>
           </div>
@@ -727,7 +798,7 @@ export default function OfferteViewPage() {
                 if (m > 65) {
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                      <div style={{ marginBottom: 8 }}>Marge <strong style={{ color: 'var(--green)' }}>{m.toFixed(1)}%</strong> zit ruim boven target. Ruimte voor:</div>
+                      <div style={{ marginBottom: 8 }}>Marge <strong style={{ color: 'var(--green)' }}>{formatPercent(m)}</strong> zit ruim boven target. Ruimte voor:</div>
                       <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                         <li>Premium upsell (dessert, saus-pakket) voor extra omzet</li>
                         <li>Vroegboek-korting richting klant als onderhandel-ruimte</li>
@@ -739,8 +810,8 @@ export default function OfferteViewPage() {
                 if (m >= 55 && m <= 65) {
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0', color: 'var(--muted)' }}>
-                      Marge <strong style={{ color: 'var(--brand-gold)' }}>{m.toFixed(1)}%</strong> zit op target.
-                      {weakLine && <> Zwakste regel: <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> op {(weakLine.marge as number).toFixed(0)}%. Overweeg prijs +€{((weakLine.prijs * 0.05) || 1).toFixed(2)} of alternatieve inkoop.</>}
+                      Marge <strong style={{ color: 'var(--brand-gold)' }}>{formatPercent(m)}</strong> zit op target.
+                      {weakLine && <> Zwakste regel: <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> op {formatPercent((weakLine.marge as number), 0)}. Overweeg prijs +{formatEur(((weakLine.prijs * 0.05) || 1))} of alternatieve inkoop.</>}
                     </div>
                   );
                 }
@@ -748,10 +819,10 @@ export default function OfferteViewPage() {
                   const upliftPerGuest = guests > 0 ? ((totals.subtotaal - totals.totalCost) * 0.15 / guests) : 0;
                   return (
                     <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                      <div style={{ marginBottom: 8, color: 'var(--muted)' }}>Marge <strong style={{ color: 'var(--amber)' }}>{m.toFixed(1)}%</strong> ligt onder target. Concrete hefbomen:</div>
+                      <div style={{ marginBottom: 8, color: 'var(--muted)' }}>Marge <strong style={{ color: 'var(--amber)' }}>{formatPercent(m)}</strong> ligt onder target. Concrete hefbomen:</div>
                       <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
-                        {weakLine && <li>Zwakste regel <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> ({(weakLine.marge as number).toFixed(0)}%) — verhogen met €{Math.ceil(weakLine.prijs * 0.1)}</li>}
-                        <li>Prijs p/p +€{Math.ceil(upliftPerGuest)} over {guests} gasten = +€{(upliftPerGuest * guests).toFixed(0)}</li>
+                        {weakLine && <li>Zwakste regel <strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> ({formatPercent((weakLine.marge as number), 0)}) — verhogen met €{Math.ceil(weakLine.prijs * 0.1)}</li>}
+                        <li>Prijs p/p +€{Math.ceil(upliftPerGuest)} over {guests} gasten = +{formatEurInt((upliftPerGuest * guests))}</li>
                         <li>Schrap laagste-marge regel, maak optioneel</li>
                       </ul>
                     </div>
@@ -759,10 +830,10 @@ export default function OfferteViewPage() {
                 }
                 return (
                   <div style={{ fontSize: 12, lineHeight: 1.55, padding: '4px 0' }}>
-                    <div style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Marge <strong>{m.toFixed(1)}%</strong> is kritisch laag. Prioriteer:</div>
+                    <div style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Marge <strong>{formatPercent(m)}</strong> is kritisch laag. Prioriteer:</div>
                     <ul style={{ paddingLeft: 18, margin: 0, color: 'var(--muted)' }}>
                       <li>Controleer crew-uren — vaak de grootste kostenpost die wegvalt</li>
-                      {weakLine && weakLine.cost != null && <li><strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> verliest geld (cost €{weakLine.cost.toFixed(2)} vs prijs €{weakLine.prijs.toFixed(2)})</li>}
+                      {weakLine && weakLine.cost != null && <li><strong style={{ color: 'var(--text)' }}>{weakLine.name}</strong> verliest geld (cost {formatEur(weakLine.cost)} vs prijs {formatEur(weakLine.prijs)})</li>}
                       <li>Minimaal {Math.ceil((60 - m))}% omzetverhoging nodig voor target (60%)</li>
                     </ul>
                   </div>
@@ -777,7 +848,13 @@ export default function OfferteViewPage() {
                   <div className="n">{offerte.client_naam || 'Geen klant'}</div>
                   <div className="s">{klant?.email || klant?.telefoon || 'Geen contactgegevens'} · {clientStats.count} eerdere opdracht{clientStats.count === 1 ? '' : 'en'}</div>
                 </div>
-                <button className="icon-btn"><MessageCircle size={14} /></button>
+                {(klant?.email || offerte.client_email) && (
+                  <button
+                    className="icon-btn"
+                    title={'Mail ' + (klant?.email || offerte.client_email)}
+                    onClick={() => window.open('mailto:' + (klant?.email || offerte.client_email), '_blank')}
+                  ><MessageCircle size={14} /></button>
+                )}
               </div>
               <div className="cc-stats">
                 <div><div className="k">Eerdere omzet</div><div className="v">{fmtEur0(clientStats.revenue)}</div></div>

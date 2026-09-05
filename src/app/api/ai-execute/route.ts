@@ -5,6 +5,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import { logAiUsageServer } from '@/lib/aiUsageServer';
 import { estimateAiCostCents } from '@/lib/aiCost';
 
+/* Zonder maxDuration kapt Vercel deze functie af op de standaardlimiet. Voor een
+   route die een AI-model aanroept is dat te kort: 41 van de 48 AI-routes zetten
+   hem al, deze zeven niet — waaronder today-briefing (draait op de startpagina)
+   en ai-execute (voert alle AI-acties uit). */
+export const maxDuration = 60;
+
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Route draait authenticated via createServerSupabase() → queries respecteren

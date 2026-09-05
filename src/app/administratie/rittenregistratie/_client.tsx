@@ -15,6 +15,7 @@ import TotalenStrip from './_components/TotalenStrip';
 import FilterChips, { type FilterValue } from './_components/FilterChips';
 import RittenTabel from './_components/RittenTabel';
 
+import { formatKm } from '@/lib/format';
 const HQ_COORD: LatLng = [52.917, 6.799]; // Borger fallback
 
 export default function RittenregistratieClient() {
@@ -25,7 +26,11 @@ export default function RittenregistratieClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const periode = (searchParams.get('p') || 'Maand') as Periode;
+  /* Stond op 'Maand'. Voor een fiscale kilometeradministratie is het jaar de
+     eenheid die telt, en in een maand zonder ritten opende de pagina leeg —
+     wat de indruk gaf dat er niets geregistreerd was terwijl /geld gewoon
+     twee ritten meldde. */
+  const periode = (searchParams.get('p') || 'Jaar') as Periode;
   const filter = (searchParams.get('cat') || 'all') as FilterValue;
 
   const updateParam = useCallback(
@@ -38,7 +43,7 @@ export default function RittenregistratieClient() {
     },
     [searchParams, pathname, router],
   );
-  const setPeriode = useCallback((p: Periode) => updateParam('p', p, 'Maand'), [updateParam]);
+  const setPeriode = useCallback((p: Periode) => updateParam('p', p, 'Jaar'), [updateParam]);
   const setFilter = useCallback((f: FilterValue) => updateParam('cat', f, 'all'), [updateParam]);
 
   const activeId: number | null = null;
@@ -113,7 +118,7 @@ export default function RittenregistratieClient() {
                 const jaar = new Date().getFullYear();
                 window.location.href = `/api/ritten/export?start=${jaar}-01-01&eind=${jaar}-12-31`;
               }}
-              title="Belastingdienst-conforme CSV downloaden voor heel ${jaar}"
+              title={`Belastingdienst-conforme CSV downloaden voor heel ${new Date().getFullYear()}`}
             >
               Export {new Date().getFullYear()}
             </Button>
@@ -226,7 +231,7 @@ function RittenSidebar({ ritten, voertuigen }: { ritten: Rit[]; voertuigen: Voer
                     {v.merk || 'Voertuig'} {v.type ? `· ${v.type}` : ''}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                    {v.kenteken} · {ritKm.toLocaleString('nl-NL', { maximumFractionDigits: 1 })} km deze periode
+                    {v.kenteken} · {formatKm(ritKm)} deze periode
                   </div>
                 </div>
               );

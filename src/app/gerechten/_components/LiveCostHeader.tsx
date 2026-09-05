@@ -11,6 +11,7 @@
 import { ArrowDownRight, ArrowUpRight, Minus, RefreshCw } from 'lucide-react';
 import { createServerSupabase } from '@/lib/supabase-server';
 import PriceTrendSparkline, { type SparkPoint } from './PriceTrendSparkline';
+import { formatPercent } from '@/lib/format';
 
 interface Props {
     gerechtId: string;
@@ -140,7 +141,7 @@ export default async function LiveCostHeader({
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: deltaColor, display: 'flex', alignItems: 'center', gap: 4 }}>
                         <DeltaIcon size={18} />
-                        {delta === null ? '–' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}%`}
+                        {delta === null ? '–' : `${delta > 0 ? '+' : ''}${formatPercent(delta)}`}
                     </div>
                 </div>
 

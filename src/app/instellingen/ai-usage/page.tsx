@@ -8,6 +8,9 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { TIER_LIMITS, type Tier } from '@/lib/featureFlags';
 
+import { formatEur, formatPercent } from '@/lib/format';
+
+import HubHeader from '@/components/chassis/HubHeader';
 /**
  * /instellingen/ai-usage
  *
@@ -47,7 +50,7 @@ function monthKey(iso: string): string {
     return iso.slice(0, 7); // YYYY-MM
 }
 
-function formatEur(cents: number): string {
+function formatEurCents(cents: number): string {
     return '€ ' + (cents / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -126,13 +129,20 @@ export default function AiUsagePage() {
             d.setDate(1); d.setHours(0, 0, 0, 0);
             return d.toISOString();
         })();
-        const callsThisMonth = rows.filter(function (r) { return r.created_at >= startOfMonthIso; }).length;
+        const rijenDezeMaand = rows.filter(function (r) { return r.created_at >= startOfMonthIso; });
+        const callsThisMonth = rijenDezeMaand.length;
+        /* "Totale spend" stond naast "Calls deze maand" maar telde álle regels
+           op. Daardoor zei deze pagina € 1,39 waar /systeem en /geld € 0,31
+           meldden — twee getallen voor dezelfde vraag, en het label loog.
+           Nu allebei over deze maand, met het totaal apart. */
+        const costThisMonthCents = rijenDezeMaand.reduce(function (som, r) { return som + r.cost_eur_cents; }, 0);
         const capProgress = cap > 0 ? callsThisMonth / cap : 0;
 
         return {
             monthly,
             actionTypes: Array.from(actionTypes),
             totalCostCents,
+            costThisMonthCents,
             totalCalls,
             cacheHitRatio,
             cap,
@@ -151,24 +161,16 @@ export default function AiUsagePage() {
                 Terug naar Instellingen
             </Link>
 
-            <div className="flex items-start gap-3 mb-6">
-                <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-gold)]/10 border border-[var(--color-accent-gold)]/20 flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4 text-[var(--color-accent-gold)]" />
-                </div>
-                <div>
-                    <h1 className="text-2xl font-extralight text-[var(--text)]">AI-gebruik en kosten</h1>
-                    <p className="text-[13px] text-[var(--muted)] mt-1">
-                        Transparant: zie precies wat AI je deze maand kost en welke calls cache-hit hadden.
-                        Voor <strong className="text-[var(--text)]">{organization?.name || '...'}</strong>.
-                    </p>
-                </div>
-            </div>
+            <HubHeader
+                titel="AI-gebruik en kosten"
+                onderschrift={<>Wat AI je deze maand kost en welke aanroepen uit de cache kwamen. Voor <strong style={{ color: 'var(--text)' }}>{organization?.name || '...'}</strong>.</>}
+            />
 
             <div className="mb-6 p-3 rounded-lg border border-[var(--card-solid)] bg-[var(--card)]/40 flex items-start gap-2">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
                 <p className="text-[11px] text-[var(--muted)] leading-relaxed">
-                    Pillar 5 — geen concurrent toont cache-hit-ratio per tenant. Cache-reads zijn 10x goedkoper dan
-                    fresh tokens; hoe hoger de hit-ratio, hoe efficiënter onze prompts.
+                    Een aanroep die uit de cache komt kost tien keer minder dan een verse. Hoe hoger dit
+                    percentage, hoe goedkoper je AI-gebruik uitpakt.
                 </p>
             </div>
 
@@ -179,7 +181,13 @@ export default function AiUsagePage() {
                     {/* KPI cards */}
                     <div className="grid sm:grid-cols-4 gap-3">
                         <KpiCard icon={<Activity className="w-4 h-4" />} label="Calls deze maand" value={String(stats.callsThisMonth)} accent={GOLD} />
-                        <KpiCard icon={<Database className="w-4 h-4" />} label="Totale spend" value={formatEur(stats.totalCostCents)} accent="#22c55e" />
+                        <KpiCard
+                            icon={<Database className="w-4 h-4" />}
+                            label="Kosten deze maand"
+                            value={formatEurCents(stats.costThisMonthCents)}
+                            accent="#22c55e"
+                            hint={stats.totalCostCents > stats.costThisMonthCents ? `${formatEurCents(stats.totalCostCents)} sinds het begin` : undefined}
+                        />
                         <KpiCard
                             icon={<Cpu className="w-4 h-4" />}
                             label="Cache-hit ratio"
@@ -217,10 +225,10 @@ export default function AiUsagePage() {
                                     })}>
                                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                                         <XAxis dataKey="month" stroke="var(--muted)" fontSize={11} />
-                                        <YAxis stroke="var(--muted)" fontSize={11} tickFormatter={function (v: number) { return '€' + v.toFixed(2); }} />
+                                        <YAxis stroke="var(--muted)" fontSize={11} tickFormatter={function (v: number) { return formatEur(v); }} />
                                         <Tooltip
                                             contentStyle={{ background: 'var(--card)', border: '1px solid var(--card-solid)', borderRadius: 8, fontSize: 12 }}
-                                            formatter={function (v: number) { return '€ ' + Number(v).toFixed(2); }}
+                                            formatter={function (v: number) { return formatEur(Number(v)); }}
                                         />
                                         <Legend wrapperStyle={{ fontSize: 11 }} formatter={function (v: string) { return actionLabel(v); }} />
                                         {stats.actionTypes.map(function (at) {
@@ -257,7 +265,7 @@ export default function AiUsagePage() {
                                 </ResponsiveContainer>
                             </div>
                             <div className="text-center -mt-12 mb-4 text-[28px] font-extralight text-[var(--text)] font-mono">
-                                {(stats.cacheHitRatio * 100).toFixed(0)}%
+                                {formatPercent((stats.cacheHitRatio * 100), 0)}
                             </div>
                         </section>
                     )}
@@ -298,7 +306,7 @@ export default function AiUsagePage() {
                                                     <td className="py-2 pr-3 text-right text-[var(--muted)] tabular-nums">
                                                         {cacheTotal > 0 ? (cacheRatio * 100).toFixed(0) + '%' : '—'}
                                                     </td>
-                                                    <td className="py-2 pr-3 text-right text-[var(--text)] tabular-nums font-bold">{formatEur(r.cost_eur_cents)}</td>
+                                                    <td className="py-2 pr-3 text-right text-[var(--text)] tabular-nums font-bold">{formatEurCents(r.cost_eur_cents)}</td>
                                                 </tr>
                                             );
                                         })}

@@ -22,6 +22,7 @@ import type { InventoryItem, Recept, StockMovement } from '@/types';
 import { RequireTier } from '@/components/PaywallPrompt';
 import { upsertInventory, deleteInventory, adjustStock } from '../actions';
 import { useIsPhone } from '@/hooks/useIsMobile';
+import { formatPercent } from '@/lib/format';
 
 const GOLD = '#c4a35a';
 
@@ -625,8 +626,8 @@ function HeroHeader({ totalItems, lowStockCount, expiringCount, avgCoverage, tot
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
                 <div>
-                    <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px' }}>Voorraad</h1>
-                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
+                    <h1 className="chassis-titel">Voorraad</h1>
+                    <div className="chassis-onderschrift">
                         {totalItems} producten · live gesynct · altijd zicht op wat je nodig hebt
                     </div>
                 </div>
@@ -964,7 +965,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                         {hov ? <>
                             <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>{hov.name}</div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 26, fontWeight: 300, color: hov.color, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt(hov.value)}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{(hov.pct * 100).toFixed(1)}% · {hov.count} items</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{formatPercent((hov.pct * 100))} · {hov.count} items</div>
                         </> : <>
                             <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>Totaal</div>
                             <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 22, fontWeight: 300, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt(total)}</div>
@@ -992,7 +993,7 @@ function CategoryChart({ categories }: { categories: { name: string; count: numb
                                 </div>
                             </div>
                             <div style={{ fontSize: 12, fontWeight: 600, minWidth: 60, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmt(s.value)}</div>
-                            <div style={{ fontSize: 10, color: 'var(--muted)', minWidth: 42, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{(s.pct * 100).toFixed(1)}%</div>
+                            <div style={{ fontSize: 10, color: 'var(--muted)', minWidth: 42, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatPercent((s.pct * 100))}</div>
                         </div>
                     ))}
                 </div>
@@ -1496,7 +1497,7 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceH
                                                 </div>
                                                 <div style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmt(a.prijs)} <span style={{ fontSize: 10, color: 'var(--muted)' }}>/ {a.eenheid}</span></div>
                                                 <div style={{ fontSize: 11, color: diffPct === 0 ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums', minWidth: 50, textAlign: 'right' }}>
-                                                    {diffPct === 0 ? '—' : `+${diffPct.toFixed(1)}%`}
+                                                    {diffPct === 0 ? '—' : `+${formatPercent(diffPct)}`}
                                                 </div>
                                             </div>
                                         );
@@ -1800,7 +1801,7 @@ function EditItemView({ editForm, setEditForm, editing, recepten, leveranciers, 
                     <ArrowLeft size={14} /> Terug
                 </button>
                 <div>
-                    <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 28, margin: 0 }}>
+                    <h1 className="chassis-titel" style={{ margin: 0 }}>
                         {editing === 'new' ? 'Nieuw item' : editForm.naam || 'Item bewerken'}
                     </h1>
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>

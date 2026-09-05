@@ -11,6 +11,7 @@ import {
 import { getSectionBySlug } from '@/lib/navigation';
 import { useSupabase } from '@/lib/useSupabase';
 import { fmt } from '@/lib/utils';
+import { isOpenstaand } from '@/lib/factuurStatus';
 
 /* ── KPI Card ─────────────────────────────────────────────── */
 
@@ -87,7 +88,7 @@ function DeZaakStats() {
     let revenue = 0;
     betaald.forEach((f: any) => { (f.items || []).forEach((i: any) => { revenue += (i.qty || 0) * (i.prijs || 0); }); });
 
-    const openFact = facturen.filter((f: any) => f.status !== 'betaald' && f.status !== 'geannuleerd');
+    const openFact = facturen.filter(isOpenstaand);
     let openBedrag = 0;
     openFact.forEach((f: any) => { (f.items || []).forEach((i: any) => { openBedrag += (i.qty || 0) * (i.prijs || 0); }); });
 
@@ -172,9 +173,7 @@ export default function SectiePage() {
                     <span className="text-[var(--blue)]">
                         {React.cloneElement(section.icon as React.ReactElement<any>, { size: 28 })}
                     </span>
-                    <h1 className="text-2xl md:text-3xl font-bold text-[var(--text)] tracking-tight">
-                        {section.title}
-                    </h1>
+                    <h1 className="chassis-titel">{section.title}</h1>
                 </div>
                 <p className="text-[var(--muted)] text-sm mt-1 ml-[42px]">
                     {section.description}

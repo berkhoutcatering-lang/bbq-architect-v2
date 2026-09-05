@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Monitor } from 'lucide-react';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import Link from 'next/link';
@@ -169,6 +169,26 @@ export default function TemplateEditor({ template, documentType, organizationId,
   const orgLogoUrl = (orgSettings as any)?.logo_url || null;
   const orgLogoDarkUrl = (orgSettings as any)?.logo_dark_url || null;
   const orgBedrijfsnaam = (orgSettings as any)?.bedrijfsnaam || '';
+  /* Alleen velden die écht gevuld zijn; een leeg veld valt terug op de
+     voorbeeldwaarde, zodat het voorbeeld niet half leeg oogt. Een gevuld veld
+     wint altijd van het voorbeeld — vooral IBAN, KvK en BTW-nummer. */
+  const orgBedrijfsgegevens = useMemo(function () {
+    const s = orgSettings as unknown as Record<string, string> | null | undefined;
+    if (!s) return undefined;
+    const paren: [string, string | undefined][] = [
+      ['bedrijfsnaam', s.bedrijfsnaam], ['ondertitel', s.ondertitel],
+      ['bedrijf_email', s.email], ['bedrijf_telefoon', s.telefoon],
+      ['bedrijf_adres', s.adres], ['website', s.website],
+      ['kvk', s.kvk], ['btw_nr', s.btw], ['iban', s.iban],
+      ['betaalvoorwaarden', s.betaalvoorwaarden],
+    ];
+    const uit: Record<string, string> = {};
+    for (const [key, waarde] of paren) {
+      const v = (waarde || '').trim();
+      if (v) uit[key] = v;
+    }
+    return Object.keys(uit).length > 0 ? uit : undefined;
+  }, [orgSettings]);
   const initialPageSettings = template?.page_settings || {
     format: 'a4' as const, orientation: 'portrait' as const,
     margins: { top: 15, right: 15, bottom: 20, left: 15 },
@@ -821,7 +841,7 @@ export default function TemplateEditor({ template, documentType, organizationId,
   }
 
   return (
-    <TemplateBrandingProvider value={{ primary: orgPrimary, accent: orgAccent, logoUrl: orgLogoUrl, logoDarkUrl: orgLogoDarkUrl, bedrijfsnaam: orgBedrijfsnaam }}>
+    <TemplateBrandingProvider value={{ primary: orgPrimary, accent: orgAccent, logoUrl: orgLogoUrl, logoDarkUrl: orgLogoDarkUrl, bedrijfsnaam: orgBedrijfsnaam, bedrijfsgegevens: orgBedrijfsgegevens }}>
     <div style={rootStyle}>
 
       {/* ═══ Top Bar ═══ */}

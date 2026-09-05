@@ -85,9 +85,8 @@ export default function GerechtenPageHero({
             <span>Receptuur · Bibliotheek</span>
           </div>
           <h1
+            className="chassis-titel"
             style={{
-              fontWeight: 200,
-              fontSize: 32,
               margin: 0,
               lineHeight: 1.1,
               letterSpacing: '-0.02em',

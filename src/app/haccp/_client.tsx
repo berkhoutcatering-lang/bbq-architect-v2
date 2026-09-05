@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/lib/AuthContext';
 import { Sparkles, Smartphone } from 'lucide-react';
 import Link from 'next/link';
 
@@ -43,6 +44,7 @@ import HACCPChat from './_components/HACCPChat';
  * Pillar #5: één step bar, geen tabs.
  */
 export default function HACCPClient() {
+    const { user } = useAuth();
     const [step, setStep] = useState(0);
     const [completed, setCompleted] = useState<number[]>([]);
     const [event, setEvent] = useState<HaccpEvent | null>(null);
@@ -277,7 +279,11 @@ export default function HACCPClient() {
     const handleLog = (checkId: string, value: string, photoUrl?: string) => {
         // Pillar #3: optimistic UI, real POST onder de motorkap.
         const now = new Date().toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-        const optimisticEntry: HaccpLogEntry = { at: now, val: value, status: 'ok', by: 'Mathijs B.' };
+        /* Stond hardgecodeerd op 'Mathijs B.' — bij elke gebruiker, in elke
+           tenant. Een HACCP-registratie is een NVWA-document; wie de meting deed
+           is juist de kern ervan. */
+        const wieLogt = (user?.user_metadata?.name as string | undefined) || user?.email || 'Onbekend';
+        const optimisticEntry: HaccpLogEntry = { at: now, val: value, status: 'ok', by: wieLogt };
         setLogEntries((prev) => ({ ...prev, [checkId]: optimisticEntry }));
 
         if (mode === 'demo' || !event) return;
@@ -301,7 +307,9 @@ export default function HACCPClient() {
                 dishLabel: check.label,
                 checkType: check.type,
                 temp: tempNumeric,
-                chef: 'Mathijs B.',
+                /* Geen `chef` meesturen: de server kent de ingelogde gebruiker en
+                   vult die in (log-check/route.ts valt terug op user.email). De
+                   client hoort geen identiteit te beweren op een NVWA-record. */
             }),
         })
             .then(async (r) => {

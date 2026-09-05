@@ -6,6 +6,8 @@
  * / inventory via `created_at` of (voor events) `date`.
  */
 
+import { localDayKeyAgo } from './date-keys';
+
 interface EventForTrend {
   date?: string | null;
   guests?: number | null;
@@ -37,11 +39,7 @@ interface InventoryForTrend {
   updated_at?: string | null;
 }
 
-function isoDay(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - offsetDays);
-  return d.toISOString().slice(0, 10);
-}
+const isoDay = localDayKeyAgo;
 
 function emptySeries(): number[] {
   return [0, 0, 0, 0, 0, 0, 0];

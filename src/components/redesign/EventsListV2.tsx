@@ -222,8 +222,20 @@ function TableView({ rows, selected, toggle, toggleAll, onOpen }: {
       {rows.map((r, i) => {
         const sel = selected.includes(r.id);
         return (
-          <div key={r.id} onClick={() => onOpen(r)}
-            style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, padding: '13px 18px', alignItems: 'center', cursor: 'pointer', fontSize: 13.5, borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none', background: sel ? 'var(--brand-tint-subtle, var(--brand-tint))' : 'transparent' }}>
+          /* Was een kale div met een klik-handler: geen href, geen rol, geen
+             tabindex. Niet te bereiken met het toetsenbord en niet met cmd-klik
+             in een nieuw tabblad te openen. Nu een echte link. */
+          <a
+            key={r.id}
+            href={`/events/${r.id}/hub`}
+            onClick={(e) => {
+              /* Cmd/ctrl/middenklik en "openen in nieuw tabblad" met rust laten;
+                 de rest via de router zodat de app niet herlaadt. */
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              onOpen(r);
+            }}
+            style={{ display: 'grid', gridTemplateColumns: cols, gap: 12, padding: '13px 18px', alignItems: 'center', cursor: 'pointer', fontSize: 13.5, borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none', background: sel ? 'var(--brand-tint-subtle, var(--brand-tint))' : 'transparent', textDecoration: 'none', color: 'inherit' }}>
             <span onClick={(e) => { e.stopPropagation(); toggle(r.id); }}><Checkbox checked={sel} onClick={() => {}} /></span>
             <span className="mono" style={{ color: 'var(--muted-light, var(--text))' }}>{fmtDatum(r.datum)}</span>
             <span style={{ minWidth: 0 }}>
@@ -234,7 +246,7 @@ function TableView({ rows, selected, toggle, toggleAll, onOpen }: {
             <span className="mono" style={{ textAlign: 'right', color: 'var(--muted-light, var(--text))' }}>{r.gasten}</span>
             <span className="mono" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text)' }}>{formatEurInt(r.omzet)}</span>
             <span><StatusBadge status={r.status} size="sm" /></span>
-          </div>
+          </a>
         );
       })}
     </div>

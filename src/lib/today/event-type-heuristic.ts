@@ -1,11 +1,15 @@
 /**
- * Heuristiek voor event-type — v1 hack tot er een `events.type` enum migratie ligt.
+ * Segment-indeling voor de omzet-mix op Vandaag.
  *
- * Logica:
- *   - menu_selectie ingevuld of items met cat=eten → catering
- *   - alleen materieel-/locatie-velden gevuld → verhuur
- *   - product-verkoop signaal (event.type bevat "verkoop"/"shop"/"toonbank") → verkoop
- *   - rest → overig
+ * Eerdere versie zocht naar "catering", "verhuur", "verkoop" en "shop" in
+ * `events.type`. Die waarden schrijft de app nergens weg: de EventWizard biedt
+ * alleen Particulier / Zakelijk / Festival. Daardoor viel vrijwel elk event in
+ * "Overig" en kon de donut nooit iets zinnigs tonen.
+ *
+ * Nu delen we in op de as die de data wél heeft — het klantsegment. Dat is ook
+ * de vraag waar je iets mee kunt: komt de omzet van particuliere feesten, van
+ * bedrijven of van festivals? Vrije-tekst types uit oudere records worden
+ * meegenomen via de regexes hieronder.
  */
 
 interface EventLike {
@@ -17,37 +21,28 @@ interface EventLike {
   date?: string | null;
 }
 
-export type EventCategory = 'catering' | 'verhuur' | 'verkoop' | 'overig';
+export type EventCategory = 'particulier' | 'zakelijk' | 'festival' | 'overig';
 
 export function classifyEventType(e: EventLike): EventCategory {
   const t = (e.type || '').toString().toLowerCase();
 
-  if (/verkoop|shop|toonbank|webshop/.test(t)) return 'verkoop';
-  if (/verhuur|rental|materieel/.test(t)) return 'verhuur';
-
-  const menu = e.menu_selectie;
-  const hasMenu =
-    Array.isArray(menu) ? menu.length > 0
-    : typeof menu === 'object' && menu !== null
-      ? Object.keys(menu as Record<string, unknown>).length > 0
-      : false;
-
-  if (hasMenu) return 'catering';
-  if (/catering|bbq|feest|borrel|lunch|diner/.test(t)) return 'catering';
+  if (/festival|markt|fair|evenement/.test(t)) return 'festival';
+  if (/zakelijk|bedrijf|business|corporate|b2b/.test(t)) return 'zakelijk';
+  if (/particulier|prive|privé|consument|b2c|feest|bruiloft|verjaardag/.test(t)) return 'particulier';
 
   return 'overig';
 }
 
 export const CATEGORY_LABEL: Record<EventCategory, string> = {
-  catering: 'BBQ Catering',
-  verhuur: 'BBQ Verhuur',
-  verkoop: 'Verkoop',
-  overig: 'Overig',
+  particulier: 'Particulier',
+  zakelijk: 'Zakelijk',
+  festival: 'Festival',
+  overig: 'Onbekend',
 };
 
 export const CATEGORY_COLOR: Record<EventCategory, string> = {
-  catering: '#c4a35a',
-  verhuur: '#86efac',
-  verkoop: '#93c5fd',
+  particulier: '#c4a35a',
+  zakelijk: '#93c5fd',
+  festival: '#86efac',
   overig: '#94a3b8',
 };

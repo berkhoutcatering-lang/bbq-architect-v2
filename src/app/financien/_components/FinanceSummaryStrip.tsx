@@ -10,6 +10,8 @@ import { useEffect, useState } from 'react';
 import { Sparkles, X, Zap, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+import { formatEur } from '@/lib/format';
+
 interface Chip {
     label: string;
     prompt: string;
@@ -123,7 +125,7 @@ export default function FinanceSummaryStrip({ onChipClick }: Props) {
                     <span style={{ marginLeft: 'auto', display: 'inline-flex', flexDirection: 'column', gap: 3, minWidth: 130 }}>
                         <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--muted)' }}>
                             <span style={{ textTransform: 'uppercase', letterSpacing: '.1em', fontWeight: 700 }}>AI-budget</span>
-                            <span className="mono">€ {aiSpend.toFixed(2).replace('.', ',')} / € {SOFT_CAP_EUR.toFixed(2).replace('.', ',')}</span>
+                            <span className="mono">{formatEur(aiSpend)} / {formatEur(SOFT_CAP_EUR)}</span>
                         </span>
                         <span style={{ height: 3, borderRadius: 2, background: 'rgba(130,130,130,.2)', overflow: 'hidden' }}>
                             <span style={{ display: 'block', height: '100%', width: spendPct + '%', borderRadius: 2, background: spendPct > 80 ? 'var(--amber)' : 'var(--brand)' }} />

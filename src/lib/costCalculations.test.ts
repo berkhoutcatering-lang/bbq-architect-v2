@@ -200,9 +200,40 @@ describe('calcOfferteMarge', () => {
         expect(m.omzet).toBe(1250);
     });
 
-    it('default basis_prijs_pp = 38.50 als niet gezet', () => {
+    it('verzint geen prijs als basis_prijs_pp ontbreekt', () => {
+        /* Stond eerder op 38.50 — een hardgecodeerde prijs die de omzet en dus
+           de marge van elke offerte zonder basisprijs verzon. */
         const m = calcOfferteMarge({ aantal_gasten: 10 }, [], []);
-        expect(m.prijsPP).toBe(38.50);
+        expect(m.prijsPP).toBe(0);
+        expect(m.omzet).toBe(0);
+        expect(m.margePct).toBe(0);
+    });
+
+    it('rekent omzet uit de offerteregels, niet uit basis_prijs_pp', () => {
+        /* De klant betaalt wat er in de regel staat. Eerder rekende dit blok
+           door met de basisprijs van de menukaart: 30 x 38.50 = 1155 terwijl de
+           offerte 30 x 42.50 = 1275 was. */
+        const offerte = {
+            items: [{ qty: 30, prijs: 42.5 }],
+            basis_prijs_pp: 38.5,
+            menu_selectie: [],
+            vaste_kosten: [],
+        };
+        const m = calcOfferteMarge(offerte, [], []);
+        expect(m.omzet).toBe(1275);
+        expect(m.gasten).toBe(30);
+        expect(m.prijsPP).toBeCloseTo(42.5, 2);
+    });
+
+    it('telt hoeveel gerechten geen kostprijs hebben', () => {
+        const offerte = {
+            items: [{ qty: 10, prijs: 40 }],
+            menu_selectie: ['Hoofdgerecht', 'Bestaat Niet', 'Ook Niet'],
+            vaste_kosten: [],
+        };
+        const m = calcOfferteMarge(offerte, gerechten as any, inv as any);
+        expect(m.gerechtenTotaal).toBe(3);
+        expect(m.gerechtenZonderKostprijs).toBe(2);
     });
 
     it('hanteert menu_selectie als sel.naam OF sel.gerecht_naam', () => {

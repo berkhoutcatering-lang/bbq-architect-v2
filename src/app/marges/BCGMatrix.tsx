@@ -3,21 +3,14 @@
 import React, { useMemo } from 'react';
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell, ZAxis } from 'recharts';
 import MetallicCard from '@/components/MetallicCard';
-import { safeJsonParse } from '@/lib/utils';
+/* Verhuisd naar lib/menu/bcgBerekening zodat de serverkant er ook bij kan.
+   Hier doorgeëxporteerd zodat bestaande imports blijven werken. */
+import { calcDishFoodcost, countDishPopularity, median, type Quadrant, type DishAnalysis } from '@/lib/menu/bcgBerekening';
+
+export { calcDishFoodcost, countDishPopularity, median };
+export type { Quadrant, DishAnalysis };
 import { getGang } from './GerechtKaart';
-
-export type Quadrant = 'star' | 'puzzle' | 'plowhorse' | 'dog';
-
-export interface DishAnalysis {
-  id: number;
-  naam: string;
-  gang_slug: string;
-  popularity: number;
-  foodcostPP: number;
-  margePct: number;
-  revenue: number;
-  quadrant: Quadrant;
-}
+import { formatPercent } from '@/lib/format';
 
 export const QUADRANT_CONFIG: Record<Quadrant, { label: string; icon: string; color: string; bg: string; border: string; advies: string }> = {
   star:      { label: 'Stars',      icon: '\u2B50', color: '#4ade80', bg: 'rgba(74,222,128,.08)',  border: 'rgba(74,222,128,.25)',  advies: 'Behoud en promoot' },
@@ -42,7 +35,7 @@ function CustomTooltip({ active, payload }: any) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Marge</span>
-          <span style={{ color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 600 }}>{d.margePct.toFixed(1)}%</span>
+          <span style={{ color: QUADRANT_CONFIG[d.quadrant].color, fontWeight: 600 }}>{formatPercent(d.margePct)}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ color: 'rgba(255,255,255,.5)' }}>Foodcost p.p.</span>
@@ -213,7 +206,7 @@ export function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>
-                            {d.margePct.toFixed(0)}% marge
+                            {formatPercent(d.margePct, 0)} marge
                           </div>
                           <div style={{ fontSize: 12, color: 'rgba(255,255,255,.35)' }}>
                             {d.popularity}x {'\u00b7'} {'\u20ac'}{d.foodcostPP.toFixed(2)}/pp
@@ -232,54 +225,5 @@ export function QuadrantCards({ dishes }: { dishes: DishAnalysis[] }) {
   );
 }
 
-export function calcDishFoodcost(gerecht: any, inventoryData: any[]): number {
-  const costs = gerecht.ingredient_costs;
-  if (!costs || !Array.isArray(costs) || costs.length === 0) return 0;
-  return costs.reduce(function (sum: number, it: any) {
-    const inv = inventoryData.find(function (i: any) { return i.naam && it.naam && i.naam.toLowerCase() === it.naam.toLowerCase(); });
-    const p = inv ? (inv.purchase_price || 0) : 0;
-    const y = it.yield || (inv ? inv.yield_factor : 1.0) || 1.0;
-    let f = 1;
-    if (it.unit === 'g' && inv && inv.unit === 'kg') f = 0.001;
-    if (it.unit === 'ml' && inv && inv.unit === 'L') f = 0.001;
-    return sum + ((it.qty_pp || 0) * f / y) * p;
-  }, 0);
-}
 
-export function countDishPopularity(dishName: string, dishId: number, eventsData: any[], offertesData: any[]): number {
-  let count = 0;
-  eventsData.forEach(function (ev: any) {
-    const menu = typeof ev.menu === 'string' ? safeJsonParse(ev.menu, []) : (ev.menu || []);
-    if (Array.isArray(menu)) {
-      if (menu.includes(dishId) || menu.includes(String(dishId))) count++;
-    }
-  });
-  offertesData.forEach(function (off: any) {
-    const parsed = typeof off.menu_selectie === 'string' ? safeJsonParse(off.menu_selectie, {}) : (off.menu_selectie || {});
-    let items: any[] = [];
-    if (Array.isArray(parsed)) {
-      items = parsed;
-    } else if (parsed && typeof parsed === 'object') {
-      Object.values(parsed).forEach(function (arr: any) {
-        if (Array.isArray(arr)) {
-          arr.forEach(function (item: any) {
-            items.push(typeof item === 'string' ? { naam: item } : item);
-          });
-        }
-      });
-    }
-    const found = items.some(function (it: any) {
-      const name = it.gerecht_naam || it.naam || '';
-      return name === dishName;
-    });
-    if (found) count++;
-  });
-  return count;
-}
 
-export function median(arr: number[]): number {
-  if (arr.length === 0) return 0;
-  const sorted = arr.slice().sort(function (a, b) { return a - b; });
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}

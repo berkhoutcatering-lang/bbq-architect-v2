@@ -17,6 +17,8 @@ import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import type { OrderItemSnapshot } from '@/lib/dal/inkoopOrders';
 
+import { formatEur } from '@/lib/format';
+
 const ROOKHOUT_OF_HARDWARE = /(rookhout|hout|aanmaak|hardware|gereedschap|servies|materieel|schoonmaak)/i;
 
 export function determineBtwPct(categorie: string | null | undefined): 9 | 21 {
@@ -124,7 +126,7 @@ const styles = StyleSheet.create({
 });
 
 function fmtEur(n: number): string {
-  return '€ ' + (Number(n) || 0).toFixed(2).replace('.', ',');
+  return formatEur((Number(n) || 0));
 }
 
 function fmtQty(n: number, unit: string): string {

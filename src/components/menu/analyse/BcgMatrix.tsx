@@ -1,8 +1,21 @@
 /* ═══════════════════════════════════════════════════════════════
    BCG Matrix — Populariteit vs. Marge (interactive SVG)
-   TSX port van mr-analyse.jsx. Werkt op echte Gerecht[] uit Supabase.
-   Populariteit wordt nu gefakeerd via een stabiele hash van id —
-   verwacht: te vervangen door echte order_count uit ML in volgende ronde.
+
+   De populariteit kwam hier uit een stabiele hash van het gerecht-id: een
+   getal tussen 20 en 100 dat niets met verkopen te maken had. Twee gerechten
+   met dezelfde marge belandden in verschillende kwadranten omdat hun UUID
+   anders spelde. Daardoor sprak deze pagina /marges tegen — die telt wél
+   echt — en zei het bijschrift "populariteit is nu nog een schatting", wat
+   een hash niet is.
+
+   Nu komt `popularity` van de serverkant, geteld uit eventmenu's en
+   offertes met countDishPopularity: dezelfde bron als /marges.
+
+   De kwadrantgrens ligt op de mediaan van je eigen gerechten, niet op een
+   vaste 50/65. Dat is de standaard-BCG-methode (Pavesic) en het is de enige
+   grens die betekenis heeft zolang de aantallen klein zijn: bij hoogstens
+   een paar offertes per gerecht zou "meer dan 50 keer verkocht" nooit
+   voorkomen en was alles een hond.
    ═══════════════════════════════════════════════════════════════ */
 
 'use client';
@@ -10,6 +23,7 @@
 import { useMemo, useState } from 'react';
 import type { Gerecht } from '@/types';
 import { fmtEuro, getMargin } from '@/components/menu/helpers';
+import { formatPercent } from '@/lib/format';
 
 interface Props {
     gerechten: Gerecht[];
@@ -37,16 +51,16 @@ const QUADRANTS: QuadDef[] = [
     { id: 'dogs',   label: 'Honden',       emoji: '🐕', bg: 'rgba(239,68,68,.04)',  border: 'rgba(239,68,68,.15)', color: '#ef4444' },
 ];
 
-function stableHash(id: string | number): number {
-    const s = String(id);
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-    return Math.abs(h) % 80 + 20; // 20-100
+function mediaan(arr: number[]): number {
+    if (arr.length === 0) return 0;
+    const g = arr.slice().sort((a, b) => a - b);
+    const m = Math.floor(g.length / 2);
+    return g.length % 2 !== 0 ? g[m] : (g[m - 1] + g[m]) / 2;
 }
 
-function getQuadrant(popularity: number, margin: number): Quadrant {
-    const highPop = popularity > 50;
-    const highMargin = margin > 65;
+function getQuadrant(popularity: number, margin: number, grensPop: number, grensMarge: number): Quadrant {
+    const highPop = popularity >= grensPop;
+    const highMargin = margin >= grensMarge;
     if (highPop && highMargin) return 'stars';
     if (!highPop && highMargin) return 'puzzle';
     if (highPop && !highMargin) return 'plow';
@@ -61,16 +75,35 @@ export function BcgMatrix({ gerechten, popularity }: Props) {
     const innerW = W - PAD;
     const innerH = H - PAD;
 
-    const enriched = useMemo(() => gerechten.map((g) => {
-        const pop = popularity?.[g.id] ?? stableHash(g.id);
-        const margin = getMargin(g);
-        return { ...g, pop, margin, quadrant: getQuadrant(pop, margin) };
-    }), [gerechten, popularity]);
+    const { enriched, grensPop, grensMarge, maxPop, heeftEchteData, zonderKostprijs } = useMemo(() => {
+        const alles = gerechten.map((g) => ({
+            ...g,
+            pop: popularity?.[String(g.id)] ?? 0,
+            margin: getMargin(g),
+        }));
+        /* Een gerecht zonder kostprijs krijgt marge 0. Namen we die mee, dan
+           zakte de mediaan naar 0 en gold "marge >= 0" voor iedereen: alles
+           werd een ster, ook wat we niet kunnen beoordelen. De gedeelde
+           bibliotheek slaat ze daarom over; hier ook, met de telling erbij. */
+        const basis = alles.filter((d) => d.margin > 0);
+        const gPop = mediaan(basis.map((d) => d.pop));
+        const gMarge = mediaan(basis.map((d) => d.margin));
+        return {
+            enriched: basis.map((d) => ({ ...d, quadrant: getQuadrant(d.pop, d.margin, gPop, gMarge) })),
+            grensPop: gPop,
+            grensMarge: gMarge,
+            maxPop: Math.max(1, ...basis.map((d) => d.pop)),
+            heeftEchteData: !!popularity && basis.some((d) => d.pop > 0),
+            zonderKostprijs: alles.length - basis.length,
+        };
+    }, [gerechten, popularity]);
 
     const qCounts: Record<Quadrant, number> = { stars: 0, puzzle: 0, plow: 0, dogs: 0 };
     enriched.forEach((d) => { qCounts[d.quadrant]++; });
 
-    const dotX = (pop: number) => PAD + (pop / 100) * innerW;
+    /* Schaalt op je hoogste telling; met vaste 100 zouden een paar
+       offertes allemaal tegen de linkerrand kleven. */
+    const dotX = (pop: number) => PAD + (pop / maxPop) * innerW;
     const dotY = (m: number) => H - PAD - (Math.max(0, Math.min(100, m)) / 100) * innerH;
 
     return (
@@ -146,7 +179,7 @@ export function BcgMatrix({ gerechten, popularity }: Props) {
                                 <g style={{ pointerEvents: 'none' }}>
                                     <rect x={dotX(d.pop) - 70} y={dotY(d.margin) - 42} width={140} height={34} rx={6} fill="rgba(0,0,0,.85)" stroke="var(--border)" />
                                     <text x={dotX(d.pop)} y={dotY(d.margin) - 28} textAnchor="middle" fill="#fff" fontSize={11} fontWeight={500}>{d.naam}</text>
-                                    <text x={dotX(d.pop)} y={dotY(d.margin) - 16} textAnchor="middle" fill="var(--muted)" fontSize={10}>{d.margin}% · {fmtEuro(Number(d.verkoopprijs ?? d.prijs ?? 0))}</text>
+                                    <text x={dotX(d.pop)} y={dotY(d.margin) - 16} textAnchor="middle" fill="var(--muted)" fontSize={10}>{formatPercent(d.margin, 0)} · {fmtEuro(Number(d.verkoopprijs ?? d.prijs ?? 0))} · {d.pop}×</text>
                                 </g>
                             )}
                         </g>
@@ -174,9 +207,20 @@ export function BcgMatrix({ gerechten, popularity }: Props) {
                 ))}
             </div>
 
-            {/* Disclaimer over populariteit-bron */}
-            <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)', fontStyle: 'italic' }}>
-                Populariteit is nu nog een schatting — zodra we per gerecht bestellingen bijhouden, baseren we dit op je echte verkoopcijfers.
+            {/* Zeg waar de assen op staan; anders is een kwadrant een mening. */}
+            <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)', lineHeight: 1.55 }}>
+                {enriched.length === 0 ? (
+                    'Nog geen gerecht met een kostprijs, dus er is niets te vergelijken. Koppel componenten aan je gerechten of vul een kostprijs in.'
+                ) : (
+                    <>
+                        {heeftEchteData
+                            ? `Populariteit = hoe vaak een gerecht op een eventmenu of offerte staat. De grens tussen populair en niet ligt op de mediaan van je eigen gerechten (${grensPop}×), die tussen hoge en lage marge op ${formatPercent(grensMarge, 0)}.`
+                            : `Nog geen gerecht op een eventmenu of offerte, dus de populariteit staat overal op nul. De margegrens ligt op de mediaan (${formatPercent(grensMarge, 0)}).`}
+                        {zonderKostprijs > 0 && (
+                            <> {zonderKostprijs} van de {enriched.length + zonderKostprijs} gerechten {zonderKostprijs === 1 ? 'staat' : 'staan'} hier niet in: daarvan is de kostprijs nog onbekend.</>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     );

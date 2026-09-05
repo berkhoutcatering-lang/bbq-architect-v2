@@ -17,6 +17,8 @@
 
 import type { PriceBasis, ContentUnit, BaseUnit, SyncErrorCode } from './types';
 
+import { formatEur } from '@/lib/format';
+
 /* ── Geldnotatie → hele centen ──────────────────────────────────────────────
  *
  * Adapters horen canonieke decimale strings te sturen ("22.50"), maar deze
@@ -305,7 +307,7 @@ function assignPerUnit(result: PricingResult, effectiveEuro: number, baseUnit: B
 
 /** Herkenbaar label voor de UI ("€9,00 / kg"). Presentatie, geen canon. */
 export function pricePerUnitLabel(result: Pick<PricingResult, 'pricePerKg' | 'pricePerLiter' | 'pricePerPiece'>): string | null {
-    const euro = (n: number) => `€${n.toFixed(2).replace('.', ',')}`;
+    const euro = (n: number) => `${formatEur(n)}`;
     if (result.pricePerKg !== null) return `${euro(result.pricePerKg)} / kg`;
     if (result.pricePerLiter !== null) return `${euro(result.pricePerLiter)} / liter`;
     if (result.pricePerPiece !== null) return `${euro(result.pricePerPiece)} / stuk`;

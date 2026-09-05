@@ -34,6 +34,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# .env.example bevat alleen namen en uitleg, geen waarden — die hoort er wel in,
+# anders weet niemand welke variabelen er te zetten zijn.
+!.env.example
 
 # Supabase CLI local cache
 supabase/.temp/

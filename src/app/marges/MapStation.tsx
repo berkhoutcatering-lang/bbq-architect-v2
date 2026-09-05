@@ -3,6 +3,8 @@
 import React from 'react';
 import { GANGEN, type GangConfig, type GerechtData } from './GerechtKaart';
 
+import { formatEur } from '@/lib/format';
+
 export function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
   gang: GangConfig;
   gerechten: GerechtData[];
@@ -70,7 +72,7 @@ export function MapStation({ gang, gerechten, onRemove, onPublish, onDrop }: {
               }}>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.naam}</span>
                 {g.kostprijs_pp && g.kostprijs_pp > 0 && (
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', flexShrink: 0 }}>€{Number(g.kostprijs_pp).toFixed(2)}</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,.35)', flexShrink: 0 }}>{formatEur(Number(g.kostprijs_pp))}</span>
                 )}
                 <button
                   onClick={function () { onRemove(g.id); }}

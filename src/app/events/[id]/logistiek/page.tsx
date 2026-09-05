@@ -11,12 +11,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Smartphone, Sparkles } from 'lucide-react';
+import { Smartphone, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import EventTabs from '@/components/EventTabs';
 import LogistiekPanel from '@/components/logistiek/LogistiekPanel';
 import { AiProposalModalAutoOpen } from '@/components/logistiek/AiProposalModal';
 
+import HubHeader from '@/components/chassis/HubHeader';
 interface EventRow {
     id: number;
     name: string | null;
@@ -88,40 +89,21 @@ export default function EventLogistiekPage() {
     return (
         <div className="redesign-root">
             <div className="main" style={{ padding: '24px 0 40px' }}>
-                <div style={{ marginBottom: 12 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => router.push(`/events/${event.id}/hub`)}>
-                        <ArrowLeft size={14} /> Terug naar event-hub
-                    </button>
-                </div>
-
-                <EventTabs eventId={event.id} eventName={event.name ?? undefined} />
-
-                {/* Event-header — compact zodat 6 accordions bovenaan blijven. */}
-                <div className="flex items-center justify-between flex-wrap gap-3 mb-5">
-                    <div>
-                        <h1 className="text-[24px] font-light leading-tight" style={{ fontFamily: 'var(--font-display)' }}>
-                            {eventNaam}
-                            <span className="text-[14px] ml-2 font-normal" style={{ color: 'var(--muted)' }}>· Logistiek</span>
-                        </h1>
-                        <p className="text-[13px] mt-1" style={{ color: 'var(--muted)' }}>
-                            {event.guests ?? 0} gasten · {dateLabel}{event.location ? ` · ${event.location}` : ''}
-                        </p>
-                    </div>
-                    <div className="flex gap-2 items-center">
+                {/* Dezelfde stapel als de event-hub had: terug-knop, tabs met
+                    eyebrow, dan pas een eigen kop. Nu: kop, dan tabs. */}
+                <HubHeader
+                    kruimels={[{ label: 'Event', href: `/events/${event.id}/hub` }]}
+                    titel={eventNaam}
+                    onderschrift={`Logistiek · ${event.guests ?? 0} gasten · ${dateLabel}${event.location ? ` · ${event.location}` : ''}`}
+                    actie={<>
                         {aiPending && (
-                            <Link href={`/logistiek?proposal=${event.id}`}
-                                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[12px] font-semibold"
-                                style={{ background: 'rgba(255,191,0,.08)', border: '1px solid rgba(255,191,0,.25)', color: 'var(--brand)' }}>
-                                <Sparkles size={13} /> AI-voorstel klaar
-                            </Link>
+                            <Link href={`/logistiek?proposal=${event.id}`} className="btn btn-primary"><Sparkles size={13} /> AI-voorstel klaar</Link>
                         )}
-                        <Link href="/logistiek/field"
-                            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-[12px] font-semibold"
-                            style={{ background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.2)', color: 'var(--brand)' }}>
-                            <Smartphone size={13} /> Veldmodus
-                        </Link>
-                    </div>
-                </div>
+                        <Link href="/logistiek/field" className="btn btn-ghost"><Smartphone size={13} /> Veldmodus</Link>
+                    </>}
+                />
+
+                <EventTabs eventId={event.id} eventName={event.name ?? undefined} toonKop={false} />
 
                 <LogistiekPanel eventId={event.id} />
             </div>

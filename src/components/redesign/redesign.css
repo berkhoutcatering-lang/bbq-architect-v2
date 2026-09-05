@@ -213,7 +213,8 @@
     padding: 16px var(--space-mobile-edge, 16px) calc(72px + env(safe-area-inset-bottom, 0px));
   }
   .redesign-root .page-head { flex-direction: column; align-items: stretch; gap: 12px; }
-  .redesign-root .page-title { font-size: 22px; }
+  /* 24px, gelijk aan .chassis-titel op de telefoon. */
+  .redesign-root .page-title { font-size: 24px; }
   .redesign-root .hstack { flex-wrap: wrap; gap: 8px; }
   .redesign-root .ev-view-tabs {
     overflow-x: auto;

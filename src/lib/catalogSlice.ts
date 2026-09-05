@@ -20,6 +20,8 @@
 
 import { supplierProductBaseCost } from './supplierSync/recipeCost';
 
+import { formatEur } from '@/lib/format';
+
 export interface CatalogusRegel {
     bron: 'price_list' | 'supplier_product';
     naam: string;
@@ -33,7 +35,7 @@ export interface CatalogusRegel {
 const PER_TERM = 6;
 
 function euro(n: number): string {
-    return `€${n.toFixed(2).replace('.', ',')}`;
+    return `${formatEur(n)}`;
 }
 
 /** supplier_prices → label. Alleen prijs_per_kg / prijs_per_stuk zijn te vertrouwen. */

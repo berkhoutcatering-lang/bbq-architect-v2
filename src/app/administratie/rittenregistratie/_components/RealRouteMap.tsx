@@ -20,6 +20,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import RittenMap, { type LatLng, type MapRoute, type MapMarker } from './RittenMap';
 import { geocodeNL, getOsrmRoute, computeBounds, type LngLat, type OsrmRoute } from './route-fetchers';
 
+import { formatKm } from '@/lib/format';
 interface Props {
   vertrekAdres: string;
   aankomstAdres: string;
@@ -246,7 +247,12 @@ export default function RealRouteMap({
           pointerEvents: 'none',
         }}
       >
-        Live route · {(state.route.distance / 1000).toFixed(1)} km · {Math.round(state.route.duration / 60)} min
+        {/* Stond op "LIVE ROUTE · 27.3 KM" naast "AFSTAND 19,0 km · gemeten
+            heen" in de cijfers ernaast. Beide kloppen, maar ze meten iets
+            anders: de kilometerstand tegenover wat de kaart voorstelt. Zonder
+            dat erbij weet je niet welk getal fiscaal telt. En 27.3 met een punt
+            naast 19,0 met een komma, op één scherm. */}
+        Volgens de kaart · {formatKm(state.route.distance / 1000)} · {Math.round(state.route.duration / 60)} min
       </div>
     </div>
   );

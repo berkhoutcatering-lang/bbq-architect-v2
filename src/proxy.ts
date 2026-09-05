@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/q/', '/aanvraag/', '/arrangement/', '/invite', '/api/accept-offerte', '/api/public-offerte', '/api/public-lead-form', '/api/public-arrangement', '/api/billing/webhook', '/api/email/inbound', '/api/extension/', '/api/cron/', '/welkom', '/pricing', '/legal'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/auth/callback', '/q/', '/aanvraag/', '/arrangement/', '/invite', '/contact', '/api/contact', '/api/accept-offerte', '/api/public-offerte', '/api/public-lead-form', '/api/public-arrangement', '/api/billing/webhook', '/api/email/inbound', '/api/extension/', '/api/cron/', '/welkom', '/pricing', '/legal'];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -48,8 +48,17 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/archief', request.url), 308);
   }
 
-  // Skip public routes
-  if (PUBLIC_ROUTES.some(function (route) { return pathname.startsWith(route); })) {
+  /* Publieke routes matchten op kale prefix. Daardoor zou een nieuwe route die
+     toevallig met dezelfde letters begint stilletjes meeliften: naast /contact
+     ook /contactpersonen, naast /pricing ook /pricingtest. Ingangen die met een
+     slash eindigen (/q/, /api/cron/) zijn bewust een map en houden hun
+     prefix-gedrag; de rest moet precies matchen of gevolgd worden door een
+     slash. */
+  const isPubliek = PUBLIC_ROUTES.some(function (route) {
+    if (route.endsWith('/')) return pathname.startsWith(route);
+    return pathname === route || pathname.startsWith(route + '/');
+  });
+  if (isPubliek) {
     return NextResponse.next();
   }
 

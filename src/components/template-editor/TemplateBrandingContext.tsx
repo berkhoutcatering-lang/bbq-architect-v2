@@ -8,6 +8,14 @@ export interface TemplateBranding {
     logoUrl?: string | null;
     logoDarkUrl?: string | null;
     bedrijfsnaam?: string;
+    /**
+     * De echte bedrijfsgegevens uit Instellingen. Zonder deze viel het
+     * factuurvoorbeeld terug op verzonnen voorbeelddata — "Hoofdstraat 1,
+     * 1234 AB Amsterdam · KvK: 12345678 · IBAN: NL91 ABNA 0417 1643 00".
+     * Wie zo'n template opsloeg zonder dat te merken, verstuurde facturen
+     * met een vreemd rekeningnummer erop.
+     */
+    bedrijfsgegevens?: Record<string, string>;
 }
 
 const TemplateBrandingContext = createContext<TemplateBranding>({

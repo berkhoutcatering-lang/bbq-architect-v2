@@ -10,6 +10,8 @@
 import type { SupplierProductObservationInput, ValidationStatus, SyncErrorCode } from './types';
 import type { PricingResult } from './pricing';
 
+import { formatPercent } from '@/lib/format';
+
 export interface AnomalyConfig {
     /** Prijsverschil t.o.v. laatst goedgekeurde vergelijkbare prijs → quarantaine. */
     priceDiffQuarantinePct: number; // default 20
@@ -100,10 +102,10 @@ export function decideValidation(
         const prev = ctx.previousApprovedEffectiveCents;
         const diffPct = ((pricing.effectivePriceCents - prev) / prev) * 100;
         if (Math.abs(diffPct) > cfg.priceDiffQuarantinePct) {
-            q('PRICE_ANOMALY', `Prijs wijkt ${diffPct.toFixed(1)}% af van laatst goedgekeurd.`);
+            q('PRICE_ANOMALY', `Prijs wijkt ${formatPercent(diffPct)} af van laatst goedgekeurd.`);
         }
         if (diffPct < -cfg.strongDropPct) {
-            q('PRICE_ANOMALY', `Sterke prijsdaling (${diffPct.toFixed(1)}%).`);
+            q('PRICE_ANOMALY', `Sterke prijsdaling (${formatPercent(diffPct)}).`);
         }
     }
 

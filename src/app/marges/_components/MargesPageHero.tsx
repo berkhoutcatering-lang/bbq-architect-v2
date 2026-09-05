@@ -65,15 +65,8 @@ export default function MargesPageHero({ totaalGerechten, metKostprijs }: Props)
             />
             <span>Margin Lab</span>
           </div>
-          <h1
-            style={{
-              fontWeight: 200,
-              fontSize: 'clamp(24px, 7vw, 36px)',
-              margin: 0,
-              lineHeight: 1.05,
-              letterSpacing: '-0.025em',
-            }}
-          >
+          {/* Was 36px waar de rest van de app 28px zet; het groene accent blijft. */}
+          <h1 className="chassis-titel">
             Marges &{' '}
             <em
               style={{

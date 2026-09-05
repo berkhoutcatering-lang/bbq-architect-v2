@@ -60,7 +60,7 @@ import {
   computeKpiTiles,
   pickGlyph,
 } from './_components/stats-helpers';
-import type { Gang, Gerecht, MenuTemplateRow } from '@/types';
+import type { Gang, Gerecht } from '@/types';
 
 /* Velden voor Gerecht (gang_slug, foto_url, tags, allergenen, ingredienten,
    bron, kostprijs_pp, verkoopprijs) en Gang (minimum, extra_prijs_pp) zijn
@@ -74,7 +74,6 @@ import type { Gang, Gerecht, MenuTemplateRow } from '@/types';
 export interface GerechtenInitial {
     gangen?: Gang[];
     gerechten?: Gerecht[];
-    menuTemplates?: MenuTemplateRow[];
 }
 
 export default function Gerechten({ initial }: { initial?: GerechtenInitial } = {}) {
@@ -118,12 +117,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [dataLoading, setDataLoading] = useState(true);
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
-    /* Menu's-tab op /gerechten — herbruikbare menu-templates die de wizard
-       opslaat. Eén plek voor menu-samenstelling, hergebruikt vanuit /offertes. */
-    const [view, setView] = useState<'gerechten' | 'menus'>('gerechten');
+    /* Was een schakelaar Gerechten/Menu's. De Menu's-kant is verhuisd naar de
+       hub-tab Menukaarten; dit scherm toont alleen nog gerechten. */
+    const view = 'gerechten' as const;
     /* Status-filter: 'all' default, anders een van de 4 workflow-states. */
     const [statusFilter, setStatusFilter] = useState<'all' | 'concept' | 'review_nodig' | 'actief' | 'inactief'>('all');
-    const [menuTemplates, setMenuTemplates] = useState<MenuTemplateRow[]>(initial?.menuTemplates ?? []);
     /* Kitchen Mode = full-screen stap-voor-stap voor in de keuken (was /recepten).
        Dit object bewaart titel + stappen array voor de stepper. */
     const [kitchenMode, setKitchenMode] = useState<{ titel: string; stappen: string[] } | null>(null);
@@ -165,26 +163,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         }
         const r = await supabase.from('gerechten').select('*').order('volgorde');
         if (r.data) setGerechten(r.data);
-        await loadMenuTemplates();
-    }
-
-    async function loadMenuTemplates() {
-        const { data, error } = await supabase
-            .from('menu_templates')
-            .select('*')
-            .eq('actief', true)
-            .order('is_default', { ascending: false })
-            .order('updated_at', { ascending: false });
-        if (error) {
-            /* Migratie nog niet gedraaid → tabel ontbreekt. Niet-fataal: lege state. */
-            if (/relation .* does not exist/i.test(error.message)) {
-                setMenuTemplates([]);
-                return;
-            }
-            console.warn('[gerechten] menu_templates load error:', error.message);
-            return;
-        }
-        setMenuTemplates(data || []);
     }
 
     /* Sinds 2026-06-02: MenuWizard is uit /gerechten verwijderd. Menukaart-
@@ -194,33 +172,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         router.push('/gerechten/menukaarten/nieuw');
     }
 
-    function editMenuTemplate(t: MenuTemplateRow) {
-        router.push(`/gerechten/menukaarten/${t.id}`);
-    }
-
-    function deleteMenuTemplate(id: number | string) {
-        showConfirm('Weet je zeker dat je dit menu wilt verwijderen?', async function () {
-            const { error } = await supabase.from('menu_templates').delete().eq('id', id);
-            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
-            showToast('Menu verwijderd');
-            await loadMenuTemplates();
-        });
-    }
-
-    async function toggleDefaultTemplate(t) {
-        if (t.is_default) {
-            const { error } = await supabase.from('menu_templates').update({ is_default: false }).eq('id', t.id);
-            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
-        } else {
-            /* Eerst alle defaults voor deze org clearen — partial unique index dwingt 1 default per org af. */
-            if (orgId) {
-                await supabase.from('menu_templates').update({ is_default: false }).eq('organization_id', orgId).eq('is_default', true);
-            }
-            const { error } = await supabase.from('menu_templates').update({ is_default: true }).eq('id', t.id);
-            if (error) { showToast('Fout: ' + error.message, 'error'); return; }
-        }
-        await loadMenuTemplates();
-    }
 
     function newGang() {
         setGangEditing('new');
@@ -799,34 +750,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 Menu's tab-toggle blijft als hoofdroute voor menu-templates view. */}
             <div className="mr-page-header" style={{ padding: '14px 0 12px', borderBottom: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-                    <h1 className="mr-page-title" style={{ fontSize: 22 }}>
-                        {view === 'gerechten' ? 'Gerechten' : "Menu's"}
-                    </h1>
-                    <span style={{ fontSize: 13, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>
-                        {view === 'gerechten' ? `${gerechten.length} gerechten` : `${menuTemplates.length} menu's`}
-                    </span>
-                    <div role="tablist" style={{ display: 'flex', gap: 2, padding: 2, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', marginLeft: 8 }}>
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={view === 'gerechten'}
-                            onClick={function () { setView('gerechten'); }}
-                            className={view === 'gerechten' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
-                            style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
-                        >
-                            Gerechten
-                        </button>
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={view === 'menus'}
-                            onClick={function () { setView('menus'); }}
-                            className={view === 'menus' ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'}
-                            style={{ minHeight: 32, padding: '6px 12px', fontSize: 13 }}
-                        >
-                            Menu&rsquo;s
-                        </button>
-                    </div>
+                    <h1 className="chassis-titel">Gerechten</h1>
+                    <span className="chassis-onderschrift">{gerechten.length} gerechten</span>
+                    {/* Hier stond een tweede tabbalk "Gerechten / Menu's", naast de
+                        hub-tabs waar Menukaarten al in zit. Twee deuren naar dezelfde
+                        lijst; deze is dicht. ?view=menus stuurt door. */}
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                     {view === 'gerechten' && (
@@ -880,55 +808,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             {/* GangFilterPills weg — gang-filter loopt via MRFilterPill in de Bucket-C filter-bar. */}
 
 
-            {view === 'menus' && (
-                <PageSection>
-                    {menuTemplates.length === 0 ? (
-                        <div style={{ padding: 40, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 12, background: 'var(--card)' }}>
-                            <UtensilsCrossed size={28} style={{ color: 'var(--muted)', marginBottom: 12 }} />
-                            <div style={{ fontWeight: 600, marginBottom: 4 }}>Nog geen menu&rsquo;s opgeslagen</div>
-                            <div style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
-                                Bouw een menu met de wizard en sla het op. Hergebruik het later in een offerte zodat je niet elke keer opnieuw begint.
-                            </div>
-                            <button className="btn btn-brand btn-sm" onClick={newMenuTemplate}>
-                                <UtensilsCrossed size={14} style={{ marginRight: 6 }} />Nieuw menu maken
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="dish-grid">
-                            {menuTemplates.map(function (t) {
-                                const sel = typeof t.menu_selectie === 'string' ? JSON.parse(t.menu_selectie) : (t.menu_selectie || {});
-                                const dishCount: number = (Object.values(sel) as unknown[]).reduce<number>(function (a, list) { return a + (Array.isArray(list) ? list.length : 0); }, 0);
-                                return (
-                                    <div key={t.id} className="dish-card" style={{ position: 'relative' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                            {t.is_default && <Star size={14} style={{ color: '#B48C14', fill: '#B48C14' }} />}
-                                            <div className="dish-name" style={{ margin: 0, flex: 1 }}>{t.naam}</div>
-                                        </div>
-                                        {t.beschrijving ? <div className="dish-desc">{String(t.beschrijving)}</div> : null}
-                                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
-                                            {dishCount} gerechten over {Object.keys(sel).length} gangen
-                                        </div>
-                                        {Number(t.basis_prijs_pp) > 0 && (
-                                            <div className="dish-kostprijs">{formatEur(Number(t.basis_prijs_pp))} p.p.</div>
-                                        )}
-                                        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                                            <button className="btn btn-ghost btn-sm" onClick={function () { editMenuTemplate(t); }} title="Aanpassen">
-                                                <Pencil size={12} style={{ marginRight: 4 }} /> Aanpassen
-                                            </button>
-                                            <button className="btn btn-ghost btn-sm" onClick={function () { toggleDefaultTemplate(t); }} title={t.is_default ? 'Standaard af' : 'Maak standaard'}>
-                                                <Star size={12} style={{ marginRight: 4, color: t.is_default ? '#B48C14' : undefined }} /> {t.is_default ? 'Standaard' : 'Maak standaard'}
-                                            </button>
-                                            <button className="btn btn-ghost btn-sm" onClick={function () { deleteMenuTemplate(t.id); }} title="Verwijderen" style={{ color: 'var(--red)' }}>
-                                                <Trash2 size={12} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </PageSection>
-            )}
 
             {view === 'gerechten' && (<>
                 {/* Filter-pills bar — gang + status, beide met MRFilterPill */}

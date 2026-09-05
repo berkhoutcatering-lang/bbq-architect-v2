@@ -2,6 +2,8 @@
 
 import { Trophy, ArrowUpRight } from 'lucide-react';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
   naam: string;
   beschrijving?: string;
@@ -99,7 +101,7 @@ export default function WinnerSpotlight({
           {categorie && <Stat label="Categorie" value={categorie} />}
           <Stat label="Marge" value={`${Math.round(margePct)}%`} tone="green" />
           {kostprijsPp !== undefined && kostprijsPp > 0 && (
-            <Stat label="Kostprijs" value={`€${kostprijsPp.toFixed(2)}`} sub="p.p." />
+            <Stat label="Kostprijs" value={`${formatEur(kostprijsPp)}`} sub="p.p." />
           )}
           {popularity !== undefined && popularity > 0 && (
             <Stat label="Populair" value={`${popularity}×`} sub="ingezet" />

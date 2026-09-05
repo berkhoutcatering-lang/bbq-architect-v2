@@ -6,6 +6,8 @@
  * worden gefilterd. Tijdzone = Europe/Amsterdam (default JS Date toLocaleString).
  */
 
+import { localDayKey, localMonthKey } from './date-keys';
+
 interface EventForRevenue {
   date?: string | null;
   guests?: number | null;
@@ -18,10 +20,6 @@ const MONTHS_NL_SHORT = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug',
 function eventValue(e: EventForRevenue): number {
   if (e.status === 'geannuleerd' || e.status === 'cancelled') return 0;
   return (e.guests || 0) * (e.ppp || 0);
-}
-
-function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }
 
 /** 7 buckets, 1 per dag, eindigend bij vandaag (inclusief). */
@@ -40,7 +38,7 @@ function computeDailyRevenue(events: EventForRevenue[], days: number): number[] 
   for (let i = 0; i < days; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - (days - 1 - i));
-    const iso = isoDay(d);
+    const iso = localDayKey(d);
     for (const e of events) {
       if (e.date === iso) buckets[i] += eventValue(e);
     }
@@ -60,7 +58,7 @@ export function compute6MonthRevenue(events: EventForRevenue[]): RevenueMonthBuc
   const now = new Date();
   for (let offset = 5; offset >= 0; offset--) {
     const ref = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-    const yyyymm = ref.toISOString().slice(0, 7);
+    const yyyymm = localMonthKey(ref);
     let total = 0;
     for (const e of events) {
       if (e.date && e.date.startsWith(yyyymm)) total += eventValue(e);

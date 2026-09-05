@@ -39,6 +39,9 @@ import { findGerechtMatch } from '@/lib/gerechtMatch';
 import { PreviewFor } from '@/components/menukaart/templates';
 import type { MenuData } from '@/lib/menukaart/menu-data';
 import MenuMenukaartCanvas, { type CanvasSaveResult } from '@/components/menu/MenuMenukaartCanvas';
+import { formatPercent } from '@/lib/format';
+import HubHeader from '@/components/chassis/HubHeader';
+import KpiTegel from '@/components/chassis/KpiTegel';
 
 const fmtEur = (n: number) => '€ ' + n.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtEur0 = (n: number) => '€ ' + Math.round(n).toLocaleString('nl-NL');
@@ -56,6 +59,14 @@ function parseMenu(m: unknown): number[] {
   return [];
 }
 
+/** "vandaag", "nog 9 dagen", "9 dagen geleden" — één regel, geen ring van 400 px. */
+function dagenTekst(dagen: number): string {
+  if (dagen === 0) return 'vandaag';
+  if (dagen > 0) return `nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}`;
+  const geleden = Math.abs(dagen);
+  return `${geleden} ${geleden === 1 ? 'dag' : 'dagen'} geleden`;
+}
+
 export default function EventHubPage() {
   const params = useParams();
   const router = useRouter();
@@ -71,6 +82,8 @@ export default function EventHubPage() {
   const [recepten, setRecepten] = useState<any[]>([]);
   const [gerechten, setGerechten] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
+  /* Bedrijfsadres uit Instellingen — vertrekpunt voor route en rit. */
+  const bedrijfsAdres: string = (settings?.adres || '').trim();
   const [klant, setKlant] = useState<any>(null);
   const [haccpRecords, setHaccpRecords] = useState<any[]>([]);
   const [serviceLogs, setServiceLogs] = useState<any[]>([]);
@@ -218,11 +231,17 @@ export default function EventHubPage() {
     const omzet = (event.guests || 0) * (event.ppp || 0);
     let cogs = 0;
     let margin: number | null = null;
+    /* Hoeveel offerte-regels nog geen kostprijs hebben. Zonder dit getal kon de
+       marge-tegel alleen "-" tonen; nu kan hij zeggen wát er mist. */
+    let regelsTotaal = 0;
+    let regelsZonderKost = 0;
     if (offerte) {
       let rawItems: unknown = offerte.items;
       if (typeof rawItems === 'string') { try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; } }
       const lineItems = Array.isArray(rawItems) ? rawItems as Array<Record<string, unknown>> : [];
-      const hasCostField = lineItems.length > 0 && lineItems.every(it => Number(it.cost) > 0);
+      regelsTotaal = lineItems.length;
+      regelsZonderKost = lineItems.filter(it => !(Number(it.cost) > 0)).length;
+      const hasCostField = lineItems.length > 0 && regelsZonderKost === 0;
       if (hasCostField) {
         const revenue = lineItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.prijs) || 0), 0);
         cogs = lineItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.cost) || 0), 0);
@@ -230,13 +249,16 @@ export default function EventHubPage() {
       }
     }
     const evDate = new Date(event.date + 'T17:00:00');
-    const daysLeft = Math.max(0, Math.ceil((evDate.getTime() - Date.now()) / 86400000));
-    /* Fixed horizon of max(60d, days-since-created) so the ring is never an uninformative empty circle on fresh events */
-    const createdAt = event.created_at ? new Date(event.created_at) : evDate;
-    const daysSinceCreated = Math.max(0, Math.ceil((evDate.getTime() - createdAt.getTime()) / 86400000));
-    const daysTotal = Math.max(60, daysSinceCreated);
-    const progress = daysTotal === 0 ? 1 : Math.max(0, Math.min(1, (daysTotal - daysLeft) / daysTotal));
-    return { guests, omzet, cogs, margin, daysLeft, progress };
+    /* `daysLeft` is bewust afgekapt op 0: de prep-agenda, de fasekaart en de
+       tijdlijn rekenen ermee en zouden op negatieve waarden vreemd doen.
+       `dagenTot` is hetzelfde getal zonder afkapping, alleen voor de tekst in
+       de kop — anders las een event van drie weken geleden als "vandaag". */
+    const dagenTot = Math.ceil((evDate.getTime() - Date.now()) / 86400000);
+    const daysLeft = Math.max(0, dagenTot);
+    /* De voortgangsring is vervallen met de hero: 400 px voor één getal dat nu
+       in de ondertitel staat. Daarmee vervalt ook de horizon-berekening die
+       alleen die ring vulde. */
+    return { guests, omzet, cogs, margin, daysLeft, dagenTot, regelsTotaal, regelsZonderKost };
   }, [event, offerte]);
 
   const prepDoneCount = prepTasks.filter(p => prepState[p.id]).length;
@@ -278,7 +300,9 @@ export default function EventHubPage() {
     out.push({
       key: 'eventdag', label: 'Event dag',
       status: isCompleted ? 'done' : isToday || (isConfirmed && serviceLogs.length > 0) ? 'active' : 'upcoming',
-      hint: serviceLogs.length > 0 ? `${serviceLogs.length} gangen gelogd` : isToday ? 'Vandaag' : `${derived?.daysLeft ?? 0}d te gaan`,
+      /* Stond op de afgekapte teller, dus een event van vorige maand meldde
+         "0d te gaan". */
+      hint: serviceLogs.length > 0 ? `${serviceLogs.length} gangen gelogd` : isToday ? 'Vandaag' : dagenTekst(derived?.dagenTot ?? 0),
     });
     const factBetaald = factuur && factuur.status === 'betaald';
     out.push({
@@ -600,10 +624,6 @@ export default function EventHubPage() {
   const dateLabel = evDateValid
     ? `${evDate.getDate()} ${moNamesLong[evDate.getMonth()]} ${evDate.getFullYear()}`
     : 'Datum onbekend';
-  const dateUpper = evDateValid
-    ? `${evDate.getDate()} ${(moNamesShort[evDate.getMonth()] || 'jan').toUpperCase()} ${evDate.getFullYear()}`
-    : 'DATUM ONBEKEND';
-  const circumference = 2 * Math.PI * 86;
 
   const statusLabel = event.status === 'confirmed' ? 'Bevestigd' : event.status === 'optie' ? 'Optie · wacht op akkoord' : event.status === 'completed' ? 'Afgerond' : 'Nieuw';
   const statusPillVariant = event.status === 'confirmed' ? 'p-ok' : event.status === 'completed' ? 'p-draft' : event.status === 'optie' ? 'p-optie' : 'p-send';
@@ -624,12 +644,69 @@ export default function EventHubPage() {
   return (
     <div className="redesign-root">
       <div className="main" style={{ padding: '24px 0 40px' }}>
-        <div style={{ marginBottom: 12 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => router.push('/events')}>
-            <ArrowLeft size={14} />Terug naar events
-          </button>
+        {/* Hier stonden vijf navigatierijen vóór de eerste inhoud: kruimelbalk,
+            de hub-tabs, een knop "Terug naar events", een eyebrow "EVENT #10"
+            en dan pas de eigen tabrij. Plus acht knoppen in drie stijlen naast
+            elkaar. Nu: één kop met één primaire actie, dan de tabrij, dan de
+            cijfers als tegels. Alles wat in de hero stond staat er nog — de
+            dagenteller staat in de ondertitel in plaats van in een ring van
+            400 px voor één getal. */}
+        <HubHeader
+          kruimels={[{ label: 'Events', href: '/events' }]}
+          titel={titleCase(displayEventName(event.name))}
+          onderschrift={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className={`pill ${statusPillVariant}`}>{statusLabel}</span>
+              <span>{dateLabel}</span>
+              <span aria-hidden="true" style={{ opacity: .4 }}>·</span>
+              <span>{event.guests || 0} gasten</span>
+              {event.location && <><span aria-hidden="true" style={{ opacity: .4 }}>·</span><span>{event.location}</span></>}
+              <span aria-hidden="true" style={{ opacity: .4 }}>·</span>
+              <span style={{ color: 'var(--text)' }}>{dagenTekst(derived?.dagenTot ?? 0)}</span>
+            </span>
+          }
+          actie={
+            <>
+              {event.status === 'confirmed' ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    if (confirm('Service Mode starten? KDS opent in fullscreen — scherm blijft aan tijdens service.')) {
+                      router.push(`/events/${event.id}/service?fullscreen=1`);
+                    }
+                  }}
+                  style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
+                >
+                  <Flame size={14} />Start service
+                </button>
+              ) : event.status !== 'completed' ? (
+                <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
+              ) : null}
+              <AskPitmasterButton event={{ id: event.id, name: event.name, date: event.date, guests: event.guests, location: event.location }} />
+            </>
+          }
+          meer={[
+            { label: 'Gegevens bewerken', onClick: () => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+            { label: 'In agenda tonen', onClick: () => router.push('/agenda') },
+            { label: 'Rit toevoegen', onClick: () => router.push(`/administratie/rittenregistratie/nieuw?event=${event.id}`) },
+            ...(event.client_email ? [{ label: 'Mail de klant', onClick: () => { window.location.href = `mailto:${event.client_email}`; } }] : []),
+            { label: 'Link kopiëren', onClick: () => {
+              navigator.clipboard?.writeText(window.location.href).then(
+                () => showToast('Link gekopieerd', 'success'),
+                () => showToast('Kopiëren lukte niet', 'error'),
+              );
+            } },
+          ]}
+        />
+
+        {/* De offline-schakelaar is geen actie maar een modus — hij hoort bij de
+            tabrij, niet bij de knoppen naast de titel. */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+            <EventTabs eventId={event.id} eventName={event.name} toonKop={false} />
+          </div>
+          <OfflineEventToggle eventId={event.id} klantId={klant?.id ?? null} variant="wide" />
         </div>
-        <EventTabs eventId={event.id} eventName={event.name} />
         {/* Alleen tonen als er écht geen menu-inhoud is — de kaart verderop
             valt terug op het standaard-sjabloon en zegt dan "LIVE", dus een
             banner op sjabloon-keuze sprak zichzelf tegen (fix 2026-06-13). */}
@@ -641,132 +718,52 @@ export default function EventHubPage() {
             />
           </div>
         )}
-        <div className="eh-hero">
-          <div className="eh-hero-bg"></div>
-          <div className="eh-hero-content">
-            <div className="eh-hero-left">
-              <div>
-                <div className="eh-hero-eyebrow"><span className="dot"></span>Event · {event.id ? `EV-${String(event.id).padStart(4, '0')}` : ''}</div>
-                <h1 className="eh-hero-title">{titleCase(displayEventName(event.name))}</h1>
-                <div className="eh-hero-sub">
-                  <span className={`pill ${statusPillVariant}`}>{statusLabel}</span>
-                  <span className="sep">·</span>
-                  <span>{event.guests || 0} gasten</span>
-                  <span className="sep">·</span>
-                  <span>{dateLabel}</span>
-                  {event.location && <>
-                    <span className="sep">·</span>
-                    <span>{event.location}</span>
-                  </>}
-                  {event.type && <>
-                    <span className="sep">·</span>
-                    <span>{event.type}</span>
-                  </>}
-                </div>
-              </div>
-              <div className="eh-hero-actions">
-                <OfflineEventToggle eventId={event.id} klantId={klant?.id ?? null} variant="wide" />
-                {event.status !== 'confirmed' && event.status !== 'completed' && (
-                  <button className="btn btn-primary" onClick={markBevestigd}><CheckCheck size={14} />Markeer bevestigd</button>
-                )}
-                {event.status === 'confirmed' && (
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                      if (confirm('Service Mode starten? KDS opent in fullscreen — scherm blijft aan tijdens service.')) {
-                        router.push(`/events/${event.id}/service?fullscreen=1`);
-                      }
-                    }}
-                    style={{ background: 'var(--brand)', color: '#0a0a0c', fontWeight: 700 }}
-                  >
-                    <Flame size={14} />Start Service (KDS)
-                  </button>
-                )}
-                <button className="btn btn-ghost" onClick={() => { document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}><Pencil size={14} />Bewerken</button>
-                <button className="btn btn-ghost" onClick={() => router.push('/agenda')}><Calendar size={14} />In agenda</button>
-                <AskPitmasterButton event={{ id: event.id, name: event.name, date: event.date, guests: event.guests, location: event.location }} />
-                <button
-                  className="btn btn-ghost"
-                  onClick={() => router.push(`/administratie/rittenregistratie/nieuw?event=${event.id}`)}
-                  title="Voeg een rit toe gekoppeld aan dit event"
-                >
-                  <Car size={14} />Rit toevoegen
-                </button>
-                {event.client_email && (
-                  <a className="btn btn-ghost btn-sm" href={`mailto:${event.client_email}`}><MessageCircle size={14} />Contact klant</a>
-                )}
-                <button className="btn btn-ghost btn-sm"><Share2 size={14} />Deel</button>
-              </div>
-            </div>
-            <div className="eh-countdown">
-              <div className="eh-countdown-ring">
-                <svg viewBox="0 0 200 200">
-                  <defs>
-                    <linearGradient id="countdownGradHub" x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#FFBF00" />
-                      <stop offset="60%" stopColor="#ff8c20" />
-                      <stop offset="100%" stopColor="#ff5010" />
-                    </linearGradient>
-                  </defs>
-                  <circle className="bg-ring" cx="100" cy="100" r="86" />
-                  <circle className="fg-ring" cx="100" cy="100" r="86"
-                    stroke="url(#countdownGradHub)"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={circumference * (1 - (derived?.progress ?? 0))} />
-                  {Array.from({ length: 30 }).map((_, i) => {
-                    const a = (i / 30) * Math.PI * 2;
-                    const x1 = 100 + Math.cos(a) * 72;
-                    const y1 = 100 + Math.sin(a) * 72;
-                    const x2 = 100 + Math.cos(a) * 76;
-                    const y2 = 100 + Math.sin(a) * 76;
-                    return <line key={i} className="tick" x1={x1} y1={y1} x2={x2} y2={y2} />;
-                  })}
-                </svg>
-                <div className="eh-countdown-center">
-                  <div className="eh-countdown-num">{derived?.daysLeft ?? 0}</div>
-                  <div className="eh-countdown-lbl">Dagen te gaan</div>
-                  <div className="eh-countdown-sub">tot {dateUpper}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="eh-hero-stats">
-            <div className="eh-hero-stat">
-              <div className="l">Gasten</div>
-              <div className="v">{event.guests || 0}</div>
-              <div className="s">{event.type || 'Event'}</div>
-            </div>
-            <div className="eh-hero-stat">
-              <div className="l">Omzet</div>
-              <div className="v">{fmtEur0(derived?.omzet ?? 0)}</div>
-              <div className="s">{event.ppp ? `€ ${event.ppp}/p` : '—'}</div>
-            </div>
-            <div className="eh-hero-stat">
-              <div className="l">Marge</div>
-              <div className={`v ${derived?.margin != null && derived.margin >= 55 ? 'ok' : derived?.margin != null && derived.margin >= 40 ? 'warn' : 'muted'}`}>
-                {derived?.margin != null ? `${derived.margin.toFixed(1)}%` : '—'}
-              </div>
-              <div className="s">
-                {derived?.margin != null
-                  ? fmtEur0((derived.omzet || 0) - (derived.cogs || 0))
-                  : (offerte ? 'Geen cost per regel' : 'Geen offerte')}
-              </div>
-              {derived?.margin != null && (
-                <div className="bar"><div className="fill" style={{ width: `${Math.min(derived.margin, 100)}%`, background: derived.margin >= 55 ? 'var(--green)' : 'var(--amber)' }}></div></div>
-              )}
-            </div>
-            <div className="eh-hero-stat">
-              <div className="l">Prep-ready</div>
-              <div className={`v ${prepReady >= 70 ? 'ok' : prepReady >= 30 ? 'warn' : 'muted'}`}>{prepReady}%</div>
-              <div className="s">{prepDoneCount} / {prepTasks.length} taken</div>
-              <div className="bar"><div className="fill" style={{ width: `${prepReady}%`, background: prepReady >= 70 ? 'var(--green)' : 'var(--amber)' }}></div></div>
-            </div>
-            <div className="eh-hero-stat">
-              <div className="l">Saldo</div>
-              <div className={`v ${factuur && saldo === 0 ? 'ok' : saldo > 0 ? 'warn' : 'muted'}`}>{fmtEur0(saldo)}</div>
-              <div className="s">{saldoLabel}</div>
-            </div>
-          </div>
+
+        <div className="chassis-kpi-rij" style={{ margin: '16px 0 20px' }}>
+          <KpiTegel label="Gasten" staat={{ soort: 'waarde', waarde: String(event.guests || 0), onder: event.type || 'Event' }} />
+          <KpiTegel
+            label="Omzet"
+            staat={(derived?.omzet ?? 0) > 0
+              ? { soort: 'waarde', waarde: fmtEur0(derived?.omzet ?? 0), onder: event.ppp ? `${fmtEur0(event.ppp)} p.p.` : undefined }
+              : { soort: 'onbepaald', reden: 'Geen prijs per persoon ingevuld', actieLabel: 'Gegevens invullen', onActie: () => document.getElementById('gegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }}
+          />
+          <KpiTegel
+            label="Marge"
+            /* Dit is de tegel die eerder "97% · Sterk" toonde terwijl de meeste
+               gerechten geen kostprijs hadden. Nu geen cijfer als de basis niet
+               klopt, met de reden erbij. */
+            staat={derived?.margin != null
+              ? {
+                  soort: 'waarde',
+                  waarde: formatPercent(derived.margin),
+                  onder: fmtEur0((derived.omzet || 0) - (derived.cogs || 0)),
+                  alarm: derived.margin < 40,
+                }
+              : !offerte
+                ? { soort: 'onbepaald', reden: 'Nog geen offerte gekoppeld' }
+                : {
+                    soort: 'onbepaald',
+                    reden: (derived?.regelsZonderKost ?? 0) > 0
+                      ? (derived?.regelsZonderKost === derived?.regelsTotaal
+                          ? `Geen van de ${derived?.regelsTotaal} ${derived?.regelsTotaal === 1 ? 'regel' : 'regels'} heeft een kostprijs`
+                          : `${derived?.regelsZonderKost} van de ${derived?.regelsTotaal} regels zonder kostprijs`)
+                      : 'Geen kostprijs per regel',
+                    actieLabel: 'Offerte openen',
+                    onActie: () => router.push(`/offertes/${offerte.id}/view`),
+                  }}
+          />
+          <KpiTegel
+            label="Prep-ready"
+            staat={prepTasks.length > 0
+              ? { soort: 'waarde', waarde: `${prepReady}%`, onder: `${prepDoneCount} van ${prepTasks.length} taken` }
+              : { soort: 'leeg', wanneer: 'Zodra er prep-taken staan' }}
+          />
+          <KpiTegel
+            label="Saldo"
+            staat={factuur
+              ? { soort: 'waarde', waarde: fmtEur0(saldo), onder: saldoLabel, alarm: saldo > 0 }
+              : { soort: 'leeg', wanneer: 'Zodra er een factuur is' }}
+          />
         </div>
 
         <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
@@ -1026,7 +1023,7 @@ export default function EventHubPage() {
 
             <div className="metal">
               <div className="metal-head">
-                <div className="hstack"><ClipboardList size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Prep-agenda · {derived?.daysLeft ?? 0}d tot event</span></div>
+                <div className="hstack"><ClipboardList size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Prep-agenda · {dagenTekst(derived?.dagenTot ?? 0)}</span></div>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{prepDoneCount} / {prepTasks.length} afgerond</span>
               </div>
               <div style={{ padding: 18 }}>
@@ -1036,15 +1033,25 @@ export default function EventHubPage() {
                   </div>
                 ) : (() => {
                   /* Bucket tasks by dagen (T-Nd). Sort descending: T-5 → T-0. */
+                  /* `dagen` betekent overal in de app "dagen vóór het event":
+                     prep-fases.ts, /prep-counter, syncEngine en bulkSchedule
+                     schrijven en lezen het allemaal positief. In de database
+                     staan echter oudere rijen met een negatief teken —
+                     "Voorraad check en ingredienten bestellen" stond op -3.
+                     Deze pagina las dat als "3 dagen ná het event" en toonde
+                     "D+3 · NA AFLOOP", dus het advies was om je ingrediënten te
+                     bestellen ná het feest. Geen enkele schrijver maakt taken
+                     ná een event, dus we lezen de afstand tot de eventdag. */
                   const buckets = new Map<number, any[]>();
                   for (const t of prepTasks) {
-                    const d = typeof t.dagen === 'number' ? t.dagen : 0;
+                    const ruw = typeof t.dagen === 'number' ? t.dagen : 0;
+                    const d = Math.abs(ruw);
                     if (!buckets.has(d)) buckets.set(d, []);
                     buckets.get(d)!.push(t);
                   }
                   const sortedDagen = Array.from(buckets.keys()).sort((a, b) => b - a);
                   const today0 = derived?.daysLeft ?? 0;
-                  const dayLabel = (d: number) => d === 0 ? 'D-day' : d < 0 ? `D+${Math.abs(d)}` : `D-${d}`;
+                  const dayLabel = (d: number) => d === 0 ? 'D-day' : `D-${d}`;
                   const dayTitle: Record<number, string> = {
                     5: 'Bestellen & voorcheck',
                     4: 'Rubs & marinades',
@@ -1076,7 +1083,7 @@ export default function EventHubPage() {
                             </div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 6 }}>
                               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16, color: dotColor, letterSpacing: '-.005em' }}>{dayLabel(d)}</span>
-                              <span style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{dayTitle[d] || (d === 0 ? 'Event dag' : d < 0 ? 'Na afloop' : 'Voorbereiding')}</span>
+                              <span style={{ fontSize: 11, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>{dayTitle[d] || (d === 0 ? 'Event dag' : 'Voorbereiding')}</span>
                               <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{doneCount}/{tasks.length}</span>
                             </div>
                             <div style={{ height: 3, background: 'rgba(130,130,130,.15)', borderRadius: 2, marginBottom: 10, overflow: 'hidden' }}>
@@ -1085,7 +1092,7 @@ export default function EventHubPage() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               {tasks.map((c: any) => {
                                 const done = !!prepState[c.id];
-                                const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - c.dagen : null;
+                                const daysUntil = typeof c.dagen === 'number' && derived ? derived.daysLeft - Math.abs(c.dagen) : null;
                                 const isKeyStep = !done && daysUntil != null && daysUntil >= 0 && daysUntil <= 1;
                                 const badge = isKeyStep ? 'Key step' : (!done && isPast ? 'Achterstand' : null);
                                 const badgeColor = isKeyStep ? 'var(--amber)' : 'var(--red)';
@@ -1248,8 +1255,24 @@ export default function EventHubPage() {
                 )}
                 <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}></div>
                 <div style={{ color: 'var(--muted)' }}>{event.location || 'Locatie onbekend'}</div>
+                {/* Heette "Route plannen" maar opende een Google Maps-zoekopdracht
+                    op het adres: geen vertrekpunt, geen richtingen, geen afstand.
+                    Nu een echte route vanaf het bedrijfsadres uit Instellingen —
+                    dat kent de app gewoon. Zonder bedrijfsadres laat Maps de
+                    gebruiker zelf een vertrekpunt kiezen. */}
                 {event.location && (
-                  <a className="btn btn-ghost btn-sm" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`} target="_blank" rel="noopener" style={{ marginTop: 4, width: '100%', justifyContent: 'center' } as CSSProperties}>
+                  <a
+                    className="btn btn-ghost btn-sm"
+                    href={
+                      'https://www.google.com/maps/dir/?api=1'
+                      + (bedrijfsAdres ? '&origin=' + encodeURIComponent(bedrijfsAdres) : '')
+                      + '&destination=' + encodeURIComponent(event.location.trim())
+                      + '&travelmode=driving'
+                    }
+                    target="_blank"
+                    rel="noopener"
+                    style={{ marginTop: 4, width: '100%', justifyContent: 'center' } as CSSProperties}
+                  >
                     <Navigation size={14} />Route plannen
                   </a>
                 )}

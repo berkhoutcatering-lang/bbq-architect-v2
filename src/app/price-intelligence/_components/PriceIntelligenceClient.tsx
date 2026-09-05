@@ -27,6 +27,7 @@ import {
     MetalCard, Eyebrow, Hint, BtnPrimary, BtnGhost, ModelToggle, Pill, SectionExplain,
 } from './_atoms';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { formatEur, formatEurInt, formatPercent } from '@/lib/format';
 import {
     fmt2, normalizeLeverancier, normalizeFactuurnummer,
     detectDuplicates, fuzzyScore, matchInventoryItem,
@@ -212,10 +213,7 @@ export default function PriceIntelligenceClient() {
         <RequireTier feature="price_intelligence">
         <div className="page-container-compact mobile-safe-bottom pi-inkoopprijzen" style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1440, margin: '0 auto' }}>
             <div style={{ marginBottom: 20, minWidth: 0 }}>
-                <h1 style={{
-                    fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200,
-                    fontSize: 34, letterSpacing: '-.015em', margin: '0 0 4px',
-                }}>
+                <h1 className="chassis-titel" style={{ margin: '0 0 4px' }}>
                     Inkoopprijzen
                 </h1>
                 <div style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.5 }}>
@@ -908,9 +906,9 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
         if (incl === 0 && excl === 0) {
             checks.push({ id: 'totals', status: 'warn', label: 'Totalen ontbreken', detail: 'Geen bedragen gevonden' });
         } else if (diff < 0.02) {
-            checks.push({ id: 'totals', status: 'ok', label: 'Totalen kloppen', detail: `€${excl.toFixed(2)} + €${btw.toFixed(2)} = €${incl.toFixed(2)}` });
+            checks.push({ id: 'totals', status: 'ok', label: 'Totalen kloppen', detail: `${formatEur(excl)} + ${formatEur(btw)} = ${formatEur(incl)}` });
         } else {
-            checks.push({ id: 'totals', status: 'error', label: 'Totalen kloppen niet', detail: `€${excl.toFixed(2)} + €${btw.toFixed(2)} = €${berekend.toFixed(2)}, maar totaal incl zegt €${incl.toFixed(2)} (verschil €${diff.toFixed(2)})` });
+            checks.push({ id: 'totals', status: 'error', label: 'Totalen kloppen niet', detail: `${formatEur(excl)} + ${formatEur(btw)} = ${formatEur(berekend)}, maar totaal incl zegt ${formatEur(incl)} (verschil ${formatEur(diff)})` });
         }
 
         // Check 2: som van subtotalen = totaal excl
@@ -919,11 +917,11 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
             const sumSubs = regels.reduce((s, r) => s + (parseFloat(String(r.subtotaal ?? 0)) || 0), 0);
             const subsDiff = Math.abs(sumSubs - excl);
             if (excl === 0) {
-                checks.push({ id: 'lines', status: 'warn', label: 'Regels niet gekoppeld aan totaal', detail: `Som subtotalen: €${sumSubs.toFixed(2)}` });
+                checks.push({ id: 'lines', status: 'warn', label: 'Regels niet gekoppeld aan totaal', detail: `Som subtotalen: ${formatEur(sumSubs)}` });
             } else if (subsDiff < 0.10) {
-                checks.push({ id: 'lines', status: 'ok', label: 'Regels matchen totaal excl.', detail: `${regels.length} regel${regels.length === 1 ? '' : 's'} = €${sumSubs.toFixed(2)}` });
+                checks.push({ id: 'lines', status: 'ok', label: 'Regels matchen totaal excl.', detail: `${regels.length} regel${regels.length === 1 ? '' : 's'} = ${formatEur(sumSubs)}` });
             } else {
-                checks.push({ id: 'lines', status: 'warn', label: 'Regels wijken af van totaal', detail: `Som: €${sumSubs.toFixed(2)} · totaal excl: €${excl.toFixed(2)} (verschil €${subsDiff.toFixed(2)})` });
+                checks.push({ id: 'lines', status: 'warn', label: 'Regels wijken af van totaal', detail: `Som: ${formatEur(sumSubs)} · totaal excl: ${formatEur(excl)} (verschil ${formatEur(subsDiff)})` });
             }
         }
 
@@ -941,13 +939,13 @@ function InvoiceReview({ invoice, setInvoice, preview, existingInvoices, invento
             } else if (pct > 20 && pct < 22) {
                 checks.push({ id: 'btw', status: 'ok', label: 'BTW ≈ 21% (standaard)', detail: 'Niet-food / dranken / verpakking' });
             } else if (isMixed && pct > 8 && pct < 22) {
-                checks.push({ id: 'btw', status: 'ok', label: `BTW ${pct.toFixed(1)}% — mix van 9% en 21%`, detail: 'Gewogen gemiddelde van voedsel en non-food regels' });
+                checks.push({ id: 'btw', status: 'ok', label: `BTW ${formatPercent(pct)} — mix van 9% en 21%`, detail: 'Gewogen gemiddelde van voedsel en non-food regels' });
             } else if (allValidRates && uniqueRates.length === 1) {
                 // Alle regels hebben zelfde tarief maar blended klopt niet met totalen — mogelijk rondafwijking
                 const onlyRate = uniqueRates[0];
-                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% wijkt af van verwachte ${onlyRate}%`, detail: 'Check totaal BTW of regel-subtotalen' });
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${formatPercent(pct)} wijkt af van verwachte ${onlyRate}%`, detail: 'Check totaal BTW of regel-subtotalen' });
             } else {
-                checks.push({ id: 'btw', status: 'warn', label: `BTW ${pct.toFixed(1)}% is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
+                checks.push({ id: 'btw', status: 'warn', label: `BTW ${formatPercent(pct)} is ongebruikelijk`, detail: 'NL kent alleen 9% en 21% normaal' });
             }
         }
 
@@ -1300,7 +1298,7 @@ function LineInsights({ line, inventory, supplierPrices, invoices }: {
             {pctChange !== null && Math.abs(pctChange) > 3 && (
                 <span title={`Normaalprijs vergeleken — was gemiddeld ${fmt2(avgHistory)} over ${historyPrices.length} eerdere facturen${hasBulk ? ' (bulk-/staffelkorting is hierbij buiten beschouwing gelaten)' : ''}`}
                     style={{ fontSize: 10, fontWeight: 700, color: pctChange > 0 ? 'var(--red)' : 'var(--green)', whiteSpace: 'nowrap' }}>
-                    {pctChange > 0 ? '↑' : '↓'} {Math.abs(pctChange).toFixed(0)}%
+                    {pctChange > 0 ? '↑' : '↓'} {formatPercent(Math.abs(pctChange), 0)}
                 </span>
             )}
         </div>
@@ -1751,7 +1749,7 @@ function buildAiTips(bySupplier: BookSupplier[], invoices: any[]): AiTip[] {
             id: 't1', supplierName: top.name, supplierColor: top.color,
             action: topShare >= 0.4 ? 'Blijf' : 'Consolideer',
             headline: `${topShare >= 0.4 ? 'Houd' : 'Versterk'} ${top.name} als ruggengraat`,
-            body: `${top.name} is je grootste leverancier met ${(topShare * 100).toFixed(0)}% aandeel (${top.count} facturen). Bundel losse orders hier voor leveringsvoordeel en betere marge-impact.`,
+            body: `${top.name} is je grootste leverancier met ${formatPercent((topShare * 100), 0)} aandeel (${top.count} facturen). Bundel losse orders hier voor leveringsvoordeel en betere marge-impact.`,
             saving: Math.round(top.spend * 0.035),
             confidence: Math.min(95, 70 + Math.round(top.count * 2)),
         });
@@ -1765,7 +1763,7 @@ function buildAiTips(bySupplier: BookSupplier[], invoices: any[]): AiTip[] {
             id: 't2', supplierName: smallRunner.name, supplierColor: 'var(--red)',
             action: 'Verminder',
             headline: `Je doet te veel ${smallRunner.name}-runs`,
-            body: `${smallRunner.count} facturen met gemiddeld €${avg.toFixed(0)} per ritje. Consolideer wekelijks en gebruik ${smallRunner.name} alléén voor last-minute of unieke items.`,
+            body: `${smallRunner.count} facturen met gemiddeld ${formatEurInt(avg)} per ritje. Consolideer wekelijks en gebruik ${smallRunner.name} alléén voor last-minute of unieke items.`,
             saving: Math.round(smallRunner.count * 4),
             confidence: Math.min(92, 65 + Math.round(smallRunner.count * 1.5)),
         });
@@ -1806,7 +1804,7 @@ function buildAiTips(bySupplier: BookSupplier[], invoices: any[]): AiTip[] {
             id: 't3', supplierName: s.cheap, supplierColor: cheapSup?.color || GOLD,
             action: 'Verschuif',
             headline: `${s.product.length > 36 ? s.product.slice(0, 36) + '…' : s.product} bij ${s.cheap}`,
-            body: `Zelfde product is bij ${s.cheap} €${s.cheapPrice.toFixed(2)} vs €${s.expPrice.toFixed(2)} bij ${s.expensive} — ${((s.diff / s.expPrice) * 100).toFixed(0)}% goedkoper.`,
+            body: `Zelfde product is bij ${s.cheap} ${formatEur(s.cheapPrice)} vs ${formatEur(s.expPrice)} bij ${s.expensive} — ${formatPercent(((s.diff / s.expPrice) * 100), 0)} goedkoper.`,
             saving: Math.round(s.diff * 10),
             confidence: 78 + Math.min(15, savings.length * 2),
         });
@@ -1963,7 +1961,7 @@ function CategoryPriceGrid({ invoices }: { invoices: any[] }) {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                                 <div>
                                     <div className="tabular" style={{ fontSize: 15, fontWeight: 600, color, fontFamily: 'Outfit, sans-serif' }}>
-                                        {flat ? '±0.0%' : `${r.delta > 0 ? '+' : ''}${r.delta.toFixed(1)}%`}
+                                        {flat ? '±0.0%' : `${r.delta > 0 ? '+' : ''}${formatPercent(r.delta)}`}
                                     </div>
                                     <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>€{Math.round(r.spend).toLocaleString('nl-NL')}</div>
                                 </div>
@@ -2393,7 +2391,7 @@ function SupplierDrillDown({ leverancier, orgId, drillCategorie, setDrillCategor
                                         <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.eenheid} · {p.datum?.slice(0, 10)}</div>
                                     </div>
                                     <div style={{ fontSize: 15, fontWeight: 700, color: GOLD, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                                        € {Number(p.prijs).toFixed(2).replace('.', ',')}
+                                        {formatEur(Number(p.prijs))}
                                     </div>
                                 </div>
                             ))}
@@ -2513,14 +2511,14 @@ function SubstitutionAdviceModal({ masterId, productName, onClose }: { masterId:
                                                     </div>
                                                 </div>
                                                 <div style={{ color: GOLD, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                                                    € {Number(p.prijs).toFixed(2).replace('.', ',')}
+                                                    {formatEur(Number(p.prijs))}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                     <div style={{ display: 'flex', gap: 10, marginTop: 10, fontSize: 11, color: 'var(--muted)', flexWrap: 'wrap' }}>
                                         {typeof sug.price_diff_pp === 'number' && (
-                                            <span>💰 {sug.price_diff_pp < 0 ? `€${Math.abs(sug.price_diff_pp).toFixed(2)} goedkoper` : sug.price_diff_pp > 0 ? `€${sug.price_diff_pp.toFixed(2)} duurder` : 'zelfde prijs'}</span>
+                                            <span>💰 {sug.price_diff_pp < 0 ? `${formatEur(Math.abs(sug.price_diff_pp))} goedkoper` : sug.price_diff_pp > 0 ? `${formatEur(sug.price_diff_pp)} duurder` : 'zelfde prijs'}</span>
                                         )}
                                         {sug.houdbaarheid_note && <span>⏱️ {sug.houdbaarheid_note}</span>}
                                     </div>
@@ -3312,10 +3310,10 @@ function FolderBooks() {
                                 <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.product}</div>
                                 <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 10 }}>{a.leverancier}</div>
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                                    <span style={{ fontSize: 26, fontWeight: 800, fontFamily: 'Outfit, sans-serif', color: 'var(--red)', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 16px rgba(239,68,68,.35)', letterSpacing: '-.01em' }}>€{a.laatst.toFixed(2)}</span>
+                                    <span style={{ fontSize: 26, fontWeight: 800, fontFamily: 'Outfit, sans-serif', color: 'var(--red)', fontVariantNumeric: 'tabular-nums', textShadow: '0 0 16px rgba(239,68,68,.35)', letterSpacing: '-.01em' }}>{formatEur(a.laatst)}</span>
                                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>nu</span>
                                 </div>
-                                <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>gemiddeld <span style={{ color: 'var(--text)' }}>€{a.gem.toFixed(2)}</span> · <span style={{ color: 'var(--red)', fontWeight: 800, fontSize: 13, textShadow: '0 0 12px rgba(239,68,68,.4)' }}>↑ {a.pct.toFixed(0)}%</span></div>
+                                <div style={{ fontSize: 11, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>gemiddeld <span style={{ color: 'var(--text)' }}>{formatEur(a.gem)}</span> · <span style={{ color: 'var(--red)', fontWeight: 800, fontSize: 13, textShadow: '0 0 12px rgba(239,68,68,.4)' }}>↑ {formatPercent(a.pct, 0)}</span></div>
                             </div>
                         ))}
                     </div>
@@ -3385,7 +3383,7 @@ function HeroStat({ label, value, delta }: { label: string; value: string; delta
                 {delta && (
                     <span style={{ fontSize: 13, fontWeight: 600, color: delta.pct > 10 ? 'var(--red)' : delta.pct < -10 ? 'var(--green)' : 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         {delta.pct > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                        {Math.abs(delta.pct).toFixed(0)}% t.o.v. vorige maand
+                        {formatPercent(Math.abs(delta.pct), 0)} t.o.v. vorige maand
                     </span>
                 )}
             </div>
@@ -3475,7 +3473,7 @@ function CategoryDonut({ data, total, onSliceClick }: { data: [string, number][]
     const hoveredSlice = hover ? slices.find(s => s.cat === hover) : null;
     const centerLabel = hoveredSlice ? hoveredSlice.cat : 'Totaal';
     const centerValue = hoveredSlice ? fmt2(hoveredSlice.val) : fmt2(total);
-    const centerSub = hoveredSlice ? `${hoveredSlice.pct.toFixed(0)}% van uitgaven` : `${data.length} categorie${data.length === 1 ? '' : 'ën'}`;
+    const centerSub = hoveredSlice ? `${formatPercent(hoveredSlice.pct, 0)} van uitgaven` : `${data.length} categorie${data.length === 1 ? '' : 'ën'}`;
 
     return (
         <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
@@ -3493,12 +3491,12 @@ function CategoryDonut({ data, total, onSliceClick }: { data: [string, number][]
                         onMouseLeave={() => setHover(null)}
                         onClick={() => onSliceClick(s.cat)}
                     >
-                        <title>{s.cat}: {fmt2(s.val)} ({s.pct.toFixed(0)}%) — klik voor details</title>
+                        <title>{s.cat}: {fmt2(s.val)} ({formatPercent(s.pct, 0)}) — klik voor details</title>
                     </path>
                 ))}
                 {slices.filter(s => s.pct >= 6).map(s => (
                     <text key={`lbl-${s.cat}`} x={s.lx} y={s.ly} textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 10, fontWeight: 700, fill: 'rgba(0,0,0,.75)', pointerEvents: 'none' }}>
-                        {s.pct.toFixed(0)}%
+                        {formatPercent(s.pct, 0)}
                     </text>
                 ))}
             </svg>
@@ -3559,7 +3557,7 @@ function CategoryBreakdown({ data, onCategoryClick }: { data: [string, number][]
                         title={clickable ? `Klik voor alle ${cat}-producten` : undefined}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3, fontSize: 11 }}>
                             <span style={{ fontWeight: 500 }}>{cat}</span>
-                            <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt2(val)} <span style={{ color: 'var(--muted-light)' }}>· {pct.toFixed(0)}%</span></span>
+                            <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmt2(val)} <span style={{ color: 'var(--muted-light)' }}>· {formatPercent(pct, 0)}</span></span>
                         </div>
                         <div style={{ height: 6, background: 'rgba(130,130,130,.08)', borderRadius: 3, overflow: 'hidden' }}>
                             <div style={{ width: `${w}%`, height: '100%', background: SUPPLIER_COLORS[i % SUPPLIER_COLORS.length], transition: 'width .3s' }} />
@@ -3682,8 +3680,8 @@ function CategoryDetailDrawer({ category, invoices, onClose }: { category: strin
                                         <div style={{ fontSize: 10, color: 'var(--muted)' }}>{p.prijzen.length}× gekocht · {p.laatst.leverancier}</div>
                                     </div>
                                     <div style={{ textAlign: 'right' }}>
-                                        <div style={{ fontSize: 14, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>€{p.laatst.prijs.toFixed(2)}<span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>/{p.eenheid}</span></div>
-                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>gem. €{p.gem.toFixed(2)}</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: GOLD, fontVariantNumeric: 'tabular-nums' }}>{formatEur(p.laatst.prijs)}<span style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>/{p.eenheid}</span></div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)' }}>gem. {formatEur(p.gem)}</div>
                                     </div>
                                 </div>
                                 {prices.length >= 2 && (
@@ -3691,7 +3689,7 @@ function CategoryDetailDrawer({ category, invoices, onClose }: { category: strin
                                         <PriceSparkline prices={prices} />
                                         {Math.abs(trend) > 3 && (
                                             <span style={{ fontSize: 10, fontWeight: 700, color: trend > 0 ? 'var(--red)' : 'var(--green)' }}>
-                                                {trend > 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(0)}% over {p.prijzen.length} inkopen
+                                                {trend > 0 ? '↑' : '↓'} {formatPercent(Math.abs(trend), 0)} over {p.prijzen.length} inkopen
                                             </span>
                                         )}
                                         <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>totaal {fmt2(p.totaalGekocht)}</span>
@@ -3771,7 +3769,7 @@ function SupplierComparisonDrawer({ invoices, onClose }: { invoices: any[]; onCl
                                 </div>
                                 {c.savingPct >= 5 && (
                                     <span style={{ padding: '3px 8px', borderRadius: 4, background: 'rgba(34,197,94,.15)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)', fontSize: 11, fontWeight: 700 }}>
-                                        Bespaar {c.savingPct.toFixed(0)}% · €{c.saving.toFixed(2)}/{c.eenheid}
+                                        Bespaar {formatPercent(c.savingPct, 0)} · {formatEur(c.saving)}/{c.eenheid}
                                     </span>
                                 )}
                             </div>
@@ -3788,7 +3786,7 @@ function SupplierComparisonDrawer({ invoices, onClose }: { invoices: any[]; onCl
                                             <div style={{ flex: 1, height: 8, background: 'rgba(130,130,130,.08)', borderRadius: 4, overflow: 'hidden' }}>
                                                 <div style={{ width: `${widthPct}%`, height: '100%', background: isLow ? 'var(--green)' : isHigh ? 'var(--red)' : GOLD, transition: 'width .3s' }} />
                                             </div>
-                                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: isLow ? 700 : 500, color: isLow ? 'var(--green)' : 'var(--text)', minWidth: 60, textAlign: 'right' }}>€{s.avg.toFixed(2)}</span>
+                                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: isLow ? 700 : 500, color: isLow ? 'var(--green)' : 'var(--text)', minWidth: 60, textAlign: 'right' }}>{formatEur(s.avg)}</span>
                                             <span style={{ fontSize: 10, color: 'var(--muted)', minWidth: 30, textAlign: 'right' }}>({s.count}×)</span>
                                         </div>
                                     );
@@ -4084,7 +4082,7 @@ function SupplierDonut({ bySupplier, total, onSelect }: { bySupplier: SupplierRo
                                     <>
                                         <div style={{ fontSize: 10, letterSpacing: '.18em', color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>{hov.name}</div>
                                         <div style={{ fontFamily: 'Outfit, sans-serif', fontSize: 24, fontWeight: 300, color: hov.color, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>{fmt2(hov.spend)}</div>
-                                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{(hov.pct * 100).toFixed(1)}% · klik voor AI</div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{formatPercent((hov.pct * 100))} · klik voor AI</div>
                                     </>
                                 ) : (
                                     <>
@@ -4296,7 +4294,7 @@ function SupplierAnalysisDrawer({ supplierName, bySupplier, totalSpend, onClose 
                                                         <span style={{ color: 'var(--red)' }}>{supplierName} {fmt2(c.selfPrice)}</span> → <span style={{ color: 'var(--green)' }}>{c.bestLev} {fmt2(c.bestPrice)}</span>
                                                     </div>
                                                 </div>
-                                                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>−{c.savingsPct.toFixed(1)}%</span>
+                                                <span style={{ fontSize: 12, color: 'var(--green)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>−{formatPercent(c.savingsPct)}</span>
                                                 <span style={{ fontSize: 11, color: 'var(--muted)' }}>per {c.eenheid || 'eenheid'}</span>
                                             </div>
                                         ))}

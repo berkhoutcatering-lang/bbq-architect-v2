@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 
+import { formatEur } from '@/lib/format';
+
 const GOLD = '#c4a35a';
 
 export type FineTuneFocus = 'smaak' | 'kostprijs' | 'textuur' | 'preptijd' | 'presentatie' | 'schaalbaarheid';
@@ -590,7 +592,7 @@ function TuneDetails({ tune }: { tune: FineTune }) {
           + <strong>{tune.details.naam}</strong> {tune.details.qty_pp} {tune.details.unit}/gast
           {tune.details.is_estimated && tune.details.estimated_price_eur != null && (
             <span style={{ color: 'var(--muted)', marginLeft: 4 }}>
-              (~€{tune.details.estimated_price_eur.toFixed(2)}/{tune.details.unit})
+              (~{formatEur(tune.details.estimated_price_eur)}/{tune.details.unit})
             </span>
           )}
         </span>

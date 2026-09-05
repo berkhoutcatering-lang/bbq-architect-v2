@@ -15,6 +15,8 @@ import {
 import styles from './MobileLarsView.module.css';
 import { useVoiceSearch } from './useVoiceSearch';
 
+import { formatEur } from '@/lib/format';
+
 export interface MobileDish {
     id: string;
     name: string;
@@ -93,7 +95,7 @@ function MobileDishCard({
             className={`${styles.card} ${isOpen ? styles.cardOpen : ''}`}
             onClick={() => onTap(dish.id)}
             aria-expanded={isOpen}
-            aria-label={`${dish.name}, verkoop €${dish.price.toFixed(2).replace('.', ',')}, marge ${Math.round(margin * 100)} procent`}
+            aria-label={`${dish.name}, verkoop ${formatEur(dish.price)}, marge ${Math.round(margin * 100)} procent`}
         >
             <div className={styles.cardTop}>
                 <div className={styles.cardGlyph} aria-hidden>{dish.glyph}</div>
@@ -104,7 +106,7 @@ function MobileDishCard({
                 <div className={styles.cardRight}>
                     <div className={styles.cardRightLabel}>Verkoop</div>
                     <div className={styles.cardRightPrice}>
-                        €{dish.price.toFixed(2).replace('.', ',')}
+                        {formatEur(dish.price)}
                     </div>
                 </div>
             </div>

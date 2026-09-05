@@ -51,6 +51,16 @@ const subRouteLabels: Record<string, string> = {
     'ai-pitmaster':     'AI Pitmaster',
 };
 
+/* Detail-routes hebben niet altijd een geregistreerde active-resource, en dan
+   viel het kruimelpad terug op de kale padsegmenten: "Gerechten › 8f2c1a4e-…"
+   of "Facturen › 64 › View". Een UUID laten we weg, een nummer tonen we als
+   "#64" zodat het als verwijzing leest en niet als woord. */
+function segmentLabel(seg: string): string | null {
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg)) return null;
+    if (/^\d+$/.test(seg)) return '#' + seg;
+    return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
+}
+
 export default function Breadcrumbs() {
     const pathname = usePathname();
     const { active } = useActiveResource();
@@ -168,8 +178,10 @@ export default function Breadcrumbs() {
                 </span>
             ) : isSubPage && subSegments.map(function (seg, i) {
                 // Lookup explicit label, fallback op auto-formatted slug
-                const label = subRouteLabels[seg]
-                    ?? seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
+                const label = subRouteLabels[seg] ?? segmentLabel(seg);
+                /* Een UUID zegt een mens niets; die laten we weg in plaats van
+                   "F3A9C1B2-..." als kruimel te tonen. */
+                if (label === null) return null;
                 return (
                     <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <ChevronRight size={11} style={{ opacity: 0.4 }} />

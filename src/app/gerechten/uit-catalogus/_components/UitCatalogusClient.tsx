@@ -188,7 +188,7 @@ export default function UitCatalogusClient() {
         <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge) 48px', maxWidth: 780, margin: '0 auto' }}>
             <Link href="/gerechten" style={terugKnop}><ArrowLeft size={15} /> Gerechten</Link>
 
-            <h1 style={{ fontFamily: 'Outfit, sans-serif', fontWeight: 200, fontSize: 30, margin: '18px 0 6px' }}>
+            <h1 className="chassis-titel" style={{ margin: '18px 0 6px' }}>
                 Receptuur uit de groothandel
             </h1>
             <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.6, margin: '0 0 22px' }}>

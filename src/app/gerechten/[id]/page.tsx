@@ -75,7 +75,7 @@ export default async function GerechtDetailPage({ params }: PageProps) {
             </nav>
 
             <header style={{ marginBottom: 24 }}>
-                <h1 style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2 }}>{gerecht.naam}</h1>
+                <h1 className="chassis-titel">{gerecht.naam}</h1>
                 {gerecht.beschrijving && (
                     <p
                         style={{

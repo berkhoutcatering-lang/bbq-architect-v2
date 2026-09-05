@@ -52,6 +52,8 @@ import { upsertMenuTemplate, deleteMenuTemplate } from '@/app/menu-templates/act
 import type { MenuTemplateWithItems, MenuTemplateGerechtRef } from '@/lib/dal/menuTemplates';
 import type { Gerecht, Gang } from '@/types';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
     /** null = create-modus, bestaand object = edit-modus. */
     initial: MenuTemplateWithItems | null;
@@ -810,9 +812,9 @@ function SortablePill({ item, gerecht, gangen, currentGangSlug, onRemove, onMove
                 {gerecht && (
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                         {prijs > 0
-                            ? `€${prijs.toFixed(2)} p.p.`
+                            ? `${formatEur(prijs)} p.p.`
                             : kost > 0
-                                ? `kost €${kost.toFixed(2)} p.p.`
+                                ? `kost ${formatEur(kost)} p.p.`
                                 : 'nog geen kostprijs'}
                     </div>
                 )}

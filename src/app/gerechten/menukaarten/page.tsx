@@ -11,6 +11,9 @@ import Link from 'next/link';
 import { Plus, BookOpen, Star, Pencil } from 'lucide-react';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { listMenuTemplatesShallow } from '@/lib/dal/menuTemplates';
+import { formatEur } from '@/lib/format';
+
+import HubHeader from '@/components/chassis/HubHeader';
 /* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered —
    niet opnieuw mounten hier (gaf dubbele tablist). */
 
@@ -30,29 +33,11 @@ export default async function MenukaartenListPage() {
     return (
         <div>
             <div style={{ padding: 16, maxWidth: 1100, margin: '0 auto' }}>
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18,
-                    flexWrap: 'wrap',
-                }}>
-                    <BookOpen size={22} color="var(--brand, #c4a35a)" />
-                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, flex: 1 }}>Menukaarten</h1>
-                    <Link
-                        href="/gerechten/menukaarten/nieuw"
-                        style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 6,
-                            padding: '8px 14px', border: 'none', borderRadius: 6,
-                            background: 'var(--brand, #c4a35a)', color: '#1a1a1e',
-                            fontWeight: 600, textDecoration: 'none',
-                        }}
-                    >
-                        <Plus size={14} /> Nieuwe menukaart
-                    </Link>
-                </div>
-
-                <p style={{ marginBottom: 18, color: 'var(--muted)', fontSize: 13, maxWidth: 660 }}>
-                    Stel hier menukaarten samen — kies per gang welke gerechten uit je bibliotheek erop staan.
-                    Sla ze op als template; je laadt ze later met één klik in een offerte.
-                </p>
+                <HubHeader
+                    titel="Menukaarten"
+                    onderschrift="Kies per gang welke gerechten uit je bibliotheek erop staan. Sla ze op als sjabloon; je laadt ze later met één klik in een offerte."
+                    actie={<Link href="/gerechten/menukaarten/nieuw" className="btn btn-primary"><Plus size={14} /> Nieuwe menukaart</Link>}
+                />
 
                 {loadError && (
                     <div style={{
@@ -130,12 +115,12 @@ export default async function MenukaartenListPage() {
                                         </div>
                                     )}
                                     <div className="menukaarten-list__meta-mobile" style={{ display: 'none', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                                        {t.item_count} gerechten · € {t.basis_prijs_pp.toFixed(2)} p.p. · {t.aantal_gasten} gasten
+                                        {t.item_count} gerechten · {formatEur(t.basis_prijs_pp)} p.p. · {t.aantal_gasten} gasten
                                         {t.is_default && <> · <span style={{ color: 'var(--brand, #c4a35a)', fontWeight: 600 }}>★ Default</span></>}
                                     </div>
                                 </div>
                                 <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.item_count}</div>
-                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>€ {t.basis_prijs_pp.toFixed(2)}</div>
+                                <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{formatEur(t.basis_prijs_pp)}</div>
                                 <div className="menukaarten-list__col" style={{ textAlign: 'right', fontSize: 13 }}>{t.aantal_gasten}</div>
                                 <div className="menukaarten-list__col">
                                     {t.is_default && (

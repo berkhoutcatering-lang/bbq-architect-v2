@@ -170,7 +170,11 @@
 /* event card */
 .pp-event { margin-top: -42px; position: relative; z-index: 2; }
 .pp.is-desktop .pp-event { margin-top: -64px; }
+/* Twee kolommen, maar een oneven aantal feiten liet rechtsonder een leeg
+   grijs vak achter — een vakje dat niets zegt. De laatste cel vult dan de
+   hele breedte. */
 .pp-event-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--border); border-radius: var(--r-md) var(--r-md) 0 0; overflow: hidden; }
+.pp-event-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .pp-event-cell { background: var(--surface-2); padding: 14px 16px; display: flex; gap: 11px; align-items: flex-start; }
 .pp-event-ico { color: var(--brand-2); margin-top: 1px; flex: none; }
 .pp-event-k { font-size: 11px; color: var(--text-faint); font-weight: 500; letter-spacing: .02em; }

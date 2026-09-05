@@ -1,3 +1,4 @@
+'use client';
 /**
  * BonReceiptThumb — mini paper-mockup voor bon-grid thumbnails.
  *
@@ -14,7 +15,8 @@
  *
  * Pas later vervangen door echte server-side PDF-thumbnail-rendering.
  */
-'use client';
+
+import { formatEur } from '@/lib/format';
 
 interface Props {
     supplier: string;
@@ -132,7 +134,7 @@ export function BonReceiptThumb({ supplier, type = 'pdf', amount, date, classNam
                         style={{ fontWeight: 700, fontSize: 8.5, color: '#1f1810' }}
                     >
                         <span>TOTAAL</span>
-                        <span>€{amount.toFixed(2)}</span>
+                        <span>{formatEur(amount)}</span>
                     </div>
 
                     {/* Polaroid-style frame voor foto-bonnen (extra subtle) */}

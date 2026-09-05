@@ -11,6 +11,8 @@ const CATEGORY_CONFIG: Record<string, { icon: typeof Sparkles; color: string; la
   breaking: { icon: AlertTriangle, color: 'var(--red)', label: 'Breaking' },
 };
 
+let lopendeChangelog: Promise<{ entries?: ChangelogEntry[]; unreadCount?: number; lastReadAt?: string }> | null = null;
+
 export default function Changelog() {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
@@ -19,8 +21,16 @@ export default function Changelog() {
   const [loaded, setLoaded] = useState(false);
 
   const fetchChangelog = useCallback(function () {
-    fetch('/api/changelog')
-      .then(function (res) { return res.json(); })
+    /* Vuurde twee keer per paginalading: React roept effecten in
+       ontwikkelmodus dubbel aan en er stond niets tussen. We delen de lopende
+       belofte, maar bewaren hem niet — zodra je het paneel opent verandert de
+       ongelezen-teller, en een bewaard antwoord zou die verouderd houden. */
+    if (!lopendeChangelog) {
+      lopendeChangelog = fetch('/api/changelog')
+        .then(function (res) { return res.json(); })
+        .finally(function () { lopendeChangelog = null; });
+    }
+    lopendeChangelog
       .then(function (data) {
         if (data.entries) {
           setEntries(data.entries);

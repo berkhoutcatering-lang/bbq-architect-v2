@@ -1,18 +1,25 @@
+import ConceptMelding from '@/components/legal/ConceptMelding';
+import { aanbieder } from '@/lib/legal';
+
 export default function VoorwaardenPage() {
   return (
     <>
       <h1>Algemene voorwaarden</h1>
       <p className="text-[12px] uppercase tracking-[0.15em] text-[var(--muted)]">Versie 1.0 · 2026-04-21</p>
 
+      <ConceptMelding />
+
       <p>
-        <strong className="text-[var(--color-accent-gold)]">Concept — nog te reviewen door jurist.</strong>
         Deze voorwaarden gelden voor het gebruik van BBQ Architect (&ldquo;de Dienst&rdquo;) aangeboden door
-        Berkhout Catering. Door een account aan te maken accepteer je deze voorwaarden.
+        {aanbieder.naam}. Door een account aan te maken accepteer je deze voorwaarden.
       </p>
 
       <h2>1. Begrippen</h2>
       <ul>
-        <li><strong>Aanbieder:</strong> Berkhout Catering, ingeschreven bij de KvK onder nummer {process.env.NEXT_PUBLIC_KVK_NUMBER ?? '—'}, gevestigd te {process.env.NEXT_PUBLIC_COMPANY_ADDRESS ?? '—'}.</li>
+        <li>
+          <strong>Aanbieder:</strong> {aanbieder.naam}
+          {aanbieder.compleet && <>, ingeschreven bij de KvK onder nummer {aanbieder.kvk}, gevestigd te {aanbieder.adres}</>}.
+        </li>
         <li><strong>Klant:</strong> de natuurlijke persoon of rechtspersoon die een abonnement op de Dienst afsluit.</li>
         <li><strong>Dienst:</strong> de SaaS-applicatie BBQ Architect inclusief alle modules, AI-functies en integraties.</li>
         <li><strong>Tier:</strong> abonnementsniveau (Starter, Pro of Enterprise) zoals gepubliceerd op /pricing.</li>

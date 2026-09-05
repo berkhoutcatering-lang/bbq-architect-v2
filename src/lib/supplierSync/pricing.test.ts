@@ -227,9 +227,11 @@ describe('computePricing — briefing §14.2 exacte voorbeelden', () => {
 
 describe('pricePerUnitLabel', () => {
     it('formatteert de van toepassing zijnde eenheid', () => {
-        expect(pricePerUnitLabel({ pricePerKg: 9, pricePerLiter: null, pricePerPiece: null })).toBe('€9,00 / kg');
-        expect(pricePerUnitLabel({ pricePerKg: null, pricePerLiter: 2.39, pricePerPiece: null })).toBe('€2,39 / liter');
-        expect(pricePerUnitLabel({ pricePerKg: null, pricePerLiter: null, pricePerPiece: 0.42 })).toBe('€0,42 / stuk');
+        /* Via formatEur, dus met de spatie na het euroteken die de rest van de
+           app ook zet (de oude test bevestigde precies de afwijking). */
+        expect(pricePerUnitLabel({ pricePerKg: 9, pricePerLiter: null, pricePerPiece: null })).toBe('€\u00a09,00 / kg');
+        expect(pricePerUnitLabel({ pricePerKg: null, pricePerLiter: 2.39, pricePerPiece: null })).toBe('€\u00a02,39 / liter');
+        expect(pricePerUnitLabel({ pricePerKg: null, pricePerLiter: null, pricePerPiece: 0.42 })).toBe('€\u00a00,42 / stuk');
     });
 });
 

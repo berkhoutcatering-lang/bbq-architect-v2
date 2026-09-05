@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Bell, Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
+import { Flame, Plus, X, ChevronRight, Car } from 'lucide-react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useSupabase } from '@/lib/useSupabase';
 import { useAuth } from '@/lib/AuthContext';
@@ -36,13 +36,15 @@ const AIPromptDrawer = dynamic(() => import('@/components/dashboard/today/AIProm
 const BusinessCharts = dynamic(() => import('@/components/dashboard/today/BusinessCharts'), { ssr: false });
 import KPIStrip, { type KpiItem } from '@/components/dashboard/today/KPIStrip';
 import KPIStripEmpty from '@/components/dashboard/today/KPIStripEmpty';
-import CompactDagbriefing from '@/components/dashboard/today/CompactDagbriefing';
 import AttentionPanel, { type AttentionItem, type AttentionSeverity } from '@/components/dashboard/today/AttentionPanel';
 import QuickActions from '@/components/dashboard/today/QuickActions';
-import BriefingTimeline from '@/components/dashboard/today/BriefingTimeline';
+import TakenLijst from '@/components/dashboard/today/TakenLijst';
+import { voegTakenSamen, type Taak, type TaakUrgentie } from '@/lib/today/taken-samenvoegen';
 
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
+import { localMonthKey } from '@/lib/today/date-keys';
+import { isOpenstaand, isVervallen } from '@/lib/factuurStatus';
 import { compute6MonthRevenue } from '@/lib/today/revenue-buckets';
 import { computeSupplierSpend } from '@/lib/today/supplier-spend';
 import {
@@ -51,9 +53,11 @@ import {
 } from '@/lib/today/kpi-trends';
 import { computeTimelineItems } from '@/lib/today/timeline-items';
 import { computeCandidates, type BriefingInput } from '@/lib/today-briefing-rules';
+import { formatEur, formatPercent } from '@/lib/format';
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [alleTakenOpen, setAlleTakenOpen] = useState(false);
   const brand = useBrandLogo();
   const ev = useSupabase<DbEvent>('events', []);
   const fac = useSupabase<Factuur>('facturen', []);
@@ -122,7 +126,8 @@ export default function DashboardPage() {
   const today7 = new Date(); today7.setDate(today7.getDate() + 7);
   const today7Iso = today7.toISOString().slice(0, 10);
 
-  const openFacturen = facturen.filter((f) => f.status !== 'betaald' && f.status !== 'geannuleerd');
+  /* Alleen verstuurde facturen zijn een vordering — concepten telden hier mee. */
+  const openFacturen = facturen.filter(isOpenstaand);
   let openFacturenBedrag = 0;
   openFacturen.forEach((f) => {
     (f.items || []).forEach((it) => { openFacturenBedrag += (it.qty || 0) * (it.prijs || 0); });
@@ -145,8 +150,11 @@ export default function DashboardPage() {
 
   const heroRow = nextEventsList[0] || null;
 
-  const curMonthPrefix = new Date().toISOString().slice(0, 7);
-  const monthEvents = events.filter((e) => e.date?.startsWith(curMonthPrefix));
+  const curMonthPrefix = localMonthKey(new Date());
+  const monthEvents = events.filter(
+    (e) => e.date?.startsWith(curMonthPrefix)
+      && e.status !== 'cancelled' && (e.status as string) !== 'geannuleerd',
+  );
   const monthRevenue = monthEvents.reduce((s: number, e) => s + ((e.guests || 0) * (e.ppp || 0)), 0);
   const heroRevenue = heroRow ? (heroRow.guests || 0) * (heroRow.ppp || 0) : 0;
 
@@ -157,12 +165,9 @@ export default function DashboardPage() {
   const conflictResult = detectAllConflicts(upcomingForConflict);
   const criticalConflicts = conflictResult.conflicts.filter((c) => c.severity === 'critical');
 
-  const verlopenFacturen = facturen.filter((f) =>
-    f.status !== 'betaald' && f.status !== 'geannuleerd' && f.vervaldatum && f.vervaldatum < today,
-  );
+  const verlopenFacturen = facturen.filter((f) => isVervallen(f, today));
   const binnenkortVervallen = facturen.filter((f) =>
-    f.status !== 'betaald' && f.status !== 'geannuleerd'
-    && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso,
+    isOpenstaand(f) && f.vervaldatum && f.vervaldatum >= today && f.vervaldatum <= today7Iso,
   );
   const calcFactuurBedrag = (f) =>
     (f.items || []).reduce((s: number, it) => s + (it.qty || 0) * (it.prijs || 0), 0);
@@ -355,7 +360,7 @@ export default function DashboardPage() {
     {
       id: 'margin',
       label: 'Marge gemiddeld',
-      value: avgMarge > 0 ? `${avgMarge.toFixed(1)}%` : '—',
+      value: avgMarge > 0 ? `${formatPercent(avgMarge)}` : '—',
       sub: 'Doel ≥ 60%',
       tone: avgMarge >= 60 ? 'ok' : avgMarge >= 40 ? 'warn' : avgMarge > 0 ? 'bad' : 'default',
       trend: trendMargin(avgMarge),
@@ -466,16 +471,23 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [today, events, facturen, offertes, inventory, prepTasks, klanten, gerechtenData, btwDeadline?.daysUntil]);
 
+  /* De briefing leunt op zeven bronnen die elk op een eigen moment binnenkomen.
+     Zolang er nog één laadt, verandert de kandidatenlijst per render — en omdat
+     CompactDagbriefing zijn cache-sleutel over die lijst hasht, miste de cache
+     altijd en ging er bij élke dashboard-lading opnieuw een AI-call af (gemeten:
+     4 per lading). Erger nog: de briefing adviseerde dan op halve data, dus twee
+     keer kijken gaf twee verschillende adviezen over dezelfde situatie.
+     Pas rekenen als alles binnen is. */
+  const briefingBronnenGeladen =
+    !ev.loading && !fac.loading && !off.loading && !inv.loading
+    && !pt.loading && !kl.loading && !ger.loading;
+
   const briefingCandidates = useMemo(
-    () => computeCandidates(briefingInput),
-    [briefingInput],
+    () => (briefingBronnenGeladen ? computeCandidates(briefingInput) : []),
+    [briefingInput, briefingBronnenGeladen],
   );
 
-  const firstName = user?.user_metadata?.name
-    ? String(user.user_metadata.name).split(' ')[0]
-    : undefined;
-
-  // ─── BriefingTimeline items ───────────────────────────────────────────
+  // ─── Taken uit de planning (voedt de takenlijst) ──────────────────────
   const timelineItems = useMemo(() => computeTimelineItems({
     verlopenFacturen: briefingInput.verlopenFacturen,
     verlopenTotaal,
@@ -499,6 +511,22 @@ export default function DashboardPage() {
     unbookedReceiptsCount,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [briefingInput, verlopenTotaal, upcomingZonderPrepMonth, heroEvent?.id, heroEvent?.daysAway, unbookedReceiptsCount]);
+
+  /* ─── Eén takenlijst ────────────────────────────────────────────────────
+     De drie briefings blijven de bron, maar komen samen op het scherm. Zie
+     src/lib/today/taken-samenvoegen.ts voor waarom. */
+  const takenUitShift: Taak[] = timelineItems.map((i) => ({
+    id: 'shift-' + i.id,
+    urgentie: (i.when === 'Vandaag' ? (i.tone === 'red' ? 'nu' : 'vandaag')
+      : i.when === 'Morgen' ? 'vandaag'
+      : i.when === 'Deze week' ? 'deze-week' : 'later') as TaakUrgentie,
+    tijd: i.duration || '',
+    titel: i.title,
+    detail: i.body || '',
+    actie: i.action || 'Open',
+    href: i.href || '/',
+    bron: 'shift',
+  }));
 
   // ─── AttentionPanel items ─────────────────────────────────────────────
   // Pillar 4 Vandaag-hub: elke kaart heeft een query-param zodat de target-page
@@ -698,8 +726,8 @@ export default function DashboardPage() {
       icon: 'percent',
       title: `${margeAlerts.length} prijsshift${margeAlerts.length === 1 ? '' : 's'} raken open offertes`,
       detail: totalImpact !== 0
-        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`
-        : `Top-shift ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%.`,
+        ? `Marge-impact € ${Math.round(totalImpact).toLocaleString('nl-NL')} — top: ${pct > 0 ? '+' : ''}${formatPercent(pct)}.`
+        : `Top-shift ${pct > 0 ? '+' : ''}${formatPercent(pct)}.`,
       cta: 'Bekijk impact',
       href: '/price-intelligence?filter=alerts',
     });
@@ -709,6 +737,34 @@ export default function DashboardPage() {
   if (!isMounted) {
     return <LoadingState label="Vandaag laden" />;
   }
+
+  const takenUitAandacht: Taak[] = attentionItems.map((a) => ({
+    id: 'att-' + a.id,
+    urgentie: (a.severity === 'high' ? 'nu' : a.severity === 'medium' ? 'vandaag' : 'deze-week') as TaakUrgentie,
+    tijd: '',
+    titel: a.title,
+    detail: a.detail,
+    actie: a.cta,
+    href: a.href,
+    bron: 'aandacht',
+  }));
+
+  const takenUitDagbriefing: Taak[] = briefingCandidates.map((c) => ({
+    id: 'brief-' + c.id,
+    urgentie: (c.priority === 'critical' ? 'nu' : c.priority === 'today' ? 'vandaag' : 'deze-week') as TaakUrgentie,
+    tijd: '',
+    titel: c.fallbackText,
+    detail: '',
+    actie: 'Bekijk',
+    href: c.href,
+    bron: 'dagbriefing',
+  }));
+
+  const alleTaken = voegTakenSamen({
+    dagbriefing: takenUitDagbriefing,
+    aandacht: takenUitAandacht,
+    shift: takenUitShift,
+  });
 
   return (
     <div
@@ -767,19 +823,6 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3 shrink-0">
-            <button
-              aria-label="Notificaties"
-              className="relative p-2 md:p-2.5 rounded-xl transition-colors min-w-touch min-h-touch flex items-center justify-center"
-              style={{ background: '#111115', border: '1px solid var(--card-solid)' }}
-            >
-              <Bell className="w-4 h-4" style={{ color: 'var(--color-text-muted)' }} />
-              {(verlopenFacturen.length > 0 || criticalConflicts.length > 0) && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                  style={{ background: 'var(--red)', border: '2px solid var(--color-bg-primary)' }}
-                />
-              )}
-            </button>
             <div className="dashboard-header__time ml-1 md:ml-2 text-right">
               <p
                 className="text-[11px] md:text-[11px] font-medium capitalize whitespace-nowrap"
@@ -851,6 +894,17 @@ export default function DashboardPage() {
         />
 
         {/* ── 2. AIQuickPrompts ── Pillar 2 Vandaag: context-aware prompts obv heroEvent */}
+        {/* Wat er te doen is, staat boven de cijfers: je opent deze pagina om te
+            weten wat je moet doen, niet om een grafiek te lezen. */}
+        <div style={{ marginBottom: 18 }}>
+          <TakenLijst
+            taken={alleTaken}
+            zichtbaar={6}
+            allesTonen={alleTakenOpen}
+            onMeer={function () { setAlleTakenOpen(true); }}
+          />
+        </div>
+
         <AIQuickPrompts onPrompt={setAiPrompt} heroEvent={heroEvent} />
 
         {/* Pillar #5 — Empty-state never blank. Voor een nieuwe tenant zonder
@@ -876,28 +930,13 @@ export default function DashboardPage() {
             {/* ── 4. KPIStrip ── */}
             <KPIStrip kpis={kpis} updatedAt={currentTime.toISOString()} />
 
-            {/* ── 5. CompactDagbriefing + Attention ── */}
-            <div
-              className="dagbrief-grid"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1.5fr 1fr',
-                gap: 16,
-                marginBottom: 18,
-              }}
-            >
-              <CompactDagbriefing candidates={briefingCandidates} firstName={firstName} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <AttentionPanel items={attentionItems} />
-              </div>
-            </div>
           </>
         )}
 
         <QuickActions />
 
-        {/* ── 6. BriefingTimeline ── alleen tonen voor tenants met data */}
-        {!isFreshTenant && <BriefingTimeline items={timelineItems} />}
+        {/* De shift-briefing zat hier als derde lijst met dezelfde taken erin.
+            Die items lopen nu mee in "Vandaag te doen" hierboven. */}
 
         <style>{`
           @media (max-width: 1024px) {
@@ -1046,7 +1085,7 @@ function EventDetailDrawer({ event, onClose }: { event: DbEvent; onClose: () => 
               {new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(revenue)}
             </div>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-              {event.guests || 0} gasten × €{(event.ppp || 0).toFixed(2)} per persoon
+              {event.guests || 0} gasten × {formatEur((event.ppp || 0))} per persoon
             </div>
           </div>
           {event.client_naam ? <DrawerStat label="Klant" value={event.client_naam} /> : null}

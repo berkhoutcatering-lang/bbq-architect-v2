@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Receipt, TrendingUp, TrendingDown, AlertCircle, Calendar, Loader2, Store } from 'lucide-react';
+import { formatPercent } from '@/lib/format';
 
 interface Lev {
   id: number;
@@ -120,9 +121,7 @@ export default function LeverancierHistoriePage() {
       </button>
 
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 30, letterSpacing: '-.015em', margin: 0, marginBottom: 4 }}>
-          {lev.naam}
-        </h1>
+        <h1 className="chassis-titel">{lev.naam}</h1>
         <div style={{ color: 'var(--muted)', fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           <span><Store size={11} style={{ verticalAlign: 'middle' }} /> {lev.type}</span>
           {lev.factuur_cyclus && <span>Facturen: {lev.factuur_cyclus}</span>}
@@ -165,7 +164,7 @@ export default function LeverancierHistoriePage() {
                           {fmtEur(t.first_price)} → <strong>{fmtEur(t.last_price)}</strong>
                           {Math.abs(t.pct_change) > 0.5 && (
                             <span style={{ marginLeft: 6, color: up ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                              {up ? '+' : ''}{t.pct_change.toFixed(1)}%
+                              {up ? '+' : ''}{formatPercent(t.pct_change)}
                             </span>
                           )}
                         </span>
@@ -224,7 +223,7 @@ export default function LeverancierHistoriePage() {
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {up ? <TrendingUp size={12} style={{ color: 'var(--red)' }} /> : <TrendingDown size={12} style={{ color: 'var(--green)' }} />}
                         <strong>{a.inventory_naam || 'onbekend'}</strong>
-                        <span style={{ color: up ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{up ? '+' : ''}{a.pct_change.toFixed(1)}%</span>
+                        <span style={{ color: up ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>{up ? '+' : ''}{formatPercent(a.pct_change)}</span>
                         <span style={{ color: 'var(--muted)' }}>({fmtEur(a.old_price)} → {fmtEur(a.new_price)})</span>
                       </span>
                       <span style={{ color: 'var(--muted)', fontSize: 11 }}>{fmtDate(a.detected_at)}</span>

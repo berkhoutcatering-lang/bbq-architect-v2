@@ -19,6 +19,7 @@ import {
     Cpu,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatEur, formatPercent } from '@/lib/format';
 
 interface MutationRow {
     id: string;
@@ -138,7 +139,7 @@ export default function FolderUitgang() {
                                     {m.leverancier ?? '—'} · {formatRelativeDate(m.reviewed_at)}
                                 </div>
                             </div>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>€ {Number(m.parsed_prijs).toFixed(2)}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{formatEur(Number(m.parsed_prijs))}</div>
                             <DeltaBadge pct={m.delta_pct} />
                         </RowCard>
                     ))}
@@ -165,7 +166,7 @@ export default function FolderUitgang() {
                                     {formatRelativeDate(s.computed_at)}
                                 </div>
                             </Link>
-                            <div style={{ fontSize: 13, fontWeight: 600 }}>€ {(s.kostprijs_cents / 100).toFixed(2)}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{formatEur((s.kostprijs_cents / 100))}</div>
                             <ArrowRight size={12} style={{ color: 'var(--muted)' }} />
                         </RowCard>
                     ))}
@@ -196,7 +197,7 @@ export default function FolderUitgang() {
                                 </div>
                             </Link>
                             <div style={{ fontSize: 13, fontWeight: 700, color: a.delta_cents > 0 ? '#dc2626' : '#16a34a' }}>
-                                € {(a.delta_cents / 100).toFixed(2)}
+                                {formatEur((a.delta_cents / 100))}
                             </div>
                             <DeltaBadge pct={a.delta_pct} />
                         </RowCard>
@@ -320,7 +321,7 @@ function DeltaBadge({ pct }: { pct: number | null }) {
             }}
         >
             {isPositive ? '+' : ''}
-            {v.toFixed(1)}%
+            {formatPercent(v)}
         </span>
     );
 }

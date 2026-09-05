@@ -1,17 +1,28 @@
+import ConceptMelding from '@/components/legal/ConceptMelding';
+import { aanbieder } from '@/lib/legal';
+
 export default function PrivacyPage() {
   return (
     <>
       <h1>Privacy-statement</h1>
       <p className="text-[12px] uppercase tracking-[0.15em] text-[var(--muted)]">Versie 1.0 · 2026-04-21</p>
 
+      <ConceptMelding />
+
       <p>
-        <strong className="text-[var(--color-accent-gold)]">Concept — nog te reviewen door jurist.</strong>
         BBQ Architect respecteert je privacy. Hieronder leggen we uit welke gegevens we verzamelen,
         waarom, hoe lang we ze bewaren en welke rechten je hebt onder de AVG.
       </p>
 
       <h2>1. Verwerkingsverantwoordelijke</h2>
-      <p>Berkhout Catering, KvK {process.env.NEXT_PUBLIC_KVK_NUMBER ?? '—'}, {process.env.NEXT_PUBLIC_COMPANY_ADDRESS ?? '—'}. Vragen via <a href="mailto:privacy@bbqarchitect.nl" className="text-[var(--color-accent-gold)]">privacy@bbqarchitect.nl</a>.</p>
+      {/* Stond op "KvK —, —" als de omgevingsvariabelen niet gezet waren.
+          Een streepje leest hier als "wij hebben geen KvK-nummer". Zijn ze
+          leeg, dan laten we die zin gewoon weg. */}
+      <p>
+        {aanbieder.naam}
+        {aanbieder.compleet && <>, KvK {aanbieder.kvk}, {aanbieder.adres}</>}
+        . Vragen via <a href="mailto:privacy@bbqarchitect.nl" className="text-[var(--color-accent-gold)]">privacy@bbqarchitect.nl</a>.
+      </p>
 
       <h2>2. Welke gegevens verwerken we?</h2>
       <ul>

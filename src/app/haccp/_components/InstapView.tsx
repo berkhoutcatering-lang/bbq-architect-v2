@@ -85,10 +85,8 @@ export default function InstapView({ onSelectEvent, onOpenDossier }: Props) {
                     <ShieldCheck size={30} color="var(--brand)" />
                 </div>
                 <h1
+                    className="chassis-titel"
                     style={{
-                        fontFamily: 'var(--font-display)',
-                        fontWeight: 300,
-                        fontSize: 32,
                         margin: 0,
                         marginBottom: 6,
                     }}

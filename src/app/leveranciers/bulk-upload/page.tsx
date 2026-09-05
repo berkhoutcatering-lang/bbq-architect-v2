@@ -11,6 +11,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '@/components/Toast';
 import { RequireTier } from '@/components/PaywallPrompt';
 import Link from 'next/link';
+import { formatEur } from '@/lib/format';
+
+import HubHeader from '@/components/chassis/HubHeader';
 import {
     Upload, FileText, Loader2, CheckCircle2, AlertTriangle, ArrowRight, X, FileCheck2, RefreshCw,
 } from 'lucide-react';
@@ -195,24 +198,11 @@ export default function BulkUploadPage() {
     return (
         <RequireTier feature="price_intelligence">
             <div style={{ padding: '24px var(--space-mobile-edge) 32px', maxWidth: 1100, margin: '0 auto' }}>
-                <div style={{ marginBottom: 22 }}>
-                    <Link
-                        href="/leveranciers"
-                        style={{ fontSize: 12, color: 'var(--muted)', textDecoration: 'none' }}
-                    >
-                        ← Leveranciers
-                    </Link>
-                    <h1 style={{
-                        fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200,
-                        fontSize: 34, letterSpacing: '-.015em', margin: '8px 0 4px 0',
-                    }}>
-                        Bulk prijslijsten uploaden
-                    </h1>
-                    <div style={{ color: 'var(--muted)', fontSize: 14 }}>
-                        Tot 25 PDFs. 1e binnen 30s, rest via batch (~10-30 min).
-                        AI herkent vlees-cuts (spiering, kippendij, brisket, …) en plaatst alles in de review-queue.
-                    </div>
-                </div>
+                <HubHeader
+                    kruimels={[{ label: 'Leveranciers', href: '/leveranciers' }]}
+                    titel="Bulk prijslijsten uploaden"
+                    onderschrift="Tot 25 PDF's. De eerste binnen 30 seconden, de rest via batch (10 tot 30 minuten). AI herkent vleesdelen (spiering, kippendij, brisket) en zet alles in de controlelijst."
+                />
 
                 {/* Optionele leverancier-binding */}
                 <div style={{
@@ -305,7 +295,7 @@ export default function BulkUploadPage() {
                         }}>
                             <div style={{ fontSize: 13, color: 'var(--muted)' }}>
                                 <strong style={{ color: 'var(--text)' }}>{queue.length}</strong> PDFs ·
-                                geschat <strong style={{ color: 'var(--text)' }}>€{(totalEstimateCents / 100).toFixed(2)}</strong>
+                                geschat <strong style={{ color: 'var(--text)' }}>{formatEur((totalEstimateCents / 100))}</strong>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 {queue.some(q => q.status === 'parsing') && (

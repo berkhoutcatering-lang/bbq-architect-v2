@@ -3,6 +3,8 @@
 import { Sparkles, X, Loader2 } from 'lucide-react';
 import type { Gerecht } from '@/types';
 
+import { formatEur } from '@/lib/format';
+
 interface Props {
     gangNaam: string;
     loading: boolean;
@@ -57,7 +59,7 @@ export default function AiSuggestionsSheet({ gangNaam, loading, error, suggestie
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                                     <h4 style={{ margin: 0, fontSize: 14, flex: 1 }}>{g?.naam ?? '(onbekend gerecht)'}</h4>
-                                    {g && <span style={{ fontSize: 11, color: 'var(--muted)' }}>€{prijs.toFixed(2)} p.p.</span>}
+                                    {g && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatEur(prijs)} p.p.</span>}
                                 </div>
                                 {s.redenering && (
                                     <p style={{ marginTop: 6, marginBottom: 8, fontSize: 12, color: 'var(--muted)' }}>{s.redenering}</p>

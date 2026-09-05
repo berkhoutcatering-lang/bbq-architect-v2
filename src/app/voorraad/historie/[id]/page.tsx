@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ArrowDown, ArrowUp, Package, Receipt, TrendingDown, TrendingUp, AlertCircle, ShieldCheck, Loader2 } from 'lucide-react';
+import { formatNumber, formatPercent } from '@/lib/format';
 
 /**
  * Voorraad-item historie page — cross-page koppeling
@@ -120,10 +121,8 @@ export default function InventoryHistoriePage() {
       </button>
 
       <header style={{ marginBottom: 20 }}>
-        <h1 style={{ fontFamily: 'Outfit, DM Sans, sans-serif', fontWeight: 200, fontSize: 30, letterSpacing: '-.015em', margin: 0, marginBottom: 4 }}>
-          {inv.naam}
-        </h1>
-        <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+        <h1 className="chassis-titel">{inv.naam}</h1>
+        <div className="chassis-onderschrift">
           Huidige stock: <strong>{inv.current_stock} {inv.unit}</strong>
           {inv.last_price_eur != null && <> · laatste prijs <strong>{fmtEur(inv.last_price_eur)}</strong>/{inv.unit} ({fmtDate(inv.last_price_at)})</>}
         </div>
@@ -150,7 +149,8 @@ export default function InventoryHistoriePage() {
                         <Icon size={12} style={{ color: meta.tone === 'ok' ? 'var(--green)' : meta.tone === 'bad' ? 'var(--red)' : meta.tone === 'warn' ? 'var(--amber)' : 'var(--muted)' }} />
                         <strong>{meta.label}</strong>
                         <span style={{ color: meta.tone === 'ok' ? 'var(--green)' : 'var(--red)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                          {isPositive ? '+' : '−'}{Math.abs(m.qty).toFixed(2)} {inv.unit}
+                          {/* Was "+20.00 kg": punt-decimaal in een Nederlandse app. */}
+                          {isPositive ? '+' : '−'}{formatNumber(Math.abs(m.qty), 2)} {inv.unit}
                         </span>
                       </span>
                       <span style={{ color: 'var(--muted)', fontSize: 11 }}>{fmtDateTime(m.created_at)}</span>
@@ -188,7 +188,7 @@ export default function InventoryHistoriePage() {
                         <strong>{fmtEur(p.unit_price)}</strong>/{p.unit}
                         {pct != null && Math.abs(pct) > 0.5 && (
                           <span style={{ marginLeft: 6, color: up ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                            {up ? '+' : ''}{pct.toFixed(1)}%
+                            {up ? '+' : ''}{formatPercent(pct)}
                           </span>
                         )}
                       </span>
@@ -219,7 +219,7 @@ export default function InventoryHistoriePage() {
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {up ? <TrendingUp size={12} style={{ color: 'var(--red)' }} /> : <TrendingDown size={12} style={{ color: 'var(--green)' }} />}
                         <strong>{a.leverancier_naam || 'onbekend'}</strong>
-                        <span style={{ color: up ? 'var(--red)' : 'var(--green)' }}>{up ? '+' : ''}{a.pct_change.toFixed(1)}%</span>
+                        <span style={{ color: up ? 'var(--red)' : 'var(--green)' }}>{up ? '+' : ''}{formatPercent(a.pct_change)}</span>
                         <span style={{ color: 'var(--muted)' }}>({fmtEur(a.old_price)} → {fmtEur(a.new_price)})</span>
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 11 }}>

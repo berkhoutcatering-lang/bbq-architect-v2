@@ -28,6 +28,12 @@ export default function ActiveResourcePill() {
   // Verberg pill als gebruiker al op de resource-pagina staat — zou redundant zijn
   if (pathname && pathname.startsWith(active.href)) return null;
 
+  /* Hij stond ook op /instellingen, /admin, /systeem en de juridische
+     pagina's. Daar heeft "Event: cor Berkhout — 16 aug" geen betekenis: je
+     bent niet met dat event bezig en er is niets wat ernaar terugverwijst. */
+  const ZONDER_CONTEXT = ['/instellingen', '/admin', '/systeem', '/legal', '/gebruikers', '/hulp', '/pricing', '/welkom'];
+  if (pathname && ZONDER_CONTEXT.some(function (p) { return pathname === p || pathname.startsWith(p + '/'); })) return null;
+
   const Icon = ICONS[active.kind] || PartyPopper;
 
   return (

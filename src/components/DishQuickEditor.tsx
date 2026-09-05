@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { X, Plus, Save, Loader2 } from 'lucide-react';
+import { formatPercent } from '@/lib/format';
 
 export interface DishDraft {
   id?: number;
@@ -177,7 +178,7 @@ export default function DishQuickEditor({ mode, gangSlug, gangOptions, existing,
           {marge !== null && (
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <div style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: marge >= 65 ? 'rgba(34,197,94,.08)' : marge >= 55 ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)', color: marge >= 65 ? 'var(--green)' : marge >= 55 ? 'var(--amber)' : 'var(--red)', border: '1px solid currentColor' }}>
-                Marge: {marge.toFixed(1)}% {marge >= 65 ? '🟢 boven streefwaarde' : marge >= 55 ? '🟠 onder doel' : '🔴 te laag'}
+                Marge: {formatPercent(marge)} {marge >= 65 ? '🟢 boven streefwaarde' : marge >= 55 ? '🟠 onder doel' : '🔴 te laag'}
               </div>
             </div>
           )}

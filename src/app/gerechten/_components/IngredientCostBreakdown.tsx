@@ -11,6 +11,8 @@
 import { createServerSupabase } from '@/lib/supabase-server';
 import SubstitutionTrigger from './SubstitutionTrigger';
 
+import { formatEur, formatNumber } from '@/lib/format';
+
 interface Props {
     gerechtId: string;
     organizationId: string;
@@ -196,13 +198,14 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
                             )}
                         </div>
                         <div style={{ fontSize: 13, textAlign: 'right' }}>
-                            {r.qty_used.toFixed(2)} {r.unit}
+                            {/* Was "180.00 g": punt-decimaal. */}
+                            {formatNumber(r.qty_used, 2)} {r.unit}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'right' }}>
-                            {r.prijs_per_kg !== null ? `€ ${r.prijs_per_kg.toFixed(2)} / kg` : '—'}
+                            {r.prijs_per_kg !== null ? `${formatEur(r.prijs_per_kg)} / kg` : '—'}
                         </div>
                         <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
-                            € {(r.cost_at_use_cents / 100).toFixed(2)}
+                            {formatEur((r.cost_at_use_cents / 100))}
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <SubstitutionTrigger

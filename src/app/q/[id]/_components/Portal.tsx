@@ -86,6 +86,8 @@ export interface PortalProps {
   settings: PortalSettings | null;
   carbon: PortalCarbon | null;
   showCo2?: boolean;
+  /** Kan deze cateraar online betalingen aannemen (Mollie geconfigureerd)? */
+  betalenMogelijk?: boolean;
 }
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -121,7 +123,14 @@ interface ParsedTotals {
 /* BTW-split: 9% over food-items (default), 21% over service-items.
    Server-side BTW-rate per item heeft voorrang als beschikbaar (item.btw).
    Items zonder expliciete btw vallen onder settings.default_btw (default 9%). */
-function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string): ParsedTotals {
+/** De vroegste van twee ISO-datums; slaat lege waarden over. */
+function vroegste(a?: string, b?: string): string | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return a < b ? a : b;
+}
+
+function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string, eventDatum?: string): ParsedTotals {
   let items: PortalOfferItem[] = [];
   if (typeof offer.items === 'string') {
     try { items = JSON.parse(offer.items); } catch { items = []; }
@@ -167,7 +176,10 @@ function calcTotals(offer: PortalOffer, defaultBtw: number, geldigTot?: string):
   const remaining = totalIncl - deposit;
   return {
     food, service, btwFood, btwService, subtotalExcl, totalIncl, deposit, remaining,
-    depositDeadline: formatDate(geldigTot, { day: 'numeric', month: 'long', year: 'numeric' }),
+    /* De aanbetaling zet de datum vast, dus de uiterste betaaldatum kan nooit
+       ná het event liggen. Hier stond alleen `geldig_tot`, waardoor er op een
+       offerte voor 18 september "te voldoen voor 20 september" kwam te staan. */
+    depositDeadline: formatDate(vroegste(geldigTot, eventDatum), { day: 'numeric', month: 'long', year: 'numeric' }),
   };
 }
 
@@ -179,7 +191,13 @@ interface MenuGroup {
   dishes: PortalMenuSelDish[];
 }
 
+/* `num` is puur de sorteervolgorde van de gangen — niet het nummer dat de klant
+   ziet. Dat werd het eerder wél, met als resultaat een menukaart die begon bij
+   "00" en een gat liet vallen ("00, 01, 02, 04") zodra een gang ontbrak. De
+   klant krijgt nu een doorlopende telling vanaf 01. */
 const COURSE_LABELS: Record<string, { num: string; label: string }> = {
+  bites:           { num: '00', label: 'Bites' },
+  hapjes:          { num: '00', label: 'Hapjes' },
   voorgerecht:     { num: '01', label: 'Voorgerecht' },
   voorgerechten:   { num: '01', label: 'Voorgerecht' },
   hoofdgerecht:    { num: '02', label: 'Hoofdgerecht' },
@@ -188,9 +206,20 @@ const COURSE_LABELS: Record<string, { num: string; label: string }> = {
   bijgerechten:    { num: '03', label: 'Bijgerecht' },
   dessert:         { num: '04', label: 'Dessert' },
   desserts:        { num: '04', label: 'Dessert' },
-  bites:           { num: '00', label: 'Bites' },
-  hapjes:          { num: '00', label: 'Hapjes' },
 };
+
+/* Een gerecht komt binnen als losse string of als object. Beide vormen moeten
+   hier hetzelfde uit komen, anders mist de tegel zijn naam. */
+function normaliseerGerechten(arr: unknown[]): PortalMenuSelDish[] {
+  return arr
+    .map(function (item) {
+      if (typeof item === 'string') return { naam: item } as PortalMenuSelDish;
+      return item as PortalMenuSelDish;
+    })
+    .filter(function (d) {
+      return !!(d && (d.naam || d.gerecht_naam));
+    });
+}
 
 function parseMenu(menuSel: PortalOffer['menu_selectie']): MenuGroup[] {
   if (!menuSel) return [];
@@ -204,23 +233,23 @@ function parseMenu(menuSel: PortalOffer['menu_selectie']): MenuGroup[] {
       return na.localeCompare(nb);
     });
     for (const k of keys) {
-      const arr = (menuSel as Record<string, PortalMenuSelDish[]>)[k];
+      const arr = (menuSel as Record<string, unknown[]>)[k];
       if (!Array.isArray(arr) || arr.length === 0) continue;
       const meta = COURSE_LABELS[k.toLowerCase()] || { num: '–', label: k };
-      groups.push({ num: meta.num, course: meta.label, dishes: arr });
+      /* In de database staan de gerechten per gang als losse strings
+         ({"bites": ["Crispy zalm", ...]}). Alleen shape 2 hieronder zette die om
+         naar { naam }; hier ging de array ongewijzigd door, waardoor `d.naam`
+         niet bestond en elke tegel terugviel op het woord "Gerecht". */
+      groups.push({ num: meta.num, course: meta.label, dishes: normaliseerGerechten(arr) });
     }
-    return groups;
+    /* Doorlopend nummeren vanaf 01, zodat er nooit een gat valt of op 00 wordt
+       begonnen als een gang ontbreekt. */
+    return groups.map((g, i) => ({ ...g, num: String(i + 1).padStart(2, '0') }));
   }
 
   // shape 2: flat array of dishes (no course grouping) → bucket onder "Menu"
   if (Array.isArray(menuSel)) {
-    const dishes: PortalMenuSelDish[] = menuSel.map(function (item) {
-      if (typeof item === 'string') {
-        return { naam: item } as PortalMenuSelDish;
-      }
-      return item;
-    });
-    return [{ num: '–', course: 'Menu', dishes }];
+    return [{ num: '01', course: 'Menu', dishes: normaliseerGerechten(menuSel) }];
   }
 
   return [];
@@ -262,14 +291,25 @@ function MapCard({ locatieNaam, locatieAdres, mapsQuery }: { locatieNaam: string
 
 function EventCard({ offer }: { offer: PortalOffer }) {
   const datum = formatDate(offer.datum);
-  const tijd = '—';
-  const locatieNaam = offer.evenement_locatie || offer.client_adres || '—';
+  let regels: PortalOfferItem[] = [];
+  if (typeof offer.items === 'string') {
+    try { regels = JSON.parse(offer.items); } catch { regels = []; }
+  } else if (Array.isArray(offer.items)) {
+    regels = offer.items;
+  }
+  const gastenAantal = offer.aantal_gasten || Number(regels[0]?.qty) || 0;
+  const locatieNaam = offer.evenement_locatie || offer.client_adres || '';
+  /* Een vakje met een streepje erin belooft informatie die er niet is. "Tijd"
+     stond zelfs hard op "—", want er is helemaal geen tijdveld op een offerte.
+     Wat leeg is, laten we weg. */
   const cells = [
-    { ico: 'calendar', k: 'Datum', v: datum || '—' },
-    { ico: 'clock', k: 'Tijd', v: tijd },
+    { ico: 'calendar', k: 'Datum', v: datum },
     { ico: 'pin', k: 'Locatie', v: locatieNaam },
-    { ico: 'users', k: 'Gasten', v: offer.aantal_gasten ? `${offer.aantal_gasten} personen` : '—' },
-  ];
+    /* `aantal_gasten` blijft leeg als de offerte via de wizard is gemaakt; die
+       vraagt er niet om. Het aantal staat dan wel in de eerste offerteregel,
+       precies zoals /offertes/[id]/view het afleidt. */
+    { ico: 'users', k: 'Gasten', v: gastenAantal ? `${gastenAantal} personen` : '' },
+  ].filter(function (c) { return !!c.v; });
   return (
     <div className="pp-card pp-event">
       <div className="pp-event-grid">
@@ -285,7 +325,7 @@ function EventCard({ offer }: { offer: PortalOffer }) {
           );
         })}
       </div>
-      {locatieNaam && locatieNaam !== '—' && (
+      {locatieNaam && (
         <MapCard locatieNaam={locatieNaam} mapsQuery={locatieNaam} />
       )}
     </div>
@@ -297,12 +337,12 @@ function Dish({ d }: { d: PortalMenuSelDish }) {
   const naam = d.naam || d.gerecht_naam || 'Gerecht';
   return (
     <div className="pp-card pp-dish">
-      {d.foto_url ? (
+      {/* Zonder foto kreeg elk gerecht een leeg grijs vlak van 16:9 met de naam
+          er nog eens in als bijschrift — twee keer dezelfde naam en een gat waar
+          niets is. Een menukaart zet daar gewoon tekst. Heeft een gerecht wel
+          een foto, dan staat die er; heeft het er geen, dan valt het vlak weg. */}
+      {d.foto_url && (
         <div className="pp-dish-media" style={{ backgroundImage: `url(${d.foto_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-      ) : (
-        <div className="ph pp-dish-media">
-          <span className="ph-label"><Icon name="image" size={11} stroke={1.6} />{naam}</span>
-        </div>
       )}
       <div className="pp-dish-body">
         <div className="pp-dish-row">
@@ -327,8 +367,10 @@ function Menu({ groups }: { groups: MenuGroup[] }) {
       {groups.map(function (c) {
         return (
           <div className="pp-course" key={c.num + c.course}>
+            {/* Het nummer is weg: "01 Voorgerecht" telt iets wat de klant niet
+                hoeft te tellen, en sprong bij een ontbrekende gang. De naam
+                zegt het al. */}
             <div className="pp-course-head">
-              <span className="pp-course-num">{c.num}</span>
               <span className="pp-course-title">{c.course}</span>
               <span className="pp-course-rule" />
             </div>
@@ -344,7 +386,7 @@ function Menu({ groups }: { groups: MenuGroup[] }) {
   );
 }
 
-function TotalCard({ t, defaultBtw }: { t: ParsedTotals; defaultBtw: number }) {
+function TotalCard({ t, defaultBtw, betalenMogelijk = true }: { t: ParsedTotals; defaultBtw: number; betalenMogelijk?: boolean }) {
   return (
     <div className="pp-card pp-total">
       <div className="pp-total-head">
@@ -387,7 +429,11 @@ function TotalCard({ t, defaultBtw }: { t: ParsedTotals; defaultBtw: number }) {
         </div>
         {t.depositDeadline && (
           <div className="pp-deposit-sub">
-            Te voldoen voor <b style={{ color: 'var(--text)' }}>{t.depositDeadline}</b> om je datum vast te zetten.
+            {betalenMogelijk
+              ? <>Te voldoen voor <b style={{ color: 'var(--text)' }}>{t.depositDeadline}</b> om je datum vast te zetten.</>
+              /* Zonder betaalprovider kan de klant hier niet afrekenen; dan geen
+                 deadline beloven maar zeggen wat er wél gebeurt. */
+              : <>Je ontvangt hiervoor een factuur zodra je de offerte bevestigt.</>}
           </div>
         )}
         <div className="pp-rest">Resterend bedrag {fmt(t.remaining)} — na afloop van het event.</div>
@@ -409,10 +455,13 @@ function Co2Card({ carbon }: { carbon: PortalCarbon }) {
           <div className="pp-co2-title">CO₂-voetafdruk</div>
           <div className="pp-co2-sub">Berekend over het hele menu</div>
         </div>
-        <span className="chip" style={{ marginLeft: 'auto' }}>
-          <HueDot hue={150} />
-          {carbon.score || '—'}
-        </span>
+        {/* Geen score? Dan geen leeg chipje met een streepje. */}
+        {carbon.score && (
+          <span className="chip" style={{ marginLeft: 'auto' }}>
+            <HueDot hue={150} />
+            {carbon.score}
+          </span>
+        )}
       </div>
       <div className="pp-co2-score">
         <span className="n">{total}</span>
@@ -478,14 +527,14 @@ function AdjustForm({ open, sent, clientNaam, tenantNaam, onSubmit }: { open: bo
    Orchestrator — manages view state (quote ↔ bedankt) + sign+pay flow.
    ────────────────────────────────────────────────────────────────────── */
 
-export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps) {
+export function Portal({ offer, settings, carbon, showCo2 = true, betalenMogelijk = false }: PortalProps) {
   const tenant = {
     naam: settings?.bedrijfsnaam || 'BBQ Architect',
     telefoon: settings?.telefoon || '',
     email: settings?.email || '',
   };
   const defaultBtw = settings?.default_btw ?? 9;
-  const totals = calcTotals(offer, defaultBtw, offer.geldig_tot);
+  const totals = calcTotals(offer, defaultBtw, offer.geldig_tot, offer.datum);
   const menuGroups = parseMenu(offer.menu_selectie);
   const themeStyle = themeStyleVars(settings?.brand_theme);
   const themeMode = getThemeMode(settings?.brand_theme);
@@ -529,22 +578,30 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
     return function () { sc.removeEventListener('scroll', onScroll); };
   }, []);
 
+  /* Scrollde naar een container die geen scroll-container is: ppRef wees naar
+     een gewone div, dus scrollTo() deed niets en de knop leek dood.
+     scrollIntoView werkt ongeacht welke voorouder daadwerkelijk scrolt.
+     Smooth-scroll wordt niet overal uitgevoerd (in-app browsers, WebViews en
+     omgevingen met animaties uit doen er niets mee), dus vallen we terug op een
+     directe sprong als er na 350 ms niets is bewogen. Anders lijkt de knop dood. */
+  function scrollNaar(el: HTMLElement | null) {
+    if (!el) return;
+    const voor = window.scrollY || document.documentElement.scrollTop || 0;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    window.setTimeout(function () {
+      const na = window.scrollY || document.documentElement.scrollTop || 0;
+      if (Math.abs(na - voor) < 8) el.scrollIntoView({ block: 'start' });
+    }, 350);
+  }
+
   function scrollToMenu() {
-    const sc = ppRef.current;
-    const el = menuRef.current;
-    if (!sc || !el) return;
-    const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 12;
-    sc.scrollTo({ top, behavior: 'smooth' });
+    scrollNaar(menuRef.current);
   }
 
   function scrollToAdjust() {
     if (!showAdjust) setShowAdjust(true);
     setTimeout(function () {
-      const sc = ppRef.current;
-      const el = adjustRef.current;
-      if (!sc || !el) return;
-      const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16;
-      sc.scrollTo({ top, behavior: 'smooth' });
+      scrollNaar(adjustRef.current);
     }, 60);
   }
 
@@ -560,7 +617,8 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
   /* Single-action acceptance: handtekening posten naar /api/accept-offerte,
      bij success → Mollie payment-create voor de aanbetaling met issuer pre-selected. */
   async function handleAcceptAndPay() {
-    if (!signatureData || !signedBy.trim() || !bank) return;
+    if (!signatureData || !signedBy.trim()) return;
+    if (betalenMogelijk && !bank) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -590,7 +648,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
          Redirect naar Mollie checkout. Bij success: webhook → /q/[id]/bedankt
          via redirect_url. */
       const factuurId = acceptJson?.workflow?.factuur?.factuurId;
-      if (factuurId) {
+      if (factuurId && betalenMogelijk) {
         const payRes = await fetch('/api/payments/mollie', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -686,7 +744,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
             <Menu groups={menuGroups} />
             {!isDesktop && (
               <div style={{ marginTop: 26, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <TotalCard t={totals} defaultBtw={defaultBtw} />
+                <TotalCard t={totals} defaultBtw={defaultBtw} betalenMogelijk={betalenMogelijk} />
                 {showCo2 && carbon && carbon.matched_count && carbon.matched_count > 0 ? <Co2Card carbon={carbon} /> : null}
                 <div ref={adjustRef}>
                   <AdjustForm
@@ -702,12 +760,12 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
           </div>
           {isDesktop && (
             <aside className="pp-aside">
-              <TotalCard t={totals} defaultBtw={defaultBtw} />
+              <TotalCard t={totals} defaultBtw={defaultBtw} betalenMogelijk={betalenMogelijk} />
               {showCo2 && carbon && carbon.matched_count && carbon.matched_count > 0 ? <Co2Card carbon={carbon} /> : null}
               <div className="pp-actions">
                 <button className="btn btn-primary" onClick={openSign}>
                   <Icon name="pen" size={17} />
-                  Bevestig &amp; betaal aanbetaling
+                  {betalenMogelijk ? 'Bevestig & betaal aanbetaling' : 'Offerte bevestigen'}
                 </button>
                 <button className="btn btn-ghost" onClick={function () { setShowAdjust(function (s) { return !s; }); }}>
                   <Icon name="edit" size={16} />
@@ -738,10 +796,10 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
       {!isDesktop && (
         <div className="pp-bottombar">
           <div className="pp-bottombar-top">
-            <div className="pp-bottombar-tot">Aanbetaling nu<b>{fmt(totals.deposit)}</b></div>
+            <div className="pp-bottombar-tot">{betalenMogelijk ? 'Aanbetaling nu' : 'Totaal'}<b>{fmt(betalenMogelijk ? totals.deposit : totals.totalIncl)}</b></div>
             <button className="btn btn-primary" onClick={openSign}>
               <Icon name="pen" size={16} />
-              Bevestig &amp; betaal
+              {betalenMogelijk ? 'Bevestig & betaal' : 'Bevestigen'}
             </button>
           </div>
           <div className="pp-bottombar-links">
@@ -778,6 +836,7 @@ export function Portal({ offer, settings, carbon, showCo2 = true }: PortalProps)
           submitError={submitError}
           onClose={closeSign}
           onConfirmPay={handleAcceptAndPay}
+          betalenMogelijk={betalenMogelijk}
         />
       )}
     </div>

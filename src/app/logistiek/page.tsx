@@ -88,6 +88,9 @@ function LogistiekInner() {
     const { orgId } = useOrg();
     const [events, setEvents] = useState<EventWithChecklist[]>([]);
     const [notifs, setNotifs] = useState<NotificationRow[]>([]);
+    /* Eventdatum per voorstel, zodat een voorstel voor een voorbij event niet
+       meer als openstaande taak leest. */
+    const [eventDatums, setEventDatums] = useState<Map<number, string>>(new Map());
     const [loading, setLoading] = useState(true);
     const [busOk, setBusOk] = useState({ ready: 0, total: 0 });
 
@@ -138,6 +141,29 @@ function LogistiekInner() {
                 .order('created_at', { ascending: false })
                 .limit(10);
             const notifList = (nf ?? []) as NotificationRow[];
+
+            /* De events hierboven gaan alleen over de komende 30 dagen, maar de
+               voorstel-historie loopt verder terug. Zonder de eventdatum kreeg
+               een voorstel voor een event van drie weken geleden nog steeds
+               "Wacht op review" — een taak die niet meer bestaat. Daarom hier de
+               datums van precies die events erbij. */
+            const voorstelEventIds = [...new Set(
+                notifList
+                    .map(n => (n.metadata as { event_id?: number } | null)?.event_id)
+                    .filter((id): id is number => typeof id === 'number'),
+            )];
+            const datumPerEvent = new Map<number, string>();
+            if (voorstelEventIds.length > 0) {
+                const { data: evDates } = await supabase
+                    .from('events')
+                    .select('id, date')
+                    .eq('organization_id', orgId)
+                    .in('id', voorstelEventIds);
+                for (const r of (evDates ?? []) as { id: number; date: string | null }[]) {
+                    if (r.date) datumPerEvent.set(r.id, r.date);
+                }
+            }
+            setEventDatums(datumPerEvent);
 
             /* Per event z'n checks koppelen + ai_pending-flag afleiden. */
             const eventsWithChecklist: EventWithChecklist[] = eventList.map(e => {
@@ -270,15 +296,21 @@ function LogistiekInner() {
                             Nog geen voorstellen. Zodra een offerte geaccepteerd wordt, verschijnt hier het AI-voorstel.
                         </div>
                     )}
-                    {notifs.map(n => <NotifCard key={n.id} n={n} />)}
+                    {notifs.map(n => (
+                        <NotifCard
+                            key={n.id}
+                            n={n}
+                            eventDatum={eventDatums.get((n.metadata as { event_id?: number } | null)?.event_id ?? -1)}
+                        />
+                    ))}
 
                     <div className="mt-5 rounded-xl p-4" style={{ background: 'rgba(130,130,130,.03)', border: '1px solid rgba(130,130,130,.06)' }}>
                         <div className="text-[9px] font-bold tracking-[0.15em] uppercase mb-2.5" style={{ color: 'var(--muted-weak)' }}>Hoe werkt het</div>
                         {[
                             'Offerte geaccepteerd',
                             'AI genereert voorstel',
-                            'Mathijs reviewt per sectie',
-                            'Checks live → Lars pakt af in veld',
+                            'Jij reviewt per sectie',
+                            'Checks live → je crew pakt af in het veld',
                         ].map((t, i) => (
                             <div key={i} className="flex items-center gap-2 text-[11px] py-1" style={{ color: 'var(--muted)' }}>
                                 <div className="w-4 h-4 rounded grid place-items-center text-[9px] font-bold flex-shrink-0"
@@ -423,12 +455,15 @@ function EventTimelineCard({ ev }: { ev: EventWithChecklist }) {
     );
 }
 
-function NotifCard({ n }: { n: NotificationRow }) {
+function NotifCard({ n, eventDatum }: { n: NotificationRow; eventDatum?: string }) {
     const dt = new Date(n.created_at);
     const isToday = dt.toISOString().slice(0, 10) === ISO_TODAY();
     const tijd = dt.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
     const dag = isToday ? 'Vandaag' : dt.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
     const dismissed = !!n.dismissed_at;
+    /* Het event is geweest en niemand heeft het voorstel opgepakt. Dat is geen
+       openstaande taak meer; zo laten we het ook lezen. */
+    const verlopen = !dismissed && !!eventDatum && eventDatum < ISO_TODAY();
     const eventId = (n.metadata as any)?.event_id;
     return (
         <div className="rounded-xl px-4 py-3 mb-2 relative overflow-hidden"
@@ -444,6 +479,11 @@ function NotifCard({ n }: { n: NotificationRow }) {
                         style={{ background: 'rgba(34,197,94,.12)', color: 'var(--green)', border: '1px solid rgba(34,197,94,.3)' }}>
                         <CheckCircle2 size={9} /> Afgehandeld
                     </span>
+                ) : verlopen ? (
+                    <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold inline-flex items-center gap-1"
+                        style={{ background: 'rgba(130,130,130,.10)', color: 'var(--muted)', border: '1px solid rgba(130,130,130,.22)' }}>
+                        <Clock size={9} /> Event geweest
+                    </span>
                 ) : (
                     <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold inline-flex items-center gap-1"
                         style={{ background: 'rgba(255,191,0,.12)', color: 'var(--brand)', border: '1px solid rgba(255,191,0,.3)' }}>
@@ -452,14 +492,14 @@ function NotifCard({ n }: { n: NotificationRow }) {
                 )}
                 <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{dag}</span>
             </div>
-            {!dismissed && eventId && (
+            {!dismissed && !verlopen && eventId && (
                 <Link href={`/logistiek?proposal=${eventId}`}
                     className="inline-flex items-center gap-1 text-[11px] font-semibold"
                     style={{ color: 'var(--brand)' }}>
                     Bekijken <ArrowRight size={11} />
                 </Link>
             )}
-            {dismissed && eventId && (
+            {(dismissed || verlopen) && eventId && (
                 <Link href={`/events/${eventId}/logistiek`}
                     className="inline-flex items-center gap-1 text-[11px] font-semibold"
                     style={{ color: 'var(--muted)' }}>

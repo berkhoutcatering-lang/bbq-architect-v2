@@ -19,7 +19,8 @@ describe('fmt2 — euro-formatter NL-style', () => {
     it('formatteert getal met 2 decimalen en komma', () => {
         expect(fmt2(12.5)).toBe(`${EUR}12,50`);
         expect(fmt2(0)).toBe(`${EUR}0,00`);
-        expect(fmt2(1234.56)).toBe(`${EUR}1234,56`);
+        /* Duizendtal-punt erbij: de oude test legde het ontbreken ervan vast. */
+        expect(fmt2(1234.56)).toBe(`${EUR}1.234,56`);
     });
 
     it('parsed string-numbers', () => {
