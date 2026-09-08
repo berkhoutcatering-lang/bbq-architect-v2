@@ -190,6 +190,9 @@ interface LeadConfirmArgs {
   eventDatum?: string;
   eventType?: string;
   bedrijfsnaam: string;
+  /** settings.telefoon van de cateraar. Leeg? Dan blijft de belregel weg —
+      liever geen aanbod om te bellen dan een aanbod zonder nummer. */
+  telefoon?: string;
   brandColor?: string;
   ondertitel?: string;
 }
@@ -207,12 +210,17 @@ export async function mailLeadBevestiging(args: LeadConfirmArgs) {
       + (args.eventDatum ? '<tr><td style="padding:8px 12px;font-size:13px;color:#888;">Datum</td><td style="padding:8px 12px;">' + escH(args.eventDatum) + '</td></tr>' : '')
       + '</table>'
     : '';
+  const bellen = args.telefoon
+    ? '<p>Kan het niet wachten, of wil je iets doorgeven? Bel ons op <strong>' + escH(args.telefoon) + '</strong>.</p>'
+    : '';
   const footer = '<p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>' + escH(args.bedrijfsnaam) + '</strong></p>';
 
-  const html = wrapHtml(greeting + intro + details + footer, args.bedrijfsnaam, args.brandColor, args.ondertitel);
+  const html = wrapHtml(greeting + intro + details + bellen + footer, args.bedrijfsnaam, args.brandColor, args.ondertitel);
   const text = 'Beste ' + (args.clientNaam || 'klant') + ',\n\n'
     + 'Bedankt voor je aanvraag bij ' + args.bedrijfsnaam + '. We nemen zo snel mogelijk contact met je op'
-    + (args.eventDatum ? ' over je event op ' + args.eventDatum : '') + '.\n\nMvg, ' + args.bedrijfsnaam;
+    + (args.eventDatum ? ' over je event op ' + args.eventDatum : '') + '.\n'
+    + (args.telefoon ? '\nKan het niet wachten, of wil je iets doorgeven? Bel ons op ' + args.telefoon + '.\n' : '')
+    + '\nMvg, ' + args.bedrijfsnaam;
 
   return sendServerMail({
     to: args.clientEmail,

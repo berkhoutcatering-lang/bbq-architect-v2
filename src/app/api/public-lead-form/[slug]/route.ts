@@ -155,6 +155,7 @@ export async function POST(
     await mailLeadBevestiging({
       clientEmail: d.email, clientNaam: d.naam,
       eventDatum: empty(d.event_datum) || undefined, eventType: empty(d.event_type) || undefined,
+      telefoon: t.settings?.telefoon || undefined,
       bedrijfsnaam, brandColor, ondertitel,
     });
     if (t.settings?.email) {
