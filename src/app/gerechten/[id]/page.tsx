@@ -18,6 +18,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import LiveCostHeader from '../_components/LiveCostHeader';
 import IngredientCostBreakdown from '../_components/IngredientCostBreakdown';
 import GerechtComponentenEditor from '../_components/GerechtComponentenEditor';
+import Receptuur from '../_components/Receptuur';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,6 +106,10 @@ export default async function GerechtDetailPage({ params }: PageProps) {
             />
 
             <GerechtComponentenEditor gerechtId={String(gerecht.id)} />
+
+            {/* De werkwijze zelf. Verschijnt alleen als er stappen zijn — de
+                meeste gerechten hebben er nog geen. */}
+            <Receptuur gerechtId={String(gerecht.id)} organizationId={orgId} />
 
             <section style={{ marginTop: 32, fontSize: 13, color: 'var(--color-text-muted)' }}>
                 <p>

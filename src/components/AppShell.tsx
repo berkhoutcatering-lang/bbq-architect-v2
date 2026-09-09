@@ -32,14 +32,18 @@ const AUTH_PAGES = ['/login', '/signup', '/auth/', '/onboarding'];
 const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/bestellen/', '/welkom', '/pricing', '/legal/', '/share/', '/m/'];
 
 // KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
-// Match drie routes:
+// Match:
 //   /events/[id]/service             — course-flow service-modus
 //   /events/[id]/service/plattegrond — floor-plan tab in service-modus
 //   /keuken/kookbord                 — prep-KDS (was /keuken/board, blijft redirect)
+//   /keuken/scherm                   — het wandscherm: hangt aan de muur, 1920×1080,
+//                                      read-only. Een sidebar zou er letterlijk
+//                                      overheen vallen en is er ook niet te bedienen.
+//   /keuken/tablet                   — de tablet in de hand, drie knoppen, verder niets.
 function isKdsPage(pathname: string): boolean {
   return (
     /^\/events\/[^/]+\/service(\/.*)?$/.test(pathname) ||
-    /^\/keuken\/(kookbord|board)(\/.*)?$/.test(pathname)
+    /^\/keuken\/(kookbord|board|scherm|tablet)(\/.*)?$/.test(pathname)
   );
 }
 

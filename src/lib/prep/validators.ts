@@ -65,7 +65,7 @@ export interface CompleteTaskInput {
     notes: string | null;
 }
 
-export function validateCompleteTask(body: unknown): { ok: true; data: CompleteTaskInput } | { ok: false; error: string } {
+export function validateCompleteTask(body: unknown): { ok: true; data: CompleteTaskInput & { onderbroken: boolean } } | { ok: false; error: string } {
     if (typeof body !== 'object' || body === null) return { ok: false, error: 'Body verplicht' };
     const b = body as Record<string, unknown>;
     if (!isPositiveInt(b.taskId)) return { ok: false, error: 'taskId moet een positief integer zijn' };
@@ -86,7 +86,11 @@ export function validateCompleteTask(body: unknown): { ok: true; data: CompleteT
         }
     }
 
-    return { ok: true, data: { taskId: b.taskId, actualQty, notes } };
+    /* Onderbroken hoort bij de meting, niet bij de taak: de taak is gewoon
+       klaar, maar de gemeten duur is onbruikbaar als de leverancier ertussen
+       kwam. Ontbreekt het veld, dan gaan we uit van doorgewerkt — dat is hoe
+       het vóór de keukenplanner ook al werkte. */
+    return { ok: true, data: { taskId: b.taskId, actualQty, notes, onderbroken: b.onderbroken === true } };
 }
 
 /* ─── skip-task ──────────────────────────────────────────────── */
