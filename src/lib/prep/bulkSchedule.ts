@@ -116,6 +116,12 @@ export interface ScheduledTaskRow {
        geen stap, geen apparaat en geen splitsing tussen werk en wachten, en dat
        is precies waarom de planner er niets mee kon. */
     recipe_step_id?: string | null;
+    /* Waar het leren op hangt. `batch_key` is voor het bundelen op het bord,
+       `bewerking_code` is de sleutel waaronder de meting wordt opgeslagen —
+       leren gebeurt op de bewerking, niet op de losse stap. Alleen batch_key
+       vullen betekent dat er nooit iets geleerd wordt, en dat merk je pas als
+       je je afvraagt waarom alles na een half jaar nog "geschat" is. */
+    bewerking_code?: string | null;
     materieel_id?: number | null;
     duur_actief_min?: number | null;
     duur_passief_min?: number | null;
@@ -420,6 +426,7 @@ export async function bulkScheduleEventPrep(
                 component_id: t.component_id,
                 duration_min: t.duration_min,
                 batch_key: t.bewerking_code,
+                bewerking_code: t.bewerking_code,
                 recipe_step_id: t.recipe_step_id,
                 materieel_id: t.materieel_id,
                 duur_actief_min: t.duur_actief_min,
