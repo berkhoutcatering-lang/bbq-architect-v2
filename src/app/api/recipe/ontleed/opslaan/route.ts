@@ -35,7 +35,7 @@ interface Body {
     nieuweComponenten?: Array<{ naam: string; eenheid: string }>;
 }
 
-export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }: TenantAuthCtx) => {
+export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, userId }: TenantAuthCtx) => {
     let body: Body;
     try {
         body = await req.json();
@@ -84,7 +84,14 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
                over een half jaar niet meer te achterhalen waarom de porchetta
                op 150 °C staat en niet op 130. */
             keuzes: controle.keuzes
-                .map((k) => ({ vraag: k.vraag, antwoord: (antwoorden.keuzes ?? {})[k.vraag] ?? null }))
+                .map((k) => ({
+                    vraag: k.vraag,
+                    antwoord: (antwoorden.keuzes ?? {})[k.vraag] ?? null,
+                    /* Wie en wanneer erbij: een logboek zonder datum is een
+                       mening, met datum is het bewijs. */
+                    op: new Date().toISOString(),
+                    door: userId,
+                }))
                 .filter((k) => k.antwoord != null),
         })
         .select('id')
@@ -99,13 +106,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     
            Kostprijs blijft leeg: die komt uit inkoop, niet uit een boek.
     
-           De koppeling gerecht ↔ bouwsteen wordt wél gelegd, met hoeveelheid 0.
-           Dat is geen verzonnen getal maar precies de eerlijke stand: we weten
-           niet hoeveel pekel er per acht porties in gaat, en nul telt voor nul
-           mee in de kostprijs. Zonder die koppeling zijn de stappen van de
-           ranchsaus nergens meer terug te vinden — ze hangen aan de bouwsteen
-           en niet aan het gerecht, dus dit is de enige draad ertussen. De kok
-           vult de hoeveelheid in zodra hij hem weet. */
+           De draad terug naar het gerecht loopt via `uit_gerecht_id` op de
+           bouwsteen. Niet via gerecht_components: daar staat `quantity_used > 0`
+           op, en hoeveel ranchsaus er per broodje in gaat weet niemand uit een
+           kookboek. Die constraint beschermt de kostprijs en blijft staan; de
+           kok legt die koppeling zelf zodra hij de hoeveelheid weet. */
     const idVan = new Map<string, number>();
     /* Alleen wat we zélf net hebben aangemaakt, zodat we bij een mislukking
        verderop precies dát kunnen terugdraaien en niets van eerder. */

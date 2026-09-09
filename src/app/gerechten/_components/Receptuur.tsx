@@ -21,7 +21,7 @@ interface Props {
     gerechtId: string;
     organizationId: string;
     /** Wat de kok besloot toen dit recept werd ingevoerd. */
-    keuzes?: Array<{ vraag: string; antwoord: string }> | null;
+    keuzes?: Array<{ vraag: string; antwoord: string; op?: string; door?: string }> | null;
 }
 
 interface StapRij {
@@ -164,12 +164,29 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
                 </p>
             )}
 
+            {/* Bewijsmateriaal, geen instelling: twee kolommen met een haarlijn
+                ertussen, zodat het leest als een logboek en nooit als iets dat
+                je per ongeluk omzet. */}
             {(keuzes?.length ?? 0) > 0 && (
-                <div style={{ margin: '0 0 18px' }}>
+                <div style={{
+                    margin: '0 0 20px', padding: '14px 0 0',
+                    borderTop: '1px solid rgba(245,245,245,.07)',
+                }}>
+                    <div style={{
+                        fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+                        color: '#8a8f98', marginBottom: 10,
+                    }}>
+                        Toen dit recept werd goedgekeurd
+                        {keuzes![0].op && ` · ${formatDatum(keuzes![0].op)}`}
+                    </div>
                     {keuzes!.map((k) => (
-                        <div key={k.vraag} style={{ fontSize: 14, marginBottom: 4 }}>
-                            <span style={{ color: '#8a8f98' }}>{k.vraag} </span>
-                            <strong>{k.antwoord}</strong>
+                        <div key={k.vraag} style={{
+                            display: 'flex', gap: 16, justifyContent: 'space-between',
+                            alignItems: 'baseline', flexWrap: 'wrap',
+                            padding: '8px 0', borderTop: '1px solid rgba(245,245,245,.07)',
+                        }}>
+                            <span style={{ fontSize: 14, color: '#8a8f98', flex: 1, minWidth: 220 }}>{k.vraag}</span>
+                            <strong style={{ fontSize: 14 }}>{k.antwoord}</strong>
                         </div>
                     ))}
                 </div>
@@ -270,6 +287,14 @@ function splitsDuur(min: number): { waarde: string; eenheid: string } {
         return { waarde: String(min / 60), eenheid: 'uur' };
     }
     return { waarde: String(min), eenheid: 'min' };
+}
+
+/** "9 sep" — een logboekregel heeft geen tijdstip nodig. */
+function formatDatum(iso: string): string {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+        ? ''
+        : d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
 }
 
 /** Vierentwintig uur pekelen lees je niet als 1440. */

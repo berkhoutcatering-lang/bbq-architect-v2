@@ -10896,3 +10896,38 @@ html, body { max-width: 100vw; overflow-x: clip; }
   .taak-rij > :nth-child(3) { grid-area: tekst; }
   .taak-rij > :nth-child(4) { grid-area: actie; justify-self: stretch; text-align: center; }
 }
+
+/* ── Receptuur: de stapregel ──────────────────────────────────────
+   Op een breed scherm staat de tijd in een eigen kolom rechts, zodat een stap
+   met niets net zo rustig oogt als een stap met vier feiten. Op een telefoon
+   past die kolom niet naast de tekst — dan zakt hij eronder, uitgelijnd met de
+   stap zelf. Lars leest dit met één hand in de keuken. */
+.receptuur-stap {
+  display: flex;
+  gap: 20px;
+  padding: 22px 24px;
+}
+.receptuur-stap__tijd {
+  text-align: right;
+  min-width: 168px;
+  flex-shrink: 0;
+  padding-left: 22px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+@media (max-width: 720px) {
+  .receptuur-stap {
+    flex-wrap: wrap;
+    padding: 18px 16px;
+    gap: 12px;
+  }
+  .receptuur-stap__tijd {
+    width: 100%;
+    min-width: 0;
+    text-align: left;
+    border-left: none !important;
+    border-top: 1px solid rgba(245, 245, 245, .07);
+    padding-left: 0;
+    padding-top: 10px;
+  }
+}

@@ -49,13 +49,16 @@ async function main() {
     /* Het echte materieel, precies zoals de route het ophaalt. */
     const { data: materieel } = await sb
         .from('materieel')
-        .select('id, naam, maakt_mogelijk, temp_min_c, temp_max_c, capaciteit_waarde, capaciteit_eenheid, kookoppervlak_cm2, aanzet_min, opwarm_min, warm_blijft_min, schoonmaak_min, exclusief_bezet, concurrent_jobs')
+        .select('id, naam, korte_naam, maakt_mogelijk, temp_min_c, temp_max_c, capaciteit_waarde, capaciteit_eenheid, kookoppervlak_cm2, aanzet_min, opwarm_min, warm_blijft_min, schoonmaak_min, exclusief_bezet, concurrent_jobs')
         .eq('organization_id', ORG)
         .not('maakt_mogelijk', 'is', null);
 
     const apparaten: ApparaatMetKundes[] = (materieel ?? []).map((m: Record<string, unknown>) => ({
         id: m.id as number,
-        naam: (m.naam as string) ?? 'Apparaat',
+        /* De keukennaam, niet de typenaam: "inductieplaat" in plaats van
+           "METRO Professional GIC3135 inductiekookplaat". Scheelt tokens in de
+           prompt en zorgt dat wat de AI teruggeeft leest zoals jij het zegt. */
+        naam: (m.korte_naam as string) || (m.naam as string) || 'Apparaat',
         kundes: (m.maakt_mogelijk as string[]) ?? [],
         aanzetMin: (m.aanzet_min as number) ?? 1,
         opwarmMin: (m.opwarm_min as number) ?? null,

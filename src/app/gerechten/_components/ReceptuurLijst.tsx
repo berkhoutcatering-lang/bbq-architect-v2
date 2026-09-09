@@ -31,6 +31,11 @@ export interface StapRegel {
     getal?: { waarde: string; eenheid: string; amber: boolean } | null;
     /** Regel onder het getal, of de hele rechterkolom als er geen getal is. */
     rechts: string;
+    /**
+     * Extra onder de stap. De goedkeur-lade hangt hier zijn vragen aan, zodat
+     * de lijst zelf dom blijft en beide schermen dezelfde stap tonen.
+     */
+    extra?: React.ReactNode;
 }
 
 export interface DeelRegel {
@@ -142,10 +147,10 @@ export default function ReceptuurLijst({ delen }: { delen: DeelRegel[] }) {
 
 function Stap({ stap, laatste }: { stap: StapRegel; laatste: boolean }) {
     return (
-        <div style={{
-            display: 'flex', gap: 20, padding: '22px 24px',
-            borderBottom: laatste ? 'none' : '1px solid rgba(245,245,245,.07)',
-        }}>
+        <div
+            className="receptuur-stap"
+            style={{ borderBottom: laatste ? 'none' : '1px solid rgba(245,245,245,.07)' }}
+        >
             <div style={{
                 fontFamily: "'IBM Plex Mono',monospace", fontSize: 22, color: '#8a8f98',
                 width: 36, flexShrink: 0,
@@ -153,6 +158,7 @@ function Stap({ stap, laatste }: { stap: StapRegel; laatste: boolean }) {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 18, lineHeight: 1.45, textWrap: 'pretty' }}>{stap.tekst}</div>
+                {stap.extra}
                 {stap.chips.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
                         {stap.chips.map((chip, i) => (
@@ -175,11 +181,13 @@ function Stap({ stap, laatste }: { stap: StapRegel; laatste: boolean }) {
 
             {/* Eigen kolom, zodat een stap met niets net zo rustig oogt als een
                 stap met vier feiten. */}
-            <div style={{
-                textAlign: 'right', minWidth: 168, flexShrink: 0,
-                borderLeft: `1px solid ${stap.getal?.amber ? 'rgba(255,191,0,.25)' : 'rgba(245,245,245,.07)'}`,
-                paddingLeft: 22, fontSize: 14, color: '#8a8f98', lineHeight: 1.4,
-            }}>
+            <div
+                className="receptuur-stap__tijd"
+                style={{
+                    borderLeft: `1px solid ${stap.getal?.amber ? 'rgba(255,191,0,.25)' : 'rgba(245,245,245,.07)'}`,
+                    color: '#8a8f98',
+                }}
+            >
                 {stap.getal && (
                     <div>
                         <span style={{

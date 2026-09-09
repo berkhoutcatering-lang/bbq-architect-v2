@@ -8,11 +8,18 @@
  * vervallen is en waarom, en wat er nog beslist moet worden. Pas als dat leeg
  * is, gaat de opslaan-knop van het slot.
  *
+ * Vormgeving volgt `docs/receptuur-designprompt.md` en het ontwerp dat daaruit
+ * kwam. Twee dingen daaruit zitten hier: een beantwoorde beslissing krimpt tot
+ * één regel met het antwoord ernaast, en alleen de bovenste openstaande vraag
+ * krijgt amber. Anders wordt de lade een muur van waarschuwingen en leest
+ * niemand hem meer.
+ *
  * De foto's gaan niet de opslag in. Ze worden verkleind, verstuurd, gelezen en
  * vergeten. Alleen jouw eigen vertaalde receptuur blijft achter.
  */
 
 import { useCallback, useRef, useState } from 'react';
+import ReceptuurLijst, { type DeelRegel, type StapChip, type StapRegel } from '../../_components/ReceptuurLijst';
 import {
     openstaandeVragen,
     metKeuzesVerwerkt,
@@ -40,6 +47,18 @@ const LEEG: Invulling = {
     },
     eenheden: {},
 };
+
+/* ── Kleuren, uit het ontwerpsysteem ────────────────────────────── */
+
+const KLEUR = {
+    paneel: '#1e1e22',
+    lijn: 'rgba(245,245,245,.10)',
+    lijnZacht: 'rgba(245,245,245,.07)',
+    goudlijn: 'rgba(196,163,90,.22)',
+    gedempt: '#8a8f98',
+    amber: '#FFBF00',
+    amberZacht: 'rgba(255,191,0,.14)',
+} as const;
 
 export default function OntledenClient() {
     const [fase, setFase] = useState<Fase>('kiezen');
@@ -132,13 +151,7 @@ export default function OntledenClient() {
     const openstaand = controle ? openstaandeVragen(controle, invulling.antwoorden) : [];
 
     return (
-        <div style={{ maxWidth: 880, margin: '0 auto', padding: '32px 20px 96px' }}>
-            <h1 style={{ fontSize: 30, fontWeight: 600, marginBottom: 6 }}>Recept uit een boek</h1>
-            <p style={{ color: 'var(--kf-muted, #8A8F98)', marginBottom: 28, lineHeight: 1.5 }}>
-                Foto van een receptpagina erin, en je krijgt hem terug zoals hij hier gemaakt wordt —
-                op jouw apparatuur. De foto zelf wordt niet bewaard.
-            </p>
-
+        <div style={{ maxWidth: 940, margin: '0 auto', padding: '32px 20px 96px' }}>
             {fout && <Melding soort="fout">{fout}</Melding>}
 
             {fase === 'kiezen' && (
@@ -153,12 +166,7 @@ export default function OntledenClient() {
                 />
             )}
 
-            {fase === 'bezig' && (
-                <div style={{ padding: '56px 0', textAlign: 'center', color: 'var(--kf-muted, #8A8F98)' }}>
-                    <div style={{ fontSize: 18, marginBottom: 8 }}>Aan het lezen en omzetten…</div>
-                    <div style={{ fontSize: 14 }}>Duurt ongeveer een minuut.</div>
-                </div>
-            )}
+            {fase === 'bezig' && <Wachten />}
 
             {fase === 'nakijken' && controle && (
                 <Lade
@@ -170,8 +178,8 @@ export default function OntledenClient() {
                     bezigMetOpslaan={bezigMetOpslaan}
                     resultaat={resultaat}
                     bewaar={() => void bewaar()}
-                    leesAnder={(naam) => void ontleed(naam)}
                     opnieuw={() => { setFase('kiezen'); setControle(null); setResultaat(null); setFotos([]); }}
+                    leesAnder={(naam) => void ontleed(naam)}
                 />
             )}
         </div>
@@ -193,18 +201,25 @@ function Kiezen(props: {
 
     return (
         <>
+            <h1 style={{ fontSize: 30, fontWeight: 600, marginBottom: 6 }}>Recept uit een kookboek</h1>
+            <p style={{ color: KLEUR.gedempt, marginBottom: 28, lineHeight: 1.5 }}>
+                Fotografeer de pagina&apos;s. Wij lezen ze uit en zetten ze om naar jouw apparatuur.
+                De foto zelf wordt niet bewaard.
+            </p>
+
             <div
                 onClick={() => invoer.current?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => { e.preventDefault(); void kiesBestanden(e.dataTransfer.files); }}
                 style={{
-                    border: '2px dashed var(--kf-border, #2B2E33)', borderRadius: 12,
-                    padding: 44, textAlign: 'center', cursor: 'pointer',
-                    background: 'var(--kf-card, #1B1D21)',
+                    border: `2px dashed ${KLEUR.lijn}`, borderRadius: 14,
+                    padding: 48, textAlign: 'center', cursor: 'pointer', background: KLEUR.paneel,
                 }}
             >
-                <div style={{ fontSize: 17, marginBottom: 6 }}>Sleep hier de foto&apos;s van het recept</div>
-                <div style={{ color: 'var(--kf-muted, #8A8F98)', fontSize: 14 }}>of klik om te kiezen · hooguit zes</div>
+                <div style={{ fontSize: 18, marginBottom: 6 }}>Sleep je foto&apos;s hierheen</div>
+                <div style={{ color: KLEUR.gedempt, fontSize: 14 }}>
+                    of kies ze van je telefoon · jpg, png, heic · hooguit zes
+                </div>
             </div>
             <input
                 ref={invoer} type="file" accept="image/*" multiple hidden
@@ -212,34 +227,43 @@ function Kiezen(props: {
             />
 
             {fotos.length > 0 && (
-                <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-                    {fotos.map((f, i) => (
-                        <div key={i} style={{ position: 'relative' }}>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={f} alt="" style={{ height: 110, borderRadius: 8, display: 'block' }} />
-                            <button
-                                type="button"
-                                aria-label="Foto weghalen"
-                                onClick={() => zetFotos((b) => b.filter((_, j) => j !== i))}
-                                style={{
-                                    position: 'absolute', top: 4, right: 4, border: 'none',
-                                    background: 'rgba(0,0,0,.65)', color: '#fff', borderRadius: 6,
-                                    width: 24, height: 24, cursor: 'pointer', lineHeight: 1,
-                                }}
-                            >×</button>
-                        </div>
-                    ))}
-                </div>
+                <>
+                    <p style={{ color: KLEUR.gedempt, fontSize: 14, margin: '16px 0 8px' }}>
+                        {fotos.length} foto{fotos.length === 1 ? '' : "'s"} klaar om te lezen.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                        {fotos.map((f, i) => (
+                            <div key={i} style={{ position: 'relative' }}>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={f} alt="" style={{ height: 120, borderRadius: 10, display: 'block' }} />
+                                <button
+                                    type="button"
+                                    aria-label="Foto weghalen"
+                                    onClick={() => zetFotos((b) => b.filter((_, j) => j !== i))}
+                                    style={{
+                                        position: 'absolute', top: 6, right: 6, border: 'none',
+                                        background: 'rgba(0,0,0,.7)', color: '#fff', borderRadius: 6,
+                                        width: 26, height: 26, cursor: 'pointer', lineHeight: 1,
+                                    }}
+                                >×</button>
+                            </div>
+                        ))}
+                    </div>
+                </>
             )}
 
+            <label style={{
+                display: 'block', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+                color: KLEUR.gedempt, margin: '22px 0 8px',
+            }}>Opmerking voor de lezer</label>
             <textarea
                 value={opmerking}
                 onChange={(e) => zetOpmerking(e.target.value)}
-                placeholder="Iets wat hij moet weten? Bijvoorbeeld: dit doen we altijd op de houtskoolgrill."
+                placeholder="Wij doen dit op de pelletgrill, niet in de oven. Porties voor 60 gasten."
                 rows={2}
                 style={{
-                    width: '100%', marginTop: 16, padding: 12, borderRadius: 8,
-                    border: '1px solid var(--kf-border, #2B2E33)', background: 'var(--kf-card, #1B1D21)',
+                    width: '100%', padding: 14, borderRadius: 10,
+                    border: `1px solid ${KLEUR.lijn}`, background: KLEUR.paneel,
                     color: 'inherit', font: 'inherit', resize: 'vertical',
                 }}
             />
@@ -248,11 +272,39 @@ function Kiezen(props: {
                 type="button"
                 disabled={fotos.length === 0}
                 onClick={start}
-                style={{ ...knop, marginTop: 16, opacity: fotos.length === 0 ? .45 : 1 }}
+                style={{ ...knop, marginTop: 18, opacity: fotos.length === 0 ? .45 : 1 }}
             >
                 Lees het recept
             </button>
         </>
+    );
+}
+
+/* ── Wachten ────────────────────────────────────────────────────── */
+
+/**
+ * Vier benoemde fasen in plaats van een balk.
+ *
+ * Een minuut duurt lang genoeg om te willen weten wát er gebeurt. De fasen
+ * lopen niet mee met de echte voortgang — die kennen we niet — dus staan ze er
+ * als opsomming en niet als afvinklijst. Beweren dat we bij stap drie zijn zou
+ * een verzonnen getal zijn in een ander jasje.
+ */
+function Wachten() {
+    return (
+        <div style={{ padding: '64px 0', textAlign: 'center' }}>
+            <div style={{ fontSize: 22, marginBottom: 10 }}>We lezen het recept</div>
+            <div style={{ color: KLEUR.gedempt, marginBottom: 26 }}>Dit duurt ongeveer een minuut.</div>
+            <ul style={{
+                listStyle: 'none', padding: 0, margin: '0 auto', maxWidth: 320,
+                textAlign: 'left', color: KLEUR.gedempt, fontSize: 15, lineHeight: 2,
+            }}>
+                <li>Tekst van de foto&apos;s gehaald</li>
+                <li>Omzetten naar onze apparatuur</li>
+                <li>Onderdelen opzoeken</li>
+                <li>Stappen op volgorde zetten</li>
+            </ul>
+        </div>
     );
 }
 
@@ -270,8 +322,10 @@ function Lade(props: {
     opnieuw: () => void;
     leesAnder: (naam: string) => void;
 }) {
-    const { controle, kosten, invulling, zetInvulling, openstaand, bezigMetOpslaan, resultaat, bewaar, opnieuw, leesAnder } = props;
-    const s = controle.samenvatting;
+    const {
+        controle, kosten, invulling, zetInvulling, openstaand,
+        bezigMetOpslaan, resultaat, bewaar, opnieuw, leesAnder,
+    } = props;
     const { antwoorden } = invulling;
 
     if (resultaat) {
@@ -279,10 +333,8 @@ function Lade(props: {
             <>
                 <Melding soort="goed">Opgeslagen. {controle.gerechtNaam} staat nu in je gerechtenboek.</Melding>
                 {resultaat.waarschuwing && <Melding soort="fout">{resultaat.waarschuwing}</Melding>}
-                {/* Kookboeken zetten er vaak twee op één bladzij. Dezelfde foto
-                    nog een keer laten lezen scheelt opnieuw fotograferen. */}
                 {controle.anderRecept && (
-                    <p style={{ marginTop: 16, marginBottom: 0, color: 'var(--kf-muted, #8A8F98)' }}>
+                    <p style={{ marginTop: 16, marginBottom: 0, color: KLEUR.gedempt }}>
                         Op deze pagina staat ook <strong>{controle.anderRecept}</strong>.
                     </p>
                 )}
@@ -301,19 +353,41 @@ function Lade(props: {
         );
     }
 
+    const stappen = metKeuzesVerwerkt(controle, antwoorden);
+    const delen = maakDelen(stappen, invulling, zetInvulling);
+    const beslist = controle.keuzes.filter((k) => (antwoorden.keuzes ?? {})[k.vraag]).length;
+
+    /* Alleen de bovenste openstaande vraag krijgt amber. De rest een goudstip,
+       zodat je ziet wat je nú beantwoordt zonder een muur van waarschuwingen. */
+    const eersteOpen = controle.keuzes.find((k) => !(antwoorden.keuzes ?? {})[k.vraag])?.vraag ?? null;
+
     return (
         <>
-            <h2 style={{ fontSize: 23, fontWeight: 600, marginBottom: 4 }}>{controle.gerechtNaam}</h2>
-            <p style={{ color: 'var(--kf-muted, #8A8F98)', marginBottom: 4 }}>
-                {controle.porties ?? antwoorden.porties ?? '?'} porties · {s.stappen} stappen
-            </p>
+            <header style={{ marginBottom: 22 }}>
+                <div style={{
+                    fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+                    color: KLEUR.gedempt, marginBottom: 6,
+                }}>
+                    Gelezen uit kookboekfoto
+                </div>
+                <h1 style={{ fontSize: 28, fontWeight: 600, margin: '0 0 6px' }}>{controle.gerechtNaam}</h1>
+                <p style={{ color: KLEUR.gedempt, margin: 0 }}>
+                    Omgezet naar onze werkwijze · {controle.porties ?? antwoorden.porties ?? '?'} porties ·{' '}
+                    {delen.length} {delen.length === 1 ? 'deel' : 'delen'} · {stappen.length} stappen
+                    {kosten && ` · € ${(kosten.centen / 100).toFixed(2)}`}
+                </p>
+                {controle.anderRecept && (
+                    <p style={{ color: KLEUR.gedempt, fontSize: 13, marginTop: 6, marginBottom: 0 }}>
+                        Op deze pagina staat ook <strong>{controle.anderRecept}</strong> — die kun je
+                        na het opslaan met één klik alsnog laten lezen.
+                    </p>
+                )}
+            </header>
 
             {/* Het boek zegt soms "voor circa 1,5 kg" en geen aantal personen.
-                Daar hoort geen stille tien voor in de plaats — je kostprijs per
-                portie hangt eraan. */}
+                Daar hoort geen stille tien voor in de plaats. */}
             {controle.porties == null && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '10px 0 4px' }}>
-                    <span style={{ fontSize: 14 }}>Voor hoeveel porties is dit?</span>
+                <Blok titel="Voor hoeveel porties is dit?">
                     <input
                         type="number" min={1} placeholder="aantal"
                         value={antwoorden.porties ?? ''}
@@ -323,77 +397,43 @@ function Lade(props: {
                         aria-label="Aantal porties"
                         style={getal}
                     />
-                </div>
-            )}
-            {/* Nooit "1 min werk" als kop zetten terwijl veertien stappen nog geen
-                tijd hebben — dan lees je een halve dag als één minuut. Er staat
-                bij over hoeveel stappen het gaat. */}
-            <p style={{ color: 'var(--kf-muted, #8A8F98)', marginBottom: 4 }}>
-                {s.stappen - s.zonderTijd === 0
-                    ? 'Nog geen enkele stap heeft een tijd — die worden gemeten zodra je hem draait.'
-                    : `Bekende tijd over ${s.stappen - s.zonderTijd} van de ${s.stappen} stappen:`
-                        + ` ${s.actiefMin} min werk`
-                        + (s.passiefMin > 0 ? `, ${formatWacht(s.passiefMin)} wachten` : '')
-                        + (s.zonderTijd > 0 ? ` · de andere ${s.zonderTijd} worden gemeten` : '')}
-            </p>
-            {kosten && (
-                <p style={{ color: 'var(--kf-muted, #8A8F98)', fontSize: 13, marginBottom: 20 }}>
-                    Dit lezen kostte € {(kosten.centen / 100).toFixed(2)}.
-                </p>
-            )}
-
-            {controle.anderRecept && (
-                <p style={{
-                    marginTop: 4, marginBottom: 0, fontSize: 13,
-                    color: 'var(--kf-muted, #8A8F98)',
-                }}>
-                    Op deze pagina staat ook <strong>{controle.anderRecept}</strong> — die kun je
-                    na het opslaan met één klik alsnog laten lezen.
-                </p>
+                </Blok>
             )}
 
             {controle.vervallen.length > 0 && (
-                <Blok titel="Vervallen op onze apparatuur">
+                <Blok titel={`Vervallen op onze apparatuur · ${controle.vervallen.length}`}>
                     {controle.vervallen.map((v, i) => (
-                        <div key={i} style={{ marginBottom: 10 }}>
-                            <div style={{ textDecoration: 'line-through', color: 'var(--kf-muted, #8A8F98)' }}>{v.tekst}</div>
-                            <div style={{ fontSize: 13, color: 'var(--brand, #6B7A3F)' }}>{v.reden}</div>
+                        <div key={i} style={{ marginBottom: i === controle.vervallen.length - 1 ? 0 : 14 }}>
+                            <div style={{ textDecoration: 'line-through', color: KLEUR.gedempt }}>{v.tekst}</div>
+                            <div style={{ fontSize: 14, marginTop: 2 }}>{v.reden}</div>
                         </div>
                     ))}
                 </Blok>
             )}
 
             {controle.keuzes.length > 0 && (
-                <Blok titel="Hier komt hij zelf niet uit">
+                <Blok titel={`Hier komt hij zelf niet uit · ${beslist} van de ${controle.keuzes.length} beslist`}>
                     {controle.keuzes.map((k) => (
-                        <div key={k.vraag} style={{ marginBottom: 14 }}>
-                            <div style={{ marginBottom: 6 }}>{k.vraag}</div>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                {k.opties.map((optie) => {
-                                    const gekozen = (antwoorden.keuzes ?? {})[k.vraag] === optie;
-                                    return (
-                                        <button
-                                            key={optie}
-                                            type="button"
-                                            onClick={() => zetInvulling((i) => ({
-                                                ...i,
-                                                antwoorden: {
-                                                    ...i.antwoorden,
-                                                    keuzes: { ...(i.antwoorden.keuzes ?? {}), [k.vraag]: optie },
-                                                },
-                                            }))}
-                                            style={gekozen ? knopKlein : knopKleinUit}
-                                        >{optie}</button>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <Keuze
+                            key={k.vraag}
+                            vraag={k.vraag}
+                            opties={k.opties}
+                            gekozen={(antwoorden.keuzes ?? {})[k.vraag] ?? null}
+                            isBovensteOpen={k.vraag === eersteOpen}
+                            kies={(optie) => zetInvulling((i) => ({
+                                ...i,
+                                antwoorden: {
+                                    ...i.antwoorden,
+                                    keuzes: { ...(i.antwoorden.keuzes ?? {}), [k.vraag]: optie },
+                                },
+                            }))}
+                        />
                     ))}
                 </Blok>
             )}
 
             {controle.ontbrekendeComponenten.length > 0 && (
-                <Blok titel="Onderdelen die je nog niet hebt">
+                <Blok titel={`Onderdelen die je nog niet hebt · ${controle.ontbrekendeComponenten.length}`}>
                     {controle.ontbrekendeComponenten.map((naam) => (
                         <ComponentKeuze
                             key={naam}
@@ -419,86 +459,92 @@ function Lade(props: {
                             zetEenheid={(e) => zetInvulling((i) => ({ ...i, eenheden: { ...i.eenheden, [naam]: e } }))}
                         />
                     ))}
+                    <p style={{ fontSize: 13, color: KLEUR.gedempt, margin: '12px 0 0', lineHeight: 1.5 }}>
+                        Aangemaakte onderdelen krijgen hun eigen stappen en mogen dagen eerder gemaakt worden.
+                        Hoeveel er per portie in gaat weet niemand uit een kookboek — dat vul je in op de
+                        gerechtpagina, en dan telt de kostprijs mee.
+                    </p>
                 </Blok>
             )}
 
-            {/* De stappen zoals ze straks worden opgeslagen — dus mét de
-                temperatuur die uit een beantwoorde keuze volgt. Wat het systeem
-                zelf invult moet je kunnen zien voordat je op opslaan drukt. */}
-            <Blok titel="De stappen">
-                {metKeuzesVerwerkt(controle, antwoorden).map((stap, i, alle) => (
-                    <div key={stap.volgnummer}>
-                        {/* Waar een blok stappen een onderdeel maakt in plaats van
-                            het gerecht zelf. Die stappen hangen straks aan de
-                            bouwsteen, en mogen dus dagen eerder gemaakt worden. */}
-                        {stap.voorComponent != null && stap.voorComponent !== alle[i - 1]?.voorComponent && (
-                            <div style={{
-                                marginTop: i === 0 ? 0 : 14, marginBottom: 2, fontSize: 12,
-                                letterSpacing: '.06em', textTransform: 'uppercase',
-                                color: 'var(--brand, #6B7A3F)', fontWeight: 600,
-                            }}>
-                                Hiermee maak je: {stap.voorComponent}
-                            </div>
-                        )}
-                        {stap.voorComponent == null && alle[i - 1]?.voorComponent != null && (
-                            <div style={{
-                                marginTop: 14, marginBottom: 2, fontSize: 12,
-                                letterSpacing: '.06em', textTransform: 'uppercase',
-                                color: 'var(--kf-muted, #8A8F98)', fontWeight: 600,
-                            }}>
-                                Het gerecht zelf
-                            </div>
-                        )}
-                    <StapRegel
-                        stap={stap}
-                        herhaalDuur={(antwoorden.herhaalDuren ?? {})[stap.volgnummer]}
-                        akkoord={(antwoorden.akkoordOndanks ?? []).includes(stap.volgnummer)}
-                        zetHerhaalDuur={(min) => zetInvulling((i) => ({
-                            ...i,
-                            antwoorden: {
-                                ...i.antwoorden,
-                                herhaalDuren: { ...(i.antwoorden.herhaalDuren ?? {}), [stap.volgnummer]: min },
-                            },
-                        }))}
-                        zetAkkoord={() => zetInvulling((i) => ({
-                            ...i,
-                            antwoorden: {
-                                ...i.antwoorden,
-                                akkoordOndanks: [...new Set([...(i.antwoorden.akkoordOndanks ?? []), stap.volgnummer])],
-                            },
-                        }))}
-                    />
-                    </div>
-                ))}
-            </Blok>
+            <div style={{ marginTop: 22, marginBottom: 10 }}>
+                <div style={{
+                    fontSize: 11, fontWeight: 600, letterSpacing: '.14em',
+                    textTransform: 'uppercase', color: KLEUR.gedempt, marginBottom: 10,
+                }}>
+                    De stappen · {delen.length} {delen.length === 1 ? 'deel' : 'delen'} · {stappen.length} stappen
+                </div>
+                <ReceptuurLijst delen={delen} />
+            </div>
 
-            {(antwoorden.componenten?.length ?? 0) > 0 && (
-                <p style={{ marginTop: 14, fontSize: 13, color: 'var(--kf-muted, #8A8F98)', lineHeight: 1.5 }}>
-                    De bouwstenen worden aangemaakt met hun eigen stappen, maar nog zónder
-                    hoeveelheid en kostprijs — die weet niemand uit een kookboek. Koppel ze aan
-                    dit gerecht zodra je weet hoeveel er per portie in gaat; dan telt de
-                    kostprijs mee en kan de keuken ze vooruit maken.
-                </p>
-            )}
-
-            <div style={{ marginTop: 24, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ marginTop: 26, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button
                     type="button"
                     disabled={openstaand.length > 0 || bezigMetOpslaan}
                     onClick={bewaar}
                     style={{ ...knop, opacity: openstaand.length > 0 || bezigMetOpslaan ? .45 : 1 }}
                 >
-                    {bezigMetOpslaan ? 'Bezig…' : 'Opslaan in mijn gerechtenboek'}
+                    {bezigMetOpslaan ? 'Bezig…' : 'Goedkeuren en opslaan'}
                 </button>
                 <button type="button" onClick={opnieuw} style={knopLicht}>Opnieuw beginnen</button>
             </div>
 
-            {openstaand.length > 0 && (
-                <p style={{ marginTop: 12, color: 'var(--kf-muted, #8A8F98)', fontSize: 14 }}>
-                    Nog {openstaand.length} ding{openstaand.length === 1 ? '' : 'en'} te beslissen — bovenaan: {openstaand[0]}
-                </p>
-            )}
+            <p style={{ marginTop: 12, color: KLEUR.gedempt, fontSize: 14 }}>
+                {openstaand.length === 0
+                    ? `Alles beslist — ${(antwoorden.componenten ?? []).length} onderdeel(en) worden aangemaakt, `
+                        + `${controle.vervallen.length} stappen vervallen.`
+                    : `Nog ${openstaand.length} ding${openstaand.length === 1 ? '' : 'en'} te beslissen — bovenaan: ${openstaand[0]}`}
+            </p>
         </>
+    );
+}
+
+/* ── Onderdelen van de lade ─────────────────────────────────────── */
+
+function Keuze(props: {
+    vraag: string;
+    opties: string[];
+    gekozen: string | null;
+    isBovensteOpen: boolean;
+    kies: (optie: string) => void;
+}) {
+    const { vraag, opties, gekozen, isBovensteOpen, kies } = props;
+
+    /* Beantwoord? Dan krimpt hij tot één regel met het antwoord ernaast. */
+    if (gekozen) {
+        return (
+            <div style={{
+                display: 'flex', gap: 16, alignItems: 'baseline', justifyContent: 'space-between',
+                padding: '10px 0', borderBottom: `1px solid ${KLEUR.lijnZacht}`, flexWrap: 'wrap',
+            }}>
+                <span style={{ color: KLEUR.gedempt, fontSize: 14, flex: 1, minWidth: 200 }}>{vraag}</span>
+                <span style={{ fontWeight: 600 }}>{gekozen}</span>
+            </div>
+        );
+    }
+
+    return (
+        <div style={{
+            padding: isBovensteOpen ? '14px 16px' : '14px 0',
+            marginLeft: isBovensteOpen ? -16 : 0, marginRight: isBovensteOpen ? -16 : 0,
+            borderRadius: isBovensteOpen ? 10 : 0,
+            background: isBovensteOpen ? KLEUR.amberZacht : 'transparent',
+            borderBottom: isBovensteOpen ? 'none' : `1px solid ${KLEUR.lijnZacht}`,
+        }}>
+            <div style={{ marginBottom: 10, display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                {!isBovensteOpen && (
+                    <span style={{ color: '#c4a35a', fontSize: 18, lineHeight: 1 }} aria-hidden>•</span>
+                )}
+                <span>{vraag}</span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {opties.map((optie) => (
+                    <button key={optie} type="button" onClick={() => kies(optie)} style={knopKleinUit}>
+                        {optie}
+                    </button>
+                ))}
+            </div>
+        </div>
     );
 }
 
@@ -511,112 +557,175 @@ function ComponentKeuze(props: {
 }) {
     const { naam, keuze, eenheid, zetKeuze, zetEenheid } = props;
     return (
-        <div style={{ padding: '10px 0', borderBottom: '1px solid var(--kf-border, #2B2E33)' }}>
-            <div style={{ marginBottom: 6 }}><strong>{naam}</strong> bestaat nog niet als bouwsteen.</div>
+        <div style={{ padding: '12px 0', borderBottom: `1px solid ${KLEUR.lijnZacht}` }}>
+            <div style={{ marginBottom: 8, display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <strong>{naam}</strong>
+                {keuze === 'aanmaken' && (
+                    <span style={{ fontSize: 13, color: KLEUR.gedempt }}>wordt aangemaakt · eenheid {eenheid}</span>
+                )}
+                {keuze === 'overslaan' && (
+                    <span style={{ fontSize: 13, color: KLEUR.gedempt }}>overgeslagen · blijft vrije tekst in de stap</span>
+                )}
+            </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="button" onClick={() => zetKeuze('aanmaken')} style={keuze === 'aanmaken' ? knopKlein : knopKleinUit}>
                     Aanmaken
                 </button>
                 <button type="button" onClick={() => zetKeuze('overslaan')} style={keuze === 'overslaan' ? knopKlein : knopKleinUit}>
-                    Hoort bij dit gerecht
+                    Overslaan
                 </button>
                 {keuze === 'aanmaken' && (
-                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, color: 'var(--kf-muted, #8A8F98)' }}>
-                        kostprijs straks per
-                        <select
-                            value={eenheid}
-                            onChange={(e) => zetEenheid(e.target.value)}
-                            style={{
-                                padding: '4px 8px', borderRadius: 6, font: 'inherit', color: 'inherit',
-                                background: 'var(--kf-card, #1B1D21)', border: '1px solid var(--kf-border, #2B2E33)',
-                            }}
-                        >
-                            {EENHEDEN.map((e) => <option key={e} value={e}>{e}</option>)}
-                        </select>
-                    </label>
+                    <select
+                        value={eenheid}
+                        onChange={(e) => zetEenheid(e.target.value)}
+                        aria-label={`Eenheid voor ${naam}`}
+                        style={{
+                            padding: '6px 10px', borderRadius: 6, font: 'inherit', color: 'inherit',
+                            background: KLEUR.paneel, border: `1px solid ${KLEUR.lijn}`,
+                        }}
+                    >
+                        {EENHEDEN.map((e) => <option key={e} value={e}>{e}</option>)}
+                    </select>
                 )}
             </div>
         </div>
     );
 }
 
-function StapRegel(props: {
-    stap: GecontroleerdeStap;
-    herhaalDuur: number | undefined;
-    akkoord: boolean;
-    zetHerhaalDuur: (min: number) => void;
-    zetAkkoord: () => void;
-}) {
-    const { stap, herhaalDuur, akkoord, zetHerhaalDuur, zetAkkoord } = props;
-    const vraag = stap.oordeel === 'vraag' ? soortVraag(stap.bezwaar) : null;
+/* ── Van controle naar de gedeelde stappenlijst ─────────────────── */
 
-    const details = [
-        stap.actiefMin != null ? `${stap.actiefMin} min werk` : null,
-        stap.passiefMin != null ? `${formatWacht(stap.passiefMin)} wachten` : null,
-        stap.materieelNaam,
-        stap.tempC != null ? `${stap.tempC} °C` : null,
-        stap.kernTempC != null ? `klaar bij kern ${stap.kernTempC} °C` : null,
-        stap.herhaalIntervalMin != null ? `elke ${stap.herhaalIntervalMin} min iets doen` : null,
-        stap.duurOnbekend ? 'tijd wordt gemeten' : null,
-    ].filter(Boolean).join(' · ');
+function maakDelen(
+    stappen: GecontroleerdeStap[],
+    invulling: Invulling,
+    zetInvulling: (fn: (i: Invulling) => Invulling) => void,
+): DeelRegel[] {
+    const namen = [...new Set(stappen.map((s) => s.voorComponent ?? null))];
+    /* Delen eerst, het gerecht zelf als laatste — zo lees je het ook. */
+    namen.sort((a, b) => (a === null ? 1 : 0) - (b === null ? 1 : 0));
+
+    return namen.map((naam) => {
+        const rijen = stappen.filter((s) => (s.voorComponent ?? null) === naam);
+        const werk = rijen.reduce((a, s) => a + (s.actiefMin ?? 0), 0);
+        const wacht = rijen.reduce((a, s) => a + (s.passiefMin ?? 0), 0);
+        const zonder = rijen.filter((s) => s.duurOnbekend).length;
+        const apparaten = [...new Set(rijen.map((s) => s.materieelNaam).filter((n): n is string => n != null))];
+
+        const tijd = [
+            werk > 0 ? `${werk} min werk` : null,
+            wacht > 0 ? `${formatDuur(wacht)} wachten` : null,
+        ].filter(Boolean);
+
+        return {
+            sleutel: naam ?? '__gerecht',
+            naam: naam ?? 'Het gerecht zelf',
+            magVooruit: naam != null,
+            onderschrift: [`${rijen.length} ${rijen.length === 1 ? 'stap' : 'stappen'}`, ...apparaten].join(' · '),
+            bekendeTijd: tijd.length > 0
+                ? tijd.join(' · ') + (zonder > 0 ? ` · ${zonder} nog te meten` : '')
+                : 'wordt gemeten',
+            stappen: rijen.map((s) => maakStap(s, invulling, zetInvulling)),
+        };
+    });
+}
+
+function maakStap(
+    stap: GecontroleerdeStap,
+    invulling: Invulling,
+    zetInvulling: (fn: (i: Invulling) => Invulling) => void,
+): StapRegel {
+    const { antwoorden } = invulling;
+    const chips: StapChip[] = [];
+    if (stap.materieelNaam) chips.push({ tekst: stap.materieelNaam });
+    if (stap.tempC != null) chips.push({ tekst: `${stap.tempC} °C`, mono: true });
+    if (stap.kernTempC != null) chips.push({ tekst: `klaar bij kern ${stap.kernTempC} °C` });
+    if (stap.herhaalIntervalMin != null) chips.push({ tekst: `elke ${stap.herhaalIntervalMin} min iets doen` });
+    if (stap.hangtAfVanVolgnummer != null) {
+        chips.push({ tekst: `na stap ${stap.hangtAfVanVolgnummer}`, voorwaarde: true });
+    }
+
+    const getal = stap.passiefMin != null
+        ? { ...splitsDuur(stap.passiefMin), amber: true }
+        : stap.actiefMin != null
+            ? { ...splitsDuur(stap.actiefMin), amber: false }
+            : null;
+
+    const rechts = stap.passiefMin != null
+        ? (stap.herhaalIntervalMin != null ? 'wachten · blijf in de buurt' : 'wachten · je kunt weg')
+        : stap.actiefMin != null
+            ? 'werk'
+            : stap.kernTempC != null ? 'de kern beslist, niet de klok' : 'tijd wordt gemeten';
+
+    return {
+        id: String(stap.volgnummer),
+        nummer: stap.volgnummer,
+        tekst: stap.tekst,
+        chips,
+        getal,
+        rechts,
+        extra: <StapVraag stap={stap} invulling={invulling} zetInvulling={zetInvulling} antwoorden={antwoorden} />,
+    };
+}
+
+/** Wat er aan deze stap nog beslist moet worden, als dat er is. */
+function StapVraag(props: {
+    stap: GecontroleerdeStap;
+    invulling: Invulling;
+    zetInvulling: (fn: (i: Invulling) => Invulling) => void;
+    antwoorden: Antwoorden;
+}) {
+    const { stap, zetInvulling, antwoorden } = props;
+    if (stap.oordeel !== 'vraag') return null;
+
+    const akkoord = (antwoorden.akkoordOndanks ?? []).includes(stap.volgnummer);
+    const soort = soortVraag(stap.bezwaar);
+    const herhaalDuur = (antwoorden.herhaalDuren ?? {})[stap.volgnummer];
+
+    if (akkoord) {
+        return (
+            <div style={{ fontSize: 14, color: '#c4a35a' }}>Jij zegt: klopt toch.</div>
+        );
+    }
 
     return (
         <div style={{
-            display: 'flex', gap: 12, padding: '10px 0',
-            borderBottom: '1px solid var(--kf-border, #2B2E33)', alignItems: 'flex-start',
+            background: KLEUR.amberZacht, borderRadius: 10, padding: '12px 14px',
+            display: 'flex', flexDirection: 'column', gap: 10,
         }}>
-            <div style={{ width: 26, color: 'var(--kf-muted, #8A8F98)', fontVariantNumeric: 'tabular-nums' }}>
-                {stap.volgnummer}.
-            </div>
-            <div style={{ flex: 1 }}>
-                <div>{stap.tekst}</div>
-                {details && (
-                    <div style={{ fontSize: 13, color: 'var(--kf-muted, #8A8F98)', marginTop: 2 }}>{details}</div>
-                )}
+            <div style={{ fontSize: 14 }}>{stap.bezwaar}</div>
 
-                {vraag && !akkoord && (
-                    <div style={{ marginTop: 8, color: '#C9A14A', fontSize: 13 }}>{stap.bezwaar}</div>
-                )}
-                {akkoord && (
-                    <div style={{ marginTop: 8, fontSize: 13, color: 'var(--brand, #6B7A3F)' }}>
-                        Jij zegt: klopt toch.
-                    </div>
-                )}
+            {soort === 'herhaling' && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 13, color: KLEUR.gedempt }}>Hoe lang duurt het per keer?</span>
+                    <input
+                        type="number" min={1} max={(stap.herhaalIntervalMin ?? 60) - 1} placeholder="min"
+                        value={herhaalDuur ?? ''}
+                        onChange={(e) => zetInvulling((i) => ({
+                            ...i,
+                            antwoorden: {
+                                ...i.antwoorden,
+                                herhaalDuren: { ...(i.antwoorden.herhaalDuren ?? {}), [stap.volgnummer]: Number(e.target.value) },
+                            },
+                        }))}
+                        aria-label={`Duur per keer van stap ${stap.volgnummer}`}
+                        style={getal}
+                    />
+                    <span style={{ fontSize: 13, color: KLEUR.gedempt }}>elke {stap.herhaalIntervalMin} min</span>
+                </div>
+            )}
 
-                {/* Bij een herhaling gaat het om de duur pér keer. Zonder dit veld
-                    liep een stap als "elk half uur natspuiten" muurvast: de
-                    controle zag terecht dat het niet paste, maar er was geen plek
-                    om te zeggen dat het één minuut is. */}
-                {vraag === 'herhaling' && !akkoord && (
-                    <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, color: 'var(--kf-muted, #8A8F98)' }}>
-                            Hoe lang duurt het per keer?
-                        </span>
-                        <input
-                            type="number" min={1} max={(stap.herhaalIntervalMin ?? 60) - 1} placeholder="min"
-                            value={herhaalDuur ?? ''}
-                            onChange={(e) => zetHerhaalDuur(Number(e.target.value))}
-                            aria-label={`Duur per keer van stap ${stap.volgnummer} in minuten`}
-                            style={getal}
-                        />
-                        <span style={{ fontSize: 13, color: 'var(--kf-muted, #8A8F98)' }}>
-                            elke {stap.herhaalIntervalMin} min
-                        </span>
-                    </div>
-                )}
-
-                {/* Een oordeel is niet met een getal op te lossen. Dan beslist de
-                    kok, want die kent zijn keuken beter dan de controle. */}
-                {vraag && !akkoord && (
-                    <button
-                        type="button"
-                        onClick={zetAkkoord}
-                        style={{ ...knopKleinUit, marginTop: 8 }}
-                    >
-                        {vraag === 'oordeel' ? 'Klopt toch, laat maar staan' : 'Laat maar staan zoals hij staat'}
-                    </button>
-                )}
-            </div>
+            <button
+                type="button"
+                onClick={() => zetInvulling((i) => ({
+                    ...i,
+                    antwoorden: {
+                        ...i.antwoorden,
+                        akkoordOndanks: [...new Set([...(i.antwoorden.akkoordOndanks ?? []), stap.volgnummer])],
+                    },
+                }))}
+                style={{ ...knopKleinUit, alignSelf: 'flex-start' }}
+            >
+                {soort === 'oordeel' ? 'Klopt toch, laat maar staan' : 'Laat maar staan zoals hij staat'}
+            </button>
         </div>
     );
 }
@@ -626,13 +735,14 @@ function StapRegel(props: {
 function Blok({ titel, children }: { titel: string; children: React.ReactNode }) {
     return (
         <section style={{
-            marginTop: 20, padding: 16, borderRadius: 10,
-            background: 'var(--kf-card, #1B1D21)', border: '1px solid var(--kf-border, #2B2E33)',
+            marginTop: 16, padding: 20, borderRadius: 14,
+            background: KLEUR.paneel, border: `1px solid ${KLEUR.lijn}`,
+            borderTop: `1px solid ${KLEUR.goudlijn}`,
         }}>
-            <h3 style={{
-                fontSize: 12, letterSpacing: '.09em', textTransform: 'uppercase',
-                color: 'var(--kf-muted, #8A8F98)', marginBottom: 12, fontWeight: 600,
-            }}>{titel}</h3>
+            <h2 style={{
+                fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+                color: KLEUR.gedempt, margin: '0 0 14px', fontWeight: 600,
+            }}>{titel}</h2>
             {children}
         </section>
     );
@@ -641,46 +751,57 @@ function Blok({ titel, children }: { titel: string; children: React.ReactNode })
 function Melding({ soort, children }: { soort: 'fout' | 'goed'; children: React.ReactNode }) {
     return (
         <div style={{
-            padding: '12px 14px', borderRadius: 8, marginBottom: 16,
-            background: soort === 'fout' ? 'rgba(180,68,47,.14)' : 'rgba(107,122,63,.18)',
-            border: `1px solid ${soort === 'fout' ? '#B4442F' : 'var(--brand, #6B7A3F)'}`,
+            padding: '12px 14px', borderRadius: 10, marginBottom: 16,
+            background: soort === 'fout' ? 'rgba(180,68,47,.14)' : 'rgba(255,191,0,.12)',
+            border: `1px solid ${soort === 'fout' ? '#B4442F' : KLEUR.amber}`,
         }}>{children}</div>
     );
 }
 
 const knop: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 8, border: 'none',
-    background: 'var(--brand, #6B7A3F)', color: '#F5F3EE', font: 'inherit',
+    padding: '12px 22px', borderRadius: 10, border: 'none',
+    background: KLEUR.amber, color: '#17181A', font: 'inherit',
     fontWeight: 600, cursor: 'pointer', display: 'inline-block',
 };
 
 const knopLicht: React.CSSProperties = {
-    padding: '10px 18px', borderRadius: 8, border: '1px solid var(--kf-border, #2B2E33)',
+    padding: '12px 22px', borderRadius: 10, border: `1px solid ${KLEUR.lijn}`,
     background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer',
 };
 
 const knopKlein: React.CSSProperties = {
-    padding: '5px 12px', borderRadius: 6, border: '1px solid var(--brand, #6B7A3F)',
-    background: 'var(--brand, #6B7A3F)', color: '#F5F3EE', font: 'inherit',
-    fontSize: 13, cursor: 'pointer',
-};
-
-const getal: React.CSSProperties = {
-    width: 84, padding: '5px 8px', borderRadius: 6,
-    border: '1px solid var(--kf-border, #2B2E33)',
-    background: 'var(--kf-card, #1B1D21)', color: 'inherit', font: 'inherit',
+    padding: '7px 14px', borderRadius: 8, border: `1px solid ${KLEUR.amber}`,
+    background: KLEUR.amber, color: '#17181A', font: 'inherit', fontSize: 14, cursor: 'pointer',
 };
 
 const knopKleinUit: React.CSSProperties = {
-    ...knopKlein, background: 'transparent', color: 'inherit',
-    border: '1px solid var(--kf-border, #2B2E33)',
+    ...knopKlein, background: 'transparent', color: 'inherit', border: `1px solid ${KLEUR.lijn}`,
+};
+
+const getal: React.CSSProperties = {
+    width: 92, padding: '7px 10px', borderRadius: 8,
+    border: `1px solid ${KLEUR.lijn}`, background: KLEUR.paneel,
+    color: 'inherit', font: 'inherit',
 };
 
 /* ── Hulp ───────────────────────────────────────────────────────── */
 
-/** Vier uur wachten lees je niet als 240. */
-function formatWacht(min: number): string {
+function splitsDuur(min: number): { waarde: string; eenheid: string } {
+    if (min >= 1440 && min % 1440 === 0) {
+        const dagen = min / 1440;
+        return { waarde: String(dagen), eenheid: dagen === 1 ? 'dag' : 'dagen' };
+    }
+    if (min >= 90 && min % 60 === 0) return { waarde: String(min / 60), eenheid: 'uur' };
+    return { waarde: String(min), eenheid: 'min' };
+}
+
+function formatDuur(min: number): string {
     if (min < 90) return `${min} min`;
+    if (min >= 1440) {
+        const dagen = Math.floor(min / 1440);
+        const rest = Math.round((min % 1440) / 60);
+        return rest === 0 ? `${dagen} dagen` : `${dagen} d ${rest} u`;
+    }
     const uren = Math.floor(min / 60);
     const rest = min % 60;
     return rest === 0 ? `${uren} uur` : `${uren} u ${rest} min`;
@@ -690,8 +811,7 @@ function formatWacht(min: number): string {
  * Verklein een foto voor verzending.
  *
  * Een telefoonfoto van vier megapixel kost onnodig veel tokens en leest niet
- * beter dan één van 1600 pixels breed. Scheelt geld per recept en tijd per
- * aanroep.
+ * beter dan één van 1600 pixels breed.
  */
 async function verklein(bestand: File, maxZijde = 1600, kwaliteit = 0.85): Promise<string> {
     const bitmap = await createImageBitmap(bestand);
