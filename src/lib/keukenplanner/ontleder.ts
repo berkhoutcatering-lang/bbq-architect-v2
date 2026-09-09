@@ -107,6 +107,14 @@ export interface Voorstel {
     vervallen?: Array<{ tekst: string; reden: string }>;
     /** Waar de AI zelf niet uit kwam. Wordt letterlijk een vraag aan de kok. */
     keuzes?: Array<{ vraag: string; opties: string[] }>;
+    /**
+     * Staat er nóg een recept op deze pagina? Dan de naam ervan.
+     *
+     * Kookboeken zetten er vaak twee op één bladzij. De lezer werkt er één uit
+     * en noemt de ander hier, zodat de kok hem met één klik alsnog kan laten
+     * lezen — zonder opnieuw te fotograferen.
+     */
+    anderRecept?: string | null;
 }
 
 export type StapOordeel = 'akkoord' | 'vraag';
@@ -134,6 +142,8 @@ export interface Controle {
     ontbrekendeComponenten: string[];
     /** Waar de AI zelf niet uitkwam. Elk hiervan wordt een keuze op de lade. */
     keuzes: Array<{ vraag: string; opties: string[] }>;
+    /** Naam van het andere recept op dezelfde pagina, als dat er is. */
+    anderRecept: string | null;
     /** Alles wat de kok moet beslissen voordat dit opgeslagen mag worden. */
     vragen: string[];
     samenvatting: { actiefMin: number; passiefMin: number; stappen: number; zonderTijd: number };
@@ -389,6 +399,7 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
         vervallen: voorstel.vervallen ?? [],
         ontbrekendeComponenten: ontbrekend,
         keuzes: voorstel.keuzes ?? [],
+        anderRecept: voorstel.anderRecept?.trim() || null,
         vragen,
         samenvatting: {
             actiefMin: stappen.reduce((a, s) => a + (s.actiefMin ?? 0), 0),
@@ -655,6 +666,7 @@ HARDE REGELS
 3b. Twee soorten temperatuur, twee velden. \`tempC\` is wat het APPARAAT aanhoudt (smoker op 115, oven op 180, koeling op 4). \`kernTempC\` is de temperatuur van het PRODUCT waarbij de stap klaar is ("tot een kerntemperatuur van 88 °C"). Zet ze nooit in hetzelfde veld: een stap die op kerntemperatuur eindigt eindigt op de meter en niet op de klok, en dat verschil bepaalt of de kok om tien over twee teruggeroepen wordt of pas als het vlees er is. Noemt het recept allebei, vul dan allebei in.
 4. Splits actief en passief. Actief = de kok is bezig. Passief = het staat te doen en de kok kan weglopen. Een stap van "1 minuut aanzetten en dan een uur opwarmen" zijn twee stappen, geen één.
 5. Wat in het boek staat en hier vervalt, zet je in "vervallen" met de reden. Nooit stilzwijgend weglaten — de kok moet kunnen zien wat er anders ging.
+5b. Staan er twee recepten op één pagina — kookboeken doen dat vaak — werk dan alléén het bovenste of grootste uit en zet de naam van het andere in "anderRecept". Niet in "vervallen" (het is geen stap die vervalt) en niet als keuze (er valt niets te kiezen). De kok laat het tweede recept met één klik alsnog lezen.
 6. Onderdelen die het recept als apart recept behandelt (een pekel, een glaze, een salsa) horen in "componenten". Verwijst het recept naar een ander recept ("zie blz. 22"), zet dan isVerwijzing op true.
 6a. De stappenlijst is ÉÉN weg door het recept, niet alle mogelijke wegen. Biedt het boek een aftakking — "gaar tot 80 °C voor plakken, of door tot 87 °C als je hem wilt plukken" — schrijf dan de stappen voor één route (de eerste die het boek noemt) en zet de aftakking in "keuzes", met in de vraag wat er verandert als de kok de andere route kiest. Allebei de routes achter elkaar in de lijst zetten levert een plan op waarin het vlees twee keer gegaard wordt.
 6d. De naam van een component is alleen de naam: "Piggy Mix BBQ-kruiden", niet "Piggy Mix BBQ-kruiden (zie blz. 27)" en niet "(verwijzing naar apart recept)". Die naam blijft voor altijd in de bouwstenenlijst staan en moet in elk recept precies hetzelfde geschreven worden, anders krijg je tien keer hetzelfde spul zonder kostprijs.
@@ -682,6 +694,19 @@ WAT NOOIT EEN STAP IS
 - Lopen. Naar de koelcel, naar de smoker, terug naar de werkbank. De planner rekent looptijden zelf uit en bundelt gangen; staat het in het recept, dan kan hij dat niet meer.
 - Klaarleggen en opruimen rond één handeling. Snijplank pakken, mes pakken, bak neerzetten. Dat is opzettijd en hoort in de duur van de stap zelf.
 - "Verzamel de ingrediënten." Dat is geen handeling maar een zin uit een kookboek.
+
+DE HUISSTIJL AANBIEDEN, NOOIT OPLEGGEN
+
+Niet elk recept is een BBQ-recept, en een gehaktbal in bier wordt er geen door hem op houtskool te leggen. De hoofdregel blijft: hetzelfde gerecht, dezelfde kwaliteit, andere machines. Schrijf de stappen zoals het boek ze bedoelt.
+
+Maar soms ligt er wél iets voor de hand omdat de pelletgrill hier tóch staat en gratis rook maakt. Een stoofstuk dat uren op laag vuur staat kan eerst een uur rook krijgen; een braadstuk dat in de oven gaat kan net zo goed in de pelletgrill in ovenstand. Zie je zoiets, leg het dan voor in "keuzes" — nooit in de stappen.
+
+Drie voorwaarden, alle drie nodig:
+- het gaat om vlees dat lang gaart of bruint, niet om een saus, een deeg of een garnituur;
+- het verandert de smaak in de richting die dit huis wil, niet zomaar een ander apparaat;
+- de eerste optie is ALTIJD "houden zoals het boek het zegt". Wie twijfelt houdt het recept intact.
+
+Bied dit hooguit één keer per recept aan. Twee rookvragen in één gerecht is geen aanbod meer maar aandrang.
 
 SCHRIJFSTIJL
 Stappen in chef-taal: één handeling per regel, gebiedend, kort. "Vliezen van de buik afhalen", niet "Vervolgens dient men de vliezen te verwijderen".`;
@@ -744,6 +769,7 @@ const SCHEMA: Record<string, unknown> = {
                 properties: { tekst: { type: 'string' }, reden: { type: 'string' } },
             },
         },
+        anderRecept: { type: 'string' },
         keuzes: {
             type: 'array',
             items: {

@@ -761,3 +761,34 @@ describe('een receptuur kan uit delen bestaan', () => {
         expect(uit.stappen[0].oordeel).toBe('akkoord');
     });
 });
+
+describe('twee recepten op één pagina', () => {
+    /* De Italiaanse kookboeken zetten er standaard twee op een bladzij. De lezer
+       werkt er één uit en noemt de ander, zodat de kok hem met één klik alsnog
+       kan laten lezen zonder opnieuw te fotograferen. */
+    it('geeft de naam van het andere recept door', () => {
+        const uit = controleer(
+            {
+                gerechtNaam: 'Gehaktballen in bier', porties: 4,
+                anderRecept: 'Gesmoord rundvlees met uien',
+                stappen: [{ volgnummer: 1, tekst: 'Balletjes draaien', actiefMin: 10 }],
+            },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.anderRecept).toBe('Gesmoord rundvlees met uien');
+        /* Het is geen openstaande beslissing: opslaan mag gewoon. */
+        expect(openstaandeVragen(uit)).toHaveLength(0);
+    });
+
+    it('is leeg als er maar één recept staat', () => {
+        const uit = controleer(
+            {
+                gerechtNaam: 'Alleen dit', porties: 4,
+                anderRecept: '  ',
+                stappen: [{ volgnummer: 1, tekst: 'Iets doen', actiefMin: 5 }],
+            },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.anderRecept).toBeNull();
+    });
+});

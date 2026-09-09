@@ -156,6 +156,10 @@ async function main() {
         console.log(`\nCOMPONENTEN die nog niet bestaan: ${controle.ontbrekendeComponenten.join(', ')}`);
     }
 
+    if (controle.anderRecept) {
+        console.log(`\nOOK OP DEZE PAGINA: ${controle.anderRecept}`);
+    }
+
     if (controle.vragen.length > 0) {
         console.log('\nVRAGEN aan de kok:');
         for (const v of controle.vragen) console.log(`  ? ${v}`);

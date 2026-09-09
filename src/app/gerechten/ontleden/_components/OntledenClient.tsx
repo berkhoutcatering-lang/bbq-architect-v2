@@ -67,14 +67,21 @@ export default function OntledenClient() {
         setFotos((b) => [...b, ...nieuw].slice(0, 6));
     }, []);
 
-    async function ontleed() {
+    /* `welkRecept` is gevuld als de kok het tweede recept van dezelfde pagina
+       laat lezen. Dezelfde foto's, andere opdracht — geen nieuwe foto nodig. */
+    async function ontleed(welkRecept?: string) {
         setFase('bezig');
         setFout(null);
         try {
             const res = await fetch('/api/recipe/ontleed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fotos, opmerking }),
+                body: JSON.stringify({
+                    fotos,
+                    opmerking: welkRecept
+                        ? `Werk nu het recept "${welkRecept}" uit van deze pagina, niet het andere.${opmerking ? ` ${opmerking}` : ''}`
+                        : opmerking,
+                }),
             });
             const json = await res.json();
             if (!res.ok) {
@@ -163,6 +170,7 @@ export default function OntledenClient() {
                     bezigMetOpslaan={bezigMetOpslaan}
                     resultaat={resultaat}
                     bewaar={() => void bewaar()}
+                    leesAnder={(naam) => void ontleed(naam)}
                     opnieuw={() => { setFase('kiezen'); setControle(null); setResultaat(null); setFotos([]); }}
                 />
             )}
@@ -260,8 +268,9 @@ function Lade(props: {
     resultaat: { gerechtId: string; waarschuwing: string | null } | null;
     bewaar: () => void;
     opnieuw: () => void;
+    leesAnder: (naam: string) => void;
 }) {
-    const { controle, kosten, invulling, zetInvulling, openstaand, bezigMetOpslaan, resultaat, bewaar, opnieuw } = props;
+    const { controle, kosten, invulling, zetInvulling, openstaand, bezigMetOpslaan, resultaat, bewaar, opnieuw, leesAnder } = props;
     const s = controle.samenvatting;
     const { antwoorden } = invulling;
 
@@ -270,10 +279,22 @@ function Lade(props: {
             <>
                 <Melding soort="goed">Opgeslagen. {controle.gerechtNaam} staat nu in je gerechtenboek.</Melding>
                 {resultaat.waarschuwing && <Melding soort="fout">{resultaat.waarschuwing}</Melding>}
-                <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+                {/* Kookboeken zetten er vaak twee op één bladzij. Dezelfde foto
+                    nog een keer laten lezen scheelt opnieuw fotograferen. */}
+                {controle.anderRecept && (
+                    <p style={{ marginTop: 16, marginBottom: 0, color: 'var(--kf-muted, #8A8F98)' }}>
+                        Op deze pagina staat ook <strong>{controle.anderRecept}</strong>.
+                    </p>
+                )}
+                <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
                     <a href={`/gerechten/${resultaat.gerechtId}`} style={{ ...knop, textDecoration: 'none' }}>
                         Bekijk het gerecht
                     </a>
+                    {controle.anderRecept && (
+                        <button type="button" onClick={() => leesAnder(controle.anderRecept!)} style={knopLicht}>
+                            Lees ook: {controle.anderRecept}
+                        </button>
+                    )}
                     <button type="button" onClick={opnieuw} style={knopLicht}>Nog een recept</button>
                 </div>
             </>
@@ -318,6 +339,16 @@ function Lade(props: {
             {kosten && (
                 <p style={{ color: 'var(--kf-muted, #8A8F98)', fontSize: 13, marginBottom: 20 }}>
                     Dit lezen kostte € {(kosten.centen / 100).toFixed(2)}.
+                </p>
+            )}
+
+            {controle.anderRecept && (
+                <p style={{
+                    marginTop: 4, marginBottom: 0, fontSize: 13,
+                    color: 'var(--kf-muted, #8A8F98)',
+                }}>
+                    Op deze pagina staat ook <strong>{controle.anderRecept}</strong> — die kun je
+                    na het opslaan met één klik alsnog laten lezen.
                 </p>
             )}
 
