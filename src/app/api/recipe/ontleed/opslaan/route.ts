@@ -146,10 +146,15 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
     }
 
     /* Bouwstenen die al bestonden — een stap mag ook een bestaand onderdeel
-       maken, en dan hoort hij daaraan te hangen en niet aan dit ene gerecht. */
-    const verwezen = [...new Set(
-        controle.stappen.map((s) => s.voorComponent).filter((n): n is string => n != null),
-    )].filter((n) => !idVan.has(n.toLowerCase()));
+       maken, en dan hoort hij daaraan te hangen en niet aan dit ene gerecht.
+    
+       Óók de onderdelen waar alleen ingrediënten naar wijzen: de mayonaise hoort
+       bij de ranchsaus ook als de stappen van die saus al bestonden. Zonder dat
+       belandt de ingrediëntenlijst nergens en blijft de kostprijs nul. */
+    const verwezen = [...new Set([
+        ...controle.stappen.map((s) => s.voorComponent),
+        ...controle.ingredienten.map((i) => i.voorComponent),
+    ].filter((n): n is string => n != null))].filter((n) => !idVan.has(n.toLowerCase()));
 
     if (verwezen.length > 0) {
         const { data: bestaand } = await supabase
@@ -223,6 +228,52 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             await supabase.from('components').delete().in('id', zelfGemaakt).eq('organization_id', orgId);
         }
         return NextResponse.json({ error: `Stappen opslaan mislukte: ${stapFout.message}` }, { status: 500 });
+    }
+
+    /* De ingrediëntenlijst. Per onderdeel bij dat onderdeel, de rest bij het
+       gerecht. Hier komt de kostprijs uit — niet uit het model, dat leest alleen
+       "300 g mager rundergehakt" en laat het rekenen aan de catalogus over.
+    
+       Dit hoort bij het opslaan en niet bij het prijzen: eerst vastleggen wat er
+       in gaat, dan pas wat het kost. Zonder deze stap stonden alle bouwstenen op
+       € 0,00 zonder enige weg omhoog. */
+    const ingredientenVoorComponent = new Map<string, Array<Record<string, unknown>>>();
+    const eigenIngredienten: string[] = [];
+
+    for (const i of controle.ingredienten) {
+        const regel = {
+            naam: i.naam,
+            hoeveelheid: i.hoeveelheid ?? null,
+            eenheid: i.eenheid ?? null,
+        };
+        if (i.voorComponent) {
+            const sleutel = i.voorComponent.toLowerCase();
+            const lijst = ingredientenVoorComponent.get(sleutel) ?? [];
+            lijst.push(regel);
+            ingredientenVoorComponent.set(sleutel, lijst);
+        } else {
+            eigenIngredienten.push(
+                [i.hoeveelheid, i.eenheid, i.naam].filter(Boolean).join(' '),
+            );
+        }
+    }
+
+    for (const [sleutel, regels] of ingredientenVoorComponent) {
+        const componentId = idVan.get(sleutel);
+        if (componentId == null) continue;
+        await supabase
+            .from('components')
+            .update({ ingredients: regels })
+            .eq('id', componentId)
+            .eq('organization_id', orgId);
+    }
+
+    if (eigenIngredienten.length > 0) {
+        await supabase
+            .from('gerechten')
+            .update({ ingredienten: eigenIngredienten })
+            .eq('id', gerecht.id)
+            .eq('organization_id', orgId);
     }
 
     /* 4 — Volgorde-afhankelijkheden. Pas nu te leggen, want de id's bestonden

@@ -159,6 +159,14 @@ async function main() {
         console.log(`\nCOMPONENTEN die nog niet bestaan: ${controle.ontbrekendeComponenten.join(', ')}`);
     }
 
+    if (controle.ingredienten.length > 0) {
+        console.log(`\nINGREDIENTEN (${controle.ingredienten.length}):`);
+        for (const i of controle.ingredienten) {
+            const deel = i.voorComponent ? `  «${i.voorComponent}»` : '';
+            console.log(`  ${String(i.hoeveelheid ?? '—').padStart(6)} ${(i.eenheid ?? '').padEnd(5)} ${i.naam}${deel}`);
+        }
+    }
+
     if (controle.anderRecept) {
         console.log(`\nOOK OP DEZE PAGINA: ${controle.anderRecept}`);
     }

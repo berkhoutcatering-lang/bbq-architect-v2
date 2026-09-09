@@ -134,29 +134,51 @@ export function pickBestMatch(
     ingredientName: string,
     candidates: CostCandidate[],
     floor = 0.45,
+    /**
+     * De eenheid uit het recept ("g", "ml", "stuk").
+     *
+     * Meegeven loont: Bidfood heeft "Karnemelk, pak 1 ltr" per ml én Makro
+     * "Campina Karnemelk 1 l" per stuk. Op naam scoren die vrijwel gelijk, en
+     * zonder deze hint won de tweede — waarna de regel afketste op "eenheid
+     * onvergelijkbaar" terwijl de goede prijs gewoon in huis was. Bij een
+     * gelijkwaardige naam wint het product waarvan de eenheid past.
+     */
+    ingredientUnit?: string | null,
 ): MatchResult | null {
+    const gewenst = ingredientUnit ? toBaseUnit(ingredientUnit)?.base ?? null : null;
+
+    /* Hoeveel naam-score een passende eenheid waard is. Klein genoeg dat een
+       duidelijk betere naam nog steeds wint — "zure room" mag nooit verliezen
+       van "room" omdat die toevallig in grammen staat. */
+    const EENHEID_BONUS = 0.08;
+
     let best: MatchResult | null = null;
+    let besteGewogen = -Infinity;
+
     for (const c of candidates) {
         const score = nameScore(ingredientName, c.name);
         if (score < floor) continue;
-        if (
-            !best ||
-            score > best.score ||
-            (score === best.score && SOURCE_RANK[c.source] > SOURCE_RANK[best.candidate.source])
-        ) {
+
+        const past = gewenst != null && c.baseUnit === gewenst;
+        const gewogen = score + (past ? EENHEID_BONUS : 0);
+
+        const beter = gewogen > besteGewogen
+            || (gewogen === besteGewogen && best != null
+                && SOURCE_RANK[c.source] > SOURCE_RANK[best.candidate.source]);
+
+        if (best == null || beter) {
             /* Staart-match → altijd 'laag', ook bij een hoge score. Anders
                presenteert een knäckebröd-met-zeezout zich als zekere zout-match. */
             const confidence = isTailOnlyMatch(ingredientName, c.name)
                 ? 'laag'
                 : confidenceFromScore(score);
             best = { candidate: c, score, confidence };
+            besteGewogen = gewogen;
         }
     }
     return best;
 }
 
-/* ── Eenheid-conversie ────────────────────────────────────────────────────
-   Alles naar één base-eenheid: g / ml / stuk. */
 export function toBaseUnit(unit: string): { base: BaseUnit; factor: number } | null {
     const u = (unit || '').toLowerCase().trim();
     switch (u) {

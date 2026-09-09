@@ -91,6 +91,22 @@ export interface VoorstelStap {
     wachtOpKeuze?: string | null;
 }
 
+/**
+ * Eén regel uit de ingrediëntenlijst van het boek.
+ *
+ * Dit is lézen, geen verzinnen. "300 g mager rundergehakt" staat er letterlijk;
+ * de kostprijs die daaruit volgt komt uit de catalogus en niet uit het model.
+ * Die twee dingen zaten aanvankelijk onder één verbod, en daardoor stond elke
+ * bouwsteen op € 0,00 zonder enige weg omhoog.
+ */
+export interface VoorstelIngredient {
+    naam: string;
+    hoeveelheid?: number | null;
+    eenheid?: string | null;
+    /** Bij welk onderdeel dit hoort. Leeg = bij het gerecht zelf. */
+    voorComponent?: string | null;
+}
+
 export interface VoorstelComponent {
     naam: string;
     /** Verwijst het recept naar een ander recept ("zie blz. 22")? */
@@ -102,6 +118,8 @@ export interface Voorstel {
     gerechtNaam: string;
     porties?: number | null;
     componenten?: VoorstelComponent[];
+    /** De ingrediëntenlijst, per onderdeel. Waar de kostprijs uit volgt. */
+    ingredienten?: VoorstelIngredient[];
     stappen: VoorstelStap[];
     /** Stappen uit het boek die hier vervallen, met de reden. */
     vervallen?: Array<{ tekst: string; reden: string }>;
@@ -140,6 +158,8 @@ export interface Controle {
     stappen: GecontroleerdeStap[];
     vervallen: Array<{ tekst: string; reden: string }>;
     ontbrekendeComponenten: string[];
+    /** De ingrediënten, met de naam van het onderdeel waar ze bij horen. */
+    ingredienten: VoorstelIngredient[];
     /** Waar de AI zelf niet uitkwam. Elk hiervan wordt een keuze op de lade. */
     keuzes: Array<{ vraag: string; opties: string[] }>;
     /** Naam van het andere recept op dezelfde pagina, als dat er is. */
@@ -405,6 +425,10 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
         stappen,
         vervallen: voorstel.vervallen ?? [],
         ontbrekendeComponenten: ontbrekend,
+        ingredienten: (voorstel.ingredienten ?? []).map((i) => ({
+            ...i,
+            voorComponent: i.voorComponent ? normaliseerComponentnaam(i.voorComponent) : null,
+        })),
         keuzes: voorstel.keuzes ?? [],
         anderRecept: voorstel.anderRecept?.trim() || null,
         vragen,
@@ -688,6 +712,7 @@ HARDE REGELS
 7. Weet je iets niet zeker en verandert het antwoord het gerecht — bijvoorbeeld of iets gerookt moet worden — zet het dan in "keuzes" met de opties. Vraag liever dan te gokken.
 6e. Maken de stappen een onderdeel dat je daarna in het gerecht gebruikt — een kruidenmengsel, een saus, een salsa, een pekel — zet dan bij díe stappen "voorComponent" op de naam van dat onderdeel uit "componenten". Dat is niet cosmetisch: een kruidenmengsel van tien minuten hoeft niet op de dag zelf, en pas als de stap aan de bouwsteen hangt mag de planner hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander gerecht. Stappen die het gerecht zelf maken laat je leeg.
 7b. Leg je een keuze voor die een stap onvolledig laat — een temperatuur die nog gekozen moet worden, een gaarheid die het eindpunt bepaalt — zet dan in die stap "wachtOpKeuze" op de exacte vraagtekst van die keuze. Anders vraagt het systeem er nog een tweede keer naar en staat dezelfde beslissing twee keer op de lijst.
+7c. Neem de ingrediëntenlijst over in "ingredienten": naam, hoeveelheid en eenheid zoals ze in het boek staan ("300 g mager rundergehakt" wordt naam "mager rundergehakt", hoeveelheid 300, eenheid "g"). Hoort een ingrediënt bij een onderdeel — de mayonaise bij de ranchsaus — zet dan voorComponent op de naam van dat onderdeel. Dit is lézen en geen verzinnen: staat er geen hoeveelheid, laat hem leeg. Hieruit rolt straks de kostprijs uit de leverancierscatalogus, dus een naam die je zelf mooier maakt kost geld.
 8. Geen allergenen, geen kostprijzen, geen productiehoeveelheden. Die komen ergens anders vandaan.
 9. Houd de werkplek consistent. Snijden, mengen en portioneren gebeuren op dezelfde werkbank tenzij het recept een reden geeft om te verkassen. Eén productie die halverwege van de keukenwerkbank naar de aanhanger springt en weer terug is geen vertaling maar een slordigheid, en de planner rekent er looptijd voor.
 
@@ -780,6 +805,20 @@ const SCHEMA: Record<string, unknown> = {
                 additionalProperties: false,
                 required: ['tekst', 'reden'],
                 properties: { tekst: { type: 'string' }, reden: { type: 'string' } },
+            },
+        },
+        ingredienten: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['naam'],
+                properties: {
+                    naam: { type: 'string' },
+                    hoeveelheid: { type: 'number' },
+                    eenheid: { type: 'string' },
+                    voorComponent: { type: 'string' },
+                },
             },
         },
         anderRecept: { type: 'string' },
