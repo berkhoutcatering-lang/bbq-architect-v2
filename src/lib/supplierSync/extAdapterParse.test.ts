@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // Importeert de EXTENSIE-adapter-helpers rechtstreeks (één bron van waarheid).
 import { toDecimalString, parsePackaging } from '../../../chrome-extension/adapters/lib/parse.js';
+import { bidfoodPackText } from '../../../chrome-extension/adapters/bidfood.js';
 
 describe('extension adapter — toDecimalString', () => {
     it('NL en internationale notatie → canonieke decimale string', () => {
@@ -116,5 +117,41 @@ describe('extension adapter — parsePackaging (§14.2 bronvelden)', () => {
         /* Deze horen in de wachtkamer thuis; een gok is erger dan een gat. */
         expect(parsePackaging('Houtduif, per stuk').priceBasis).not.toBe('package');
         expect(parsePackaging('Spareribs sous-vide gegaard, krat 8 x 3 ribben').priceBasis).toBe('unknown');
+    });
+});
+
+/**
+ * Bidfood beschrijft een omdoos in twee helften: "40 gr per zakje, doos 12
+ * zakjes". Wie alleen de eerste helft leest houdt 40 gram over terwijl de prijs
+ * over 480 gram gaat. Op 9 september 2026 stond 45% van alle producten met een
+ * graminhoud daardoor boven de 150 euro per kilo — zalmfilet op 554, kipdij­
+ * shoarma op 338. Deze helper zet de twee helften weer bij elkaar.
+ */
+describe('bidfoodPackText — omdoos uit de productnaam', () => {
+    it('telt stuks maal stukgewicht', () => {
+        expect(bidfoodPackText('Zalmfilet zonder vel vacuüm ASC 180 gr per stuk, doos 25 stuks'))
+            .toBe('25 × 180 g');
+    });
+
+    it('herkent ook zakje, cupje en bus als inhoudswoord', () => {
+        expect(bidfoodPackText('Peper sticks 0,2 gr per zakje, doos 750 zakjes')).toBe('750 × 0,2 g');
+        expect(bidfoodPackText('Mayonaise 25 gr per cupje, doos 100 cupjes')).toBe('100 × 25 g');
+        expect(bidfoodPackText('Chips hot & spicy 40 gr per bus, tray 12 bussen')).toBe('12 × 40 g');
+    });
+
+    it('een genoemd totaal wint van het stukgewicht', () => {
+        /* "20 gr per stuk, zak 1 kg" — de zak is de verpakking, het stukgewicht
+           een bijzin. Zonder deze regel lees je 20 gram: vijftig keer te weinig. */
+        expect(bidfoodPackText('Plantaardige kipnuggets 20 gr per stuk, zak 1 kg')).toBe('1 kg');
+        expect(bidfoodPackText('Rundergehaktbal Albondigas ca. 30 gr per stuk, doos 5 kg')).toBe('5 kg');
+    });
+
+    it('laat een naam zonder omdoos met rust', () => {
+        expect(bidfoodPackText('Paprikapoeder, bus 500 gr')).toBe('Paprikapoeder, bus 500 gr');
+    });
+
+    it('leest het aantal ná de inhoudsmaat, niet ervoor', () => {
+        /* Anders wordt "12 gr per stuk" zelf als aantal gelezen. */
+        expect(bidfoodPackText('Bonbon 12 gr per stuk, doos 40 stuks')).toBe('40 × 12 g');
     });
 });
