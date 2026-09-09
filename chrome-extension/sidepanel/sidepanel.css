@@ -68,3 +68,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .advanced summary { cursor: pointer; padding: 8px 0; font-size: 13px; color: var(--muted); }
 .adv-body { padding-bottom: 10px; }
 .diag { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); white-space: pre-wrap; margin-top: 8px; }
+
+/* Welke categorie de run als startpunt neemt. Staat boven de startknop, want
+   daarna is het twintig minuten te laat. */
+.scan-scope { margin-bottom: 8px; }
+.scan-scope.warn { color: var(--warn); }

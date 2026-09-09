@@ -193,6 +193,46 @@ function renderSample(sample) {
     box.classList.remove('hidden');
 }
 
+
+/**
+ * Welke categorie gaan we scannen?
+ *
+ * De run begint bij de pagina waar je op staat, maar dat stond nergens — dus
+ * kon je twintig minuten wachten om te ontdekken dat hij sauzen had gedaan
+ * terwijl je op chocolade stond. Nu zie je het vóór je op start drukt.
+ */
+function categorieUitUrl(url) {
+    try {
+        const p = new URL(url).pathname;
+        const m = /\/assortiment\/([a-z0-9-]+)/i.exec(p);
+        if (m) return m[1].replace(/-/g, ' ');
+        if (/\/webshop\/?$/.test(p)) return 'het hele assortiment';
+        return null;
+    } catch (e) { return null; }
+}
+
+async function toonCategorie() {
+    const regels = document.querySelectorAll('.scan-scope');
+    if (!regels.length) return;
+    let tekst = '';
+    let onbekend = true;
+    try {
+        const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        const url = tabs && tabs[0] && tabs[0].url;
+        const cat = url ? categorieUitUrl(url) : null;
+        onbekend = !cat;
+        tekst = cat
+            ? `Start bij: ${cat}`
+            : 'Ga eerst naar de categorie die je wilt inlezen.';
+    } catch (e) {
+        tekst = '';
+    }
+    for (const el of regels) {
+        el.textContent = tekst;
+        el.classList.toggle('warn', onbekend);
+    }
+}
+
 async function startSync() {
     banner('info', 'Sync starten…');
     const res = await sendCmd('BBQ_V2_START', {
@@ -208,6 +248,12 @@ async function startSync() {
     show('s-progress');
     return true;
 }
+
+/* Bijwerken zodra je van tabblad of pagina wisselt, anders staat er een
+   categorie waar je allang niet meer bent. */
+chrome.tabs.onActivated.addListener(() => { toonCategorie(); });
+chrome.tabs.onUpdated.addListener((_id, info) => { if (info.url) toonCategorie(); });
+toonCategorie();
 
 $('btn-start').addEventListener('click', async () => {
     $('btn-start').disabled = true;
