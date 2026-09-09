@@ -15,6 +15,7 @@
 import { useCallback, useRef, useState } from 'react';
 import {
     openstaandeVragen,
+    metKeuzesVerwerkt,
     soortVraag,
     type Controle,
     type GecontroleerdeStap,
@@ -390,8 +391,11 @@ function Lade(props: {
                 </Blok>
             )}
 
+            {/* De stappen zoals ze straks worden opgeslagen — dus mét de
+                temperatuur die uit een beantwoorde keuze volgt. Wat het systeem
+                zelf invult moet je kunnen zien voordat je op opslaan drukt. */}
             <Blok titel="De stappen">
-                {controle.stappen.map((stap) => (
+                {metKeuzesVerwerkt(controle, antwoorden).map((stap) => (
                     <StapRegel
                         key={stap.volgnummer}
                         stap={stap}

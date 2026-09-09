@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    controleer, magOpslaan, openstaandeVragen, inventarisVoorPrompt, isPlanbaar, type Voorstel,
+    controleer, magOpslaan, openstaandeVragen, metKeuzesVerwerkt, temperatuurUitKeuze,
+    inventarisVoorPrompt, isPlanbaar, type Voorstel,
 } from './ontleder';
 import type { ApparaatMetKundes } from './estafette';
 
@@ -667,5 +668,55 @@ describe('een toestel houdt zijn stand vast', () => {
             { apparaten: APPARATEN },
         );
         expect(uit.stappen[2].tempC).toBe(220);
+    });
+});
+
+describe('een beantwoorde keuze belandt in de stap', () => {
+    /* Zonder dit bewaarde het gerecht netjes "150 °C" als beslissing en had het
+       tegelijk een stap zonder temperatuur — het antwoord stond dan wel in de
+       database maar niet waar de planner kijkt. */
+    const PORCHETTA: Voorstel = {
+        gerechtNaam: 'Porchetta', porties: 12,
+        stappen: [{
+            volgnummer: 1, tekst: 'Indirect garen tot kern 64 °C',
+            materieelId: 21, kernTempC: 64, passiefMin: 300,
+            wachtOpKeuze: 'Op welke grilltemperatuur?',
+        }],
+        keuzes: [{
+            vraag: 'Op welke grilltemperatuur?',
+            opties: ['150 °C indirect — circa 5 à 6 uur tot 64 °C', '130 °C indirect — langzamer'],
+        }],
+    };
+
+    it('pakt de waarde vooraan uit de gekozen optie', () => {
+        expect(temperatuurUitKeuze('150 °C indirect — circa 5 à 6 uur tot 64 °C')).toBe(150);
+        expect(temperatuurUitKeuze('Niet draaien, stil laten liggen')).toBeNull();
+    });
+
+    it('zet die temperatuur in de stap die erop wachtte', () => {
+        const uit = controleer(PORCHETTA, { apparaten: APPARATEN });
+        expect(uit.stappen[0].tempC).toBeUndefined();
+
+        const verwerkt = metKeuzesVerwerkt(uit, {
+            keuzes: { 'Op welke grilltemperatuur?': '150 °C indirect — circa 5 à 6 uur tot 64 °C' },
+        });
+        expect(verwerkt[0].tempC).toBe(150);
+        expect(verwerkt[0].kernTempC).toBe(64);
+    });
+
+    it('laat een stap met een eigen temperatuur met rust', () => {
+        const metEigen = controleer(
+            { ...PORCHETTA, stappen: [{ ...PORCHETTA.stappen[0], tempC: 175 }] },
+            { apparaten: APPARATEN },
+        );
+        const verwerkt = metKeuzesVerwerkt(metEigen, {
+            keuzes: { 'Op welke grilltemperatuur?': '150 °C indirect — circa 5 à 6 uur tot 64 °C' },
+        });
+        expect(verwerkt[0].tempC).toBe(175);
+    });
+
+    it('doet niets zolang er niet gekozen is', () => {
+        const uit = controleer(PORCHETTA, { apparaten: APPARATEN });
+        expect(metKeuzesVerwerkt(uit)[0].tempC).toBeUndefined();
     });
 });

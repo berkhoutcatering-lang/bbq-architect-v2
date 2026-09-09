@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
-import { openstaandeVragen, type Controle, type Antwoorden } from '@/lib/keukenplanner/ontleder';
+import { openstaandeVragen, metKeuzesVerwerkt, type Controle, type Antwoorden } from '@/lib/keukenplanner/ontleder';
 
 export const runtime = 'nodejs';
 
@@ -80,6 +80,12 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
             porties: controle.porties ?? antwoorden.porties ?? 10,
             bron: 'ai',
             status: 'concept',
+            /* De beslissingen die de kok nam, met de vraag erbij. Zonder dit is
+               over een half jaar niet meer te achterhalen waarom de porchetta
+               op 150 °C staat en niet op 130. */
+            keuzes: controle.keuzes
+                .map((k) => ({ vraag: k.vraag, antwoord: (antwoorden.keuzes ?? {})[k.vraag] ?? null }))
+                .filter((k) => k.antwoord != null),
         })
         .select('id')
         .single();
@@ -96,7 +102,9 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     /* Duren worden niet meer gevraagd: hoe lang 2,5 kg procureur over kern 88
        doet weet je pas als je het gemeten hebt. Wat het recept noemt gaat mee,
        de rest blijft leeg en komt uit het leerspoor. */
-    const rijen = controle.stappen.map((s) => {
+    /* De gekozen antwoorden staan hier al ín de stappen: kiest de kok 150 °C,
+       dan gaat die 150 mee als temp_doel_c en niet alleen als losse notitie. */
+    const rijen = metKeuzesVerwerkt(controle, antwoorden).map((s) => {
         return {
             organization_id: orgId,
             gerecht_id: gerecht.id,

@@ -18,6 +18,8 @@ import { createServerSupabase } from '@/lib/supabase-server';
 interface Props {
     gerechtId: string;
     organizationId: string;
+    /** Wat de kok besloot toen dit recept werd ingevoerd. */
+    keuzes?: Array<{ vraag: string; antwoord: string }> | null;
 }
 
 interface StapRij {
@@ -36,7 +38,7 @@ interface StapRij {
     duur_bron: string | null;
 }
 
-export default async function Receptuur({ gerechtId, organizationId }: Props) {
+export default async function Receptuur({ gerechtId, organizationId, keuzes }: Props) {
     const sb = await createServerSupabase();
 
     const { data: stappen } = await sb
@@ -105,6 +107,20 @@ export default async function Receptuur({ gerechtId, organizationId }: Props) {
                         + (zonderTijd > 0 ? ` · de andere ${zonderTijd} worden gemeten` : '')}
                 {gemeten > 0 && ` · ${gemeten} al echt gemeten`}
             </p>
+
+            {/* Waarom staat de porchetta op 150 °C en niet op 130? Omdat je dat
+                gekozen hebt. Zonder dit blokje is dat over een half jaar niet
+                meer te achterhalen. */}
+            {(keuzes?.length ?? 0) > 0 && (
+                <div style={{ padding: '10px 16px 0' }}>
+                    {keuzes!.map((k) => (
+                        <div key={k.vraag} style={{ fontSize: 13, marginBottom: 6 }}>
+                            <span style={{ color: 'var(--color-text-muted, #9ca3af)' }}>{k.vraag} </span>
+                            <strong>{k.antwoord}</strong>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             <ol style={{ listStyle: 'none', padding: '8px 0 12px', margin: 0 }}>
                 {rijen.map((r) => {

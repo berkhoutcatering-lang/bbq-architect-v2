@@ -462,6 +462,45 @@ export interface Antwoorden {
 }
 
 /**
+ * De temperatuur uit een gekozen optie halen.
+ *
+ * De AI schrijft zijn opties met de waarde vooraan: "150 °C indirect —
+ * vergelijkbaar met het matig hete vuur, circa 5 à 6 uur tot 64 °C". Het eerste
+ * getal is de keuze, de rest is uitleg. Daarom het éérste getal en niet het
+ * enige — anders levert die 64 verderop een lege uitkomst op.
+ *
+ * Wat hieruit komt wordt op de lade getoond vóórdat er wordt opgeslagen. Een
+ * getal dat het systeem zelf invult moet je kunnen zien, anders is het alsnog
+ * een stille aanname.
+ */
+export function temperatuurUitKeuze(optie: string): number | null {
+    const m = /(\d{2,3})\s*°\s*C/.exec(optie);
+    if (!m) return null;
+    const waarde = Number(m[1]);
+    return waarde >= 40 && waarde <= 300 ? waarde : null;
+}
+
+/**
+ * De antwoorden van de kok in de stappen zetten.
+ *
+ * Zonder dit staat het antwoord wél in de database maar niet waar de planner
+ * kijkt: de porchetta zou zijn keuze "150 °C" netjes bewaren en tegelijk een
+ * stap hebben zonder temperatuur. Eén plek, gebruikt door het scherm om te tonen
+ * wat er gaat gebeuren en door de opslagroute om het te schrijven.
+ */
+export function metKeuzesVerwerkt(controle: Controle, antwoorden: Antwoorden = {}): GecontroleerdeStap[] {
+    const gekozen = antwoorden.keuzes ?? {};
+
+    return controle.stappen.map((stap) => {
+        if (stap.wachtOpKeuze == null || stap.tempC != null) return stap;
+        const antwoord = gekozen[stap.wachtOpKeuze];
+        if (!antwoord) return stap;
+        const temp = temperatuurUitKeuze(antwoord);
+        return temp == null ? stap : { ...stap, tempC: temp };
+    });
+}
+
+/**
  * Wat voor soort vraag is dit, en dus: met wát kun je hem beantwoorden?
  *
  * Het scherm moet weten of het een getalveld moet tonen of een oordeel moet

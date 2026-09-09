@@ -50,7 +50,7 @@ export default async function GerechtDetailPage({ params }: PageProps) {
     /* Gerecht ophalen (RLS doet tenant-check, .single() faalt als niet gevonden) */
     const { data: gerecht, error } = await sb
         .from('gerechten')
-        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug')
+        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug, keuzes')
         .eq('id', id)
         .eq('organization_id', orgId)
         .maybeSingle();
@@ -109,7 +109,11 @@ export default async function GerechtDetailPage({ params }: PageProps) {
 
             {/* De werkwijze zelf. Verschijnt alleen als er stappen zijn — de
                 meeste gerechten hebben er nog geen. */}
-            <Receptuur gerechtId={String(gerecht.id)} organizationId={orgId} />
+            <Receptuur
+                gerechtId={String(gerecht.id)}
+                organizationId={orgId}
+                keuzes={gerecht.keuzes as Array<{ vraag: string; antwoord: string }> | null}
+            />
 
             <section style={{ marginTop: 32, fontSize: 13, color: 'var(--color-text-muted)' }}>
                 <p>
