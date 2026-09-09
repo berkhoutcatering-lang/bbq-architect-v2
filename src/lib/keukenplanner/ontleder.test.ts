@@ -720,3 +720,44 @@ describe('een beantwoorde keuze belandt in de stap', () => {
         expect(metKeuzesVerwerkt(uit)[0].tempC).toBeUndefined();
     });
 });
+
+describe('een receptuur kan uit delen bestaan', () => {
+    /* Mathijs, 9 sep: "recepturen moeten uit delen KUNNEN bestaan — stel ik ga
+       pulled pork maken en het kruiden mengen kost 10 min, dan kan dat ook
+       eerder." Zolang die stap aan het gerecht hangt kan de planner hem niet
+       vooruittrekken; aan de bouwsteen wel. */
+    const MET_DEEL: Voorstel = {
+        gerechtNaam: 'Pulled pork', porties: 20,
+        componenten: [{ naam: 'Piggy Mix BBQ-kruiden (zie blz. 27)' }],
+        stappen: [
+            { volgnummer: 1, tekst: 'Specerijen afwegen en mengen', actiefMin: 10, voorComponent: 'Piggy Mix BBQ-kruiden (zie blz. 27)' },
+            { volgnummer: 2, tekst: 'Schouder inwrijven met de kruiden', actiefMin: 5 },
+        ],
+    };
+
+    it('houdt de deelstappen los van het gerecht', () => {
+        const uit = controleer(MET_DEEL, { apparaten: APPARATEN });
+        expect(uit.stappen[0].voorComponent).toBe('Piggy Mix BBQ-kruiden');
+        expect(uit.stappen[1].voorComponent).toBeNull();
+        expect(uit.stappen.every((s) => s.oordeel === 'akkoord')).toBe(true);
+    });
+
+    it('vraagt door als de stap naar een onderdeel wijst dat nergens staat', () => {
+        /* Anders belandt die stap nergens: niet bij het gerecht en niet bij de
+           bouwsteen. */
+        const uit = controleer(
+            { ...MET_DEEL, componenten: [] },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.stappen[0].oordeel).toBe('vraag');
+        expect(uit.stappen[0].bezwaar).toContain('staat niet bij de onderdelen');
+    });
+
+    it('herkent het onderdeel ook als het anders geciteerd is', () => {
+        const uit = controleer(
+            { ...MET_DEEL, componenten: [{ naam: 'Piggy Mix BBQ-kruiden' }] },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.stappen[0].oordeel).toBe('akkoord');
+    });
+});

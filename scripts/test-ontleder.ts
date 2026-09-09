@@ -27,7 +27,7 @@ for (const regel of readFileSync('.env.local', 'utf8').split('\n')) {
     if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
 }
 
-const paden = process.argv.slice(2);
+const paden = process.argv.slice(2).filter((a, i, alle) => !a.startsWith('--') && alle[i - 1] !== '--bewaar');
 if (paden.length === 0) {
     console.error('Geef minstens één foto mee.');
     process.exit(1);
@@ -136,6 +136,7 @@ async function main() {
             s.passiefMin != null ? `${s.passiefMin}p` : null,
         ].filter(Boolean).join('/') || '—';
         const waar = s.materieelNaam ? ` @ ${s.materieelNaam}` : '';
+        const deel = s.voorComponent ? `  «${s.voorComponent}»` : '';
         const temp = [
             s.tempC != null ? `${s.tempC}°C` : null,
             s.kernTempC != null ? `kern ${s.kernTempC}°C` : null,
@@ -143,7 +144,7 @@ async function main() {
         ].filter(Boolean).map((t) => ` ${t}`).join('');
         const vlag = s.oordeel === 'vraag' ? '  ⟵ ' + s.bezwaar
             : s.wachtOpKeuze ? '  ⟵ wacht op keuze' : '';
-        console.log(`${String(s.volgnummer).padStart(2)}. [${tijd.padStart(9)}] ${s.tekst}${waar}${temp}${vlag}`);
+        console.log(`${String(s.volgnummer).padStart(2)}. [${tijd.padStart(9)}] ${s.tekst}${deel}${waar}${temp}${vlag}`);
     }
 
     if (controle.vervallen.length > 0) {
@@ -162,6 +163,15 @@ async function main() {
 
     const oordeel = magOpslaan(controle);
     console.log(`\nOpslaan: ${oordeel.mag ? 'mag' : 'nog niet'} — ${oordeel.reden}`);
+
+    /* Met --bewaar <pad> valt het voorstel op schijf, zodat de opslagroute
+       getest kan worden zonder er nog een keer voor te betalen. */
+    const bewaarIdx = process.argv.indexOf('--bewaar');
+    if (bewaarIdx !== -1 && process.argv[bewaarIdx + 1]) {
+        const { writeFileSync } = await import('node:fs');
+        writeFileSync(process.argv[bewaarIdx + 1], JSON.stringify(controle, null, 1));
+        console.log(`Voorstel bewaard in ${process.argv[bewaarIdx + 1]}`);
+    }
 }
 
 main().catch((e) => {

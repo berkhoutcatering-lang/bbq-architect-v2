@@ -94,7 +94,59 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         return NextResponse.json({ error: gerechtFout?.message ?? 'Gerecht aanmaken mislukte' }, { status: 500 });
     }
 
-    /* 2 — De stappen. `duur_bron` staat op geschat: dit komt uit een boek en uit
+    /* 2 — De bouwstenen. Vóór de stappen, want een stap die een onderdeel maakt
+           heeft het id van dat onderdeel nodig.
+    
+           Kostprijs blijft leeg: die komt uit inkoop, niet uit een boek. En de
+           koppeling tússen gerecht en bouwsteen (gerecht_components) leggen we
+           bewust niet — daar hoort een hoeveelheid bij en die weten we niet.
+           Die legt de kok zelf zodra hij weet hoeveel pekel er per acht porties
+           in gaat. */
+    const idVan = new Map<string, number>();
+    /* Alleen wat we zélf net hebben aangemaakt, zodat we bij een mislukking
+       verderop precies dát kunnen terugdraaien en niets van eerder. */
+    const zelfGemaakt: number[] = [];
+
+    if (nieuw.length > 0) {
+        const { data: gemaakt, error } = await supabase.from('components').insert(
+            nieuw.map((c) => ({
+                organization_id: orgId,
+                name: c.naam,
+                type: 'prepared',
+                category: 'food',
+                base_quantity: 1,
+                base_unit: c.eenheid,
+                base_cost_cents: 0,
+                ai_suggested: true,
+                description: `Aangemaakt vanuit het recept ${controle.gerechtNaam}. Kostprijs nog invullen.`,
+            })),
+        ).select('id, name');
+        if (error) {
+            await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
+            return NextResponse.json({ error: `Bouwsteen aanmaken mislukte: ${error.message}` }, { status: 500 });
+        }
+        for (const c of gemaakt ?? []) {
+            idVan.set((c.name as string).toLowerCase(), c.id as number);
+            zelfGemaakt.push(c.id as number);
+        }
+    }
+
+    /* Bouwstenen die al bestonden — een stap mag ook een bestaand onderdeel
+       maken, en dan hoort hij daaraan te hangen en niet aan dit ene gerecht. */
+    const verwezen = [...new Set(
+        controle.stappen.map((s) => s.voorComponent).filter((n): n is string => n != null),
+    )].filter((n) => !idVan.has(n.toLowerCase()));
+
+    if (verwezen.length > 0) {
+        const { data: bestaand } = await supabase
+            .from('components')
+            .select('id, name')
+            .eq('organization_id', orgId)
+            .in('name', verwezen);
+        for (const c of bestaand ?? []) idVan.set((c.name as string).toLowerCase(), c.id as number);
+    }
+
+    /* 3 — De stappen. `duur_bron` staat op geschat: dit komt uit een boek en uit
            jouw inschatting, niet uit een meting. Zodra je hem een paar keer
            gedraaid hebt, zet het leerspoor hem op gemeten. */
     const herhaalDuren = antwoorden.herhaalDuren ?? {};
@@ -105,9 +157,16 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     /* De gekozen antwoorden staan hier al ín de stappen: kiest de kok 150 °C,
        dan gaat die 150 mee als temp_doel_c en niet alleen als losse notitie. */
     const rijen = metKeuzesVerwerkt(controle, antwoorden).map((s) => {
+        /* Een stap hangt aan het gerecht óf aan een bouwsteen, nooit aan
+           allebei: anders zou het kruidenmengsel twee keer gemaakt worden. */
+        const componentId = s.voorComponent != null
+            ? idVan.get(s.voorComponent.toLowerCase()) ?? null
+            : null;
+
         return {
             organization_id: orgId,
-            gerecht_id: gerecht.id,
+            gerecht_id: componentId == null ? gerecht.id : null,
+            component_id: componentId,
             step_order: s.volgnummer,
             tekst: s.tekst,
             actie: s.bewerking ?? null,
@@ -124,7 +183,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
                uur natspuiten" las het model de hele gaartijd als de duur van de
                handeling, en dat is honderdvijftig minuten werk die er niet zijn. */
             herhaal_duur_min: herhaalDuren[s.volgnummer] ?? s.herhaalDuurMin ?? null,
-            toezicht_nodig: s.toezichtNodig === true,
+            /* Erbij blijven volgt uit de herhaling: moet er elk half uur iets
+               gebeuren, dan is die wachttijd niet vrij en mag de planner er geen
+               ander werk in schuiven. Het model vroeg zelf om dit veld en zette
+               het op bijna elke stap, ook op snijwerk — daar zei het niets. */
+            toezicht_nodig: s.toezichtNodig === true || s.herhaalIntervalMin != null,
             plaats: 'thuis' as const,
             duur_bron: 'geschat',
             bron: 'ontleder',
@@ -138,12 +201,17 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
 
     if (stapFout) {
         /* Een gerecht zonder stappen is erger dan geen gerecht: het ziet er af
-           uit en is het niet. Draai hem terug. */
+           uit en is het niet. Alles terugdraaien wat we net hebben neergezet —
+           óók de bouwstenen, want die staan nu vóór de stappen en blijven
+           anders als wees achter die niemand besteld heeft. */
         await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
+        if (zelfGemaakt.length > 0) {
+            await supabase.from('components').delete().in('id', zelfGemaakt).eq('organization_id', orgId);
+        }
         return NextResponse.json({ error: `Stappen opslaan mislukte: ${stapFout.message}` }, { status: 500 });
     }
 
-    /* 3 — Volgorde-afhankelijkheden. Pas nu te leggen, want de id's bestonden
+    /* 4 — Volgorde-afhankelijkheden. Pas nu te leggen, want de id's bestonden
            een moment geleden nog niet. Mislukt dit, dan is het recept er wél —
            alleen mag de planner de stappen niet door elkaar husselen. */
     const perNummer = new Map((opgeslagen ?? []).map((r) => [r.step_order as number, r.id as string]));
@@ -164,35 +232,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         }
     }
 
-    /* 4 — Pas nu de bouwstenen die de kok wil aanmaken. Bewust als laatste:
-           in de eerste versie stonden ze vooraan, en toen het gerecht daarna
-           afketste op een constraint bleven er twee lege componenten achter die
-           niemand had besteld. Kostprijs blijft leeg — die komt uit inkoop, niet
-           uit een boek. De eenheid komt van de kok, want daar hangt elke latere
-           hoeveelheid aan vast. */
-    let componentWaarschuwing: string | null = null;
-    if (nieuw.length > 0) {
-        const { error } = await supabase.from('components').insert(
-            nieuw.map((c) => ({
-                organization_id: orgId,
-                name: c.naam,
-                type: 'prepared',
-                category: 'food',
-                base_quantity: 1,
-                base_unit: c.eenheid,
-                base_cost_cents: 0,
-                ai_suggested: true,
-                description: `Aangemaakt vanuit het recept ${controle.gerechtNaam}. Kostprijs nog invullen.`,
-            })),
-        );
-        if (error) componentWaarschuwing = `Het recept staat erin, maar de bouwstenen niet: ${error.message}`;
-    }
-
     return NextResponse.json({
         ok: true,
         gerechtId: gerecht.id,
         stappen: rijen.length,
-        componenten: componentWaarschuwing ? 0 : nieuw.length,
-        waarschuwing: componentWaarschuwing ?? koppelWaarschuwing,
+        componenten: nieuw.length,
+        waarschuwing: koppelWaarschuwing,
     });
 });

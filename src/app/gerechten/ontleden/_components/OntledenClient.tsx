@@ -395,9 +395,30 @@ function Lade(props: {
                 temperatuur die uit een beantwoorde keuze volgt. Wat het systeem
                 zelf invult moet je kunnen zien voordat je op opslaan drukt. */}
             <Blok titel="De stappen">
-                {metKeuzesVerwerkt(controle, antwoorden).map((stap) => (
+                {metKeuzesVerwerkt(controle, antwoorden).map((stap, i, alle) => (
+                    <div key={stap.volgnummer}>
+                        {/* Waar een blok stappen een onderdeel maakt in plaats van
+                            het gerecht zelf. Die stappen hangen straks aan de
+                            bouwsteen, en mogen dus dagen eerder gemaakt worden. */}
+                        {stap.voorComponent != null && stap.voorComponent !== alle[i - 1]?.voorComponent && (
+                            <div style={{
+                                marginTop: i === 0 ? 0 : 14, marginBottom: 2, fontSize: 12,
+                                letterSpacing: '.06em', textTransform: 'uppercase',
+                                color: 'var(--brand, #6B7A3F)', fontWeight: 600,
+                            }}>
+                                Hiermee maak je: {stap.voorComponent}
+                            </div>
+                        )}
+                        {stap.voorComponent == null && alle[i - 1]?.voorComponent != null && (
+                            <div style={{
+                                marginTop: 14, marginBottom: 2, fontSize: 12,
+                                letterSpacing: '.06em', textTransform: 'uppercase',
+                                color: 'var(--kf-muted, #8A8F98)', fontWeight: 600,
+                            }}>
+                                Het gerecht zelf
+                            </div>
+                        )}
                     <StapRegel
-                        key={stap.volgnummer}
                         stap={stap}
                         herhaalDuur={(antwoorden.herhaalDuren ?? {})[stap.volgnummer]}
                         akkoord={(antwoorden.akkoordOndanks ?? []).includes(stap.volgnummer)}
@@ -416,8 +437,18 @@ function Lade(props: {
                             },
                         }))}
                     />
+                    </div>
                 ))}
             </Blok>
+
+            {(antwoorden.componenten?.length ?? 0) > 0 && (
+                <p style={{ marginTop: 14, fontSize: 13, color: 'var(--kf-muted, #8A8F98)', lineHeight: 1.5 }}>
+                    De bouwstenen worden aangemaakt met hun eigen stappen, maar nog zónder
+                    hoeveelheid en kostprijs — die weet niemand uit een kookboek. Koppel ze aan
+                    dit gerecht zodra je weet hoeveel er per portie in gaat; dan telt de
+                    kostprijs mee en kan de keuken ze vooruit maken.
+                </p>
+            )}
 
             <div style={{ marginTop: 24, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button

@@ -36,20 +36,47 @@ interface StapRij {
     toezicht_nodig: boolean | null;
     hangt_af_van_stap_id: string | null;
     duur_bron: string | null;
+    component_id: number | null;
 }
 
 export default async function Receptuur({ gerechtId, organizationId, keuzes }: Props) {
     const sb = await createServerSupabase();
 
+    const KOLOMMEN = 'id, step_order, tekst, duur_actief_min, duur_passief_min, temp_doel_c, kern_temp_c, materieel_id, herhaal_interval_min, herhaal_duur_min, toezicht_nodig, hangt_af_van_stap_id, duur_bron, component_id';
+
     const { data: stappen } = await sb
         .from('recipe_steps')
-        .select('id, step_order, tekst, duur_actief_min, duur_passief_min, temp_doel_c, kern_temp_c, materieel_id, herhaal_interval_min, herhaal_duur_min, toezicht_nodig, hangt_af_van_stap_id, duur_bron')
+        .select(KOLOMMEN)
         .eq('gerecht_id', gerechtId)
         .eq('organization_id', organizationId)
         .order('step_order');
 
     const rijen = (stappen ?? []) as StapRij[];
-    if (rijen.length === 0) return null;
+
+    /* De stappen die een bouwsteen maken hangen niet aan dit gerecht maar aan de
+       bouwsteen zelf — daar is het hele punt van: die mogen dagen eerder. Ze
+       horen hier wel gewoon te staan, anders lijkt het recept half. */
+    const { data: bouwstenen } = await sb
+        .from('gerecht_components')
+        .select('component_id')
+        .eq('gerecht_id', gerechtId)
+        .eq('organization_id', organizationId);
+
+    const componentIds = (bouwstenen ?? []).map((b) => b.component_id as number);
+    let deelRijen: StapRij[] = [];
+    let deelNamen = new Map<number, string>();
+
+    if (componentIds.length > 0) {
+        const [{ data: deelStappen }, { data: comps }] = await Promise.all([
+            sb.from('recipe_steps').select(KOLOMMEN)
+                .in('component_id', componentIds).eq('organization_id', organizationId).order('step_order'),
+            sb.from('components').select('id, name').in('id', componentIds).eq('organization_id', organizationId),
+        ]);
+        deelRijen = (deelStappen ?? []) as StapRij[];
+        deelNamen = new Map((comps ?? []).map((c) => [c.id as number, c.name as string]));
+    }
+
+    if (rijen.length === 0 && deelRijen.length === 0) return null;
 
     /* Apparaatnamen erbij. Alleen de toestellen die daadwerkelijk gebruikt
        worden — een lijst van al je materieel heeft hier niets te zoeken. */
@@ -64,13 +91,15 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
         for (const m of materieel ?? []) namen.set(m.id as number, m.naam as string);
     }
 
-    /* Stapnummer per id, zodat "hangt af van" een nummer wordt en geen UUID. */
-    const nummerVan = new Map(rijen.map((r) => [r.id, r.step_order]));
+    /* Eerst de delen, dan het gerecht zelf: zo lees je het ook in de keuken. */
+    const alle = [...deelRijen, ...rijen];
 
-    const zonderTijd = rijen.filter((r) => r.duur_actief_min == null && r.duur_passief_min == null).length;
-    const werkMin = rijen.reduce((a, r) => a + (r.duur_actief_min ?? 0), 0);
-    const wachtMin = rijen.reduce((a, r) => a + (r.duur_passief_min ?? 0), 0);
-    const gemeten = rijen.filter((r) => r.duur_bron === 'gemeten').length;
+    /* Stapnummer per id, zodat "hangt af van" een nummer wordt en geen UUID. */
+    const nummerVan = new Map(alle.map((r) => [r.id, r.step_order]));
+    const zonderTijd = alle.filter((r) => r.duur_actief_min == null && r.duur_passief_min == null).length;
+    const werkMin = alle.reduce((a, r) => a + (r.duur_actief_min ?? 0), 0);
+    const wachtMin = alle.reduce((a, r) => a + (r.duur_passief_min ?? 0), 0);
+    const gemeten = alle.filter((r) => r.duur_bron === 'gemeten').length;
 
     return (
         <section
@@ -92,16 +121,16 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
                     letterSpacing: 0.5,
                 }}
             >
-                Zo maken we het ({rijen.length} stappen)
+                Zo maken we het ({alle.length} stappen)
             </header>
 
             {/* De kop mag nooit één totaal noemen alsof alles bekend is: bij
                 veertien stappen zonder tijd leest "1 min werk" als een gerecht
                 dat in een minuut klaar is. */}
             <p style={{ padding: '10px 16px 0', margin: 0, fontSize: 13, color: 'var(--color-text-muted, #9ca3af)' }}>
-                {rijen.length - zonderTijd === 0
+                {alle.length - zonderTijd === 0
                     ? 'Nog geen enkele stap heeft een tijd — die komen vanzelf zodra je hem draait.'
-                    : `Bekende tijd over ${rijen.length - zonderTijd} van de ${rijen.length} stappen:`
+                    : `Bekende tijd over ${alle.length - zonderTijd} van de ${alle.length} stappen:`
                         + ` ${werkMin} min werk`
                         + (wachtMin > 0 ? `, ${formatDuur(wachtMin)} wachten` : '')
                         + (zonderTijd > 0 ? ` · de andere ${zonderTijd} worden gemeten` : '')}
@@ -123,7 +152,10 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
             )}
 
             <ol style={{ listStyle: 'none', padding: '8px 0 12px', margin: 0 }}>
-                {rijen.map((r) => {
+                {alle.map((r, i) => {
+                    const deelNaam = r.component_id != null ? deelNamen.get(r.component_id) : null;
+                    const vorigeDeel = i === 0 ? undefined
+                        : alle[i - 1].component_id != null ? deelNamen.get(alle[i - 1].component_id!) : null;
                     const details = [
                         r.duur_actief_min != null ? `${r.duur_actief_min} min werk` : null,
                         r.duur_passief_min != null ? `${formatDuur(r.duur_passief_min)} wachten` : null,
@@ -144,8 +176,25 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
                     ].filter(Boolean).join(' · ');
 
                     return (
+                        <div key={r.id}>
+                        {/* Kop boven een blok stappen dat een bouwsteen maakt. Die
+                            mogen dagen eerder gemaakt worden en horen zichtbaar
+                            los te staan van het gerecht zelf. */}
+                        {deelNaam != null && deelNaam !== vorigeDeel && (
+                            <div style={{
+                                padding: '10px 16px 2px', fontSize: 12, fontWeight: 600,
+                                letterSpacing: '.06em', textTransform: 'uppercase',
+                                color: 'var(--brand, #6B7A3F)',
+                            }}>Hiermee maak je: {deelNaam} · mag vooruit</div>
+                        )}
+                        {deelNaam == null && vorigeDeel != null && (
+                            <div style={{
+                                padding: '10px 16px 2px', fontSize: 12, fontWeight: 600,
+                                letterSpacing: '.06em', textTransform: 'uppercase',
+                                color: 'var(--color-text-muted, #9ca3af)',
+                            }}>Het gerecht zelf</div>
+                        )}
                         <li
-                            key={r.id}
                             style={{
                                 display: 'flex',
                                 gap: 12,
@@ -179,6 +228,7 @@ export default async function Receptuur({ gerechtId, organizationId, keuzes }: P
                                 )}
                             </span>
                         </li>
+                        </div>
                     );
                 })}
             </ol>

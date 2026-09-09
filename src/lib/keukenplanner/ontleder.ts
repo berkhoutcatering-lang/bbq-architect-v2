@@ -59,11 +59,27 @@ export interface VoorstelStap {
     /** Elke zoveel minuten iets doen: natspuiten, draaien. */
     herhaalIntervalMin?: number | null;
     herhaalDuurMin?: number | null;
-    /** Moet de kok erbij blijven? */
+    /**
+     * Moet de kok erbij blijven?
+     *
+     * Staat niet meer in het schema — de opslagroute leidt hem af uit
+     * herhaalIntervalMin. Het veld blijft bestaan zodat oudere voorstellen en de
+     * tests er nog mee overweg kunnen.
+     */
     toezichtNodig?: boolean | null;
     hangtAfVanVolgnummer?: number | null;
     /** Wat er in het boek stond en hier niet meer geldt. Alleen ter uitleg. */
     vervangenDoor?: string | null;
+    /**
+     * Deze stap maakt niet het gerecht maar een onderdeel ervan.
+     *
+     * De naam van de bouwsteen uit `componenten`. Het kruidenmengsel voor de
+     * pulled pork kost tien minuten en hoeft niet op de dag zelf: hangt die
+     * stap aan de bouwsteen in plaats van aan het gerecht, dan mag de planner
+     * hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander
+     * gerecht.
+     */
+    voorComponent?: string | null;
     /**
      * Deze stap wacht op een keuze die hierboven al gesteld is.
      *
@@ -216,6 +232,12 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
        Dezelfde vraag, hetzelfde toestel, drie regels verderop. */
     const standVan = new Map<number, number>();
 
+    /* De bouwstenen die het voorstel zelf noemt, genormaliseerd. Een stap mag
+       alleen naar iets uit deze lijst verwijzen. */
+    const genoemdeComponenten = new Set(
+        (voorstel.componenten ?? []).map((c) => normaliseerComponentnaam(c.naam).toLowerCase()),
+    );
+
     const stappen: GecontroleerdeStap[] = voorstel.stappen.map((rauw) => {
         /* Wat het model in zijn eigen zin schreef maar niet in het veld zette. */
         const kern = rauw.kernTempC ?? kernUitTekst(rauw.tekst) ?? undefined;
@@ -231,6 +253,7 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
             ...rauw,
             kernTempC: kern,
             tempC: eigenTemp ?? erfelijk,
+            voorComponent: rauw.voorComponent ? normaliseerComponentnaam(rauw.voorComponent) : null,
         };
         const basis = { ...s, duurBron: 'geschat' as const };
         const apparaat = s.materieelId != null ? perId.get(s.materieelId) : undefined;
@@ -262,6 +285,14 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
                     `${apparaat.naam} houdt ${apparaat.temp_min_c ?? '?'}–${apparaat.temp_max_c ?? '?'} °C en deze stap vraagt ${s.tempC} °C`,
                 );
             }
+        }
+
+        /* 1b — Hoort deze stap bij een bouwsteen die ook echt bestaat? Een stap
+                die naar een onderdeel verwijst dat nergens in de lijst staat
+                belandt anders nergens: niet bij het gerecht en niet bij de
+                bouwsteen. */
+        if (s.voorComponent != null && !genoemdeComponenten.has(s.voorComponent.toLowerCase())) {
+            return vraag(basis, `Deze stap hoort bij "${s.voorComponent}", maar dat staat niet bij de onderdelen`);
         }
 
         /* 2c — Tweede mening. De tekst wordt niet gebruikt om te beslissen —
@@ -630,6 +661,7 @@ HARDE REGELS
 6c. Een component is iets dat je vóór of tijdens dít gerecht maakt en erin verwerkt. Een bijgerecht dat "lekker is erbij", of een ánder gerecht waar dit gerecht een vulling voor kan zijn, is geen component — die horen bij "vervallen" als serveertip of blijven helemaal weg. Zet nooit iets in "vervallen" als serveersuggestie én in "componenten": dat is twee keer een ander antwoord op dezelfde vraag.
 6b. Staat er een instructie die zich herháált — "elk half uur natspuiten", "vanaf het eerste uur elk uur insprayen", "iedere dag omdraaien" — vul dan herhaalIntervalMin én herhaalDuurMin. Het interval is hoe vaak, de duur is hoe lang je er per keer mee bezig bent (bijna altijd één of twee minuten). Laat je die leeg, dan weet de planner niet dat de kok elk uur even terug moet.
 7. Weet je iets niet zeker en verandert het antwoord het gerecht — bijvoorbeeld of iets gerookt moet worden — zet het dan in "keuzes" met de opties. Vraag liever dan te gokken.
+6e. Maken de stappen een onderdeel dat je daarna in het gerecht gebruikt — een kruidenmengsel, een saus, een salsa, een pekel — zet dan bij díe stappen "voorComponent" op de naam van dat onderdeel uit "componenten". Dat is niet cosmetisch: een kruidenmengsel van tien minuten hoeft niet op de dag zelf, en pas als de stap aan de bouwsteen hangt mag de planner hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander gerecht. Stappen die het gerecht zelf maken laat je leeg.
 7b. Leg je een keuze voor die een stap onvolledig laat — een temperatuur die nog gekozen moet worden, een gaarheid die het eindpunt bepaalt — zet dan in die stap "wachtOpKeuze" op de exacte vraagtekst van die keuze. Anders vraagt het systeem er nog een tweede keer naar en staat dezelfde beslissing twee keer op de lijst.
 8. Geen allergenen, geen kostprijzen, geen productiehoeveelheden. Die komen ergens anders vandaan.
 9. Houd de werkplek consistent. Snijden, mengen en portioneren gebeuren op dezelfde werkbank tenzij het recept een reden geeft om te verkassen. Eén productie die halverwege van de keukenwerkbank naar de aanhanger springt en weer terug is geen vertaling maar een slordigheid, en de planner rekent er looptijd voor.
@@ -697,9 +729,9 @@ const SCHEMA: Record<string, unknown> = {
                     materieelId: { type: 'integer' },
                     herhaalIntervalMin: { type: 'integer' },
                     herhaalDuurMin: { type: 'integer' },
-                    toezichtNodig: { type: 'boolean' },
                     hangtAfVanVolgnummer: { type: 'integer' },
                     wachtOpKeuze: { type: 'string' },
+                    voorComponent: { type: 'string' },
                 },
             },
         },
