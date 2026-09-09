@@ -101,8 +101,23 @@ export interface VoorstelStap {
  */
 export interface VoorstelIngredient {
     naam: string;
+    /** Zoals het in het boek staat: 2, 0.5, 1. */
     hoeveelheid?: number | null;
+    /** Zoals het in het boek staat: "el", "tl", "stengels", "g". */
     eenheid?: string | null;
+    /**
+     * Diezelfde hoeveelheid in gram.
+     *
+     * Alleen bij huishoudmaten — een theelepel, een stengel, een teen, een bosje.
+     * Wat al in g, kg, ml of l staat blijft zoals het is.
+     *
+     * Dit is omrekenen en geen verzinnen: een theelepel gedroogde dille weegt
+     * ongeveer een gram, een stengel bleekselderij een gram of veertig. Zonder
+     * dat getal is de opbrengst van een batch niet te berekenen (je kunt geen
+     * grammen bij theelepels optellen) en blijft de kostprijs op nul staan. De
+     * boekwaarde blijft ernaast staan, zodat zichtbaar is wat er omgerekend is.
+     */
+    gram?: number | null;
     /** Bij welk onderdeel dit hoort. Leeg = bij het gerecht zelf. */
     voorComponent?: string | null;
 }
@@ -268,7 +283,16 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
         (voorstel.componenten ?? []).map((c) => normaliseerComponentnaam(c.naam).toLowerCase()),
     );
 
-    const stappen: GecontroleerdeStap[] = voorstel.stappen.map((rauw) => {
+    const stappen: GecontroleerdeStap[] = voorstel.stappen.map((rauwIn) => {
+        /* Nul is geen herhaling maar de afwezigheid ervan. Het model vult die
+           velden soms met 0 in plaats van ze weg te laten, en dan meldde de
+           controle "elke 0 min 0 min werk — dat past niet in elkaar" en kon een
+           volstrekt gezond recept niet meer opgeslagen worden. */
+        const rauw: VoorstelStap = {
+            ...rauwIn,
+            herhaalIntervalMin: (rauwIn.herhaalIntervalMin ?? 0) > 0 ? rauwIn.herhaalIntervalMin : null,
+            herhaalDuurMin: (rauwIn.herhaalDuurMin ?? 0) > 0 ? rauwIn.herhaalDuurMin : null,
+        };
         /* Wat het model in zijn eigen zin schreef maar niet in het veld zette. */
         const kern = rauw.kernTempC ?? kernUitTekst(rauw.tekst) ?? undefined;
         const omgeving = omgevingUitTekst(rauw.tekst);
@@ -712,7 +736,9 @@ HARDE REGELS
 7. Weet je iets niet zeker en verandert het antwoord het gerecht — bijvoorbeeld of iets gerookt moet worden — zet het dan in "keuzes" met de opties. Vraag liever dan te gokken.
 6e. Maken de stappen een onderdeel dat je daarna in het gerecht gebruikt — een kruidenmengsel, een saus, een salsa, een pekel — zet dan bij díe stappen "voorComponent" op de naam van dat onderdeel uit "componenten". Dat is niet cosmetisch: een kruidenmengsel van tien minuten hoeft niet op de dag zelf, en pas als de stap aan de bouwsteen hangt mag de planner hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander gerecht. Stappen die het gerecht zelf maken laat je leeg.
 7b. Leg je een keuze voor die een stap onvolledig laat — een temperatuur die nog gekozen moet worden, een gaarheid die het eindpunt bepaalt — zet dan in die stap "wachtOpKeuze" op de exacte vraagtekst van die keuze. Anders vraagt het systeem er nog een tweede keer naar en staat dezelfde beslissing twee keer op de lijst.
-7c. Neem de ingrediëntenlijst over in "ingredienten": naam, hoeveelheid en eenheid zoals ze in het boek staan ("300 g mager rundergehakt" wordt naam "mager rundergehakt", hoeveelheid 300, eenheid "g"). Hoort een ingrediënt bij een onderdeel — de mayonaise bij de ranchsaus — zet dan voorComponent op de naam van dat onderdeel. Dit is lézen en geen verzinnen: staat er geen hoeveelheid, laat hem leeg. Hieruit rolt straks de kostprijs uit de leverancierscatalogus, dus een naam die je zelf mooier maakt kost geld.
+7c. Neem de ingrediëntenlijst over in "ingredienten": naam, hoeveelheid en eenheid zoals ze in het boek staan ("300 g mager rundergehakt" wordt naam "mager rundergehakt", hoeveelheid 300, eenheid "g"). Hoort een ingrediënt bij een onderdeel — de mayonaise bij de ranchsaus — zet dan voorComponent op de naam van dat onderdeel. Dit is lézen: staat er geen hoeveelheid, laat hem leeg. Hieruit rolt de kostprijs uit de leverancierscatalogus, dus een naam die je zelf mooier maakt kost geld.
+7d. Reken huishoudmaten ALTIJD om naar gram en zet dat in "gram". Een theelepel, een eetlepel, een stengel, een teen, een bosje, een snufje, "1 grote tomaat" — die kun je niet optellen en niet vergelijken met een catalogusprijs, en zonder dat getal blijft de kostprijs nul. Gebruik gangbare keukenwaarden: een theelepel gedroogde kruiden ≈ 1 g, een theelepel zout ≈ 6 g, een eetlepel olie ≈ 14 g, een stengel bleekselderij ≈ 40 g, een middelgrote ui ≈ 110 g, een teen knoflook ≈ 5 g, een grote tomaat ≈ 150 g.
+    Wat al in g, kg, ml of l staat laat je met rust — daar valt niets om te rekenen. En "naar smaak" blijft leeg: dat is geen hoeveelheid, en een verzonnen getal is erger dan een leeg veld.
 8. Geen allergenen, geen kostprijzen, geen productiehoeveelheden. Die komen ergens anders vandaan.
 9. Houd de werkplek consistent. Snijden, mengen en portioneren gebeuren op dezelfde werkbank tenzij het recept een reden geeft om te verkassen. Eén productie die halverwege van de keukenwerkbank naar de aanhanger springt en weer terug is geen vertaling maar een slordigheid, en de planner rekent er looptijd voor.
 
@@ -817,6 +843,7 @@ const SCHEMA: Record<string, unknown> = {
                     naam: { type: 'string' },
                     hoeveelheid: { type: 'number' },
                     eenheid: { type: 'string' },
+                    gram: { type: 'number' },
                     voorComponent: { type: 'string' },
                 },
             },

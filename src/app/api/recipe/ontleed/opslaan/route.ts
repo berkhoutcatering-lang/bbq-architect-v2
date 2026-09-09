@@ -197,11 +197,17 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             temp_doel_c: s.tempC ?? null,
             kern_temp_c: s.kernTempC ?? null,
             materieel_id: s.materieelId ?? null,
-            herhaal_interval_min: s.herhaalIntervalMin ?? null,
+            /* Nul is geen herhaling maar de afwezigheid ervan, en de database
+               eist interval én duur samen (recipe_steps_herhaling_compleet). De
+               lezer ruimt dit ook op, maar een voorstel kan van elders komen —
+               een schrijver hoort zijn eigen constraint te kennen. */
+            herhaal_interval_min: (s.herhaalIntervalMin ?? 0) > 0 ? s.herhaalIntervalMin : null,
             /* Wat de kok invulde wint van wat het model schatte: bij "elk half
                uur natspuiten" las het model de hele gaartijd als de duur van de
                handeling, en dat is honderdvijftig minuten werk die er niet zijn. */
-            herhaal_duur_min: herhaalDuren[s.volgnummer] ?? s.herhaalDuurMin ?? null,
+            herhaal_duur_min: (s.herhaalIntervalMin ?? 0) > 0
+                ? (herhaalDuren[s.volgnummer] ?? ((s.herhaalDuurMin ?? 0) > 0 ? s.herhaalDuurMin : null))
+                : null,
             /* Erbij blijven volgt uit de herhaling: moet er elk half uur iets
                gebeuren, dan is die wachttijd niet vrij en mag de planner er geen
                ander werk in schuiven. Het model vroeg zelf om dit veld en zette
@@ -245,6 +251,9 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             naam: i.naam,
             hoeveelheid: i.hoeveelheid ?? null,
             eenheid: i.eenheid ?? null,
+            /* De omgerekende waarde náást de boekwaarde, niet in plaats van.
+               Zo blijft zichtbaar dat "2 stengels" 80 gram is geworden. */
+            gram: i.gram ?? null,
         };
         if (i.voorComponent) {
             const sleutel = i.voorComponent.toLowerCase();
@@ -258,14 +267,25 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         }
     }
 
+    let ingredientenWeggeschreven = 0;
+    const zonderBouwsteen: string[] = [];
+
     for (const [sleutel, regels] of ingredientenVoorComponent) {
         const componentId = idVan.get(sleutel);
-        if (componentId == null) continue;
-        await supabase
+        if (componentId == null) {
+            /* Zichtbaar maken in plaats van stil overslaan: een ingrediënt dat
+               naar een onderdeel wijst dat we niet kunnen vinden verdwijnt
+               anders spoorloos, en de kostprijs blijft nul zonder dat iemand
+               weet waarom. */
+            zonderBouwsteen.push(sleutel);
+            continue;
+        }
+        const { error } = await supabase
             .from('components')
             .update({ ingredients: regels })
             .eq('id', componentId)
             .eq('organization_id', orgId);
+        if (!error) ingredientenWeggeschreven += regels.length;
     }
 
     if (eigenIngredienten.length > 0) {
@@ -302,6 +322,8 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         gerechtId: gerecht.id,
         stappen: rijen.length,
         componenten: nieuw.length,
+        ingredientregels: ingredientenWeggeschreven,
+        ingredientenZonderBouwsteen: zonderBouwsteen,
         waarschuwing: koppelWaarschuwing,
     });
 });

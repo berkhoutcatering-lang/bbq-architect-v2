@@ -27,6 +27,27 @@ interface IngredientRegel {
     naam: string;
     hoeveelheid?: number | null;
     eenheid?: string | null;
+    /** Huishoudmaat omgerekend naar gram. Leeg als er niets om te rekenen viel. */
+    gram?: number | null;
+}
+
+/**
+ * De hoeveelheid waarmee gerekend wordt, en in welke eenheid.
+ *
+ * Grammen gaan vóór: je kunt geen theelepels optellen en niet vergelijken met
+ * een catalogusprijs per kilo. Staat er al g, kg, ml of l, dan blijft dat staan —
+ * daar valt niets om te rekenen en omzetten zou alleen afrondingsfouten geven.
+ */
+function rekenmaat(r: IngredientRegel): { hoeveelheid: number | null; eenheid: string | null } {
+    const eigen = (r.eenheid ?? '').toLowerCase().trim();
+    const isBasis = ['g', 'gram', 'kg', 'ml', 'l', 'liter'].includes(eigen);
+    if (isBasis && typeof r.hoeveelheid === 'number' && r.hoeveelheid > 0) {
+        return { hoeveelheid: r.hoeveelheid, eenheid: r.eenheid ?? null };
+    }
+    if (typeof r.gram === 'number' && r.gram > 0) {
+        return { hoeveelheid: r.gram, eenheid: 'g' };
+    }
+    return { hoeveelheid: r.hoeveelheid ?? null, eenheid: r.eenheid ?? null };
 }
 
 interface Body {
@@ -87,7 +108,10 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         const rauw = await matchIngredientenTegenCatalogus(
             supabase,
             orgId,
-            regels.map((r) => ({ naam: r.naam, qty_pp: r.hoeveelheid, eenheid: r.eenheid })),
+            regels.map((r) => {
+                const m = rekenmaat(r);
+                return { naam: r.naam, qty_pp: m.hoeveelheid, eenheid: m.eenheid };
+            }),
         );
 
         /* Alleen een zekere match met een vergelijkbare eenheid telt mee. De
@@ -119,15 +143,55 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         /* De opbrengst: hoeveel levert deze batch op? Uit de regels die een
            hoeveelheid hebben. Zonder opbrengst is er geen eerlijke omrekening
            naar een prijs per gram. */
+        /* De opbrengst: hoeveel levert deze batch op?
+        
+           Milliliters tellen hier als grammen. `recipeYieldFromRows` weigert dat
+           terecht in het algemeen — siroop weegt 1,4 en olie 0,92 — maar bij een
+           saus van mayonaise, karnemelk en zure room zit je binnen een procent,
+           en het alternatief is helemaal geen kostprijs. Mathijs' eigen norm is
+           1 tot 4 procent, dus dit valt ruim binnen wat bruikbaar is. Het staat
+           erbij als `opbrengstBenadering` zodat niemand denkt dat het gewogen is. */
+        const maten = regels
+            .map(rekenmaat)
+            .filter((m) => typeof m.hoeveelheid === 'number' && m.hoeveelheid > 0 && m.eenheid);
+
+        const vloeibaar = maten.some((m) => ['ml', 'l', 'liter'].includes((m.eenheid ?? '').toLowerCase()));
         const opbrengst = recipeYieldFromRows(
-            regels
-                .filter((r) => typeof r.hoeveelheid === 'number' && r.hoeveelheid > 0 && r.eenheid)
-                .map((r) => ({ qty: r.hoeveelheid as number, unit: r.eenheid as string })),
+            maten.map((m) => {
+                const e = (m.eenheid ?? '').toLowerCase();
+                const naarGram = e === 'l' || e === 'liter' ? 1000 : e === 'ml' ? 1 : null;
+                return naarGram != null
+                    ? { qty: (m.hoeveelheid as number) * naarGram, unit: 'g' }
+                    : { qty: m.hoeveelheid as number, unit: m.eenheid as string };
+            }),
         );
 
-        const perBasis = opbrengst != null
-            ? costPerBaseFromRecipe(somCenten, opbrengst, Number(comp.base_quantity) || 1, comp.base_unit as string)
+        /* Een basis van 1 gram is te fijn. Kostprijs staat in hele centen, dus
+           bij 0,87 cent per gram schrijf je 1 cent op en zit je er 15% naast —
+           en bij 0,44 cent zelfs op nul, waarmee het gerecht weer gratis is.
+        
+           We kiezen daarom een basis waarbij er minstens tien centen op tafel
+           liggen: dan is de afrondingsfout hooguit een half procent, ruim binnen
+           de 1 tot 4 procent die hier de norm is. Dat is geen ander getal maar
+           dezelfde prijs in een leesbare eenheid — zoals een catalogus "per kilo"
+           schrijft en niet "per gram". */
+        const GENOEG_CENTEN = 10;
+        let basisHoeveelheid = Number(comp.base_quantity) || 1;
+        let perBasis = opbrengst != null
+            ? costPerBaseFromRecipe(somCenten, opbrengst, basisHoeveelheid, comp.base_unit as string)
             : null;
+
+        if (opbrengst != null && perBasis != null && perBasis < GENOEG_CENTEN) {
+            for (const grover of [100, 1000]) {
+                if (grover <= basisHoeveelheid) continue;
+                const poging = costPerBaseFromRecipe(somCenten, opbrengst, grover, comp.base_unit as string);
+                if (poging != null && poging >= GENOEG_CENTEN) {
+                    basisHoeveelheid = grover;
+                    perBasis = poging;
+                    break;
+                }
+            }
+        }
 
         const onzeker = gematcht.filter((r) => r.bezwaar != null).length;
 
@@ -137,7 +201,10 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
             status: perBasis != null ? 'berekend' : 'onvolledig',
             somCenten,
             opbrengst,
+            opbrengstBenadering: vloeibaar,
             nieuweKostprijsCenten: perBasis,
+            nieuweBasisHoeveelheid: basisHoeveelheid,
+            eenheid: comp.base_unit,
             huidigeKostprijsCenten: comp.base_cost_cents,
             gekoppeld: tellenMee.length,
             onzeker,
@@ -148,7 +215,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         if (!body.alleenTonen && perBasis != null && perBasis > 0) {
             await supabase
                 .from('components')
-                .update({ base_cost_cents: perBasis, ingredients: ruwe })
+                .update({ base_cost_cents: perBasis, base_quantity: basisHoeveelheid })
                 .eq('id', comp.id)
                 .eq('organization_id', orgId);
         }

@@ -796,3 +796,38 @@ describe('twee recepten op één pagina', () => {
         expect(uit.anderRecept).toBeNull();
     });
 });
+
+describe('nul is geen herhaling', () => {
+    /* Het model vult herhaalIntervalMin en herhaalDuurMin soms met 0 in plaats
+       van ze weg te laten. De controle las dat als "elke 0 minuten 0 minuten
+       werk" en blokkeerde daarmee een volstrekt gezond recept. */
+    it('laat een stap met nullen gewoon door', () => {
+        const uit = controleer(
+            {
+                gerechtNaam: 'Sandwich', porties: 4,
+                stappen: [{
+                    volgnummer: 1, tekst: 'Broodjes beleggen', actiefMin: 5,
+                    herhaalIntervalMin: 0, herhaalDuurMin: 0,
+                }],
+            },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.stappen[0].oordeel).toBe('akkoord');
+        expect(uit.stappen[0].herhaalIntervalMin).toBeNull();
+        expect(openstaandeVragen(uit)).toHaveLength(0);
+    });
+
+    it('een echte herhaling die niet past blijft een vraag', () => {
+        const uit = controleer(
+            {
+                gerechtNaam: 'Ribs', porties: 4,
+                stappen: [{
+                    volgnummer: 1, tekst: 'Natspuiten', passiefMin: 120,
+                    herhaalIntervalMin: 30, herhaalDuurMin: 45,
+                }],
+            },
+            { apparaten: APPARATEN },
+        );
+        expect(uit.stappen[0].oordeel).toBe('vraag');
+    });
+});

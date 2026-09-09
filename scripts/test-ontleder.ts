@@ -163,7 +163,8 @@ async function main() {
         console.log(`\nINGREDIENTEN (${controle.ingredienten.length}):`);
         for (const i of controle.ingredienten) {
             const deel = i.voorComponent ? `  «${i.voorComponent}»` : '';
-            console.log(`  ${String(i.hoeveelheid ?? '—').padStart(6)} ${(i.eenheid ?? '').padEnd(5)} ${i.naam}${deel}`);
+            const gram = i.gram != null ? `  (= ${i.gram} g)` : '';
+            console.log(`  ${String(i.hoeveelheid ?? '—').padStart(6)} ${(i.eenheid ?? '').padEnd(9)}${gram.padEnd(12)} ${i.naam}${deel}`);
         }
     }
 
