@@ -101,6 +101,115 @@ async function loadReceptenContext(sb: SupabaseClient, orgId: string): Promise<R
     return { recepten: gerechten || [], inventory: inventory || [] };
 }
 
+
+/**
+ * Wat Rook moet weten om over de productie mee te denken.
+ *
+ * Aanleiding, letterlijk: "hey ai rook, het is vandaag dinsdag en morgen staat
+ * er niks, zal ik anders batches vooruit maken? zo ja wat staat er op de
+ * planning en is te kort op voorraad?"
+ *
+ * Om daar antwoord op te geven heeft hij vier dingen nodig, en niet meer:
+ * wanneer het druk wordt, wat er vooruit gemaakt mág worden, wat zó lang duurt
+ * dat het nu al moet beginnen, en wat er op is. De rest is ruis in een prompt
+ * die elke vraag meegaat.
+ */
+async function loadKeukenContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
+    const vandaag = new Date();
+    const overDrieWeken = new Date(vandaag.getTime() + 21 * 86400000);
+    const isoDag = (d: Date) => d.toISOString().slice(0, 10);
+
+    const [{ data: events }, { data: inventory }, { data: taken }, { data: bouwstenen }] = await Promise.all([
+        sb.from('events').select('id, name, date, guests, status, menu')
+            .eq('organization_id', orgId)
+            .gte('date', isoDag(vandaag)).lte('date', isoDag(overDrieWeken))
+            .order('date'),
+        sb.from('inventory').select('naam, current_stock, min_stock, unit, categorie')
+            .eq('organization_id', orgId),
+        sb.from('prep_tasks').select('id, text, status, scheduled_at, duur_actief_min, duur_passief_min')
+            .eq('organization_id', orgId).neq('status', 'done')
+            .order('scheduled_at', { nullsFirst: false }).limit(40),
+        /* Bouwstenen mét eigen stappen: dát zijn de dingen die vooruit mogen. */
+        sb.from('components').select('id, name, base_unit, base_cost_cents, uit_gerecht_id')
+            .eq('organization_id', orgId).not('uit_gerecht_id', 'is', null),
+    ]);
+
+    const laag = (inventory || []).filter(function (i: Record<string, unknown>) {
+        return (i.min_stock as number) > 0 && (i.current_stock as number) <= (i.min_stock as number);
+    });
+
+    /* Hoeveel werk zit er in elk onderdeel, en in hoeveel gerechten komt het
+       terug? Een kruidenmengsel dat in zes gerechten zit is de moeite van
+       vooruit maken waard; eentje dat in één gerecht zit meestal niet. */
+    const componentIds = (bouwstenen || []).map(function (c: Record<string, unknown>) { return c.id as number; });
+    let vooruit: Record<string, unknown>[] = [];
+
+    if (componentIds.length > 0) {
+        const [{ data: stappen }, { data: gebruik }] = await Promise.all([
+            sb.from('recipe_steps').select('component_id, duur_actief_min, duur_passief_min')
+                .eq('organization_id', orgId).in('component_id', componentIds),
+            sb.from('gerecht_components').select('component_id, gerecht_id')
+                .eq('organization_id', orgId).in('component_id', componentIds),
+        ]);
+
+        vooruit = (bouwstenen || []).map(function (c: Record<string, unknown>) {
+            const eigen = (stappen || []).filter(function (s: Record<string, unknown>) { return s.component_id === c.id; });
+            const werk = eigen.reduce(function (a: number, s: Record<string, unknown>) { return a + ((s.duur_actief_min as number) || 0); }, 0);
+            const wacht = eigen.reduce(function (a: number, s: Record<string, unknown>) { return a + ((s.duur_passief_min as number) || 0); }, 0);
+            const inGerechten = (gebruik || []).filter(function (g: Record<string, unknown>) { return g.component_id === c.id; }).length;
+            return {
+                naam: c.name,
+                stappen: eigen.length,
+                werk_min: werk,
+                wacht_min: wacht,
+                gebruikt_in_gerechten: inGerechten || 1,
+                kostprijs_bekend: ((c.base_cost_cents as number) || 0) > 0,
+                eenheid: c.base_unit,
+            };
+        }).filter(function (v: Record<string, unknown>) { return (v.stappen as number) > 0; })
+          .sort(function (a: Record<string, unknown>, b: Record<string, unknown>) {
+              return (b.gebruikt_in_gerechten as number) - (a.gebruikt_in_gerechten as number);
+          });
+    }
+
+    /* Gerechten waar dagen wachttijd in zit. Die bepalen wanneer je moet
+       beginnen, en dat is precies wat je vergeet als je op de dag zelf kijkt. */
+    const { data: langeStappen } = await sb
+        .from('recipe_steps')
+        .select('gerecht_id, duur_passief_min, tekst')
+        .eq('organization_id', orgId).gte('duur_passief_min', 720);
+
+    const perGerecht = new Map<string, number>();
+    (langeStappen || []).forEach(function (s: Record<string, unknown>) {
+        if (!s.gerecht_id) return;
+        const id = s.gerecht_id as string;
+        perGerecht.set(id, (perGerecht.get(id) || 0) + ((s.duur_passief_min as number) || 0));
+    });
+
+    let langeDoorlooptijd: Record<string, unknown>[] = [];
+    if (perGerecht.size > 0) {
+        const { data: namen } = await sb.from('gerechten').select('id, naam')
+            .eq('organization_id', orgId).in('id', [...perGerecht.keys()]);
+        langeDoorlooptijd = (namen || []).map(function (g: Record<string, unknown>) {
+            return {
+                naam: g.naam,
+                dagen_vooraf: Math.ceil((perGerecht.get(g.id as string) || 0) / 1440),
+            };
+        }).sort(function (a: Record<string, unknown>, b: Record<string, unknown>) {
+            return (b.dagen_vooraf as number) - (a.dagen_vooraf as number);
+        });
+    }
+
+    return {
+        keuken_vandaag: isoDag(vandaag),
+        keuken_events: events || [],
+        keuken_lage_voorraad: laag,
+        keuken_open_taken: taken || [],
+        keuken_mag_vooruit: vooruit,
+        keuken_lange_doorlooptijd: langeDoorlooptijd,
+    };
+}
+
 async function loadVoorraadContext(sb: SupabaseClient, orgId: string): Promise<Record<string, unknown>> {
     const { data: inventory } = await sb.from('inventory').select('*').eq('organization_id', orgId).order('naam');
     const laag = (inventory || []).filter(function (i: Record<string, unknown>) { return (i.current_stock as number) <= (i.min_stock as number); });
@@ -299,8 +408,18 @@ export async function loadPageContext(
         if (pathname.startsWith('/agenda')) return await loadAgendaContext(sb, orgId);
         if (pathname.startsWith('/offertes')) return await loadOffortesContext(sb, orgId);
         if (pathname.startsWith('/facturen')) return await loadFacturenContext(sb, orgId);
-        if (pathname.startsWith('/gerechten')) return await loadGerechtenContext(sb, orgId);
+        if (pathname.startsWith('/gerechten')) {
+            /* De keuken-hub: hier staan de gerechten én wordt over de productie
+               gepraat. Allebei meesturen, want "zal ik batches vooruit maken?"
+               is geen vraag over een gerecht maar over de week. */
+            const [gerechten, keuken] = await Promise.all([
+                loadGerechtenContext(sb, orgId),
+                loadKeukenContext(sb, orgId),
+            ]);
+            return { ...gerechten, ...keuken };
+        }
         if (pathname.startsWith('/recepten')) return await loadReceptenContext(sb, orgId);
+        if (pathname.startsWith('/keuken')) return await loadKeukenContext(sb, orgId);
         if (pathname.startsWith('/voorraad')) return await loadVoorraadContext(sb, orgId);
         if (pathname.startsWith('/inkoop')) return await loadInkoopContext(sb, orgId);
         if (pathname.startsWith('/haccp')) return await loadHaccpContext(sb, orgId);
@@ -334,6 +453,50 @@ export function formatContext(pathname: string, data: Record<string, any>): stri
         lines.push('Lage voorraad: ' + (data.lage_voorraad || []).length + ' items');
         (data.lage_voorraad || []).forEach(function (i: any) {
             lines.push('  - ' + i.naam + ': ' + i.current_stock + '/' + i.min_stock + ' ' + i.unit + ' (TE LAAG)');
+        });
+    }
+
+    // Keuken — genoeg om over de productie mee te denken, niet meer
+    if (data.keuken_vandaag) {
+        lines.push('Vandaag: ' + data.keuken_vandaag);
+
+        const ev = data.keuken_events || [];
+        lines.push('Events in de komende drie weken: ' + ev.length);
+        ev.forEach(function (e: any) {
+            const dagen = Math.round((Date.parse(e.date) - Date.parse(data.keuken_vandaag)) / 86400000);
+            lines.push('  - ' + e.date + ' (over ' + dagen + ' dagen) | ' + e.name + ' | ' + (e.guests || 0) + ' gasten | ' + e.status);
+        });
+        if (ev.length === 0) lines.push('  (geen events gepland — een lege dag is een dag om vooruit te werken)');
+
+        const vooruit = data.keuken_mag_vooruit || [];
+        if (vooruit.length > 0) {
+            lines.push('Onderdelen die vooruit gemaakt mogen worden (eigen stappen, los van het gerecht):');
+            vooruit.forEach(function (v: any) {
+                lines.push('  - ' + v.naam + ': ' + v.stappen + ' stappen, ' + v.werk_min + ' min werk'
+                    + (v.wacht_min > 0 ? ' + ' + v.wacht_min + ' min wachten' : '')
+                    + ' | in ' + v.gebruikt_in_gerechten + ' gerecht(en)'
+                    + (v.kostprijs_bekend ? '' : ' | LET OP: kostprijs nog niet ingevuld'));
+            });
+        }
+
+        const lang = data.keuken_lange_doorlooptijd || [];
+        if (lang.length > 0) {
+            lines.push('Gerechten die dagen vooraf moeten beginnen:');
+            lang.forEach(function (g: any) {
+                lines.push('  - ' + g.naam + ': begin ' + g.dagen_vooraf + ' dagen voor de uitlevering');
+            });
+        }
+
+        const laag = data.keuken_lage_voorraad || [];
+        lines.push('Onder het minimum: ' + laag.length + ' artikelen');
+        laag.slice(0, 15).forEach(function (i: any) {
+            lines.push('  - ' + i.naam + ': ' + i.current_stock + '/' + i.min_stock + ' ' + i.unit);
+        });
+
+        const taken = data.keuken_open_taken || [];
+        lines.push('Open prep-taken: ' + taken.length);
+        taken.slice(0, 10).forEach(function (t: any) {
+            lines.push('  - ' + t.text + (t.scheduled_at ? ' | gepland ' + String(t.scheduled_at).slice(0, 10) : ' | niet ingepland'));
         });
     }
 

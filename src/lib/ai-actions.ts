@@ -65,6 +65,10 @@ interface ContextData {
     verloopAlerts?: Record<string, unknown>[];
     leveranciers?: Record<string, unknown>[];
     inkooplijsten?: Record<string, unknown>[];
+    /** Onderdelen met eigen stappen: wat er vooruit gemaakt mag worden. */
+    magVooruit?: Record<string, unknown>[];
+    /** Gerechten met dagen wachttijd, en hoeveel dagen vooraf ze beginnen. */
+    langeDoorlooptijd?: Record<string, unknown>[];
     haccp_records?: Record<string, unknown>[];
     haccp_vandaag?: Record<string, unknown>[];
     time_logs?: Record<string, unknown>[];
@@ -90,13 +94,23 @@ interface ContextData {
     klantgesprek_avgPpp?: number;
 }
 
+/* Waarom /keuken bij een aantal acties staat: Mathijs wil op het kookbord een
+   gesprek kunnen voeren dat ergens toe leidt. "Morgen staat er niks, zal ik
+   batches vooruit maken?" eindigt in prep-taken; "zet een bestellijst klaar en
+   zet het in de agenda" eindigt in een inkooplijst en een event. Zonder deze
+   pagina in de lijst mag Rook daar wel meedenken maar niets voorstellen, en dan
+   is het een encyclopedie in plaats van een hulp.
+
+   /gerechten staat erbij omdat dat de keuken-hub is: /keuken leidt erheen door,
+   en het kookbord en het wandscherm hebben geen chat — dat zijn KDS-schermen
+   zonder sidebar, met vette handen ervoor. */
 export const ACTION_TYPES: Record<string, ActionTypeDef> = {
     // ── Events ──────────────────────────────────────────────────────────────
     create_event: {
         label: 'Event aanmaken',
         table: 'events',
         op: 'insert',
-        pages: ['/', '/events', '/agenda', '/offertes'],
+        pages: ['/', '/events', '/agenda', '/offertes', '/keuken', '/gerechten'],
         icon: 'CalendarPlus',
         color: '#3b82f6',
     },
@@ -280,7 +294,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak aanmaken',
         table: 'prep_tasks',
         op: 'insert',
-        pages: ['/agenda', '/events', '/events/[id]/service'],
+        pages: ['/agenda', '/events', '/events/[id]/service', '/keuken', '/gerechten'],
         icon: 'ListChecks',
         color: '#22c55e',
     },
@@ -288,7 +302,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-taak bijwerken',
         table: 'prep_tasks',
         op: 'update',
-        pages: ['/agenda', '/events/[id]/service'],
+        pages: ['/agenda', '/events/[id]/service', '/keuken', '/gerechten'],
         icon: 'Pencil',
         color: '#f59e0b',
     },
@@ -404,7 +418,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Prep-lijst genereren',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/agenda', '/events/[id]/service'],
+        pages: ['/', '/events', '/agenda', '/events/[id]/service', '/keuken', '/gerechten'],
         icon: 'ListChecks',
         color: '#22c55e',
         tool: 'generatePrepList',
@@ -413,7 +427,7 @@ export const ACTION_TYPES: Record<string, ActionTypeDef> = {
         label: 'Inkooplijst berekenen',
         table: null,
         op: 'tool',
-        pages: ['/', '/events', '/inkoop', '/voorraad'],
+        pages: ['/', '/events', '/inkoop', '/voorraad', '/keuken', '/gerechten'],
         icon: 'ShoppingCart',
         color: '#3b82f6',
         tool: 'generateInkooplijst',
@@ -844,6 +858,84 @@ export async function loadPageContextData(pathname: string, supabase: SupabaseCl
             }
         }
 
+        /* Keuken — genoeg om over de productie mee te denken, en niet meer.
+        
+           Aanleiding, letterlijk uit een gesprek: "het is vandaag dinsdag en
+           morgen staat er niks, zal ik anders batches vooruit maken? zo ja wat
+           staat er op de planning en is te kort op voorraad?" Om dat te kunnen
+           beantwoorden heeft Rook vier dingen nodig: wanneer het druk wordt,
+           wat er vooruit gemaakt mág worden, wat zo lang duurt dat het nu al
+           moet beginnen, en wat er op is. */
+        /* Ook op /gerechten: dát is de keuken-hub (/keuken leidt eheen door), en
+           daar staat de chat. Op het kookbord en het wandscherm is geen Rook —
+           dat zijn KDS-schermen zonder sidebar, met vette handen ervoor. */
+        if (pathname.startsWith('/keuken') || pathname.startsWith('/gerechten')) {
+            const vandaag = new Date();
+            const drieWeken = new Date(vandaag.getTime() + 21 * 86400000);
+            const dag = function (d: Date) { return d.toISOString().slice(0, 10); };
+
+            const evK = await supabase.from('events').select('id,name,date,guests,status')
+                .gte('date', dag(vandaag)).lte('date', dag(drieWeken)).order('date', { ascending: true }).limit(25);
+            ctx.events = evK.data || [];
+
+            const invK = await supabase.from('inventory').select('id,naam,current_stock,min_stock,unit');
+            ctx.lowStock = (invK.data || []).filter(function (i: Record<string, unknown>) {
+                return (i.min_stock as number) > 0 && (i.current_stock as number) <= (i.min_stock as number);
+            }).slice(0, 20);
+
+            const ptK = await supabase.from('prep_tasks').select('id,text,status,scheduled_at')
+                .neq('status', 'done').order('scheduled_at', { ascending: true, nullsFirst: false }).limit(30);
+            ctx.prep_tasks = ptK.data || [];
+
+            /* Onderdelen met eigen stappen: dát is wat vooruit mag. Een
+               kruidenmengsel dat in zes gerechten terugkomt is de moeite waard
+               om in één keer te maken; eentje in één gerecht meestal niet. */
+            const compK = await supabase.from('components')
+                .select('id,name,base_unit,base_cost_cents').not('uit_gerecht_id', 'is', null);
+            const compIds = (compK.data || []).map(function (c: Record<string, unknown>) { return c.id as number; });
+
+            if (compIds.length > 0) {
+                const stK = await supabase.from('recipe_steps')
+                    .select('component_id,duur_actief_min,duur_passief_min').in('component_id', compIds);
+                const gcK = await supabase.from('gerecht_components').select('component_id').in('component_id', compIds);
+
+                ctx.magVooruit = (compK.data || []).map(function (c: Record<string, unknown>) {
+                    const eigen = (stK.data || []).filter(function (s: Record<string, unknown>) { return s.component_id === c.id; });
+                    return {
+                        naam: c.name,
+                        stappen: eigen.length,
+                        werk_min: eigen.reduce(function (a: number, s: Record<string, unknown>) { return a + ((s.duur_actief_min as number) || 0); }, 0),
+                        wacht_min: eigen.reduce(function (a: number, s: Record<string, unknown>) { return a + ((s.duur_passief_min as number) || 0); }, 0),
+                        in_gerechten: (gcK.data || []).filter(function (g: Record<string, unknown>) { return g.component_id === c.id; }).length || 1,
+                        kostprijs_bekend: ((c.base_cost_cents as number) || 0) > 0,
+                        eenheid: c.base_unit,
+                    };
+                }).filter(function (v: Record<string, unknown>) { return (v.stappen as number) > 0; })
+                  .sort(function (a: Record<string, unknown>, b: Record<string, unknown>) {
+                      return (b.in_gerechten as number) - (a.in_gerechten as number);
+                  });
+            }
+
+            /* Gerechten met dagen wachttijd. Die bepalen wanneer je moet
+               beginnen, en dat vergeet je als je op de dag zelf kijkt. */
+            const langK = await supabase.from('recipe_steps')
+                .select('gerecht_id,duur_passief_min').gte('duur_passief_min', 720).not('gerecht_id', 'is', null);
+            const perGerecht: Record<string, number> = {};
+            (langK.data || []).forEach(function (s: Record<string, unknown>) {
+                const id = s.gerecht_id as string;
+                perGerecht[id] = (perGerecht[id] || 0) + ((s.duur_passief_min as number) || 0);
+            });
+            const langIds = Object.keys(perGerecht);
+            if (langIds.length > 0) {
+                const gK = await supabase.from('gerechten').select('id,naam').in('id', langIds);
+                ctx.langeDoorlooptijd = (gK.data || []).map(function (g: Record<string, unknown>) {
+                    return { naam: g.naam, dagen_vooraf: Math.ceil((perGerecht[g.id as string] || 0) / 1440) };
+                }).sort(function (a: Record<string, unknown>, b: Record<string, unknown>) {
+                    return (b.dagen_vooraf as number) - (a.dagen_vooraf as number);
+                });
+            }
+        }
+
         if (pathname === '/events') {
             const todayEv = new Date().toISOString().slice(0, 10);
             const evRes = await supabase.from('events')
@@ -1248,6 +1340,25 @@ export function formatContextForPrompt(contextData: ContextData | null): string 
         });
         lines.push('');
     }
+    if (contextData.magVooruit && contextData.magVooruit.length > 0) {
+        lines.push('**Onderdelen die vooruit gemaakt mogen worden** (eigen stappen, los van het gerecht):');
+        contextData.magVooruit.forEach(function (v) {
+            lines.push('- ' + v.naam + ': ' + v.stappen + ' stappen, ' + v.werk_min + ' min werk'
+                + ((v.wacht_min as number) > 0 ? ' + ' + v.wacht_min + ' min wachten' : '')
+                + ' | komt terug in ' + v.in_gerechten + ' gerecht(en)'
+                + (v.kostprijs_bekend ? '' : ' | kostprijs nog niet ingevuld'));
+        });
+        lines.push('');
+    }
+
+    if (contextData.langeDoorlooptijd && contextData.langeDoorlooptijd.length > 0) {
+        lines.push('**Gerechten die dagen vooraf moeten beginnen:**');
+        contextData.langeDoorlooptijd.forEach(function (g) {
+            lines.push('- ' + g.naam + ': begin ' + g.dagen_vooraf + ' dagen voor de uitlevering');
+        });
+        lines.push('');
+    }
+
     if (contextData.recenteEvents && contextData.recenteEvents.length > 0) {
         lines.push('**Recent afgeronde events:**');
         contextData.recenteEvents.forEach(function (e) {

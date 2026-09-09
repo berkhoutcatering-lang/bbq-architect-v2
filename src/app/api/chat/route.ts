@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { getActionInstructions, formatContextForPrompt } from '@/lib/ai-actions';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { loadPageContext, formatContext } from '@/lib/bbq-context';
 import { checkRateLimit } from '@/lib/rateLimit';
 import { PAGE_SYSTEM_PROMPTS, OPERATOR_INSTRUCTIONS, BASE_PERSONA, MODE_INSTRUCTIONS, BRAINSTORM_INSTRUCTIONS, normalizePagePath } from '@/lib/ai-prompts';
 import { getMode, isThinkingMode, type ThinkingMode } from '@/lib/ai-modes';
@@ -390,6 +391,16 @@ export async function POST(req: NextRequest): Promise<NextResponse | Response> {
         ];
         if (contextData && typeof contextData === 'object' && Object.keys(contextData).length > 0) {
             systemBlocks.push({ type: 'text', text: formatContextForPrompt(contextData) });
+        } else if (orgId && pageContext) {
+            /* Vangnet: stuurt de aanroeper geen data mee, dan haalt Rook hem zelf
+               op in plaats van te zeggen dat hij niks kan zien. Dat gebeurde toen
+               de chat vanaf een ander scherm werd aangeroepen: hij antwoordde
+               keurig "ik heb geen live toegang tot je planning" terwijl de data
+               er gewoon was. Een assistent die blind is omdat de aanroeper iets
+               vergat, is blind om de verkeerde reden. */
+            const eigen = await loadPageContext(pageContext, sbAuth, orgId);
+            const tekst = formatContext(pageContext, eigen);
+            if (tekst) systemBlocks.push({ type: 'text', text: tekst });
         }
         // Active-resource-pill (cross-page context). Achter de cache-breakpoint
         // zodat resource-switches geen prefix-cache-miss veroorzaken.
