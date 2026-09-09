@@ -88,6 +88,52 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     const { data: componenten, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    /* Hoe compleet is de catalogus waar we tegen prijzen?
+    
+       Zonder dit trek je de verkeerde conclusie. Bij de ranchsaus kwamen
+       gedroogd bieslook, dille en uiengranulaat als "geen product gevonden"
+       terug, en dat leest als "Bidfood verkoopt dat niet". In werkelijkheid
+       staat de import van Bidfood sinds 31 juli op `partial`: hij is blijven
+       hangen in brood-banket-en-bakproducten, en het hele droge assortiment is
+       nooit binnengekomen. Een lege uitkomst mag nooit als een compleet antwoord
+       gepresenteerd worden. */
+    const { data: leveranciers } = await supabase
+        .from('leveranciers')
+        .select('naam, products_count, last_sync_status, last_sync_at')
+        .eq('organization_id', orgId)
+        .gt('products_count', 0);
+
+    /* `ok` en `completed` zijn allebei "klaar" — twee woorden voor hetzelfde,
+       gegroeid over verschillende importwegen. Alles daarbuiten betekent dat er
+       nog iets ontbreekt. Een sync die maanden op `running` staat is niet bezig
+       maar blijven hangen; dat is iets anders dan half klaar en verdient een
+       eigen woord. */
+    const KLAAR = new Set(['ok', 'completed']);
+    const MAAND_MS = 30 * 86_400_000;
+
+    const onvolledig = (leveranciers ?? [])
+        .filter((l) => l.last_sync_status != null && !KLAAR.has(l.last_sync_status as string))
+        .map((l) => {
+            const stand = l.last_sync_status as string;
+            const laatst = l.last_sync_at as string | null;
+            const oud = laatst != null && Date.now() - Date.parse(laatst) > MAAND_MS;
+            return {
+                naam: l.naam as string,
+                producten: l.products_count as number,
+                stand,
+                laatst,
+                uitleg: stand === 'running' && oud
+                    ? 'staat al maanden op "bezig" — waarschijnlijk halverwege blijven hangen'
+                    : stand === 'never' ? 'nooit ingelezen'
+                        : 'niet afgemaakt',
+            };
+        });
+
+    /** "Bidfood, Sligro en Baktotaal" — geen rij van vijf keer "en". */
+    const opsomming = (namen: string[]): string =>
+        namen.length <= 1 ? (namen[0] ?? '')
+            : `${namen.slice(0, -1).join(', ')} en ${namen[namen.length - 1]}`;
+
     const uitkomst: Array<Record<string, unknown>> = [];
 
     for (const comp of componenten ?? []) {
@@ -225,5 +271,13 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
         ok: true,
         alleenTonen: body.alleenTonen === true,
         componenten: uitkomst,
+        /* Erbij, altijd: "niet gevonden" betekent iets anders als de catalogus
+           half binnen is. */
+        catalogus: {
+            onvolledig,
+            waarschuwing: onvolledig.length > 0
+                ? `${opsomming(onvolledig.map((l) => l.naam))} ${onvolledig.length === 1 ? 'is' : 'zijn'} niet volledig ingelezen. "Geen product gevonden" kan dus ook betekenen dat het er nog niet in staat.`
+                : null,
+        },
     });
 });
