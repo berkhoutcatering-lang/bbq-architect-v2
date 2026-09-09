@@ -92,11 +92,16 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     
        Zonder dit trek je de verkeerde conclusie. Bij de ranchsaus kwamen
        gedroogd bieslook, dille en uiengranulaat als "geen product gevonden"
-       terug, en dat leest als "Bidfood verkoopt dat niet". In werkelijkheid
-       staat de import van Bidfood sinds 31 juli op `partial`: hij is blijven
-       hangen in brood-banket-en-bakproducten, en het hele droge assortiment is
-       nooit binnengekomen. Een lege uitkomst mag nooit als een compleet antwoord
-       gepresenteerd worden. */
+       terug, en dat leest als "Bidfood verkoopt dat niet".
+    
+       De catalogus wordt per categorie ingelezen — de extensie begint bij de
+       pagina waar je op stond toen je op start drukte — en die van kruiden en
+       specerijen is er nooit doorheen geweest. Vlees, vis, zuivel, groente,
+       droge waren, sauzen en brood staan er ruim in; los kruidnagel, laurier,
+       nootmuskaat, jeneverbes en de granulaten niet.
+    
+       Een lege uitkomst mag daarom nooit als een compleet antwoord
+       gepresenteerd worden zolang de stand op iets anders dan "klaar" staat. */
     const { data: leveranciers } = await supabase
         .from('leveranciers')
         .select('naam, products_count, last_sync_status, last_sync_at')
