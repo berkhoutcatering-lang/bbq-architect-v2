@@ -63,6 +63,8 @@ const KLEUR = {
 export default function OntledenClient() {
     const [fase, setFase] = useState<Fase>('kiezen');
     const [fotos, setFotos] = useState<string[]>([]);
+    /* Een gerecht in woorden, als er geen kookboekpagina is. */
+    const [idee, setIdee] = useState('');
     const [opmerking, setOpmerking] = useState('');
     const [controle, setControle] = useState<Controle | null>(null);
     const [kosten, setKosten] = useState<{ centen: number } | null>(null);
@@ -97,6 +99,7 @@ export default function OntledenClient() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fotos,
+                    beschrijving: idee,
                     opmerking: welkRecept
                         ? `Werk nu het recept "${welkRecept}" uit van deze pagina, niet het andere.${opmerking ? ` ${opmerking}` : ''}`
                         : opmerking,
@@ -162,6 +165,8 @@ export default function OntledenClient() {
                     zetOpmerking={setOpmerking}
                     invoer={invoer}
                     kiesBestanden={kiesBestanden}
+                    idee={idee}
+                    zetIdee={setIdee}
                     start={() => void ontleed()}
                 />
             )}
@@ -180,6 +185,7 @@ export default function OntledenClient() {
                     bewaar={() => void bewaar()}
                     opnieuw={() => { setFase('kiezen'); setControle(null); setResultaat(null); setFotos([]); }}
                     leesAnder={(naam) => void ontleed(naam)}
+                    uitIdee={fotos.length === 0}
                 />
             )}
         </div>
@@ -195,9 +201,12 @@ function Kiezen(props: {
     zetOpmerking: (v: string) => void;
     invoer: React.RefObject<HTMLInputElement | null>;
     kiesBestanden: (l: FileList | null) => Promise<void>;
+    idee: string;
+    zetIdee: (v: string) => void;
     start: () => void;
 }) {
-    const { fotos, zetFotos, opmerking, zetOpmerking, invoer, kiesBestanden, start } = props;
+    const { fotos, zetFotos, opmerking, zetOpmerking, invoer, kiesBestanden, idee, zetIdee, start } = props;
+    const kanStarten = fotos.length > 0 || idee.trim().length >= 8;
 
     return (
         <>
@@ -252,6 +261,28 @@ function Kiezen(props: {
                 </>
             )}
 
+            {/* Geen boek? Dan een idee. Zelfde lade, zelfde regels — hij bedenkt
+                het gerecht, maar de tijden blijven leeg tot ze gemeten zijn. */}
+            <label style={{
+                display: 'block', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
+                color: KLEUR.gedempt, margin: '26px 0 8px',
+            }}>Of beschrijf een gerecht</label>
+            <textarea
+                value={idee}
+                onChange={(e) => zetIdee(e.target.value)}
+                placeholder="Passievrucht panna cotta met cranberry's en schuim van vlierbloesem"
+                rows={2}
+                style={{
+                    width: '100%', padding: 14, borderRadius: 10,
+                    border: `1px solid ${KLEUR.lijn}`, background: KLEUR.paneel,
+                    color: 'inherit', font: 'inherit', resize: 'vertical',
+                }}
+            />
+            <p style={{ fontSize: 13, color: KLEUR.gedempt, margin: '6px 0 0' }}>
+                Zonder boek bedenkt hij het recept zelf — op jouw apparatuur, met de onderdelen los.
+                De tijden blijven leeg tot je ze een keer gemeten hebt.
+            </p>
+
             <label style={{
                 display: 'block', fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
                 color: KLEUR.gedempt, margin: '22px 0 8px',
@@ -270,11 +301,11 @@ function Kiezen(props: {
 
             <button
                 type="button"
-                disabled={fotos.length === 0}
+                disabled={!kanStarten}
                 onClick={start}
-                style={{ ...knop, marginTop: 18, opacity: fotos.length === 0 ? .45 : 1 }}
+                style={{ ...knop, marginTop: 18, opacity: kanStarten ? 1 : .45 }}
             >
-                Lees het recept
+                {fotos.length > 0 ? 'Lees het recept' : 'Bedenk het recept'}
             </button>
         </>
     );
@@ -321,10 +352,12 @@ function Lade(props: {
     bewaar: () => void;
     opnieuw: () => void;
     leesAnder: (naam: string) => void;
+    /** Kwam dit uit een idee in plaats van een kookboekpagina? */
+    uitIdee: boolean;
 }) {
     const {
         controle, kosten, invulling, zetInvulling, openstaand,
-        bezigMetOpslaan, resultaat, bewaar, opnieuw, leesAnder,
+        bezigMetOpslaan, resultaat, bewaar, opnieuw, leesAnder, uitIdee,
     } = props;
     const { antwoorden } = invulling;
 
@@ -368,7 +401,7 @@ function Lade(props: {
                     fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase',
                     color: KLEUR.gedempt, marginBottom: 6,
                 }}>
-                    Gelezen uit kookboekfoto
+                    {uitIdee ? 'Bedacht op jouw apparatuur' : 'Gelezen uit kookboekfoto'}
                 </div>
                 <h1 style={{ fontSize: 28, fontWeight: 600, margin: '0 0 6px' }}>{controle.gerechtNaam}</h1>
                 <p style={{ color: KLEUR.gedempt, margin: 0 }}>

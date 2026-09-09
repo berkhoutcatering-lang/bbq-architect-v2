@@ -47,6 +47,16 @@ const TOEGESTANE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'imag
 interface Body {
     /** Data-URL's of kale base64. De foto's worden niet bewaard. */
     fotos?: unknown;
+    /**
+     * Een gerecht in woorden, in plaats van een foto.
+     *
+     * "Passievrucht panna cotta met cranberry's en schuim van vlierbloesem" —
+     * dan is er geen boek om te lezen en bedenkt hij het recept zelf, maar met
+     * precies dezelfde regels: op ónze apparatuur, onderdelen los, en geen
+     * verzonnen tijden. Dat laatste is geen tegenspraak: het gerecht mag hij
+     * bedenken, hoe lang het duurt niet.
+     */
+    beschrijving?: unknown;
     /** Wat de kok er zelf bij zegt. Mag leeg. */
     opmerking?: unknown;
 }
@@ -59,7 +69,19 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         return NextResponse.json({ error: 'Ongeldige JSON' }, { status: 400 });
     }
 
-    const fotos = leesFotos(body.fotos);
+    const idee = typeof body.beschrijving === 'string' ? body.beschrijving.trim().slice(0, 2000) : '';
+    const heeftFotos = Array.isArray(body.fotos) && body.fotos.length > 0;
+
+    if (!heeftFotos && idee.length < 8) {
+        return NextResponse.json(
+            { error: 'Stuur een foto van het recept, of beschrijf het gerecht in een zin' },
+            { status: 400 },
+        );
+    }
+
+    const fotos = heeftFotos
+        ? leesFotos(body.fotos)
+        : { ok: true as const, waarden: [] };
     if (!fotos.ok) {
         return NextResponse.json({ error: (fotos as { ok: false; error: string }).error }, { status: 400 });
     }
@@ -118,7 +140,9 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         {
             type: 'text',
             text: [
-                'Zet dit recept om naar onze werkwijze.',
+                idee
+                    ? `Bedenk het recept voor dit gerecht en schrijf het meteen op onze werkwijze:\n"${idee}"\n\nEr is geen kookboek — het gerecht mag je zelf bedenken. De tijden niet: die laat je leeg zoals altijd, want die worden hier gemeten.`
+                    : 'Zet dit recept om naar onze werkwijze.',
                 '',
                 'DIT STAAT ER IN DE KEUKEN — kies alleen hieruit, met het id tussen haken:',
                 inventarisVoorPrompt(apparaten),
@@ -172,7 +196,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         tokens_cache_read: bericht.usage.cache_read_input_tokens ?? 0,
         tokens_cache_creation: bericht.usage.cache_creation_input_tokens ?? 0,
         cost_eur_cents: kostenCent,
-        metadata: { feature: 'recept-ontleder', fotos: fotos.waarden.length },
+        metadata: { feature: 'recept-ontleder', fotos: fotos.waarden.length, uit_idee: idee.length > 0 },
     }).catch(() => { /* boekhouding mag de route niet blokkeren */ });
 
     if (bericht.stop_reason === 'refusal') {

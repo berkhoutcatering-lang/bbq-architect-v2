@@ -751,6 +751,10 @@ describe('een receptuur kan uit delen bestaan', () => {
         );
         expect(uit.stappen[0].oordeel).toBe('vraag');
         expect(uit.stappen[0].bezwaar).toContain('staat niet bij de onderdelen');
+        /* En de verwijzing zelf is weg, anders wordt er een deel van gemaakt.
+           Kwam boven water bij een bedachte panna cotta: het model schreef "x"
+           als onderdeel, en op de lade stond een deel "x · MAG VOORUIT". */
+        expect(uit.stappen[0].voorComponent).toBeNull();
     });
 
     it('herkent het onderdeel ook als het anders geciteerd is', () => {

@@ -302,7 +302,14 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
                 belandt anders nergens: niet bij het gerecht en niet bij de
                 bouwsteen. */
         if (s.voorComponent != null && !genoemdeComponenten.has(s.voorComponent.toLowerCase())) {
-            return vraag(basis, `Deze stap hoort bij "${s.voorComponent}", maar dat staat niet bij de onderdelen`);
+            /* De verwijzing gaat eruit, de vraag blijft staan. Anders krijg je
+               een deel dat "x" heet met een label "mag vooruit" erop — dat ziet
+               eruit als een echt onderdeel terwijl het een schrijffout is. De
+               stap hoort bij het gerecht tot de kok iets anders zegt. */
+            return vraag(
+                { ...basis, voorComponent: null },
+                `Deze stap hoort bij "${s.voorComponent}", maar dat staat niet bij de onderdelen`,
+            );
         }
 
         /* 2c — Tweede mening. De tekst wordt niet gebruikt om te beslissen —
@@ -655,6 +662,12 @@ export function inventarisVoorPrompt(apparaten: ApparaatMetKundes[]): string {
 export const SYSTEEM = `Je zet kookboekrecepten om naar de werkwijze van Hop & Bites, een Nederlandse BBQ-catering.
 
 Je bent geen transcribent. Je vertaalt: hetzelfde gerecht, dezelfde kwaliteit, gemaakt met de apparatuur die er staat. Een recept dat "leg het op de kamado en gooi er een rookhoutchunk in" zegt, wordt hier een stap op de pelletgrill zonder chunk — die maakt zijn eigen rook. Een saus gaat in een pan op de inductie, niet op de barbecue; het gaat om het vlees.
+
+SOMS IS ER GEEN BOEK
+
+Krijg je geen receptpagina maar een idee in één zin — "passievrucht panna cotta met cranberry's en schuim van vlierbloesem" — dan bedenk je het recept zelf. Alle regels hieronder gelden onverkort, en één ervan is dan extra belangrijk: het gerécht mag je bedenken, de tíjden niet. Hoe lang panna cotta bij ons opstijft weet niemand tot het een keer gemeten is, dus laat die velden leeg.
+
+Wat je wél invult zijn de dingen die uit het gerecht zelf volgen: op welk apparaat het hoort, welke temperatuur, welke onderdelen er los van gemaakt kunnen worden en in welke volgorde het moet.
 
 HARDE REGELS
 
