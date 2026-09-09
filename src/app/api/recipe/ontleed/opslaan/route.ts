@@ -97,11 +97,15 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     /* 2 — De bouwstenen. Vóór de stappen, want een stap die een onderdeel maakt
            heeft het id van dat onderdeel nodig.
     
-           Kostprijs blijft leeg: die komt uit inkoop, niet uit een boek. En de
-           koppeling tússen gerecht en bouwsteen (gerecht_components) leggen we
-           bewust niet — daar hoort een hoeveelheid bij en die weten we niet.
-           Die legt de kok zelf zodra hij weet hoeveel pekel er per acht porties
-           in gaat. */
+           Kostprijs blijft leeg: die komt uit inkoop, niet uit een boek.
+    
+           De koppeling gerecht ↔ bouwsteen wordt wél gelegd, met hoeveelheid 0.
+           Dat is geen verzonnen getal maar precies de eerlijke stand: we weten
+           niet hoeveel pekel er per acht porties in gaat, en nul telt voor nul
+           mee in de kostprijs. Zonder die koppeling zijn de stappen van de
+           ranchsaus nergens meer terug te vinden — ze hangen aan de bouwsteen
+           en niet aan het gerecht, dus dit is de enige draad ertussen. De kok
+           vult de hoeveelheid in zodra hij hem weet. */
     const idVan = new Map<string, number>();
     /* Alleen wat we zélf net hebben aangemaakt, zodat we bij een mislukking
        verderop precies dát kunnen terugdraaien en niets van eerder. */
@@ -118,6 +122,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
                 base_unit: c.eenheid,
                 base_cost_cents: 0,
                 ai_suggested: true,
+                /* Herkomst, geen gebruik: hierdoor zijn de stappen van dit
+                   onderdeel terug te vinden vanaf het gerecht. Hoevéél ervan in
+                   het gerecht gaat komt later in gerecht_components, en daar
+                   hoort een echte hoeveelheid bij. */
+                uit_gerecht_id: gerecht.id,
                 description: `Aangemaakt vanuit het recept ${controle.gerechtNaam}. Kostprijs nog invullen.`,
             })),
         ).select('id, name');

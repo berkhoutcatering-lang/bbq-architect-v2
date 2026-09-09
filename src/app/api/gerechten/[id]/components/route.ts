@@ -40,7 +40,21 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
         .eq('gerecht_id', id);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ items: data ?? [] });
+
+    /* Bouwstenen die de receptlezer uit dít gerecht heeft losgehaald — de
+       ranchsaus van de chicken sandwich — en die nog geen hoeveelheid hebben.
+       Ze staan wél in de receptuur met hun eigen stappen, dus zonder deze lijst
+       zegt dit blok "nog geen componenten" terwijl er twee zichtbaar zijn. */
+    const gekoppeld = new Set((data ?? []).map((r) => r.component_id as number));
+    const { data: uitDitRecept } = await supabase
+        .from('components')
+        .select('id, name, base_unit')
+        .eq('uit_gerecht_id', id);
+
+    return NextResponse.json({
+        items: data ?? [],
+        zonderHoeveelheid: (uitDitRecept ?? []).filter((c) => !gekoppeld.has(c.id as number)),
+    });
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {

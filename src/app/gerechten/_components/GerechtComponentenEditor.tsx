@@ -61,6 +61,9 @@ export function eenheidsOpties(baseUnit: string | undefined, huidige: string): s
 
 export default function GerechtComponentenEditor({ gerechtId }: Props) {
   const [linked, setLinked] = useState<LinkedComponent[]>([]);
+  /* Onderdelen die de receptlezer uit dit gerecht haalde en die nog geen
+     hoeveelheid hebben. Ze staan al in de receptuur met hun eigen stappen. */
+  const [zonderHoeveelheid, setZonderHoeveelheid] = useState<Array<{ id: number; name: string; base_unit: string }>>([]);
   const [available, setAvailable] = useState<AvailableComponent[]>([]);
   const [zoek, setZoek] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -86,8 +89,12 @@ export default function GerechtComponentenEditor({ gerechtId }: Props) {
   const loadLinked = useCallback(async () => {
     const res = await fetch(`/api/gerechten/${gerechtId}/components`);
     if (!res.ok) return;
-    const json = await res.json() as { items: LinkedComponent[] };
+    const json = await res.json() as {
+      items: LinkedComponent[];
+      zonderHoeveelheid?: Array<{ id: number; name: string; base_unit: string }>;
+    };
     setLinked(json.items ?? []);
+    setZonderHoeveelheid(json.zonderHoeveelheid ?? []);
     setConcept({});
   }, [gerechtId]);
 
@@ -361,8 +368,27 @@ export default function GerechtComponentenEditor({ gerechtId }: Props) {
         </div>
       )}
 
+      {/* Wat de receptlezer eruit haalde maar nog geen hoeveelheid heeft. Dit
+          blok zei "nog geen componenten" terwijl er in de receptuur eronder twee
+          delen stonden — dat is dezelfde vraag met twee antwoorden. */}
+      {zonderHoeveelheid.length > 0 && (
+        <div style={{
+          padding: '12px 14px', marginBottom: 10, borderRadius: 8,
+          border: '1px dashed var(--border)',
+        }}>
+          <p style={{ fontSize: 13, margin: '0 0 4px' }}>
+            {zonderHoeveelheid.length === 1 ? 'Eén onderdeel komt' : `${zonderHoeveelheid.length} onderdelen komen`}
+            {' '}uit dit recept: <strong>{zonderHoeveelheid.map(c => c.name).join(', ')}</strong>.
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>
+            Ze staan met hun eigen stappen in de receptuur hieronder. Koppel ze hierboven met een
+            hoeveelheid zodra je weet hoeveel er per portie in gaat — dan tellen ze mee in de kostprijs.
+          </p>
+        </div>
+      )}
+
       {/* Gekoppelde componenten */}
-      {linked.length === 0 ? (
+      {linked.length === 0 && zonderHoeveelheid.length === 0 ? (
         <div style={{
           padding: '20px 16px', border: '1px dashed var(--border)',
           borderRadius: 10, textAlign: 'center',
