@@ -62,4 +62,59 @@ describe('extension adapter — parsePackaging (§14.2 bronvelden)', () => {
         const p = parsePackaging('assortiment');
         expect(p.priceBasis).toBe('unknown');
     });
+
+    /* Bidfood schrijft "gr", niet "g" of "gram". Die ene lettergreep hield op
+       9 september 1.045 producten in de wachtkamer — vrijwel de hele
+       kruidenkast, want kruiden worden nu eenmaal per gram verkocht. */
+    it('leest "gr" als gram', () => {
+        const p = parsePackaging('Paprikapoeder, bus 500 gr');
+        expect(p.priceBasis).toBe('package');
+        expect(p.packCount).toBe('1');
+        expect(p.contentPerItemQuantity).toBe('500');
+        expect(p.contentPerItemUnit).toBe('g');
+    });
+
+    it('leest "grammen" ook', () => {
+        expect(parsePackaging('zak 250 grammen').contentPerItemUnit).toBe('g');
+    });
+
+    /* Centiliter is geen basiseenheid; 75 cl en 750 ml moeten hetzelfde
+       opleveren, anders staat dezelfde fles twee keer verschillend in de kast. */
+    it('rekent centiliter om naar milliliter', () => {
+        const p = parsePackaging('Sushi azijn, fles 50 cl');
+        expect(p.contentPerItemQuantity).toBe('500');
+        expect(p.contentPerItemUnit).toBe('ml');
+    });
+
+    it('rekent deciliter om naar milliliter', () => {
+        const p = parsePackaging('fles 5 dl');
+        expect(p.contentPerItemQuantity).toBe('500');
+        expect(p.contentPerItemUnit).toBe('ml');
+    });
+
+    it('leest "lt" als liter', () => {
+        const p = parsePackaging('Frituurvet vloeibaar regular, emmer 10 lt');
+        expect(p.contentPerItemQuantity).toBe('10');
+        expect(p.contentPerItemUnit).toBe('liter');
+    });
+
+    it('telt verpakkingswoorden als stuks wanneer er geen gewicht staat', () => {
+        const p = parsePackaging('Drinkbouillon tomaat sticks, doosje 80 zakjes');
+        expect(p.priceBasis).toBe('package');
+        expect(p.packCount).toBe('80');
+        expect(p.contentPerItemUnit).toBe('piece');
+    });
+
+    it('gewicht wint van het verpakkingswoord', () => {
+        /* "40 gr per zakje, doos 12 zakjes" gaat over 40 gram, niet over 12. */
+        const p = parsePackaging('Winegums 120 gr per zakje, doos 12 zakjes');
+        expect(p.contentPerItemQuantity).toBe('120');
+        expect(p.contentPerItemUnit).toBe('g');
+    });
+
+    it('houdt echt onduidelijke verpakking onduidelijk', () => {
+        /* Deze horen in de wachtkamer thuis; een gok is erger dan een gat. */
+        expect(parsePackaging('Houtduif, per stuk').priceBasis).not.toBe('package');
+        expect(parsePackaging('Spareribs sous-vide gegaard, krat 8 x 3 ribben').priceBasis).toBe('unknown');
+    });
 });
