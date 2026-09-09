@@ -1,0 +1,26 @@
+{
+  "_toelichting": "Antwoord op aanroep B — POST /api/experience/v1/boxes. De VORM is het contract; token, url en namen zijn plaatshouders (zie experience-v1.md). onderdelen[] is de stand op het moment van koppelen en gaat één op één in bestellingen.doos_snapshot.",
+  "token": "PLAATSHOUDER-TOKEN-0000",
+  "url": "https://example.invalid/k/PLAATSHOUDER-TOKEN-0000",
+  "stops": [
+    { "naam": "Halte 1" },
+    { "naam": "Halte 2" },
+    { "naam": "Halte 3" },
+    { "naam": "Halte 4" },
+    { "naam": "Halte 5" }
+  ],
+  "onderdelen": [
+    { "naam": "Gerecht 1", "soort": "proteïne", "per": "persoon", "aantal_per_persoon": 2, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 3 },
+    { "naam": "Gerecht 2", "soort": "proteïne", "per": "persoon", "aantal_per_persoon": 2, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 3 },
+    { "naam": "Gerecht 3", "soort": "proteïne", "per": "persoon", "aantal_per_persoon": 2, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 2 },
+    { "naam": "Gerecht 4", "soort": "proteïne", "per": "persoon", "aantal_per_persoon": 2, "bewaren": "Koeling", "allergenen": ["schaaldieren"], "houdbaarheid_dagen": 2 },
+    { "naam": "Gerecht 5", "soort": "proteïne", "per": "persoon", "aantal_per_persoon": 2, "bewaren": "Koeling", "allergenen": ["vis"], "houdbaarheid_dagen": 2 },
+    { "naam": "Saus 1", "soort": "saus", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": ["mosterd"], "houdbaarheid_dagen": 5 },
+    { "naam": "Saus 2", "soort": "saus", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": ["ei", "melk"], "houdbaarheid_dagen": 4 },
+    { "naam": "Saus 3", "soort": "saus", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 5 },
+    { "naam": "Zuur 1", "soort": "zuur", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 10 },
+    { "naam": "Zuur 2", "soort": "zuur", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 10 },
+    { "naam": "Salade 1", "soort": "salade", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": ["ei", "mosterd"], "houdbaarheid_dagen": 3 },
+    { "naam": "Salade 2", "soort": "salade", "per": "doos", "aantal_per_persoon": 1, "bewaren": "Koeling", "allergenen": [], "houdbaarheid_dagen": 3 }
+  ]
+}

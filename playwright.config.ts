@@ -37,6 +37,14 @@ export default defineConfig({
             name: 'chromium',
             use: { ...devices['Desktop Chrome'] },
         },
+        /* Bestelstroom-rooktest. Eigen testDir, dus de menukaart-snapshots
+           blijven waar ze staan. Op een telefoonformaat, want daar wordt
+           besteld — en de knop die hij bewaakt stond een dag onzichtbaar. */
+        {
+            name: 'bestelstroom',
+            testDir: './tests/bestelstroom',
+            use: { ...devices['iPhone 13'] },
+        },
     ],
 
     /* Snapshot output naast de spec, scoped per template. */
@@ -44,7 +52,11 @@ export default defineConfig({
 
     /* Spawn de Next.js server vóór de tests. Test-mode flag schakelt de
        /_test/menukaart/* test-routes aan (anders geven die 404). */
-    webServer: {
+    /* Wijst PLAYWRIGHT_BASE_URL naar een server die al draait, dan geen tweede
+       starten. Next weigert een tweede `next dev` in dezelfde map, en een
+       `next build` ernaast zou de .next van die draaiende server overschrijven —
+       met meerdere sessies op deze repo is dat geen theoretisch risico. */
+    webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
         command: useDev
             ? 'NEXT_PUBLIC_E2E=1 NODE_ENV=test npm run dev -- -p 3001'
             : 'NEXT_PUBLIC_E2E=1 NODE_ENV=test npm run build && NEXT_PUBLIC_E2E=1 npm start -- -p 3001',
