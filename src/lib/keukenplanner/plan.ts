@@ -11,6 +11,7 @@ import type { Keukenscherm, Melding, Taak, TijdlijnRegel, Aandacht } from './typ
 import { formatDuur, formatKort, vrijeRuimteMin } from './duur';
 import { terugrekenen, marge, type TerugrekenInvoer } from './terugrekenen';
 import { vulGaten } from './gatenvullen';
+import { verdeelOverApparaten, botsingMelding, type BezettingsTaak } from './bezetting';
 import type { CapaciteitsProbleem } from './batchen';
 
 export interface PlanInvoer extends TerugrekenInvoer {
@@ -40,6 +41,23 @@ export function bouwScherm(invoer: PlanInvoer): Keukenscherm {
 
     const gaten = vulGaten({ taken: open, margeMin, nu });
 
+    /* Wie moet er op wie wachten? `terugrekenen` weet wanneer een taak op zijn
+       vroegst kán beginnen, niet of het toestel dan vrij is. Bij één pit staat
+       alles in de rij, en zonder deze stap belooft het bord een dag die niet
+       uit te voeren is. */
+    const bezetting = verdeelOverApparaten(open.map((t): BezettingsTaak => {
+        const r = rekening.get(t.id);
+        return {
+            id: t.id,
+            apparaatId: t.apparaat?.id ?? null,
+            concurrentJobs: t.apparaat?.concurrentJobs ?? null,
+            exclusiefBezet: t.apparaat?.exclusiefBezet !== false,
+            vroegsteStart: r?.vroegsteStart ?? nu,
+            duurMin: (t.actiefMin ?? 0) + (t.passiefMin ?? 0),
+            uiterlijkKlaar: r?.uiterlijkKlaar ?? null,
+        };
+    }));
+
     /* Waar staat het scherm op? Loopt er iets waar hij mee bezig is, dan
        "bezig". Loopt er iets passiefs, dan is hij vrij en hoort er werk in
        dat gat te staan. Is er niets, dan is de dag klaar. */
@@ -51,6 +69,20 @@ export function bouwScherm(invoer: PlanInvoer): Keukenscherm {
     const meldingen: Melding[] = [
         ...(invoer.extraMeldingen ?? []),
         ...(invoer.capaciteitsProblemen ?? []).map(capaciteitsMelding),
+        ...bezetting.botsingen.map((b): Melding => {
+            const apparaat = open.find((t) => t.apparaat?.id === b.apparaatId)?.apparaat ?? null;
+            return {
+                id: `bezetting-${b.apparaatId}`,
+                /* Wachten op een toestel is de dag zoals hij is, geen storing.
+                   Alleen als iemand er zijn deadline door mist wordt het erger
+                   dan een mededeling. */
+                ernst: b.teLaat.length > 0 ? 'waarschuwing' : 'info',
+                kop: botsingMelding(b, apparaat?.naam ?? 'dit toestel', apparaat?.concurrentJobs ?? 1),
+                verwacht: b.teLaat.length > 0
+                    ? 'Iets naar een andere dag schuiven, of een tweede toestel erbij.'
+                    : null,
+            };
+        }),
     ];
 
     /* Eerlijk zijn over wat er nog niet is. Beter dan een matrix vol
