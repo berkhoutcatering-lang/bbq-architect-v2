@@ -54,17 +54,28 @@ export default async function AnalysePage({
     }
 
     let componentCount = 0;
+    /* Componenten die nog op opbrengst 1,000 staan: de standaardwaarde uit de
+       migratie. Voor een fles saus klopt dat, voor bavette bijna zeker niet —
+       en zolang het veld leeg blijft rekent de hele menukaart alsof er geen
+       snijverlies is. We tellen alleen; wat 100% terecht is, beoordeelt Sam. */
+    let componentenZonderVerlies = 0;
     try {
         const compRes = await supabase.from('components').select('id', { count: 'exact', head: true });
         componentCount = compRes.count ?? 0;
+        const zonder = await supabase
+            .from('components')
+            .select('id', { count: 'exact', head: true })
+            .eq('yield_factor', 1);
+        componentenZonderVerlies = zonder.count ?? 0;
     } catch {
-        /* Tabel bestaat niet of geen rechten — KPI valt terug op 0. */
+        /* Tabel of kolom bestaat niet — beide tellers vallen terug op 0. */
     }
 
     return <AnalyseClient
             initialView={view}
             gerechten={gerechten}
             componentCount={componentCount}
+            componentenZonderVerlies={componentenZonderVerlies}
             populariteit={populariteit}
         />;
 }

@@ -1,0 +1,865 @@
+/**
+ * De ontleder — van een receptfoto naar een Hop & Bites-receptuur.
+ *
+ * **Wie doet wat, en waarom die grens daar ligt.**
+ *
+ * De eerste versie liet code het apparaat kiezen op grond van patronen in de
+ * recepttekst. Dat werkt bij "bereid een BBQ voor op indirect grillen" en
+ * breekt bij "leg het vlees op de kamado en gooi er een rookhoutchunk in" —
+ * dan moet je elke formulering gaan opsommen die een kok kan bedenken. Dat is
+ * precies waar patroonherkenning slecht in is.
+ *
+ * Dus:
+ *
+ *   **De AI vertaalt.** Hij krijgt de inventaris te zien en zet het recept om
+ *   naar hoe het hier gemaakt wordt. Een saus gaat in een pan op de inductie,
+ *   niet "op het vuur". Een chunk in de kamado bestaat hier niet. Hetzelfde
+ *   gerecht, dezelfde kwaliteit, andere machines.
+ *
+ *   **De code controleert.** Bestaat dat apparaat? Haalt het die temperatuur?
+ *   Staat er een duur bij of wordt er iets verzonnen? Mag dit opgeslagen
+ *   worden? Harde vragen met harde antwoorden — daar is code goed in.
+ *
+ * Deze module is die controle. Puur, testbaar, geen netwerk. Wat er niet
+ * doorheen komt, wordt een vraag aan de kok en geen stille aanname.
+ */
+
+import { leesBereidingswijze } from './apparaatKeuze';
+import type { ApparaatMetKundes } from './estafette';
+
+/** Eén stap zoals de AI hem voorstelt, al vertaald naar deze keuken. */
+export interface VoorstelStap {
+    volgnummer: number;
+    /** De handeling in chef-taal, één zin. */
+    tekst: string;
+    /** Genormaliseerd werkwoord, waarop gebatcht wordt. */
+    bewerking?: string | null;
+    hoeveelheid?: number | null;
+    eenheid?: string | null;
+    /** Minuten waarin de kok bezig is. Leeg = stond niet in het recept. */
+    actiefMin?: number | null;
+    /** Minuten wachten. Leeg = stond niet in het recept. */
+    passiefMin?: number | null;
+    /** Temperatuur van de omgeving: de smoker op 115, de oven op 180. */
+    tempC?: number | null;
+    /**
+     * Kerntemperatuur van het product waarbij de stap klaar is.
+     *
+     * Dit is de eindconditie, niet een instelling. Staat hij gevuld, dan eindigt
+     * de stap op de meter en niet op de klok — en dan is de duur ernaast een
+     * schatting van hoe lang dat duurt, geen afspraak.
+     */
+    kernTempC?: number | null;
+    /** Welk toestel de AI hiervoor koos, uit de meegegeven inventaris. */
+    materieelId?: number | null;
+    /** Waarom dat toestel. Komt op de goedkeur-lade. */
+    apparaatReden?: string | null;
+    /** Andere toestellen die ook kunnen — dan mag de kok kiezen. */
+    alternatieven?: Array<{ materieelId: number; label: string }>;
+    /** Elke zoveel minuten iets doen: natspuiten, draaien. */
+    herhaalIntervalMin?: number | null;
+    herhaalDuurMin?: number | null;
+    /**
+     * Moet de kok erbij blijven?
+     *
+     * Staat niet meer in het schema — de opslagroute leidt hem af uit
+     * herhaalIntervalMin. Het veld blijft bestaan zodat oudere voorstellen en de
+     * tests er nog mee overweg kunnen.
+     */
+    toezichtNodig?: boolean | null;
+    hangtAfVanVolgnummer?: number | null;
+    /** Wat er in het boek stond en hier niet meer geldt. Alleen ter uitleg. */
+    vervangenDoor?: string | null;
+    /**
+     * Deze stap maakt niet het gerecht maar een onderdeel ervan.
+     *
+     * De naam van de bouwsteen uit `componenten`. Het kruidenmengsel voor de
+     * pulled pork kost tien minuten en hoeft niet op de dag zelf: hangt die
+     * stap aan de bouwsteen in plaats van aan het gerecht, dan mag de planner
+     * hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander
+     * gerecht.
+     */
+    voorComponent?: string | null;
+    /**
+     * Deze stap wacht op een keuze die hierboven al gesteld is.
+     *
+     * Zonder dit veld vraagt de controle nóg een keer wat de AI zelf al netjes
+     * had voorgelegd: bij de porchetta stond "welke pittemperatuur?" als keuze
+     * én als bezwaar bij de stap. Twee regels voor één beslissing, en dan raakt
+     * de lijst vol met dingen die al beantwoord worden.
+     */
+    wachtOpKeuze?: string | null;
+}
+
+/**
+ * Eén regel uit de ingrediëntenlijst van het boek.
+ *
+ * Dit is lézen, geen verzinnen. "300 g mager rundergehakt" staat er letterlijk;
+ * de kostprijs die daaruit volgt komt uit de catalogus en niet uit het model.
+ * Die twee dingen zaten aanvankelijk onder één verbod, en daardoor stond elke
+ * bouwsteen op € 0,00 zonder enige weg omhoog.
+ */
+export interface VoorstelIngredient {
+    naam: string;
+    /** Zoals het in het boek staat: 2, 0.5, 1. */
+    hoeveelheid?: number | null;
+    /** Zoals het in het boek staat: "el", "tl", "stengels", "g". */
+    eenheid?: string | null;
+    /**
+     * Diezelfde hoeveelheid in gram.
+     *
+     * Alleen bij huishoudmaten — een theelepel, een stengel, een teen, een bosje.
+     * Wat al in g, kg, ml of l staat blijft zoals het is.
+     *
+     * Dit is omrekenen en geen verzinnen: een theelepel gedroogde dille weegt
+     * ongeveer een gram, een stengel bleekselderij een gram of veertig. Zonder
+     * dat getal is de opbrengst van een batch niet te berekenen (je kunt geen
+     * grammen bij theelepels optellen) en blijft de kostprijs op nul staan. De
+     * boekwaarde blijft ernaast staan, zodat zichtbaar is wat er omgerekend is.
+     */
+    gram?: number | null;
+    /** Bij welk onderdeel dit hoort. Leeg = bij het gerecht zelf. */
+    voorComponent?: string | null;
+}
+
+export interface VoorstelComponent {
+    naam: string;
+    /** Verwijst het recept naar een ander recept ("zie blz. 22")? */
+    isVerwijzing?: boolean;
+}
+
+/** Wat de AI teruggeeft na het lezen van de foto's. */
+export interface Voorstel {
+    gerechtNaam: string;
+    porties?: number | null;
+    componenten?: VoorstelComponent[];
+    /** De ingrediëntenlijst, per onderdeel. Waar de kostprijs uit volgt. */
+    ingredienten?: VoorstelIngredient[];
+    stappen: VoorstelStap[];
+    /** Stappen uit het boek die hier vervallen, met de reden. */
+    vervallen?: Array<{ tekst: string; reden: string }>;
+    /** Waar de AI zelf niet uit kwam. Wordt letterlijk een vraag aan de kok. */
+    keuzes?: Array<{ vraag: string; opties: string[] }>;
+    /**
+     * Staat er nóg een recept op deze pagina? Dan de naam ervan.
+     *
+     * Kookboeken zetten er vaak twee op één bladzij. De lezer werkt er één uit
+     * en noemt de ander hier, zodat de kok hem met één klik alsnog kan laten
+     * lezen — zonder opnieuw te fotograferen.
+     */
+    anderRecept?: string | null;
+}
+
+export type StapOordeel = 'akkoord' | 'vraag';
+
+export interface GecontroleerdeStap extends VoorstelStap {
+    oordeel: StapOordeel;
+    /** Alleen gevuld bij een vraag: wat er niet klopt. */
+    bezwaar?: string | null;
+    materieelNaam?: string | null;
+    /**
+     * Geen tijd in het recept, en ook niet nodig om de dag te kunnen plannen.
+     * Wordt getoond, telt niet mee in het gatenvullen, en gaat vanzelf goed
+     * zodra hij een paar keer gemeten is.
+     */
+    duurOnbekend?: boolean;
+    /** Duur komt uit een boek, niet uit een meting. Altijd. */
+    duurBron: 'geschat';
+}
+
+export interface Controle {
+    gerechtNaam: string;
+    porties: number | null;
+    stappen: GecontroleerdeStap[];
+    vervallen: Array<{ tekst: string; reden: string }>;
+    ontbrekendeComponenten: string[];
+    /** De ingrediënten, met de naam van het onderdeel waar ze bij horen. */
+    ingredienten: VoorstelIngredient[];
+    /** Waar de AI zelf niet uitkwam. Elk hiervan wordt een keuze op de lade. */
+    keuzes: Array<{ vraag: string; opties: string[] }>;
+    /** Naam van het andere recept op dezelfde pagina, als dat er is. */
+    anderRecept: string | null;
+    /** Alles wat de kok moet beslissen voordat dit opgeslagen mag worden. */
+    vragen: string[];
+    samenvatting: { actiefMin: number; passiefMin: number; stappen: number; zonderTijd: number };
+}
+
+export interface ControleContext {
+    apparaten: ApparaatMetKundes[];
+    /** Componenten die al bestaan, op naam. */
+    bekendeComponenten?: string[];
+}
+
+/**
+ * Controleer het voorstel van de AI tegen de werkelijke keuken.
+ *
+ * Vijf harde toetsen. Elke toets die faalt wordt een vraag — nooit een stille
+ * correctie, want dan leert niemand er iets van en klopt het de volgende keer
+ * weer niet.
+ */
+/**
+ * Componentnaam zonder de verwijzing naar het boek.
+ *
+ * "Smokey's Pig Spray (zie blz. 29)" en "Smokey's Pig Spray (blz. 28)" zijn
+ * hetzelfde spul uit hetzelfde boek, alleen anders geciteerd. Zonder deze
+ * normalisatie maakt elk recept zijn eigen kopie aan, en bij duizend recepten
+ * heb je dan tien Piggy Mixen die geen van alle een kostprijs hebben.
+ */
+export function normaliseerComponentnaam(naam: string): string {
+    /* Elke afsluitende haakjes-zin die naar het boek verwijst gaat eraf, hoe
+       omslachtig ook geformuleerd: "(zie blz. 27)" net zo goed als
+       "(zie blz. 27 — verwijzing naar apart recept)". */
+    const zonder = naam.replace(/\s*\([^()]*\b(?:blz|bladzijde|pagina|p)\b[^()]*\)\s*$/i, '').trim();
+    return (zonder || naam).trim();
+}
+
+/**
+ * Hoe een kerntemperatuur in een zin geschreven kan staan.
+ *
+ * Twee volgordes, want een kok schrijft ze allebei: "tot kern 88 °C" en
+ * "tot minimaal 64 °C kerntemperatuur". Alleen de eerste herkennen liet die 64
+ * doorlekken naar het apparaatveld, en dan meldt de controle dat de Yoder geen
+ * 64 °C haalt terwijl dat de temperatuur van het vlees is.
+ */
+const KERN_PATROON = /\bkern(?:temperatuur)?\s*(?:van\s*|heeft bereikt van\s*|bereikt van\s*)?(\d{2,3})\s*°?\s*C|(\d{2,3})\s*°?\s*C\s*kern(?:temperatuur)?\b/gi;
+
+/**
+ * Kerntemperatuur uit de eigen staptekst vissen.
+ *
+ * "Grillen tot een kerntemperatuur van 65 °C" met een leeg kernTempC-veld kwam
+ * in twee van de elf proefrecepten voor: het getal staat er, het veld niet. Dat
+ * is geen oordeel en geen schatting — het is overtypen uit een zin die het
+ * model zelf geschreven heeft, en daar is code beter in dan een taalmodel.
+ *
+ * Alleen bij precies één ondubbelzinnige vermelding. Staan er twee
+ * kerntemperaturen in één zin, dan is het een aftakking en beslist de kok.
+ */
+function kernUitTekst(tekst: string): number | null {
+    const treffers = [...tekst.matchAll(KERN_PATROON)].map((m) => m[1] ?? m[2]);
+    if (treffers.length !== 1) return null;
+    const waarde = Number(treffers[0]);
+    /* Buiten dit bereik is het geen kerntemperatuur maar iets anders. */
+    return waarde >= 40 && waarde <= 100 ? waarde : null;
+}
+
+/**
+ * Apparaattemperatuur uit de eigen staptekst vissen.
+ *
+ * Spiegelbeeld van `kernUitTekst`, en met dezelfde reden: "direct grillen op
+ * circa 250 °C tot een kerntemperatuur van 65 °C" met een leeg tempC-veld
+ * leverde de vraag op welke stand de grill moest krijgen — terwijl het antwoord
+ * in diezelfde zin stond.
+ *
+ * De kernvermeldingen worden er eerst uitgeknipt, anders leest hij de 65 als
+ * de stand van de grill.
+ */
+function omgevingUitTekst(tekst: string): number | null {
+    const zonderKern = tekst.replace(new RegExp(KERN_PATROON.source, 'gi'), ' ');
+    const treffers = [...zonderKern.matchAll(/(\d{2,3})\s*°\s*C/g)];
+    if (treffers.length !== 1) return null;
+    const waarde = Number(treffers[0][1]);
+    return waarde >= 40 && waarde <= 300 ? waarde : null;
+}
+
+export function controleer(voorstel: Voorstel, context: ControleContext): Controle {
+    const perId = new Map(context.apparaten.map((a) => [a.id, a]));
+    const bekend = new Set(
+        (context.bekendeComponenten ?? []).map((n) => normaliseerComponentnaam(n).toLowerCase()),
+    );
+    const vragen: string[] = [];
+
+    /* Op welke stand elk toestel staat, terwijl we door het recept lopen.
+    
+       Een smoker die op 115 °C is gezet blijft op 115 °C tot iemand hem
+       verdraait. Het recept schrijft dat één keer op en gaat verder — maar bij
+       de porchetta stond de temperatuur alleen bij het erop leggen, en toen
+       vroeg de controle bij het inpakken opnieuw op welke stand de Yoder moest.
+       Dezelfde vraag, hetzelfde toestel, drie regels verderop. */
+    const standVan = new Map<number, number>();
+
+    /* De bouwstenen die het voorstel zelf noemt, genormaliseerd. Een stap mag
+       alleen naar iets uit deze lijst verwijzen. */
+    const genoemdeComponenten = new Set(
+        (voorstel.componenten ?? []).map((c) => normaliseerComponentnaam(c.naam).toLowerCase()),
+    );
+
+    const stappen: GecontroleerdeStap[] = voorstel.stappen.map((rauwIn) => {
+        /* Nul is geen herhaling maar de afwezigheid ervan. Het model vult die
+           velden soms met 0 in plaats van ze weg te laten, en dan meldde de
+           controle "elke 0 min 0 min werk — dat past niet in elkaar" en kon een
+           volstrekt gezond recept niet meer opgeslagen worden. */
+        const rauw: VoorstelStap = {
+            ...rauwIn,
+            herhaalIntervalMin: (rauwIn.herhaalIntervalMin ?? 0) > 0 ? rauwIn.herhaalIntervalMin : null,
+            herhaalDuurMin: (rauwIn.herhaalDuurMin ?? 0) > 0 ? rauwIn.herhaalDuurMin : null,
+        };
+        /* Wat het model in zijn eigen zin schreef maar niet in het veld zette. */
+        const kern = rauw.kernTempC ?? kernUitTekst(rauw.tekst) ?? undefined;
+        const omgeving = omgevingUitTekst(rauw.tekst);
+        /* Eén getal in de zin is één temperatuur. Belandt dezelfde waarde in
+           allebei de velden, dan is het twee keer hetzelfde gelezen. */
+        const eigenTemp = rauw.tempC ?? (omgeving != null && omgeving !== kern ? omgeving : undefined);
+        const erfelijk = rauw.materieelId != null ? standVan.get(rauw.materieelId) : undefined;
+
+        if (eigenTemp != null && rauw.materieelId != null) standVan.set(rauw.materieelId, eigenTemp);
+
+        const s: VoorstelStap = {
+            ...rauw,
+            kernTempC: kern,
+            tempC: eigenTemp ?? erfelijk,
+            voorComponent: rauw.voorComponent ? normaliseerComponentnaam(rauw.voorComponent) : null,
+        };
+        const basis = { ...s, duurBron: 'geschat' as const };
+        const apparaat = s.materieelId != null ? perId.get(s.materieelId) : undefined;
+
+        /* 1 — Bestaat het gekozen toestel? Een id dat nergens op slaat is
+               erger dan geen keuze: het ziet er ingevuld uit. */
+        if (s.materieelId != null && !apparaat) {
+            return vraag(basis, `Apparaat ${s.materieelId} staat niet in het materieel — welk toestel wordt dit?`);
+        }
+
+        /* Wacht deze stap op een keuze die de kok toch al voorgelegd krijgt?
+           Dan is een bezwaar dubbelop — de beslissing staat al op de lade. */
+        const wachtOpKeuze = s.wachtOpKeuze != null
+            && (voorstel.keuzes ?? []).some((k) => k.vraag === s.wachtOpKeuze);
+
+        /* 2 — Haalt dat toestel de gevraagde temperatuur? Een onbekend bereik
+               is geen bezwaar; een bereik dat het niet haalt wel.
+        
+               Let op wélke temperatuur: `tempC` is wat het apparaat aanhoudt en
+               dat toetsen we. `kernTempC` is de temperatuur van het vlees en
+               heeft niets met het bereik van de smoker te maken — die is bijna
+               altijd lager, en zou vals alarm geven. */
+        if (apparaat && s.tempC != null) {
+            const onder = apparaat.temp_min_c != null && s.tempC < apparaat.temp_min_c;
+            const boven = apparaat.temp_max_c != null && s.tempC > apparaat.temp_max_c;
+            if (onder || boven) {
+                return vraag(
+                    basis,
+                    `${apparaat.naam} houdt ${apparaat.temp_min_c ?? '?'}–${apparaat.temp_max_c ?? '?'} °C en deze stap vraagt ${s.tempC} °C`,
+                );
+            }
+        }
+
+        /* 1b — Hoort deze stap bij een bouwsteen die ook echt bestaat? Een stap
+                die naar een onderdeel verwijst dat nergens in de lijst staat
+                belandt anders nergens: niet bij het gerecht en niet bij de
+                bouwsteen. */
+        if (s.voorComponent != null && !genoemdeComponenten.has(s.voorComponent.toLowerCase())) {
+            /* De verwijzing gaat eruit, de vraag blijft staan. Anders krijg je
+               een deel dat "x" heet met een label "mag vooruit" erop — dat ziet
+               eruit als een echt onderdeel terwijl het een schrijffout is. De
+               stap hoort bij het gerecht tot de kok iets anders zegt. */
+            return vraag(
+                { ...basis, voorComponent: null },
+                `Deze stap hoort bij "${s.voorComponent}", maar dat staat niet bij de onderdelen`,
+            );
+        }
+
+        /* 2c — Tweede mening. De tekst wordt niet gebruikt om te beslissen —
+               daar is de AI beter in — maar als de tekst overduidelijk iets
+               anders zegt dan het gekozen toestel, is dat het melden waard.
+               Alleen bij een echte botsing, niet bij twijfel.
+        
+               Dit gaat vóór de vragen over temperatuur en duur: staat de stap
+               op het verkeerde toestel, dan is het zinloos om te vragen op
+               welke stand dat toestel moet. */
+        const uitTekst = leesBereidingswijze(s.tekst);
+        if (apparaat && uitTekst != null) {
+            const wilRoken = uitTekst === 'roken' || uitTekst === 'indirect';
+            if (wilRoken && !apparaat.kundes.includes('smoker')) {
+                return vraag(basis, `De stap leest als rookwerk maar staat op ${apparaat.naam} — klopt dat?`);
+            }
+        }
+
+        /* 2b — Een kerntemperatuur zonder omgevingstemperatuur. Dat de stap op
+                de meter eindigt is prima, maar dan moet er wél staan waarop het
+                apparaat gezet wordt — anders kun je hem niet eens aanzetten.
+                Deze vraag gaat vóór de duur-vraag: een onbekende duur meet je
+                vanzelf, een onbekende instelling niet. */
+        if (!wachtOpKeuze && s.kernTempC != null && s.tempC == null && apparaat != null && kanVerwarmen(apparaat)) {
+            return vraag(basis, `Klaar bij kern ${s.kernTempC} °C — maar op welke temperatuur zet je de ${apparaat.naam}?`);
+        }
+
+        /* 3 — Ontbrekende duur: wel merken, niet altijd vragen.
+        
+               Een kookboek zet nooit een tijd bij "bestrooi met zout en peper",
+               en daar hoort ook geen vraag bij — dat meet het systeem vanzelf
+               zodra je het een paar keer doet. Vraag alleen naar een duur als
+               het antwoord de dag verandert: bij een stap die een apparaat
+               bezet houdt, of bij wachten.
+        
+               De eerste echte proef gaf 27 vragen waarvan er 20 hierover
+               gingen. Een lijst die altijd vol staat wordt niet gelezen, en dan
+               is de goedkeuring een klik geworden in plaats van een oordeel. */
+        /* Een herhaling die geen duur per keer heeft gaat over die duur, niet
+           over bezetting. "Elke 30 minuten besproeien" vroeg eerst hoe lang de
+           smoker bezet raakt, en dat is de verkeerde vraag: de smoker staat er
+           toch al, het gaat om die ene minuut spuiten. */
+        if (s.herhaalIntervalMin != null && (s.herhaalDuurMin ?? null) == null) {
+            return vraag(basis, `Er moet elke ${s.herhaalIntervalMin} min iets gebeuren, maar niet hoe lang dat per keer duurt`);
+        }
+
+        const duurOnbekend = (s.actiefMin ?? null) == null && (s.passiefMin ?? null) == null;
+
+        /* Hier stond een vraag: "klaar bij kern 88 °C, maar hoe lang duurt dat?"
+           Die is eruit, want het antwoord is een gok en gokken is precies wat
+           dit systeem niet moet doen. Hoe lang 2,5 kg procureur erover doet
+           weet je pas als je het een keer gemeten hebt, en daar is het
+           leerspoor voor.
+        
+           De stap blijft wél zichtbaar als `duurOnbekend`: op het bord staat
+           "tijd wordt gemeten", en de planner weet dat hij van deze stap geen
+           eindtijd kan beloven. Dat is eerlijker dan een getal dat iemand onder
+           druk heeft ingevuld. */
+
+        /* 4 — Een herhaling moet binnen zijn eigen interval passen. Elk half
+               uur twintig minuten spuiten is geen tussendoortje maar werk. */
+        if (s.herhaalIntervalMin != null && s.herhaalDuurMin != null
+            && s.herhaalDuurMin >= s.herhaalIntervalMin) {
+            return vraag(basis, `Elke ${s.herhaalIntervalMin} min ${s.herhaalDuurMin} min werk — dat past niet in elkaar`);
+        }
+
+        return {
+            ...basis,
+            oordeel: 'akkoord',
+            materieelNaam: apparaat?.naam ?? null,
+            bezwaar: null,
+            /* Wel zichtbaar op de lade, maar geen blokkade: de planner toont
+               hem en laat hem buiten het gatenvullen tot hij gemeten is. */
+            duurOnbekend,
+        };
+    });
+
+    /* Componenten waar het recept naar verwijst en die je nog niet hebt. Die
+       moeten eerst bestaan, anders hangt de helft van het recept in de lucht. */
+    const ontbrekend = [...new Set(
+        (voorstel.componenten ?? [])
+            .map((c) => normaliseerComponentnaam(c.naam))
+            .filter((naam) => !bekend.has(naam.toLowerCase())),
+    )];
+
+    for (const naam of ontbrekend) vragen.push(`"${naam}" bestaat nog niet als component — eerst aanmaken?`);
+    for (const k of voorstel.keuzes ?? []) vragen.push(`${k.vraag} (${k.opties.join(' / ')})`);
+    for (const s of stappen) if (s.oordeel === 'vraag') vragen.push(`Stap ${s.volgnummer}: ${s.bezwaar}`);
+
+    return {
+        gerechtNaam: voorstel.gerechtNaam,
+        porties: voorstel.porties ?? null,
+        stappen,
+        vervallen: voorstel.vervallen ?? [],
+        ontbrekendeComponenten: ontbrekend,
+        ingredienten: (voorstel.ingredienten ?? []).map((i) => ({
+            ...i,
+            voorComponent: i.voorComponent ? normaliseerComponentnaam(i.voorComponent) : null,
+        })),
+        keuzes: voorstel.keuzes ?? [],
+        anderRecept: voorstel.anderRecept?.trim() || null,
+        vragen,
+        samenvatting: {
+            actiefMin: stappen.reduce((a, s) => a + (s.actiefMin ?? 0), 0),
+            passiefMin: stappen.reduce((a, s) => a + (s.passiefMin ?? 0), 0),
+            stappen: stappen.length,
+            /* Eerlijk erbij: hoeveel stappen nog geen tijd hebben. Dat getal
+               hoort te dalen naarmate je vaker kookt. */
+            zonderTijd: stappen.filter((s) => s.duurOnbekend).length,
+        },
+    };
+}
+
+/**
+ * Is dit iets waar je een taak aan kunt hangen?
+ *
+ * Een mes en een snijplank staan in het materieel — terecht, want ze hebben een
+ * vervangingswaarde — maar het zijn geen apparaten die je bezet houdt. Zonder
+ * deze zeef hing het model stappen aan de Miyabi Sujihiki, en dan staat er op
+ * het wandscherm dat je "op het mes" aan het werk bent.
+ *
+ * De scheidslijn: iets dat alleen "werkbank" kan is gereedschap. Een gekoelde
+ * werkbank kan ook "koeling" en blijft dus wél staan.
+ */
+export function isPlanbaar(a: ApparaatMetKundes): boolean {
+    if (a.kundes.length === 0) return false;
+    return !(a.kundes.length === 1 && a.kundes[0] === 'werkbank');
+}
+
+/**
+ * Kan dit toestel actief verwarmen?
+ *
+ * Een kerntemperatuur zonder ingestelde apparaattemperatuur is alleen een vraag
+ * bij iets dat je op een stand zet. Bij "afhalen bij kern 87 °C en een kwartier
+ * laten rusten" op de Cambro vroeg het systeem op welke temperatuur je de
+ * transportwagen zet — die 87 was de temperatuur waarbij het vlees eráf kwam,
+ * niet iets wat de wagen moet halen.
+ */
+function kanVerwarmen(a: ApparaatMetKundes): boolean {
+    return a.kundes.some((k) => k === 'smoker' || k === 'oven' || k === 'grill' || k === 'fornuis');
+}
+
+/**
+ * Is dit een apparaat waar de dag op vastloopt als het onbekend lang bezet is?
+ *
+ * Een smoker die je zonder tijd inplant sloopt je hele middag; een pannetje op
+ * de inductie niet. Het onderscheid zit in wat je erin laadt en hoe lang het
+ * duurt voor hij bruikbaar is: een toestel met capaciteit, rooster of een
+ * serieuze opwarmtijd is een toestel waar je op wacht.
+ *
+ * Zonder dit onderscheid werd elke stap een vraag — ook "appel schillen op de
+ * werkbank" — en dan wordt de goedkeuring een klik in plaats van een oordeel.
+ */
+function isZwaarApparaat(a: ApparaatMetKundes): boolean {
+    /* Capaciteit telt alleen als het een lading is. Een koelwerkbank heeft
+       "421 liter" en dat is opslagvolume, geen belading — daar sta je aan te
+       werken, je houdt hem niet bezet. Las ik dat als een lading, dan vroeg
+       het systeem hoe lang je werkbank bezet is terwijl je vlees droogdept. */
+    const ladingInKilos = a.capaciteitWaarde != null && (a.capaciteitEenheid ?? '').toLowerCase().startsWith('kg');
+    return ladingInKilos
+        || a.kookoppervlakCm2 != null
+        || (a.opwarmMin ?? 0) >= 10;
+}
+
+function vraag(basis: VoorstelStap & { duurBron: 'geschat' }, bezwaar: string): GecontroleerdeStap {
+    return { ...basis, oordeel: 'vraag', bezwaar };
+}
+
+/**
+ * Wat de kok in de goedkeur-lade heeft ingevuld.
+ *
+ * Bewust drie losse velden en geen vrije tekst: het scherm en de opslagroute
+ * moeten allebei kunnen uitrekenen of er nog iets openstaat, en dat lukt
+ * alleen als een antwoord een waarde is en geen zin.
+ */
+export interface Antwoorden {
+    /** Hoe lang de hérhaling per keer duurt: één minuut spuiten, niet het hele uur. */
+    herhaalDuren?: Record<number, number>;
+    /**
+     * Stappen waarvan de kok zegt: het klopt toch.
+     *
+     * Niet elke twijfel is met een getal op te lossen. Bij "die temperatuur haalt
+     * dat toestel niet" of "dit leest als rookwerk maar staat op de inductie" is
+     * het antwoord een oordeel, en dat oordeel is van de kok. Zonder deze uitweg
+     * blijft zo'n stap eeuwig open staan en kan het recept nooit opgeslagen
+     * worden — dat is geen controle meer, dat is een dichte deur.
+     */
+    akkoordOndanks?: number[];
+    /** Componenten die aangemaakt mogen worden, op naam. */
+    componenten?: string[];
+    /** Componenten die bewust overgeslagen worden. Ook dat is een antwoord. */
+    componentenOvergeslagen?: string[];
+    /** Gekozen optie per keuze van de AI, op de vraagtekst. */
+    keuzes?: Record<string, string>;
+    /**
+     * Voor hoeveel porties dit recept is.
+     *
+     * Alleen nodig als het boek het niet zegt — "voor circa 1,5 kg" is geen
+     * aantal. Zonder dit getal schreef de opslagroute er stilzwijgend tien in,
+     * en dáár hangt straks je kostprijs per portie aan.
+     */
+    porties?: number | null;
+}
+
+/**
+ * De temperatuur uit een gekozen optie halen.
+ *
+ * De AI schrijft zijn opties met de waarde vooraan: "150 °C indirect —
+ * vergelijkbaar met het matig hete vuur, circa 5 à 6 uur tot 64 °C". Het eerste
+ * getal is de keuze, de rest is uitleg. Daarom het éérste getal en niet het
+ * enige — anders levert die 64 verderop een lege uitkomst op.
+ *
+ * Wat hieruit komt wordt op de lade getoond vóórdat er wordt opgeslagen. Een
+ * getal dat het systeem zelf invult moet je kunnen zien, anders is het alsnog
+ * een stille aanname.
+ */
+export function temperatuurUitKeuze(optie: string): number | null {
+    const m = /(\d{2,3})\s*°\s*C/.exec(optie);
+    if (!m) return null;
+    const waarde = Number(m[1]);
+    return waarde >= 40 && waarde <= 300 ? waarde : null;
+}
+
+/**
+ * De antwoorden van de kok in de stappen zetten.
+ *
+ * Zonder dit staat het antwoord wél in de database maar niet waar de planner
+ * kijkt: de porchetta zou zijn keuze "150 °C" netjes bewaren en tegelijk een
+ * stap hebben zonder temperatuur. Eén plek, gebruikt door het scherm om te tonen
+ * wat er gaat gebeuren en door de opslagroute om het te schrijven.
+ */
+export function metKeuzesVerwerkt(controle: Controle, antwoorden: Antwoorden = {}): GecontroleerdeStap[] {
+    const gekozen = antwoorden.keuzes ?? {};
+
+    return controle.stappen.map((stap) => {
+        if (stap.wachtOpKeuze == null || stap.tempC != null) return stap;
+        const antwoord = gekozen[stap.wachtOpKeuze];
+        if (!antwoord) return stap;
+        const temp = temperatuurUitKeuze(antwoord);
+        return temp == null ? stap : { ...stap, tempC: temp };
+    });
+}
+
+/**
+ * Wat voor soort vraag is dit, en dus: met wát kun je hem beantwoorden?
+ *
+ * Het scherm moet weten of het een getalveld moet tonen of een oordeel moet
+ * vragen. De eerste versie keek alleen naar duur-vragen, en toen bleek een
+ * herhaling die niet paste een stap te zijn die je nooit meer los kreeg.
+ */
+export type VraagSoort = 'herhaling' | 'oordeel';
+
+export function soortVraag(bezwaar: string | null | undefined): VraagSoort {
+    const t = bezwaar ?? '';
+    if (t.includes('per keer') || t.includes('past niet in elkaar')) return 'herhaling';
+    return 'oordeel';
+}
+
+/**
+ * Wat er nog beslist moet worden, gegeven wat er al ingevuld is.
+ *
+ * Deze functie is de enige plek waar die regel staat. Het scherm gebruikt hem
+ * om de knop op slot te houden, de opslagroute om te controleren dat er niet
+ * langs het scherm heen geschreven wordt — een dichte deur die je via de
+ * achterdeur kunt omzeilen is geen deur.
+ */
+export function openstaandeVragen(controle: Controle, antwoorden: Antwoorden = {}): string[] {
+    const aangemaakt = new Set(antwoorden.componenten ?? []);
+    const overgeslagen = new Set(antwoorden.componentenOvergeslagen ?? []);
+    const keuzes = antwoorden.keuzes ?? {};
+    const open: string[] = [];
+
+    if (controle.stappen.length === 0) return ['Geen stappen gevonden in dit recept'];
+
+    if (controle.porties == null && !(typeof antwoorden.porties === 'number' && antwoorden.porties > 0)) {
+        open.push('Voor hoeveel porties is dit recept?');
+    }
+
+    const herhaal = antwoorden.herhaalDuren ?? {};
+    const ondanks = new Set(antwoorden.akkoordOndanks ?? []);
+
+    for (const s of controle.stappen) {
+        if (s.oordeel !== 'vraag') continue;
+        /* De kok heeft er expliciet ja tegen gezegd. Dat telt. */
+        if (ondanks.has(s.volgnummer)) continue;
+
+        /* Bij een herhaling gaat het om de duur pér keer, en die moet binnen
+           het interval passen — anders is het geen tussendoortje maar werk. */
+        if (soortVraag(s.bezwaar) === 'herhaling') {
+            const d = herhaal[s.volgnummer];
+            const interval = s.herhaalIntervalMin ?? 0;
+            if (typeof d === 'number' && d > 0 && d < interval) continue;
+        }
+
+        open.push(`Stap ${s.volgnummer}: ${s.bezwaar}`);
+    }
+
+    for (const naam of controle.ontbrekendeComponenten) {
+        if (!aangemaakt.has(naam) && !overgeslagen.has(naam)) {
+            open.push(`"${naam}" bestaat nog niet als component — eerst aanmaken?`);
+        }
+    }
+
+    for (const k of controle.keuzes) {
+        const gekozen = keuzes[k.vraag];
+        if (!gekozen || !k.opties.includes(gekozen)) open.push(k.vraag);
+    }
+
+    return open;
+}
+
+/**
+ * Mag dit opgeslagen worden?
+ *
+ * Nee zolang er vragen open staan. De ontleder stelt voor, de kok beslist —
+ * en een systeem dat zijn eigen voorstel goedkeurt is geen goedkeuring.
+ */
+export function magOpslaan(controle: Controle, antwoorden: Antwoorden = {}): { mag: boolean; reden: string } {
+    const open = openstaandeVragen(controle, antwoorden);
+    if (open.length === 0) return { mag: true, reden: 'Klaar om op te slaan' };
+    if (controle.stappen.length === 0) return { mag: false, reden: open[0] };
+    return { mag: false, reden: `${open.length} ding(en) om eerst te beslissen` };
+}
+
+/**
+ * De inventaris zoals de AI hem te zien krijgt.
+ *
+ * Bewust compact en zonder franje: dit gaat elke aanroep mee, dus elk woord
+ * telt. En bewust volledig genoeg om écht te kunnen kiezen — een model dat
+ * niet weet dat je een inductieplaat hebt, zet je sauzen op de barbecue.
+ */
+export function inventarisVoorPrompt(apparaten: ApparaatMetKundes[]): string {
+    const planbaar = apparaten.filter(isPlanbaar);
+    if (planbaar.length === 0) return 'Er staat nog geen apparatuur in het systeem.';
+
+    return planbaar
+        .map((a) => {
+            const stukken = [`[${a.id}] ${a.naam}`, `kan: ${a.kundes.join(', ') || 'onbekend'}`];
+            if (a.temp_min_c != null || a.temp_max_c != null) {
+                stukken.push(`${a.temp_min_c ?? '?'}–${a.temp_max_c ?? '?'} °C`);
+            }
+            if (a.capaciteitWaarde != null) stukken.push(`max ${a.capaciteitWaarde} ${a.capaciteitEenheid ?? ''}`.trim());
+            if (a.kookoppervlakCm2 != null) stukken.push(`${a.kookoppervlakCm2} cm² rooster`);
+            if (a.opwarmMin != null) stukken.push(`${a.opwarmMin} min opwarmen`);
+            return stukken.join(' · ');
+        })
+        .join('\n');
+}
+
+/* ── De prompt en het schema ─────────────────────────────────────
+   Hier en niet in de route, zodat de test precies meet wat de route
+   straks doet. Twee versies van een prompt is geen prompt. */
+
+export const SYSTEEM = `Je zet kookboekrecepten om naar de werkwijze van Hop & Bites, een Nederlandse BBQ-catering.
+
+Je bent geen transcribent. Je vertaalt: hetzelfde gerecht, dezelfde kwaliteit, gemaakt met de apparatuur die er staat. Een recept dat "leg het op de kamado en gooi er een rookhoutchunk in" zegt, wordt hier een stap op de pelletgrill zonder chunk — die maakt zijn eigen rook. Een saus gaat in een pan op de inductie, niet op de barbecue; het gaat om het vlees.
+
+SOMS IS ER GEEN BOEK
+
+Krijg je geen receptpagina maar een idee in één zin — "passievrucht panna cotta met cranberry's en schuim van vlierbloesem" — dan bedenk je het recept zelf. Alle regels hieronder gelden onverkort, en één ervan is dan extra belangrijk: het gerécht mag je bedenken, de tíjden niet. Hoe lang panna cotta bij ons opstijft weet niemand tot het een keer gemeten is, dus laat die velden leeg.
+
+Wat je wél invult zijn de dingen die uit het gerecht zelf volgen: op welk apparaat het hoort, welke temperatuur, welke onderdelen er los van gemaakt kunnen worden en in welke volgorde het moet.
+
+HARDE REGELS
+
+0. Alle tijden zijn in MINUTEN, ook de lange. Een nacht is 720, een etmaal 1440, zeven dagen pekelen is 10080, negen dagen 12960. Zet nooit "7" omdat het recept dagen zegt en laat het veld ook niet leeg omdat het getal groot wordt — een pekelstap van een week is juist de stap waar de hele planning omheen gebouwd wordt. Datzelfde geldt voor een herhaling: "iedere dag omdraaien" is herhaalIntervalMin 1440.
+1. Verzin geen tijden. Staat er geen duur in het recept en kun je hem niet uit de tekst afleiden, laat het veld leeg. Een leeg veld wordt een vraag aan de kok; een verzonnen getal wordt een verkeerde planning die niemand opmerkt.
+2. Kies alleen uit de meegegeven apparatuur, met het opgegeven id. Verzin geen apparaat en geen id.
+3. Respecteer het temperatuurbereik van een toestel. Past het niet, kies iets anders of stel een vraag.
+3a. Noemt een stap een kerntemperatuur, vul dan ALTIJD kernTempC. Niet alleen in de zin schrijven — het veld stuurt wanneer de kok teruggeroepen wordt.
+3b. Twee soorten temperatuur, twee velden. \`tempC\` is wat het APPARAAT aanhoudt (smoker op 115, oven op 180, koeling op 4). \`kernTempC\` is de temperatuur van het PRODUCT waarbij de stap klaar is ("tot een kerntemperatuur van 88 °C"). Zet ze nooit in hetzelfde veld: een stap die op kerntemperatuur eindigt eindigt op de meter en niet op de klok, en dat verschil bepaalt of de kok om tien over twee teruggeroepen wordt of pas als het vlees er is. Noemt het recept allebei, vul dan allebei in.
+4. Splits actief en passief. Actief = de kok is bezig. Passief = het staat te doen en de kok kan weglopen. Een stap van "1 minuut aanzetten en dan een uur opwarmen" zijn twee stappen, geen één.
+5. Wat in het boek staat en hier vervalt, zet je in "vervallen" met de reden. Nooit stilzwijgend weglaten — de kok moet kunnen zien wat er anders ging.
+5b. Staan er twee recepten op één pagina — kookboeken doen dat vaak — werk dan alléén het bovenste of grootste uit en zet de naam van het andere in "anderRecept". Niet in "vervallen" (het is geen stap die vervalt) en niet als keuze (er valt niets te kiezen). De kok laat het tweede recept met één klik alsnog lezen.
+6. Onderdelen die het recept als apart recept behandelt (een pekel, een glaze, een salsa) horen in "componenten". Verwijst het recept naar een ander recept ("zie blz. 22"), zet dan isVerwijzing op true.
+6a. De stappenlijst is ÉÉN weg door het recept, niet alle mogelijke wegen. Biedt het boek een aftakking — "gaar tot 80 °C voor plakken, of door tot 87 °C als je hem wilt plukken" — schrijf dan de stappen voor één route (de eerste die het boek noemt) en zet de aftakking in "keuzes", met in de vraag wat er verandert als de kok de andere route kiest. Allebei de routes achter elkaar in de lijst zetten levert een plan op waarin het vlees twee keer gegaard wordt.
+6d. De naam van een component is alleen de naam: "Piggy Mix BBQ-kruiden", niet "Piggy Mix BBQ-kruiden (zie blz. 27)" en niet "(verwijzing naar apart recept)". Die naam blijft voor altijd in de bouwstenenlijst staan en moet in elk recept precies hetzelfde geschreven worden, anders krijg je tien keer hetzelfde spul zonder kostprijs.
+6c. Een component is iets dat je vóór of tijdens dít gerecht maakt en erin verwerkt. Een bijgerecht dat "lekker is erbij", of een ánder gerecht waar dit gerecht een vulling voor kan zijn, is geen component — die horen bij "vervallen" als serveertip of blijven helemaal weg. Zet nooit iets in "vervallen" als serveersuggestie én in "componenten": dat is twee keer een ander antwoord op dezelfde vraag.
+6b. Staat er een instructie die zich herháált — "elk half uur natspuiten", "vanaf het eerste uur elk uur insprayen", "iedere dag omdraaien" — vul dan herhaalIntervalMin én herhaalDuurMin. Het interval is hoe vaak, de duur is hoe lang je er per keer mee bezig bent (bijna altijd één of twee minuten). Laat je die leeg, dan weet de planner niet dat de kok elk uur even terug moet.
+7. Weet je iets niet zeker en verandert het antwoord het gerecht — bijvoorbeeld of iets gerookt moet worden — zet het dan in "keuzes" met de opties. Vraag liever dan te gokken.
+6e. Maken de stappen een onderdeel dat je daarna in het gerecht gebruikt — een kruidenmengsel, een saus, een salsa, een pekel — zet dan bij díe stappen "voorComponent" op de naam van dat onderdeel uit "componenten". Dat is niet cosmetisch: een kruidenmengsel van tien minuten hoeft niet op de dag zelf, en pas als de stap aan de bouwsteen hangt mag de planner hem vooruittrekken en samenvoegen met dezelfde bewerking in een ander gerecht. Stappen die het gerecht zelf maken laat je leeg.
+7b. Leg je een keuze voor die een stap onvolledig laat — een temperatuur die nog gekozen moet worden, een gaarheid die het eindpunt bepaalt — zet dan in die stap "wachtOpKeuze" op de exacte vraagtekst van die keuze. Anders vraagt het systeem er nog een tweede keer naar en staat dezelfde beslissing twee keer op de lijst.
+7c. Neem de ingrediëntenlijst over in "ingredienten": naam, hoeveelheid en eenheid zoals ze in het boek staan ("300 g mager rundergehakt" wordt naam "mager rundergehakt", hoeveelheid 300, eenheid "g"). Hoort een ingrediënt bij een onderdeel — de mayonaise bij de ranchsaus — zet dan voorComponent op de naam van dat onderdeel. Dit is lézen: staat er geen hoeveelheid, laat hem leeg. Hieruit rolt de kostprijs uit de leverancierscatalogus, dus een naam die je zelf mooier maakt kost geld.
+7d. Reken huishoudmaten ALTIJD om naar gram en zet dat in "gram". Een theelepel, een eetlepel, een stengel, een teen, een bosje, een snufje, "1 grote tomaat" — die kun je niet optellen en niet vergelijken met een catalogusprijs, en zonder dat getal blijft de kostprijs nul. Gebruik gangbare keukenwaarden: een theelepel gedroogde kruiden ≈ 1 g, een theelepel zout ≈ 6 g, een eetlepel olie ≈ 14 g, een stengel bleekselderij ≈ 40 g, een middelgrote ui ≈ 110 g, een teen knoflook ≈ 5 g, een grote tomaat ≈ 150 g.
+    Wat al in g, kg, ml of l staat laat je met rust — daar valt niets om te rekenen. En "naar smaak" blijft leeg: dat is geen hoeveelheid, en een verzonnen getal is erger dan een leeg veld.
+8. Geen allergenen, geen kostprijzen, geen productiehoeveelheden. Die komen ergens anders vandaan.
+9. Houd de werkplek consistent. Snijden, mengen en portioneren gebeuren op dezelfde werkbank tenzij het recept een reden geeft om te verkassen. Eén productie die halverwege van de keukenwerkbank naar de aanhanger springt en weer terug is geen vertaling maar een slordigheid, en de planner rekent er looptijd voor.
+
+HOE GROOT IS EEN STAP
+
+Een stap is zo klein als de eenheid die je wilt meten en hergebruiken. Niet kleiner. Een stap verdient een eigen regel als hij minstens één van deze vijf heeft:
+- een eigen duur die het waard is om te meten ("8 kg buikspek portioneren")
+- een eigen apparaat dat hij bezet houdt
+- eigen wachttijd, zodat de kok kan weglopen
+- een eigen beslismoment of temperatuurcontrole
+- batchbaarheid: het is een bewerking die in andere gerechten terugkomt, zoals ui snipperen of mayonaise aanmaken
+
+Heeft iets geen van die vijf, dan hoort het bij de stap ernaast. "Insmeren met olie en bestrooien met zout en peper" is één stap, geen twee.
+
+WAT NOOIT EEN STAP IS
+- Het apparaat opstoken of voorverwarmen. Van elk toestel weet het systeem hoe lang het nodig heeft om op temperatuur te komen, en het zet de wekker daar zelf op. Zet je het óók als stap in het recept, dan telt die tijd twee keer en gaat de smoker een uur te vroeg aan. LET OP: de temperatuur die in die opstookzin stond ("verhit tot 250 °C") mag niet verdwijnen — zet hem als tempC bij de eerste stap waarin er iets op dat toestel gaat. Laat je hem weg, dan weet niemand op welke stand het ding moet.
+- Lopen. Naar de koelcel, naar de smoker, terug naar de werkbank. De planner rekent looptijden zelf uit en bundelt gangen; staat het in het recept, dan kan hij dat niet meer.
+- Klaarleggen en opruimen rond één handeling. Snijplank pakken, mes pakken, bak neerzetten. Dat is opzettijd en hoort in de duur van de stap zelf.
+- "Verzamel de ingrediënten." Dat is geen handeling maar een zin uit een kookboek.
+
+DE HUISSTIJL AANBIEDEN, NOOIT OPLEGGEN
+
+Niet elk recept is een BBQ-recept, en een gehaktbal in bier wordt er geen door hem op houtskool te leggen. De hoofdregel blijft: hetzelfde gerecht, dezelfde kwaliteit, andere machines. Schrijf de stappen zoals het boek ze bedoelt.
+
+Maar soms ligt er wél iets voor de hand omdat de pelletgrill hier tóch staat en gratis rook maakt. Een stoofstuk dat uren op laag vuur staat kan eerst een uur rook krijgen; een braadstuk dat in de oven gaat kan net zo goed in de pelletgrill in ovenstand. Zie je zoiets, leg het dan voor in "keuzes" — nooit in de stappen.
+
+Drie voorwaarden, alle drie nodig:
+- het gaat om vlees dat lang gaart of bruint, niet om een saus, een deeg of een garnituur;
+- het verandert de smaak in de richting die dit huis wil, niet zomaar een ander apparaat;
+- de eerste optie is ALTIJD "houden zoals het boek het zegt". Wie twijfelt houdt het recept intact.
+
+Bied dit hooguit één keer per recept aan. Twee rookvragen in één gerecht is geen aanbod meer maar aandrang.
+
+SCHRIJFSTIJL
+Stappen in chef-taal: één handeling per regel, gebiedend, kort. "Vliezen van de buik afhalen", niet "Vervolgens dient men de vliezen te verwijderen".`;
+
+export /**
+ * Het schema waar het antwoord van het model aan moet voldoen.
+ *
+ * Bewust zonder ['X', 'null']-varianten: geen van deze velden is verplicht, dus
+ * een leeg veld laat het model gewoon weg. Met de null-varianten erbij liep het
+ * schema tegen de complexiteitsgrens van de API aan ("Schema is too complex")
+ * zodra er één veld bijkwam. Weglaten en null betekenen hier hetzelfde.
+ */
+const SCHEMA: Record<string, unknown> = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['gerechtNaam', 'stappen'],
+    properties: {
+        gerechtNaam: { type: 'string' },
+        porties: { type: 'integer' },
+        componenten: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['naam'],
+                properties: {
+                    naam: { type: 'string' },
+                },
+            },
+        },
+        stappen: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['volgnummer', 'tekst'],
+                properties: {
+                    volgnummer: { type: 'integer' },
+                    tekst: { type: 'string' },
+                    bewerking: { type: 'string' },
+                    actiefMin: { type: 'integer' },
+                    passiefMin: { type: 'integer' },
+                    tempC: { type: 'number' },
+                    kernTempC: { type: 'number' },
+                    materieelId: { type: 'integer' },
+                    herhaalIntervalMin: { type: 'integer' },
+                    herhaalDuurMin: { type: 'integer' },
+                    hangtAfVanVolgnummer: { type: 'integer' },
+                    wachtOpKeuze: { type: 'string' },
+                    voorComponent: { type: 'string' },
+                },
+            },
+        },
+        vervallen: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['tekst', 'reden'],
+                properties: { tekst: { type: 'string' }, reden: { type: 'string' } },
+            },
+        },
+        ingredienten: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['naam'],
+                properties: {
+                    naam: { type: 'string' },
+                    hoeveelheid: { type: 'number' },
+                    eenheid: { type: 'string' },
+                    gram: { type: 'number' },
+                    voorComponent: { type: 'string' },
+                },
+            },
+        },
+        anderRecept: { type: 'string' },
+        keuzes: {
+            type: 'array',
+            items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['vraag', 'opties'],
+                properties: {
+                    vraag: { type: 'string' },
+                    opties: { type: 'array', items: { type: 'string' } },
+                },
+            },
+        },
+    },
+};

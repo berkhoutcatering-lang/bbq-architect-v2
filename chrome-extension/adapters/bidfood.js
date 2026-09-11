@@ -185,16 +185,35 @@ function stripBidfoodPaging(u) {
 
 function safeParse(s) { try { return JSON.parse(s); } catch (e) { return null; } }
 
-/** Herken "M gr/g/kg/ml/l per stuk" + "(doosje) N stuks" → "N × M unit". */
-function bidfoodPackText(name) {
+/* Bidfood beschrijft een omdoos in twee helften: "120 gr per zakje, doos 12
+   zakjes". Wie alleen de eerste helft leest, houdt 120 gram over terwijl de
+   prijs over 1.440 gram gaat — een factor twaalf op de kostprijs. Vroeger keek
+   deze helper alleen naar "per stuk", en Bidfood schrijft net zo vaak zakje,
+   reep, bus, fles of cupje. Daarom staan alle verpakkingswoorden hier. */
+const INHOUDSWOORD = 'stuk|zakje|zak|doosje|doos|reep|rol|fles|bus|pot|potje|bakje|bak|blik|cupje|sachet|pak|emmer|beker|tray|krat|kist|wikkel|st';
+const AANTALWOORD = 'stuks?|zakjes?|zakken|doosjes?|dozen|repen|rollen|flessen|bussen|potjes?|potten|bakjes?|bakken|blikken|cupjes?|sachets?|pakken|emmers?|bekers?|trays?|kratten|kisten|wikkels?';
+
+/** Herken "M gr per zakje" + "doos N zakjes" → "N × M unit". Geëxporteerd om te testen. */
+export function bidfoodPackText(name) {
     const t = String(name || '').toLowerCase();
-    const per = t.match(/([\d.,]+)\s*(kg|kilo|kilogram|gram|gr|g|ml|liter|ltr|l)\s*(?:per|\/)\s*stuk/);
-    const cnt = t.match(/(?:doos(?:je)?|tray|pak|zak|colli)?\s*(\d+)\s*stuks?\b/);
-    if (per && cnt) {
-        const unit = per[2] === 'gr' ? 'g' : per[2]; // "gr" → g
-        return `${parseInt(cnt[1], 10)} × ${per[1]} ${unit}`;
-    }
-    return name; // laat de generieke parsePackaging z'n best doen
+    const per = t.match(new RegExp(`([\\d.,]+)\\s*(kg|kilo|kilogram|grammen|gram|gr|g|ml|liter|ltr|lt|l|cl|dl)\\s*(?:per|/)\\s*(?:${INHOUDSWOORD})\\b`));
+    if (!per) return name;
+
+    /* Het aantal staat ná de inhoudsmaat ("40 gr per zakje, doos 12 zakjes").
+       Zoeken vanaf dat punt voorkomt dat we de inhoudsmaat zelf als aantal
+       lezen bij namen als "12 gr per stuk". */
+    const rest = t.slice(per.index + per[0].length);
+    const cnt = rest.match(new RegExp(`(\\d+)\\s*(?:${AANTALWOORD})\\b`));
+    const unit = per[2] === 'gr' ? 'g' : per[2]; // "gr" → g
+    if (cnt) return `${parseInt(cnt[1], 10)} × ${per[1]} ${unit}`;
+
+    /* Geen aantal, maar wél een totaal: "20 gr per stuk, zak 1 kg". Dan is de
+       zak de verpakking en het stukgewicht een bijzin. Zonder deze regel leest
+       de generieke lezer de 20 gram als inhoud — vijftig keer te weinig. */
+    const totaal = rest.match(/([\d.,]+)\s*(kg|kilo|kilogram|grammen|gram|gr|g|ml|liter|ltr|lt|l|cl|dl)\b/);
+    if (totaal) return `${totaal[1]} ${totaal[2]}`;
+
+    return name;
 }
 
 function stripSession(u) {

@@ -1,0 +1,1577 @@
+<title>BBQ Architect Handboek</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --paper:#FAF8F3; --paper-2:#FFFFFF; --paper-3:#F1EDE4;
+  --ink:#1B1A17; --ink-2:#46443D; --ink-3:#78746A;
+  --line:#E0DACC; --line-2:#CFC7B4;
+  --amber:#9A6E00; --amber-ink:#7A5700; --amber-wash:#FBF0D2;
+  --olive:#5E6B34; --olive-wash:#EDF0DF;
+  --rust:#9C3B21; --rust-wash:#F8E6DF;
+  --shadow:0 1px 2px rgba(27,26,23,.05), 0 8px 24px -16px rgba(27,26,23,.25);
+  --f-display:"Outfit",-apple-system,"Segoe UI",sans-serif;
+  --f-body:"DM Sans",-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#121214; --paper-2:#191919; --paper-3:#212020;
+    --ink:#F4F2EC; --ink-2:#BDB8AC; --ink-3:#8B867B;
+    --line:#2C2B29; --line-2:#3D3B37;
+    --amber:#F2C14E; --amber-ink:#FFD470; --amber-wash:#2A2411;
+    --olive:#A8BC6A; --olive-wash:#1E2415;
+    --rust:#E08B6B; --rust-wash:#2A1A13;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#121214; --paper-2:#191919; --paper-3:#212020;
+  --ink:#F4F2EC; --ink-2:#BDB8AC; --ink-3:#8B867B;
+  --line:#2C2B29; --line-2:#3D3B37;
+  --amber:#F2C14E; --amber-ink:#FFD470; --amber-wash:#2A2411;
+  --olive:#A8BC6A; --olive-wash:#1E2415;
+  --rust:#E08B6B; --rust-wash:#2A1A13;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--f-body); font-size:16px; line-height:1.68;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{display:grid; grid-template-columns:250px minmax(0,1fr); gap:0; max-width:1400px; margin:0 auto}
+
+/* ── Zijnavigatie ─────────────────────────────────── */
+.rail{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:34px 20px 60px; background:var(--paper);
+}
+.rail .mark{font-family:var(--f-display); font-weight:600; font-size:15px; letter-spacing:-.01em; margin:0 0 2px}
+.rail .mark span{color:var(--amber)}
+.rail .sub{font-size:11px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase; margin:0 0 22px}
+.rail ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:1px}
+.rail a{
+  display:grid; grid-template-columns:22px 1fr; gap:8px; align-items:baseline;
+  text-decoration:none; color:var(--ink-2); font-size:13.5px; line-height:1.4;
+  padding:6px 8px; border-radius:5px; border-left:2px solid transparent;
+}
+.rail a:hover{background:var(--paper-3); color:var(--ink)}
+.rail a.on{color:var(--ink); background:var(--amber-wash); border-left-color:var(--amber); font-weight:500}
+.rail a em{font-style:normal; font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); font-variant-numeric:tabular-nums}
+.rail a.on em{color:var(--amber)}
+.rail hr{border:0; border-top:1px solid var(--line); margin:16px 0}
+.rail .foot{font-size:11.5px; color:var(--ink-3); line-height:1.5}
+
+/* ── Inhoud ───────────────────────────────────────── */
+main{padding:0 clamp(20px,4vw,64px) 140px; min-width:0}
+.masthead{padding:72px 0 44px; border-bottom:2px solid var(--ink); margin-bottom:44px}
+.masthead .kicker{font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--amber); margin:0 0 18px}
+.masthead h1{
+  font-family:var(--f-display); font-weight:200; font-size:clamp(40px,7vw,74px);
+  line-height:.98; letter-spacing:-.03em; margin:0 0 20px; text-wrap:balance;
+}
+.masthead h1 b{font-weight:600}
+.masthead .lede{font-size:19px; line-height:1.6; color:var(--ink-2); max-width:62ch; margin:0}
+.stats{display:flex; flex-wrap:wrap; gap:0; margin-top:36px; border-top:1px solid var(--line)}
+.stats div{padding:14px 26px 12px 0; margin-right:26px; border-right:1px solid var(--line)}
+.stats div:last-child{border-right:0}
+.stats b{display:block; font-family:var(--f-display); font-weight:300; font-size:28px; line-height:1; font-variant-numeric:tabular-nums}
+.stats span{font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3)}
+
+section{padding-top:26px; scroll-margin-top:20px}
+.parthead{margin:64px 0 30px; padding-top:26px; border-top:1px solid var(--line)}
+section:first-of-type .parthead{border-top:0; margin-top:0}
+.parthead .num{font-family:var(--f-mono); font-size:11px; letter-spacing:.16em; color:var(--amber); text-transform:uppercase}
+.parthead h2{
+  font-family:var(--f-display); font-weight:300; font-size:clamp(28px,4vw,42px);
+  letter-spacing:-.022em; line-height:1.06; margin:8px 0 12px; text-wrap:balance;
+}
+.parthead p{margin:0; max-width:66ch; color:var(--ink-2); font-size:17px}
+.parthead .fire{height:2px; width:110px; margin-top:20px;
+  background:linear-gradient(90deg,var(--amber),var(--olive) 70%,transparent)}
+
+h3{font-family:var(--f-display); font-weight:600; font-size:21px; letter-spacing:-.012em; margin:38px 0 10px; text-wrap:balance}
+h4{font-family:var(--f-display); font-weight:600; font-size:16px; margin:26px 0 8px; letter-spacing:-.005em}
+p{max-width:68ch; margin:0 0 14px}
+ul,ol{max-width:68ch; padding-left:20px; margin:0 0 16px}
+li{margin-bottom:5px}
+a{color:var(--amber-ink)}
+code{font-family:var(--f-mono); font-size:.86em; background:var(--paper-3); padding:1px 5px; border-radius:3px; color:var(--ink)}
+strong{font-weight:700}
+em.q{font-style:italic; color:var(--ink-2)}
+
+/* ── Route-kaarten ────────────────────────────────── */
+.routes{display:flex; flex-direction:column; gap:14px; margin:20px 0 8px}
+.route{
+  background:var(--paper-2); border:1px solid var(--line); border-radius:9px;
+  padding:18px 20px 16px; box-shadow:var(--shadow);
+}
+.route.dead{background:transparent; box-shadow:none; border-style:dashed; opacity:.85}
+.route > header{display:flex; flex-wrap:wrap; align-items:baseline; gap:10px; margin-bottom:8px}
+.route .path{font-family:var(--f-mono); font-size:12.5px; font-weight:600; color:var(--amber-ink)}
+.route .nm{font-family:var(--f-display); font-weight:600; font-size:17px; letter-spacing:-.01em}
+.route p{margin:0 0 10px; max-width:70ch; color:var(--ink-2)}
+.route ul{margin:0 0 10px; max-width:70ch}
+.route ul li{margin-bottom:4px; font-size:15px}
+.route .meta{display:flex; flex-wrap:wrap; gap:6px; padding-top:10px; border-top:1px solid var(--line)}
+.tag{
+  font-family:var(--f-mono); font-size:10.5px; letter-spacing:.02em;
+  padding:3px 7px; border-radius:4px; background:var(--paper-3); color:var(--ink-3); white-space:nowrap;
+}
+.tag.ai{background:var(--amber-wash); color:var(--amber-ink)}
+.tag.db{background:var(--olive-wash); color:var(--olive)}
+.tag.field{background:var(--rust-wash); color:var(--rust)}
+.tag.pub{background:var(--paper-3); color:var(--ink-2); border:1px solid var(--line-2)}
+
+/* ── Tabellen ─────────────────────────────────────── */
+.tbl{overflow-x:auto; margin:18px 0 24px; border:1px solid var(--line); border-radius:9px; background:var(--paper-2)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:520px}
+th,td{text-align:left; padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:top}
+th{
+  font-family:var(--f-mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--ink-3); font-weight:500; background:var(--paper-3); white-space:nowrap;
+}
+tr:last-child td{border-bottom:0}
+td code{background:transparent; padding:0; color:var(--amber-ink); font-size:12.5px}
+td.n{font-variant-numeric:tabular-nums; white-space:nowrap}
+
+/* ── Callouts ─────────────────────────────────────── */
+.note{
+  border-left:3px solid var(--olive); background:var(--olive-wash);
+  padding:14px 18px; border-radius:0 7px 7px 0; margin:20px 0; max-width:70ch;
+}
+.note.warn{border-left-color:var(--rust); background:var(--rust-wash)}
+.note.rule{border-left-color:var(--amber); background:var(--amber-wash)}
+.note p:last-child{margin-bottom:0}
+.note .lbl{
+  font-family:var(--f-mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+  display:block; margin-bottom:5px; opacity:.8;
+}
+
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin:18px 0 24px}
+.card{background:var(--paper-2); border:1px solid var(--line); border-radius:9px; padding:16px 18px; box-shadow:var(--shadow)}
+.card h4{margin:0 0 6px}
+.card p{margin:0; font-size:14.5px; color:var(--ink-2)}
+.card .path{font-family:var(--f-mono); font-size:11.5px; color:var(--amber-ink); display:block; margin-bottom:4px}
+
+.hubhead{
+  display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+  margin:46px 0 6px; padding-bottom:8px; border-bottom:2px solid var(--line-2);
+}
+.hubhead h3{margin:0; font-size:25px; font-weight:300; font-family:var(--f-display); letter-spacing:-.02em}
+.hubhead .path{font-family:var(--f-mono); font-size:12px; color:var(--ink-3)}
+
+footer.end{margin-top:80px; padding-top:26px; border-top:2px solid var(--ink); font-size:13.5px; color:var(--ink-3)}
+
+@media (max-width:900px){
+  .wrap{grid-template-columns:1fr}
+  .rail{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:24px 20px}
+  .rail ol{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:2px}
+  main{padding:0 20px 90px}
+  .masthead{padding-top:40px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+:focus-visible{outline:2px solid var(--amber); outline-offset:2px; border-radius:3px}
+</style>
+
+<div class="wrap">
+<nav class="rail" aria-label="Inhoud">
+  <p class="mark">BBQ <span>Architect</span></p>
+  <p class="sub">Handboek · 1 sep 2026</p>
+  <ol>
+    <li><a href="#p1"><em>01</em><span>Wat het is</span></a></li>
+    <li><a href="#p2"><em>02</em><span>Voor wie, en waarom</span></a></li>
+    <li><a href="#p3"><em>03</em><span>De regels eronder</span></a></li>
+    <li><a href="#p4"><em>04</em><span>Hoe het gebouwd is</span></a></li>
+    <li><a href="#p5"><em>05</em><span>De navigatie</span></a></li>
+    <li><a href="#p6"><em>06</em><span>Elke pagina, één voor één</span></a></li>
+    <li><a href="#p7"><em>07</em><span>De klantkant</span></a></li>
+    <li><a href="#p8"><em>08</em><span>De AI-laag</span></a></li>
+    <li><a href="#p9"><em>09</em><span>De achterkant</span></a></li>
+    <li><a href="#p10"><em>10</em><span>Waar het nu staat</span></a></li>
+    <li><a href="#p11"><em>11</em><span>Woordenlijst</span></a></li>
+  </ol>
+  <hr>
+  <p class="foot">Geschreven vanaf de code, niet vanaf het geheugen. Elke pagina, elke tab, elke achterdeur.</p>
+</nav>
+
+<main>
+<header class="masthead">
+  <p class="kicker">Volledig overzicht · branch feat/kennisbank-en-keuken</p>
+  <h1>Alles wat<br>BBQ&nbsp;Architect <b>doet</b></h1>
+  <p class="lede">Eén Nederlandse app die de hele keten van een cateringbedrijf draagt: van de aanvraag die binnenkomt tot de bon die de boekhouder krijgt. Dit document loopt hem helemaal langs — waarom hij bestaat, hoe hij in elkaar zit, en wat er op elk scherm gebeurt.</p>
+  <div class="stats">
+    <div><b>103</b><span>Pagina's</span></div>
+    <div><b>198</b><span>API-routes</span></div>
+    <div><b>126</b><span>Migraties</span></div>
+    <div><b>~110</b><span>Tabellen</span></div>
+    <div><b>229k</b><span>Regels code</span></div>
+    <div><b>8</b><span>Hubs</span></div>
+  </div>
+</header>
+
+<!-- ══════════ DEEL 1 ══════════ -->
+<section id="p1">
+<div class="parthead">
+  <span class="num">Deel 01</span>
+  <h2>Wat het is</h2>
+  <p>Eén zin, dan de uitleg.</p>
+  <div class="fire"></div>
+</div>
+
+<p><strong>BBQ Architect is het commandocentrum van een cateringbedrijf.</strong> Een aanvraag komt binnen, wordt een offerte, de offerte wordt een event, het event wordt een menu, het menu wordt een bestellijst en een kookplanning, de dag zelf wordt een servicebord, en achteraf wordt het een factuur, een bon-archief en een BTW-aangifte. Al die stappen leefden vroeger in Excel, WhatsApp, een papieren map en het hoofd van de eigenaar. Hier leven ze in één keten, waarin elke stap de volgende voedt.</p>
+
+<p>Het is geen boekhoudpakket met een agenda erbij, en ook geen planner met facturen erbij. Het bijzondere zit in de <em class="q">doorrekening</em>: als een leverancier de prijs van bavette verhoogt, dan verandert de kostprijs van het component, dan de kostprijs van het gerecht, dan de marge van het menu, dan de marge van elke open offerte waar dat menu in zit — en dan verschijnt er een melding op de startpagina dat er offertes zijn die je niet meer wilt versturen zoals ze zijn.</p>
+
+<h3>De vijf dingen die hij echt doet</h3>
+<div class="grid2">
+  <div class="card"><h4>Verkopen</h4><p>Aanvraagformulier, leadpijplijn, offerte-wizard, opgemaakte menukaart, klantportaal met handtekening en iDEAL-aanbetaling, factuur.</p></div>
+  <div class="card"><h4>Plannen</h4><p>Agenda met conflictdetectie, event-hub per opdracht, draaiboek, logistiek-checklists, crew-uren, materieel, rittenregistratie.</p></div>
+  <div class="card"><h4>Koken</h4><p>Gerechten opgebouwd uit componenten, receptuur, allergenen, kookbord met prep-taken per station, servicebord op de dag zelf, HACCP-registratie.</p></div>
+  <div class="card"><h4>Inkopen</h4><p>Leverancierscatalogi, prijslijsten uit PDF en e-mail, bestelvoorstel op basis van events én minimumvoorraad, ontvangst boeken, bonnen scannen.</p></div>
+  <div class="card"><h4>Verantwoorden</h4><p>Winst &amp; verlies, cashflow-prognose, BTW-aangifte, RGS-categorisering, maandpakket voor de boekhouder, doorzoekbaar bonnenkistje met bewaarplicht van zeven jaar.</p></div>
+  <div class="card"><h4>En overal: meedenken</h4><p>AI die de bon leest, het recept ontleedt, het menu voorstelt, de dagbriefing schrijft en de vraag beantwoordt — maar nooit zelf een bedrag, een BTW-tarief of een allergeen verzint.</p></div>
+</div>
+
+<div class="note rule">
+  <span class="lbl">De zin die alles samenvat</span>
+  <p>Van aanvraag tot factuur in één flow, met de keuken erin — voor de prijs van een boekhoudabonnement, in het Nederlands.</p>
+</div>
+</section>
+
+<!-- ══════════ DEEL 2 ══════════ -->
+<section id="p2">
+<div class="parthead">
+  <span class="num">Deel 02</span>
+  <h2>Voor wie, en waarom</h2>
+  <p>Het product bestaat omdat er een gat in de markt zit dat vier soorten software elk half dichten.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>Het probleem</h3>
+<p>De echte concurrent is geen software maar een stapel: <strong>Excel + WhatsApp + Moneybird + Google Agenda + Canva.</strong> Zo werkt naar schatting tachtig procent van de kleine Nederlandse caterers. Dat werkt, tot het niet meer werkt: de offerte kent de kostprijs niet, de kostprijs kent de leverancier niet, de bestellijst kent het event niet, en de boekhouder krijgt in januari een schoenendoos.</p>
+
+<p>De internationale catering-SaaS (Tripleseat, Caterease, CaterZen, FoodStorm) is volwassen maar Engelstalig, duur, en kent geen Nederlandse BTW, geen iDEAL, geen Moneybird en geen NVWA-HACCP. De Nederlandse spelers (Cateringpoint, Fjild, Rentman) kennen de markt maar dekken één stuk van de keten. Niemand doet de keuken erbij.</p>
+
+<h3>De doelgroep</h3>
+<div class="tbl"><table>
+<thead><tr><th>Laag</th><th>Wie</th><th>Aantal</th></tr></thead>
+<tbody>
+<tr><td>Totale markt</td><td>NL-bedrijven met SBI 56.21 (event-catering)</td><td class="n">~4.500</td></tr>
+<tr><td>Bereikbare markt</td><td>NL-caterers met 1–30 events per maand, primair BBQ/event</td><td class="n">~1.500</td></tr>
+<tr><td>Doel binnen 12 maanden</td><td>Betalende klanten</td><td class="n">50</td></tr>
+</tbody></table></div>
+
+<p><strong>Bewust niet bediend:</strong> hotels en congreslocaties met meer dan honderd events per maand (ander werkproces), internationale markten (de Nederlandse pasvorm ís de voorsprong), restaurants (kassa en reserveringen zijn een ander product), en dark kitchens (geen event-context).</p>
+
+<h3>De drie mensen voor wie elk ontwerp getoetst wordt</h3>
+<div class="tbl"><table>
+<thead><tr><th>Persona</th><th>Apparaat en situatie</th><th>Wat die wil</th></tr></thead>
+<tbody>
+<tr><td><strong>Lars</strong> — operator op locatie</td><td>Tablet, handschoenen aan, fel zonlicht, event-dag</td><td>Drie grote knoppen voor de hele avond</td></tr>
+<tr><td><strong>Pro-tier</strong> — onbekende caterer</td><td>Laptop bij de installatie, telefoon in het veld</td><td>Binnen tien minuten snappen wat te doen, zonder iemand te bellen</td></tr>
+<tr><td><strong>Mathijs</strong> — eigenaar, bouwer, beheerder</td><td>Alles, zeven dagen per week</td><td>App open, meteen zien wat speelt, ⌘K voor de rest</td></tr>
+</tbody></table></div>
+<p>Bij een conflict wint <strong>Lars van Pro-tier, en Pro-tier van Mathijs</strong>. Lars dwingt eenvoud af (aanraakvlakken van minstens 44 pixels, één tik per handeling). Pro-tier dwingt zuivere taal af (geen jargon, geen bedrijfsnamen in menu-items). Mathijs krijgt zijn diepte, maar verstopt achter het commandopalet.</p>
+
+<h3>Wat het kost</h3>
+<div class="tbl"><table>
+<thead><tr><th>Pakket</th><th>Prijs</th><th>Grenzen</th><th>Wat erbij komt</th></tr></thead>
+<tbody>
+<tr><td><strong>Starter</strong></td><td class="n">€49 p/m · €490 p/j</td><td class="n">50 AI-acties · 10 events · 2 teamleden · 1 GB</td><td>Events, offertes, facturen, klanten, gerechten, agenda, AI-assistent en offerte-wizard</td></tr>
+<tr><td><strong>Pro</strong></td><td class="n">€99 p/m · €990 p/j</td><td class="n">500 AI-acties · 50 events · 5 teamleden · 10 GB</td><td>Menu-analyse, HACCP, voorraad, inkoop, uren, materieel, logistiek, Moneybird, iDEAL, digitale handtekening, inkoopprijzen, website-beheer, CSV-import</td></tr>
+<tr><td><strong>Enterprise</strong></td><td class="n">€249 p/m · €2.490 p/j</td><td class="n">2.000 AI-acties · onbeperkt events en teamleden · 100 GB</td><td>Lead-widget, bestelportaal, API, white-label, meerdere locaties, voorrangssupport</td></tr>
+</tbody></table></div>
+<p>AI zit in het abonnement. Er is geen doorbelasting per gebruik — wel een plafond per pakket, zie <a href="#p8">deel 8</a>.</p>
+
+<h3>Waaraan het succes gemeten wordt</h3>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Meetpunt</th><th>Doel</th><th>Hoe gemeten</th></tr></thead>
+<tbody>
+<tr><td class="n">1</td><td>Tijd tot de eerste offerte</td><td class="n">&lt; 15 min</td><td>Van <code>signup_completed</code> naar <code>first_offerte_concept</code></td></tr>
+<tr><td class="n">2</td><td>Activatiegraad</td><td class="n">≥ 40%</td><td>Alle vier checklist-items af binnen zeven dagen</td></tr>
+<tr><td class="n">3</td><td>Terugkeer na een week</td><td class="n">≥ 50%</td><td>Inlog op dag 1 t/m 7 na aanmelding</td></tr>
+<tr><td class="n">4</td><td>Eerste échte offerte verstuurd</td><td class="n">≥ 70%</td><td><code>first_offerte_sent</code> binnen 30 dagen</td></tr>
+<tr><td class="n">5</td><td>AI-gebruik</td><td class="n">≥ 30%</td><td><code>ai_wizard_used</code> gedeeld door alle offertes</td></tr>
+</tbody></table></div>
+<p>Die gebeurtenissen worden echt weggeschreven — naar de tabel <code>activation_events</code>, met een trigger die de organisatie en gebruiker automatisch invult — en zijn te zien op <code>/admin/funnel</code>.</p>
+</section>
+
+<!-- ══════════ DEEL 3 ══════════ -->
+<section id="p3">
+<div class="parthead">
+  <span class="num">Deel 03</span>
+  <h2>De regels eronder</h2>
+  <p>Zeven ontwerpprincipes en één harde afspraak over wat de AI wel en niet mag. Ze verklaren waarom schermen zijn zoals ze zijn.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>De zeven ontwerpprincipes</h3>
+<ol>
+<li><strong>Taak boven module.</strong> De navigatie volgt wat iemand doet, niet hoe de code is ingedeeld.</li>
+<li><strong>Eén plek per begrip.</strong> Als event-gegevens op twee plekken te wijzigen zijn, kiest de app er één en stuurt de andere door.</li>
+<li><strong>Dagelijks zichtbaar, zeldzaam vindbaar.</strong> Acht hubs in de zijbalk; al het overige achter ⌘K.</li>
+<li><strong>De Vandaag-laag toont stand van zaken, geen kengetallen.</strong> "Wat speelt er nu", niet "totale omzet Q2".</li>
+<li><strong>Hub-namen zijn vrij van de eigen bedrijfsnaam.</strong> "Voorraad", niet "Hop &amp; Bites Stock" — anders werkt het nooit voor een andere caterer.</li>
+<li><strong>De veldsituatie wint.</strong> Lars met handschoenen gaat vóór Mathijs op een laptop, en die gaat vóór visuele schoonheid.</li>
+<li><strong>AI stelt voor, de mens beslist.</strong> Geen automatische acties; altijd een voorbeeld vooraf, altijd weg te klikken.</li>
+</ol>
+
+<h3>D, A en H — de belangrijkste afspraak in de hele app</h3>
+<p>Elke functie waar AI bij komt kijken wordt eerst uit elkaar getrokken in taken, en elke taak krijgt een klasse. "Een beetje AI gebruiken" bestaat niet.</p>
+<div class="tbl"><table>
+<thead><tr><th>Klasse</th><th>Wat het is</th><th>Wie beslist</th><th>Rol van het model</th></tr></thead>
+<tbody>
+<tr><td><strong>D — Deterministisch</strong></td><td>Uit te rekenen uit data en regels. Precies één juist antwoord.</td><td>Code. Altijd.</td><td>Alleen tonen en uitleggen. Het model mag het getal <em>nooit</em> maken.</td></tr>
+<tr><td><strong>A — AI-geredeneerd</strong></td><td>Oordeel, taal, prioritering, creativiteit. Geen enkel juist antwoord.</td><td>Het model, binnen een prompt-contract.</td><td>Volledig producerend.</td></tr>
+<tr><td><strong>H — Hybride</strong></td><td>Model stelt voor, code toetst aan een harde grens, mens tekent.</td><td>Alle drie, in die volgorde.</td><td>Voorstel binnen een door code afgebakende ruimte.</td></tr>
+</tbody></table></div>
+
+<div class="note rule">
+  <span class="lbl">De harde regel</span>
+  <p>Gaat het naar buiten (klant, leverancier) of is het onomkeerbaar (geld, voedselveiligheid, wet)? → <strong>nooit vanzelf, altijd goedkeuring.</strong><br>Blijft het binnen en is het terug te draaien? → <strong>mag zelfstandig.</strong></p>
+</div>
+
+<p><strong>Voorbeelden van D</strong> — een recept opschalen van 40 naar 65 gasten, het aantal gastronorm-bakken, kerntemperaturen en koeltijden, foodcost en marge, de BTW-splitsing, allergenen, en het terugrekenen van een deadline. <strong>Voorbeelden van A</strong> — de kok-coach die uitlegt waarom een hollandaise schift, de toon van een offerteconcept, de volgorde in de dagbriefing, een menusuggestie bij een aanvraag. <strong>Voorbeelden van H</strong> — receptuur ontleden, een conceptbestelling, een e-mail aan een klant.</p>
+
+<h3>De rekenmodules waar niets omheen mag</h3>
+<p>Voor elke som die geld raakt is er precies één module. Alle schermen gebruiken die, en niets anders.</p>
+<div class="tbl"><table>
+<thead><tr><th>Module</th><th>Waarvoor</th><th>De regel</th></tr></thead>
+<tbody>
+<tr><td><code>lib/format.ts</code></td><td>Elk bedrag op het scherm</td><td>Nederlandse notatie: punt als duizendtal, komma als decimaal, spatie na het euroteken</td></tr>
+<tr><td><code>lib/menuMargin.ts</code></td><td>Marge op menuniveau</td><td>(menuprijs − som van gerechtkostprijzen) ÷ menuprijs. Het gerecht is een signaal, het menu is het oordeel</td></tr>
+<tr><td><code>lib/unitPrice.ts</code></td><td>Grootverpakking → eenheidsprijs</td><td>Genormaliseerd naar per 100 g, per 100 ml of per stuk. Nooit AI-rekenwerk</td></tr>
+<tr><td><code>lib/btw-rules.ts</code></td><td>BTW-tarief</td><td>AI mag de categorie voorstellen, het percentage komt altijd uit deze tabel — en is datumgebonden aan de factuurdatum</td></tr>
+<tr><td><code>lib/costCalculations.ts</code></td><td>Kostprijs per gerecht</td><td>Uit componenten en doseringen, niet uit een schatting</td></tr>
+<tr><td><code>lib/prijsControle.ts</code></td><td>Verdachte inkoopprijzen</td><td>Wijst aan en stelt de vraag — verandert nooit zelf een bedrag</td></tr>
+<tr><td><code>lib/statuses.ts</code></td><td>Statussen en hun kleuren</td><td>Eén woordenlijst voor offerte, event, factuur en order</td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+  <span class="lbl">Geleerd, met schade</span>
+  <p><strong>Een leeg veld verslaat een schatting die zich voordoet als feit.</strong> Waar een duur, een prijs of een hoeveelheid niet in de bron staat, blijft het veld leeg en zegt het scherm "onbekend". Ooit telde een onbekende kostprijs stilletjes als nul mee, waardoor marges er prachtig uitzagen. Sindsdien: per regel vastleggen waar het getal vandaan komt.</p>
+</div>
+
+<h3>Twee fouten die de app nu actief tegenhoudt</h3>
+<p>Beide zijn echt gebeurd, in echte data, en kosten geld:</p>
+<ul>
+<li><strong>De pakgrootte als dosering.</strong> Gegrilde kippendij stond op 2,5 kg per gast — dat is de inhoud van het pak. Voor 35 gasten rekende de app 87,5 kilo kip uit, en zo kwam het op de bestellijst. Nu vraagt een dosering boven een halve kilo per gast: <em class="q">bedoel je het pak?</em></li>
+<li><strong>De pakprijs als eenheidsprijs.</strong> Diezelfde kip kwam uit op €0,60 per kilo omdat €5,99 met eenheid "kg" gelezen werd als de prijs voor de hele doos van tien kilo. De controle vindt dit nu: van 5.238 producten met een pakinhoud zijn er 182 verdacht.</li>
+</ul>
+</section>
+
+<!-- ══════════ DEEL 4 ══════════ -->
+<section id="p4">
+<div class="parthead">
+  <span class="num">Deel 04</span>
+  <h2>Hoe het gebouwd is</h2>
+  <p>De techniek, in gewone taal. Wat draait waar, en waarom die keuze.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>Het fundament</h3>
+<div class="tbl"><table>
+<thead><tr><th>Onderdeel</th><th>Keuze</th><th>Waarvoor</th></tr></thead>
+<tbody>
+<tr><td>Raamwerk</td><td>Next.js 16.2 met React 19.2</td><td>Pagina's die deels op de server en deels in de browser draaien — snel eerste beeld, toch levendig</td></tr>
+<tr><td>Taal</td><td>TypeScript 6</td><td>Fouten die anders pas bij een klant opvallen, vallen al bij het opslaan op</td></tr>
+<tr><td>Database</td><td>Supabase (PostgreSQL) in Frankfurt</td><td>~110 tabellen, rijbeveiliging per organisatie, opslag voor foto's en PDF's, inloggen</td></tr>
+<tr><td>AI</td><td>Anthropic SDK 0.95 — Haiku 4.5, Sonnet 4.6, Opus 4.7</td><td>Goedkoop model voor eenvoudig werk, duur model alleen waar het loont</td></tr>
+<tr><td>Uiterlijk</td><td>Tailwind 3.4 plus eigen CSS-variabelen</td><td>Acht kleurstellingen, per klant om te zetten</td></tr>
+<tr><td>Hosting</td><td>Vercel, regio <code>fra1</code></td><td>Frankfurt — naast de database. Stond het in Washington, dan kostte elke vraag ~140 ms extra</td></tr>
+<tr><td>Betalen</td><td>Mollie (iDEAL)</td><td>Aanbetaling door de klant én het abonnement zelf</td></tr>
+<tr><td>Boekhouden</td><td>Moneybird (OAuth) en Exact Online</td><td>Facturen en bonnen doorzetten</td></tr>
+<tr><td>E-mail</td><td>Resend</td><td>Offertes, facturen, herinneringen, boekhouderpakket</td></tr>
+<tr><td>Testen</td><td>Vitest (73 testbestanden), Playwright, Promptfoo</td><td>Rekenwerk, schermen én de AI zelf</td></tr>
+</tbody></table></div>
+
+<h3>De lagen, van buiten naar binnen</h3>
+<ol>
+<li><strong>De poort</strong> — <code>src/proxy.ts</code>. Controleert bij elk verzoek of je ingelogd bent, laat publieke routes door (klantportaal, aanvraagformulier, webhooks) en handelt oude adressen af met een doorverwijzing.</li>
+<li><strong>De schil</strong> — <code>AppShell</code>. Beslist welke omlijsting je krijgt: geen enkele op inlog- en klantpagina's, volledig scherm op de kookborden, en de gewone app met zijbalk daarbuiten.</li>
+<li><strong>De pagina's</strong> — 103 stuks, waarvan de zwaarste hun gegevens op de server ophalen en alleen de interactie aan de browser overlaten.</li>
+<li><strong>Serveracties</strong> — 20 <code>actions.ts</code>-bestanden. Opslaan en wijzigen gaat hierlangs, met validatie en een controlespoor, in plaats van rechtstreeks vanuit de browser.</li>
+<li><strong>De data-toegangslaag</strong> — <code>src/lib/dal/</code>. Alle sommen die geld raken (bestelvoorstel, vraagberekening, pakafronding, prijsverversing) staan hier, apart en getest.</li>
+<li><strong>De API</strong> — 198 routes. Alles wat AI aanroept, wat een externe partij aanroept, of wat te zwaar is voor de browser.</li>
+</ol>
+
+<h3>Meerdere bedrijven in één app</h3>
+<p>Elke rij in elke tabel draagt een <code>organization_id</code>. De database zelf weigert rijen van een andere organisatie te tonen — niet de app, de <em>database</em>. Dat heet rijbeveiliging, en het is de reden dat één installatie veilig meerdere caterers kan bedienen.</p>
+<div class="note warn">
+  <span class="lbl">De valkuil daarbij</span>
+  <p>Bij het <em>opslaan</em> van een nieuwe rij moet de organisatie altijd expliciet worden meegestuurd. Er zijn geen standaardwaarden of triggers die dat stiekem doen (op twee tabellen na). Een hele testronde bracht 17 plekken aan het licht waar dat ontbrak — inklokken, de AI-wizard, nieuw event, klanten, facturen — en waar opslaan dus stil mislukte.</p>
+</div>
+<p>Serverroutes gebruiken één wikkel, <code>withTenantAuth</code>, die inlog en lidmaatschap controleert vóór de route zelf iets doet. Platformbeheerders worden apart herkend aan hun e-mailadres in een omgevingsvariabele.</p>
+
+<h3>Het uiterlijk: acht kleurstellingen uit zes tokens</h3>
+<p>Een thema is niet een stapel CSS maar zes waarden: achtergrond, tekst, kaart, primair, accent, secundair — plus of het licht of donker is. Daaruit rekent <code>themeTokens.ts</code> de tientallen afgeleide kleuren uit, inclusief een correctie zodat gedempte tekst op lichte thema's leesbaar blijft (die kwam op één thema uit op 3,2:1 en moest naar de norm).</p>
+<p>De acht: <strong>Smoke &amp; Steel, Drents Eik, Brandstapel, Nordic Graphite</strong> (donker) en <strong>Witte Berken, Studio Paper, Moestuin, Zandstrand</strong> (licht). De keuze staat in een cookie, zodat de eerste weergave meteen goed is en er geen flits van het verkeerde thema komt.</p>
+<p>Lettertypen komen via <code>next/font</code> van het eigen domein — DM Sans voor tekst, Outfit voor koppen, IBM Plex Mono voor getallen, Playfair en Oswald voor menukaarten. Eerder werden ze bij Google opgehaald, wat een DNS-, TLS- en downloadronde vóór het eerste beeld kostte.</p>
+
+<h3>Werkt ook zonder internet</h3>
+<p>De app is installeerbaar als telefoon-app en heeft een service-worker. Voor een event kun je <em class="q">offline-modus</em> aanzetten: er wordt een momentopname van dat ene event in de browser-database gezet, en alles wat je daarna wijzigt komt in een wachtrij die bij herstel van de verbinding wordt weggeschreven. HACCP-registraties werken sowieso offline — een keuken op een weiland heeft zelden bereik.</p>
+
+<h3>Zes manieren waarop gegevens naar binnen komen</h3>
+<div class="grid2">
+  <div class="card"><h4>Foto of PDF van een bon</h4><p>Slepen, plakken, camera of bestandskiezer. Wordt gelezen door een model met beeldherkenning, waarna jij de regels bevestigt.</p></div>
+  <div class="card"><h4>E-mail</h4><p>Een Cloudflare Email Worker vangt post op <code>pl-{naam}@in.bbqarchitect.app</code>, controleert de ondertekening en zet bijlagen klaar. Leveranciers kunnen hun prijslijst dus gewoon mailen.</p></div>
+  <div class="card"><h4>Browser-uitbreiding</h4><p>Een Chrome-extensie (Manifest V3) haalt prijzen op vanaf de ingelogde leverancierssite. Hervatbaar: valt hij uit, dan pakt hij de draad op waar hij was.</p></div>
+  <div class="card"><h4>Prijslijst-PDF's in bulk</h4><p>Tot 25 tegelijk. De eerste realtime binnen 30 seconden, de rest via de goedkope batch-verwerking die 's nachts wordt opgehaald.</p></div>
+  <div class="card"><h4>UBL en bankafschriften</h4><p>Elektronische facturen (UBL-XML) en MT940-afschriften worden gelezen en tegen je facturen afgeletterd.</p></div>
+  <div class="card"><h4>Gewoon typen</h4><p>Overal met een zoekveld dat in de leverancierscatalogus zoekt — nooit een leeg naamveld waar je maar wat invult.</p></div>
+</div>
+
+<h3>Wat er 's nachts vanzelf gebeurt</h3>
+<div class="tbl"><table>
+<thead><tr><th>Tijd</th><th>Wat</th><th>Waarom</th></tr></thead>
+<tbody>
+<tr><td class="n">03:00</td><td>Gastnamen op plattegronden anonimiseren</td><td>Privacy — namen hoeven na het event niet te blijven staan</td></tr>
+<tr><td class="n">04:00</td><td>Batch-prijslijsten ophalen</td><td>De goedkope verwerking van de vorige dag binnenhalen</td></tr>
+<tr><td class="n">04:00</td><td>Markt-pulse verversen</td><td>Anonieme prijstrend over meerdere klanten heen (minimaal 5 deelnemers)</td></tr>
+<tr><td class="n">04:15</td><td>Receptkostprijzen herberekenen</td><td>Nieuwe inkoopprijzen doorrekenen naar componenten en gerechten</td></tr>
+<tr><td class="n">05:30</td><td>Google Agenda synchroniseren</td><td>Events in je eigen agenda</td></tr>
+<tr><td class="n">06:00</td><td>Financiële samenvatting</td><td>Zodat het dashboard 's ochtends klaar staat</td></tr>
+<tr><td class="n">07:00</td><td>Marge-alarm scannen</td><td>Prijsstijgingen die open offertes raken</td></tr>
+<tr><td>1e v/d maand</td><td>Vergeten ritten signaleren</td><td>Kilometeradministratie sluitend houden</td></tr>
+</tbody></table></div>
+<div class="note">
+  <span class="lbl">Een les die geld kostte</span>
+  <p>Op het gratis Vercel-pakket mag een taak hooguit één keer per dag draaien. Stond er één op "elk uur", dan mislukte <em>elke</em> publicatie stil. Vandaar dat alles hierboven dagelijks is.</p>
+</div>
+</section>
+
+<!-- ══════════ DEEL 5 ══════════ -->
+<section id="p5">
+<div class="parthead">
+  <span class="num">Deel 05</span>
+  <h2>De navigatie</h2>
+  <p>Eén startpagina, zeven hubs, en vier manieren om ergens te komen.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>De structuur</h3>
+<p>De zijbalk toont alleen hub-titels; de onderdelen klappen uit voor de hub waar je in zit. De routes zelf zijn nooit veranderd bij een herindeling — alleen de groepering. Oude adressen blijven werken via doorverwijzingen.</p>
+<div class="tbl"><table>
+<thead><tr><th>Hub</th><th>Deur</th><th>Wat eronder hangt</th></tr></thead>
+<tbody>
+<tr><td><strong>Vandaag</strong></td><td><code>/</code></td><td>Vast bovenaan. De verkeerstoren</td></tr>
+<tr><td><strong>Plannen</strong></td><td><code>/agenda</code></td><td>Agenda · Events</td></tr>
+<tr><td><strong>Verkoop</strong></td><td><code>/offertes</code></td><td>Aanvragen · Arrangementen · Offertes · Klanten</td></tr>
+<tr><td><strong>Keuken</strong></td><td><code>/gerechten</code></td><td>Gerechten · Componenten · Kookbord · Menu-analyse</td></tr>
+<tr><td><strong>Inkoop &amp; Voorraad</strong></td><td><code>/voorraad</code></td><td>Voorraad · Inkoop · Leveranciers · Bonnen scannen · Bonnenkistje · Inkoopprijzen</td></tr>
+<tr><td><strong>Geld</strong></td><td><code>/financien</code></td><td>Financiën · Facturen · Boekhouder</td></tr>
+<tr><td><strong>Team &amp; Operatie</strong></td><td><code>/uren</code></td><td>Uren · Materieel · Rittenregistratie · Logistiek</td></tr>
+<tr><td><strong>Systeem</strong></td><td><code>/systeem</code></td><td>Instellingen · Gebruikers · Integraties · Mailbox · Website · Help · Platformbeheer</td></tr>
+</tbody></table></div>
+
+<h3>De vier ingangen</h3>
+<div class="grid2">
+  <div class="card"><h4>Zijbalk</h4><p>Op laptop. Acht hubs, aanraakvlakken van minstens 44 pixels, de actieve hub klapt open.</p></div>
+  <div class="card"><h4>Onderbalk</h4><p>Alleen op telefoon. Vijf tabs: Vandaag · Plannen · Verkoop · Menu · Meer. "Geld" viel eraf zodat "Verkoop" erin paste — dat is dagelijks werk, geld is wekelijks.</p></div>
+  <div class="card"><h4>⌘K — het commandopalet</h4><p>Ruim 35 vaste bestemmingen plus live zoeken door events, offertes, facturen, gerechten, voorraad en klanten. Ook de plek waar je de AI direct een vraag stelt.</p></div>
+  <div class="card"><h4>De zwevende knop</h4><p>Rechtsonder, op tablet en laptop: snel naar een bestellijst of een nieuw event. Verdwijnt op telefoon, waar de onderbalk het werk doet.</p></div>
+</div>
+<p>Daarnaast: <strong>broodkruimels</strong> bovenaan elke pagina, een <strong>actieve-bron-pil</strong> die onthoudt met welk event of welke offerte je bezig bent zodat de AI dat weet, en <strong>relatie-pillen</strong> op detailpagina's waarmee je van offerte naar event naar factuur naar klant kunt doorklikken — de cirkel rond.</p>
+</section>
+
+<!-- ══════════ DEEL 6 ══════════ -->
+<section id="p6">
+<div class="parthead">
+  <span class="num">Deel 06</span>
+  <h2>Elke pagina, één voor één</h2>
+  <p>Alle 103 routes, gegroepeerd per hub. Per pagina: wat het is, wat je er kunt, en waar de gegevens vandaan komen. Doorverwijzingen — oude adressen die nog leven voor bestaande bladwijzers — staan met een stippellijn.</p>
+  <div class="fire"></div>
+</div>
+
+<div class="hubhead"><h3>Vandaag</h3><span class="path">de verkeerstoren</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/</span><span class="nm">Vandaag</span></header>
+  <p>De startpagina, en het drukst bezochte scherm van de app. Hij haalt dertien tabellen tegelijk op en zet die om in één beeld: wat speelt er nu, wat vraagt aandacht, en wat kan ik in één klik doen. Bewust géén kwartaalcijfers — dat is de taak van Geld.</p>
+  <ul>
+    <li><strong>Begroeting</strong> die meebeweegt met het uur, plus je voornaam.</li>
+    <li><strong>Event-held</strong> — het eerstvolgende event groot in beeld: dagen te gaan, gasten, omzet, locatie, status, en of gangen, allergieën en prep al ingevuld zijn.</li>
+    <li><strong>AI-snelvragen</strong> — vier knoppen die een vraag met de context van dat event openen in een zijlade, met grafiek.</li>
+    <li><strong>Negen kengetallen</strong> met trendpijl en doorklik: dagen tot het volgende event, events deze week, omzet deze maand, pijplijn aan offertes, openstaande facturen, gemiddelde marge (doel ≥ 60%), voorraadwaarde, items onder minimum, bonnen te boeken.</li>
+    <li><strong>Bedrijfsgrafieken</strong> — omzetverdeling per eventtype, zes maanden omzet, top-5 uitgaven per leverancier.</li>
+    <li><strong>Dagbriefing</strong> — een korte tekst die uit ruim twintig regels de belangrijkste punten kiest.</li>
+    <li><strong>Aandachtspaneel</strong> — rode en oranje kaarten met een concrete knop: bestellen voor events binnen de levertijd van je traagste leverancier, bestellingen die verzonden maar niet geleverd zijn, aanvragen die op opvolging wachten, voorraad onder minimum, facturen ouder dan 30 dagen, offertes met lage marge, ontbrekende menukaarten, events zonder offerte, en prijsschommelingen die open offertes raken.</li>
+    <li><strong>Tijdlijn</strong> van komende verplichtingen, inclusief de BTW-deadline.</li>
+    <li><strong>Onboarding-checklist</strong> en de <strong>persona-quiz</strong> voor nieuwe gebruikers, allebei weg te klikken.</li>
+    <li><strong>Nieuw event</strong> en <strong>Rit registreren</strong> als vaste knoppen bovenaan.</li>
+  </ul>
+  <div class="meta"><span class="tag db">13 tabellen</span><span class="tag ai">AI-snelvragen</span><span class="tag">conflictdetectie</span><span class="tag">lege staat voor nieuwe klanten</span></div>
+</article>
+</div>
+
+<div class="hubhead"><h3>Plannen</h3><span class="path">/agenda · alles rond een opdracht</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/agenda</span><span class="nm">Agenda</span></header>
+  <p>Vier kalenders over elkaar: events, prep-deadlines, bestelmomenten en persoonlijke afspraken. Elk met eigen kleur en aan- of uit te zetten.</p>
+  <ul>
+    <li>Drie weergaven: <strong>maand, week en lijst</strong> — de keuze staat in het adres, dus een link is deelbaar.</li>
+    <li>Filters op kalender, status en categorie, met pillen die tonen wat er actief staat.</li>
+    <li><strong>Conflictdetectie</strong> — twee events op één dag, te weinig tijd ertussen, dubbele bezetting.</li>
+    <li>Persoonlijke afspraken toevoegen, en eigen categorieën beheren.</li>
+    <li>Knop om vanaf hier meteen een inkooplijst te genereren.</li>
+    <li>Kengetallen bovenaan en een detailkaart per event bij aanklikken.</li>
+  </ul>
+  <div class="meta"><span class="tag db">events · prep_tasks · agenda_personal</span><span class="tag">Google Agenda-koppeling</span><span class="tag">iCal-export</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events</span><span class="nm">Events</span></header>
+  <p>De lijst van alle opdrachten, als tabel of als kaartenraster. Kolommen: event, datum, klant, gasten, locatie, omzet, status.</p>
+  <ul><li>Vijf statussen met eigen kleur: concept, optie, bevestigd, afgerond, geannuleerd.</li><li>Zoeken en filteren; klik gaat naar de event-hub.</li></ul>
+  <div class="meta"><span class="tag db">events</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/hub</span><span class="nm">Event-hub</span></header>
+  <p>Het hart van één opdracht — met ruim 1.500 regels het grootste scherm van de app. Alles wat bij dit event hoort komt hier samen, met bovenaan een tabbalk naar de zeven gezichten van hetzelfde event.</p>
+  <ul>
+    <li><strong>Werkstroom in vijf fasen</strong>: Offerte → Acceptatie → Voorbereiding → Eventdag → Afronding, met per fase of hij af, actief of nog te doen is.</li>
+    <li><strong>Voortgangsring</strong> die de tijd tot het event toont over een vaste horizon, zodat een vers event geen leeg rondje is.</li>
+    <li><strong>Menu-overzicht</strong> per gang, opgehaald uit de gekoppelde offerte, met allergenen per gerecht.</li>
+    <li><strong>Menukaart</strong>: kies een sjabloon en open de opmaak-editor — het tweede toegangspunt naast de offerte.</li>
+    <li><strong>Klantblok</strong>: bellen, mailen, route in Google Maps, contactgegevens.</li>
+    <li><strong>Financieel</strong>: offertebedrag, factuurstand, openstaand saldo.</li>
+    <li><strong>Inkooplijst-kaart</strong>: wat dit event aan producten vraagt.</li>
+    <li><strong>HACCP-kaart</strong>: staat er al een plan voor deze dag.</li>
+    <li><strong>Draaiboek</strong>: tijdlijn met eigen regels, bewerkbaar en op te slaan.</li>
+    <li><strong>Prep-fasen</strong> gegroepeerd per dag vóór het event (T-5 tot T-0).</li>
+    <li><strong>Kok-coach-kaart</strong> per fase met advies voor die dag.</li>
+    <li>Status omzetten met directe terugkoppeling, en terugdraaien als het opslaan mislukt.</li>
+  </ul>
+  <div class="meta"><span class="tag db">events · courses · offertes · prep_tasks · service_logs</span><span class="tag ai">kok-coach</span><span class="tag">PDF-draaiboek</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/field</span><span class="nm">Veldweergave</span></header>
+  <p>Hetzelfde event, maar voor één hand op een telefoon met vluchtige aandacht. Alle knoppen minstens 56 pixels.</p>
+  <ul><li>Naam, datum, locatie, gasten in het groot.</li><li>Route openen met één tik.</li><li>Klant bellen met één tik.</li><li>Mijn uren starten of stoppen in twee tikken.</li><li>Materieel-checklist uit de paklijst.</li><li>Doorsteek naar de HACCP-veldmodus.</li></ul>
+  <div class="meta"><span class="tag field">veldmodus · 56 px</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/service</span><span class="nm">Servicebord</span></header>
+  <p>De avond zelf, op volledig scherm zonder app-omlijsting. Het bord waar de gang-voor-gang uitgifte op draait.</p>
+  <ul>
+    <li><strong>Gangenrail</strong> links, <strong>focuskaart</strong> in het midden met de gang die nu draait, <strong>straks</strong> en een mini-plattegrond rechts.</li>
+    <li>Vier statussen per gang: wachtend → in bereiding → klaar voor uitgifte → geserveerd.</li>
+    <li><strong>Rook-strip</strong> bovenaan: korte instructies over wat er op de smoker moet gebeuren.</li>
+    <li><strong>Kookkaart</strong> als schuiflade over het hele scherm, met vier tabbladen: Actieplan · Mise en place · Per tafel · Kwaliteit. Per gerecht de bereidingswijze stap voor stap, de plating, de vegetarische variant, en per tafel wie wat krijgt.</li>
+    <li>Verbruik wordt bij het afmelden van een gang <strong>server-zijdig van de voorraad afgeboekt</strong>, met eenheidsomrekening en één keer per gang (geen dubbeltelling).</li>
+    <li><strong>Opruim-checklist</strong> aan het eind: smokers uit, as koud in metalen bak, bain-maries leeg, snijplanken wassen, restanten apart voor verspillingsregistratie, locatie-eindcheck, klant bedanken.</li>
+    <li><strong>Feedback-dump</strong> — ruwe aantekeningen die de AI omzet in kernpunten en actiepunten voor de volgende keer.</li>
+    <li>Instructiepijlen bij het eerste gebruik, afvinklijstjes bewaard in de browser.</li>
+  </ul>
+  <div class="meta"><span class="tag field">volledig scherm</span><span class="tag ai">kwaliteitsassistent</span><span class="tag db">service_state · courses · stock_movements</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/service/plattegrond</span><span class="nm">Plattegrond</span></header>
+  <p>Het tweede tabblad van het servicebord: de zaal van bovenaf.</p>
+  <ul><li>Tafels en zones tekenen en verslepen.</li><li><strong>Gast-pins met allergeenring</strong> — je ziet aan de tafel wie wat niet mag.</li><li>Servicezones toewijzen aan medewerkers.</li><li>Rookpluim van de smoker als oriëntatiepunt.</li><li>AI-voorstel voor de indeling, dat jij bevestigt.</li></ul>
+  <div class="meta"><span class="tag db">floor_plans · floor_plan_guests · service_zones</span><span class="tag ai">indeling-voorstel</span><span class="tag">gastnamen worden 's nachts geanonimiseerd</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/logistiek</span><span class="nm">Logistiek per event</span></header>
+  <p>Zes uitklapbare kaarten met de checklists voor dit event: wat mee moet, wie rijdt, wat er op locatie moet staan.</p>
+  <div class="meta"><span class="tag db">event_checklist_items</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/menukaart-editor</span><span class="nm">Menukaart vanuit het event</span></header>
+  <p>Spiegelbeeld van de editor bij de offerte: je begint bij het event, de app zoekt de gekoppelde offerte erbij. De menukaart woont in de offerte — één bron, twee deuren. Geen offerte gekoppeld? Dan een lege staat met de weg terug.</p>
+  <div class="meta"><span class="tag db">offertes.menukaart_template_id</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/events/[id]/reflectie</span><span class="nm">Reflectie</span></header>
+  <p>Opent pas ná het event. Vier vragen die samen bepalen of de terugblik compleet is: een cijfer, wat ging goed, wat kan beter, en bij een cijfer onder de zeven ook de oorzaak.</p>
+  <div class="meta"><span class="tag">alleen na de eventdatum</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/klantgesprek</span><span class="nm">Klantgesprek</span></header>
+  <p>Het intake-formulier dat je invult terwijl je bij de klant zit. Verschijnt met een event-tabbalk als je hem vanaf een event opent.</p>
+  <ul>
+    <li>Klantgegevens, type klant, eventdetails, locatie-aantekeningen, start- en eindtijd.</li>
+    <li>Aantal gasten, waarvan vegetarisch, <strong>allergieën en dieetwensen per gast</strong>.</li>
+    <li>Menuwensen, serveerwijze, dranken, extra materieel, tafels en stoelen.</li>
+    <li>Budget en prijs per persoon, met een geschat totaal.</li>
+    <li><strong>Claude stelt een menu voor</strong> op basis van wat je hebt opgeschreven.</li>
+    <li>Vrije gespreksnotities die de AI omzet naar gestructureerde velden.</li>
+    <li>Opvolgdatum en vastgelegde toestemming.</li>
+  </ul>
+  <div class="meta"><span class="tag ai">notities → velden</span><span class="tag ai">menuvoorstel</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/prep-counter</span><span class="nm">Prep-teller</span></header>
+  <p>De takenlijst voor één event: links de taken, rechts de gekozen taak met het gekoppelde gerecht, de ingrediënten en de hoeveelheden. Toont de tijd tot het event.</p>
+  <div class="meta"><span class="tag db">prep_tasks</span><span class="tag ai">inline AI-studio</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/haccp</span><span class="nm">HACCP</span></header>
+  <p>Voedselveiligheid in vijf stappen: <strong>Kies → AI-plan → Aanpassen → Loggen → Dossier.</strong> Werkt door als de verbinding wegvalt of een migratie ontbreekt: dan draait hij op voorbeelddata met een duidelijk merkteken.</p>
+  <ul>
+    <li>Kies een event; de AI schrijft binnen enkele seconden een controlelijst, stromend meegetypt.</li>
+    <li>Pas het plan aan naar je eigen keuken.</li>
+    <li>Registreer metingen: kerntemperatuur, koeling, vriezer, serveren, handhygiëne, oppervlaktereiniging, kruisbesmetting, tijd uit koeling.</li>
+    <li><strong>Corrigerende actie</strong> bij een afwijking — vijf vaste sjablonen (opnieuw verwarmen, extra koelen, weggooien, sensor controleren, chef inschakelen), met begeleide stappen en aftekening. Registraties worden nooit gewijzigd, er komt altijd een regel bij.</li>
+    <li><strong>Dossier</strong>: alles op datum, met norm, waarde, uitvoerder en status, exporteerbaar als PDF voor de NVWA.</li>
+    <li><strong>Trends</strong> en een tijdlijn over de middelen heen.</li>
+    <li>Chatvenster om een vraag over de voedselveiligheid van dit event te stellen.</li>
+  </ul>
+  <div class="meta"><span class="tag db">haccp_records · haccp_corrective_actions · event_haccp_plans</span><span class="tag ai">plangeneratie</span><span class="tag">werkt offline</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/haccp/field</span><span class="nm">HACCP veldmodus</span></header>
+  <p>Temperatuur registreren in drie tikken, met knoppen van minstens 56 pixels. Kies het type (kip, rundvlees, varkensvlees, vis, salade, dessert, koeling, vriezer, serveren), tik de temperatuur, klaar. Toont de laatste vijf registraties.</p>
+  <div class="meta"><span class="tag field">3 tikken</span><span class="tag">werkt offline</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/events/[id]</span><span class="nm">→ /events/[id]/hub</span></header>
+  <p>Doorverwijzing naar de event-hub.</p>
+</article>
+<article class="route dead">
+  <header><span class="path">/plannen · /event-planner</span><span class="nm">→ /agenda</span></header>
+  <p>De tussenhub is vervangen door directe links; de losse planner is opgegaan in de agenda.</p>
+</article>
+</div>
+
+<div class="hubhead"><h3>Verkoop</h3><span class="path">/offertes · van aanvraag tot handtekening</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/verkoop/leads</span><span class="nm">Aanvragen</span></header>
+  <p>De pijplijn van binnengekomen aanvragen, met vijf stadia: nieuw → in gesprek → offerte → gewonnen of verloren. Bovenaan de cijfers die ertoe doen: open aanvragen, gewonnen waarde, win-verhouding, en hoeveel er te lang stilliggen.</p>
+  <ul>
+    <li>Elke aanvraag met naam, datum, gasten, budget, indicatie-omzet en herkomst.</li>
+    <li><strong>AI-conceptmenu</strong> per aanvraag, te gebruiken in de offerte.</li>
+    <li>Doorzetten naar een offerte — de wizard neemt de gegevens over.</li>
+    <li>Publieke formulierlink kopiëren om te delen of op de site te zetten.</li>
+    <li>Aanvragen die te lang stilliggen komen ook op de startpagina terecht.</li>
+  </ul>
+  <div class="meta"><span class="tag db">leads</span><span class="tag ai">conceptmenu</span><span class="tag pub">gevoed door /aanvraag/[slug]</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/verkoop/arrangementen</span><span class="nm">Arrangementen</span></header>
+  <p>De bouwer achter <em class="q">"stel zelf je offerte samen"</em>. Jij bepaalt de categorieën en de niveaus, de klant kiest en ziet een indicatieprijs.</p>
+  <ul>
+    <li>Naam, korte uitleg, icoon, minimum en standaard aantal gasten.</li>
+    <li>Categorieën (gangen) met per categorie meerdere niveaus en prijzen.</li>
+    <li>Eén niveau markeren als <em class="q">populairst</em>.</li>
+    <li><strong>Trechter</strong>: hoeveel mensen het formulier openden, startten en verstuurden.</li>
+    <li>Publieke link, en een waarschuwing bij niet-opgeslagen wijzigingen.</li>
+  </ul>
+  <div class="meta"><span class="tag db">arrangementen · arrangement_categorieen · categorie_niveaus</span><span class="tag pub">gepubliceerd op /arrangement/[slug]</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/offertes</span><span class="nm">Offertes</span></header>
+  <p>Het commerciële hart. Links de lijst, rechts de bewerker met vijf stappen: <strong>Wie · Wat · Hoeveel · Eenmalig · Marge.</strong> Dit is het scherm waar de meeste omzet doorheen loopt.</p>
+  <ul>
+    <li><strong>Wie</strong> — klant kiezen of nieuw aanmaken, adres, e-mail, datum, geldig tot (standaard 30 dagen).</li>
+    <li><strong>Wat</strong> — menu samenstellen via de menukiezer, een opgeslagen menu ophalen, of direct regels typen.</li>
+    <li><strong>Hoeveel</strong> — regels met aantal, omschrijving en prijs; kortingsregels krijgen een eigen pil.</li>
+    <li><strong>Eenmalig</strong> — vaste kosten los van het aantal gasten (reiskosten, huur, crew).</li>
+    <li><strong>Marge</strong> — foodcost, omzet, nettowinst en marge live meerekenend terwijl je typt.</li>
+    <li><strong>AI-offerte-wizard</strong> — klantnaam, datum, gasten, waarvan vegetarisch, aantal gangen en prijs per persoon; de AI stelt een menu voor en de wizard bewaart je concept zeven dagen in de browser.</li>
+    <li><strong>Marge-drift-banner</strong> — verschijnt als inkoopprijzen zijn gestegen sinds je de offerte opstelde, met de grootste impact eerst; te snoozen of af te handelen.</li>
+    <li>Na acceptatie: event bijwerken naar bevestigd, factuur aanmaken, prep-taken inplannen, servicegangen aanmaken, inkooplijst genereren — allemaal als vervolgstap in beeld.</li>
+    <li>Zes statussen: concept, verzonden, geaccepteerd, afgewezen, verlopen, geannuleerd.</li>
+  </ul>
+  <div class="meta"><span class="tag db">offertes · courses · klanten · menu_templates</span><span class="tag ai">menuvoorstel</span><span class="tag">PDF · e-mail · portaal-link</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/offertes/[id]/view</span><span class="nm">Offerte-detail</span></header>
+  <p>De offerte als document, met de commerciële analyse ernaast.</p>
+  <ul>
+    <li>Regels gegroepeerd: smoker-hoofdgerechten, bijgerechten en sauzen, crew en logistiek, overig.</li>
+    <li><strong>Brutomarge, inkoopratio en marge per hoofd</strong>.</li>
+    <li><strong>Vergelijking met eerdere offertes</strong> van dezelfde klant.</li>
+    <li><strong>Pitmaster-suggesties</strong> — bijvoorbeeld: schrap de zwakste regel of maak hem optioneel.</li>
+    <li>Bewerken, dupliceren, nieuwe versie maken, versturen.</li>
+  </ul>
+  <div class="meta"><span class="tag ai">verbetersuggesties</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/offertes/[id]/menukaart-editor</span><span class="nm">Menukaart-editor</span></header>
+  <p>De opmaak van de menukaart die de klant krijgt. Tien sjablonen in het register: Restaurant, Smokehouse, Modern, Minimal, Rustic, Duotone, Editorial, Tasting, Foodtruck (21×21) en Uitnodiging (21×21).</p>
+  <ul>
+    <li>Sjabloon kiezen, kleuren aanpassen, teksten per gang bewerken.</li>
+    <li>De stijl valt van je bedrijfsinstellingen naar de offerte: standaard erft elke nieuwe offerte je huisstijl, maar een offerte met eigen aanpassingen houdt die.</li>
+    <li>Direct als PDF te openen en te printen.</li>
+    <li>Elk sjabloon heeft een vastgelegde afbeelding in de tests, zodat een wijziging in de opmaak zichtbaar wordt vóór hij bij een klant belandt.</li>
+  </ul>
+  <div class="meta"><span class="tag">10 sjablonen</span><span class="tag">PDF via react-pdf</span><span class="tag">beeldvergelijkingstests</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/klanten</span><span class="nm">Klanten</span></header>
+  <p>Het klantenbestand met de historie erbij: per klant het aantal offertes, events en facturen, en de totale waarde.</p>
+  <ul><li>Contactgegevens, bedrijf, adres, type klant, notities.</li><li>Vanaf de klantkaart direct een offerte opstellen of een event aanmaken.</li><li>Opslaan gaat via serveracties met veldvalidatie — een fout verschijnt onder het veld zelf.</li></ul>
+  <div class="meta"><span class="tag db">klanten</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/facturen</span><span class="nm">Facturen</span></header>
+  <p>Facturen opstellen, versturen en innen. Regels met aantal, omschrijving, prijs en BTW-percentage, plus vervaldatum en betalingsregistratie.</p>
+  <ul><li>Factuurnummer met eigen voorvoegsel.</li><li>PDF downloaden of per e-mail versturen.</li><li>Betalingen bijhouden; onbetaald na 30 dagen komt op de startpagina.</li><li>Doorzetten naar Moneybird.</li><li>Concept-facturen worden automatisch bewaard terwijl je typt.</li></ul>
+  <div class="meta"><span class="tag db">facturen</span><span class="tag">Moneybird · UBL · Mollie</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/verkoop</span><span class="nm">→ /offertes</span></header>
+  <p>De tussenhub is vervallen; offertes zijn de deur.</p>
+</article>
+<article class="route dead">
+  <header><span class="path">/offerte-editor</span><span class="nm">→ /offertes</span></header>
+  <p>De losse editor is uitgefaseerd — de wizard op /offertes is de enige route.</p>
+</article>
+</div>
+
+<div class="hubhead"><h3>Keuken</h3><span class="path">/gerechten · wat je kookt en wat het kost</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/gerechten</span><span class="nm">Gerechten</span></header>
+  <p>De bibliotheek van wat je verkoopt. Elk gerecht is opgebouwd uit componenten en draagt zijn eigen kostprijs, allergenen en receptuur. Vier tabbladen bovenaan: Gerechten · Componenten · Menukaarten · Analyse.</p>
+  <ul>
+    <li>Per gerecht een lade met tabbladen: <strong>Wat</strong> (naam, gang, beschrijving, foto), <strong>Bouw</strong> (componenten en doseringen), <strong>Kostprijs</strong>, <strong>Receptuur</strong> (bereidingswijze en stappenlijst), <strong>Allergenen</strong>, <strong>Service</strong> (servicetip, wijnsuggestie, serveerfoto) en <strong>Statistieken</strong>.</li>
+    <li><strong>Compleetheidsmeter</strong> per gerecht en over de hele bibliotheek — bijvoorbeeld de allergenen-dekking.</li>
+    <li><strong>Beschikbaar in wizard</strong> — alleen aangevinkte gerechten verschijnen in de offerte-wizard.</li>
+    <li><strong>Signature-uitlichting</strong> voor je paradepaardjes.</li>
+    <li><strong>Allergenen laten detecteren</strong> door de AI, met bevestiging per gerecht.</li>
+    <li><strong>Vervangingsadvies</strong> — bij een duur of onverkrijgbaar ingrediënt een alternatief met prijsverschil.</li>
+    <li><strong>Prijstrend</strong> als minigrafiek per ingrediënt.</li>
+    <li>Twee AI-lades: de <strong>Bedenker</strong> (vrij brainstormen) en de <strong>Pitmaster</strong> (gerichte vragen), allebei via de knop of via een adres met <code>?modal=</code>.</li>
+    <li>Een menu samenstellen en opslaan als sjabloon.</li>
+  </ul>
+  <div class="meta"><span class="tag db">gerechten · gerecht_components · component_allergens · recipe_steps</span><span class="tag ai">allergenen · bedenker · vervanging</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/[id]</span><span class="nm">Gerecht-detail</span></header>
+  <p>Eén gerecht op een eigen pagina, met de kostprijs live berekend op de server en een uitsplitsing per ingrediënt. Per regel is te zien waar de prijs vandaan komt en of hij vertrouwd mag worden. Naast elke regel een knop voor vervangingsadvies.</p>
+  <div class="meta"><span class="tag db">kostprijs via database-functie</span><span class="tag ai">vervangingsadvies per regel</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/componenten</span><span class="nm">Componenten</span></header>
+  <p>Met bijna 3.800 regels het grootste losse scherm. Componenten zijn de bouwstenen: wijzig er één, en elk gerecht waar hij in zit past mee. Twee soorten: <strong>zelf bereid</strong> (met eigen receptuur en onderliggende ingrediënten) en <strong>ingekocht product</strong> (rechtstreeks uit een leverancierscatalogus).</p>
+  <ul>
+    <li><strong>Mappenboom</strong> in Drive-stijl, met slepen tussen mappen.</li>
+    <li>Per component: naam, categorie (food of non-food), basis-hoeveelheid en eenheid, kosten, allergenen, beschrijving.</li>
+    <li><strong>Terugrekenen vanaf een grootverpakking</strong> naar een eenheidsprijs — met de rekenhulp die de pakprijs-valkuil dichtzet.</li>
+    <li><strong>Snijverlies</strong> als keuze in gewone taal: alles (100%), beetje bijsnijden (90%), vet en pees eraf (75%), flink bijsnijden (65%).</li>
+    <li><strong>Koppeling aan een leveranciersproduct</strong>, zodat de prijs meebeweegt met de catalogus.</li>
+    <li><strong>Live impact-voorbeeld</strong>: verander je de prijs, dan zie je meteen wat dat met de foodcost van de betrokken gerechten doet.</li>
+    <li><strong>"Er zit in" en "wordt gebruikt in"</strong> — beide kanten van de keten zichtbaar.</li>
+    <li><strong>HACCP-punten</strong> per component: handhygiëne, kerntemperatuur, koeltemperatuur, kruisbesmetting, oppervlaktereiniging, tijd uit koeling.</li>
+    <li>Scannen van een kant-en-klaar product met de camera, prijslijst importeren, of tekst plakken uit een bestellijst.</li>
+    <li>Sorteren op meest gebruikt, laatst toegevoegd, of nergens gebruikt bovenaan.</li>
+  </ul>
+  <div class="meta"><span class="tag db">components · component_ingredients · component_folders · component_haccp_points</span><span class="tag ai">productscan uit foto</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/uit-catalogus</span><span class="nm">Receptuur uit de groothandel</span></header>
+  <p><em class="q">"Kip van Beef Club, de marinade maak jij."</em> Je pint echte catalogusproducten vast, de AI bouwt het gerecht daaromheen en kiest de rest bij voorkeur uit wat er bij jouw leveranciers te koop is.</p>
+  <ul>
+    <li>Producten aanwijzen die erin moeten.</li>
+    <li>De AI levert ingrediënten, bereiding en stappen voor de planning.</li>
+    <li><strong>De kostprijs komt niet van de AI</strong> maar wordt achteraf uit de echte catalogus afgeleid.</li>
+    <li>Het scherm zegt eerlijk hoeveel regels wél en niet een prijs kregen — een som die vijf van de twaalf regels als nul meetelt is geen kostprijs maar een ondergrens, en zo staat hij er ook.</li>
+  </ul>
+  <div class="meta"><span class="tag ai">receptuur</span><span class="tag db">kostprijs uit supplier_products</span><span class="tag">dit wordt de standaardroute</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/menukaarten</span><span class="nm">Menukaarten</span></header>
+  <p>De lijst van opgeslagen menu-sjablonen: naam, aantal gangen, aantal gerechten, basisprijs per persoon, of hij de standaard is, en wanneer hij voor het laatst wijzigde.</p>
+  <div class="meta"><span class="tag db">menu_templates · menu_template_items</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/menukaarten/[id]</span><span class="nm">Menu samenstellen</span></header>
+  <p>De samensteller. Adres <code>nieuw</code> begint leeg, een nummer opent een bestaand menu. Gangen en gerechten worden vooraf op de server opgehaald zodat het scherm meteen staat.</p>
+  <div class="meta"><span class="tag">MenuComposer</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gerechten/analyse</span><span class="nm">Menu-analyse</span></header>
+  <p>Welke gerechten verdienen hun plek. Twee weergaven in één pagina, te kiezen in het adres: <code>?view=performance</code> toont de BCG-matrix, <code>?view=health</code> het gezondheidsraster.</p>
+  <div class="meta"><span class="tag db">gerechten · offertes</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/marges</span><span class="nm">Marges</span></header>
+  <p>De kostprijs- en winstanalyse over de hele kaart heen, in de bekende vier vakken: <strong>⭐ Stars</strong> (populair en winstgevend), <strong>🐴 Plowhorses</strong> (populair, dunne marge), <strong>🧩 Puzzles</strong> (winstgevend, weinig verkocht) en <strong>🐕 Dogs</strong> (geen van beide).</p>
+  <ul><li>Winnaars en verliezers naast elkaar.</li><li>Gerechten selecteren en een menukaart indelen op basis van de matrix.</li><li>Detaillade per gerecht met de onderliggende cijfers.</li></ul>
+  <div class="meta"><span class="tag db">menuMargin.ts is de rekenkanon</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/keuken/kookbord</span><span class="nm">Kookbord</span></header>
+  <p>Het prep-scherm voor de dagen vóór een event, op volledig scherm zonder app-omlijsting. Twee gezichten van dezelfde gegevens.</p>
+  <ul>
+    <li><strong>Mise-en-place</strong> — per gerecht gegroepeerd, met per component wat er te maken is, de hoeveelheid (dosering per gast × aantal gasten), allergenen, bereidingswijze, HACCP-punten, smaakprofiel en notities. Afvinken met een veeg.</li>
+    <li><strong>Werklijst</strong> — de beste route door de prep. Bundelt dezelfde bewerking over recepten heen, toont handtijd naast wachttijd, geeft per plaats een budget (thuis is een ochtend, op locatie zijn het de minuten waarin tachtig mensen wachten), en vult dode tijd met wat je ondertussen kunt doen. Elke suggestie draagt zijn reden.</li>
+    <li><strong>Taken plannen</strong> — voor een bestaand event alsnog prep-taken laten genereren; hetzelfde codepad als bij offerte-acceptatie.</li>
+    <li>Waar een duur nergens is opgeschreven staat er <em class="q">duur onbekend</em>, geen geschat getal.</li>
+  </ul>
+  <div class="meta"><span class="tag field">volledig scherm · veeg-afvinken</span><span class="tag db">mep_items · prep_tasks · recipe_steps</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/m/gerechten</span><span class="nm">Gerechten op de telefoon</span></header>
+  <p>Een uitgeklede mobiele weergave van de gerechtenlijst voor de operator op locatie.</p>
+  <div class="meta"><span class="tag field">Lars-modus</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/keuken/board · /recepten · /keuken · /inspiratie · /menu-engineering</span><span class="nm">→ /gerechten, /marges, /keuken/kookbord</span></header>
+  <p>Vijf oude adressen. Recepten zijn samengevoegd met gerechten, "menu engineering" heet nu marges, het oude keukenbord is gesplitst in het kookbord en het servicebord.</p>
+</article>
+</div>
+
+<div class="hubhead"><h3>Inkoop &amp; Voorraad</h3><span class="path">/voorraad · waar het eten vandaan komt</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/voorraad</span><span class="nm">Voorraad</span></header>
+  <p>Wat er in huis is, wat het waard is, en wat op raakt. Bijna 2.000 regels aan scherm, met de hele voorraadhuishouding erin.</p>
+  <ul>
+    <li>Voorraadstand per product met eenheid, categorie en waarde; totale voorraadwaarde bovenaan.</li>
+    <li><strong>Par-niveau en bestelpunt</strong> per product, met vier standen: op peil, voldoende, laag, op.</li>
+    <li><strong>Dekking</strong> — hoe lang je nog vooruit kunt gezien de geplande events.</li>
+    <li><strong>THT-alarm</strong> bij houdbaarheid binnen drie dagen.</li>
+    <li><strong>Leveranciersvergelijking</strong> per product, met "goedkoopst" gemarkeerd.</li>
+    <li><strong>Prijshistorie</strong> uit de inkoopprijzen-module, als grafiek.</li>
+    <li><strong>Controlespoor</strong> van elke voorraadmutatie: ontvangst, verbruik, telling, correctie, verspilling.</li>
+    <li><strong>AI-voorraadadvies</strong> met vaste vragen: wat is bijna op, wat bederft eerst, welke dure langzaamlopers heb ik. Antwoord op basis van de echte stand, als rapport te bewaren.</li>
+    <li>Product toevoegen met AI-invulhulp, scannen, of handmatig; voorraadlijst als PDF.</li>
+  </ul>
+  <div class="meta"><span class="tag db">inventory · stock_movements · price_history</span><span class="tag ai">voorraadadvies</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/voorraad/nulmeting</span><span class="nm">Keuken tellen</span></header>
+  <p>De looproute met je telefoon langs drie zones, om voor het eerst of opnieuw te tellen wat er staat.</p>
+  <ul><li>Per product: aantal pakken × pakinhoud, met rekenhulp.</li><li>Foto erbij; de bucket is privé, dus de links worden in één keer ondertekend afgegeven.</li><li>Toont wat je al geteld hebt, zodat je verder kunt waar je gebleven was.</li><li>Bestaat het product al, dan werkt hij bij in plaats van dubbel aanmaken.</li></ul>
+  <div class="meta"><span class="tag field">telefoon-looproute</span><span class="tag db">voorraad_tellingen</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/voorraad/historie/[id]</span><span class="nm">Historie van één product</span></header>
+  <p>Het volledige spoor van één voorraaditem: alle mutaties, de prijsontwikkeling en de openstaande marge-alarmen. Beantwoordt vragen als <em class="q">welke bon dronk deze voorraad op</em> en <em class="q">hoe heeft de prijs zich ontwikkeld</em>.</p>
+  <div class="meta"><span class="tag db">stock_movements · price_history · marge_alerts</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/inkoop</span><span class="nm">Inkoop</span></header>
+  <p>Eén vraag, één antwoord: <em class="q">wat moet ik vandaag bestellen, per leverancier, om mijn minimumvoorraad op peil te houden én de events van de komende veertien dagen te kunnen koken?</em> De rekensom draait op de server en is volledig deterministisch — geen AI.</p>
+  <ul>
+    <li>Kaart per leverancier: naam, type, aantal regels, totaalbedrag, uiterste besteldatum, belknop.</li>
+    <li>Per regel: product, hoeveelheid (direct aan te passen), prijs per eenheid, totaal, verwijderen, of overstappen naar een andere leverancier.</li>
+    <li><strong>Ontbrekende leverancier</strong> — een vastgezette balk bovenaan voor producten die nog nergens aan hangen, met een keuzelijst per regel.</li>
+    <li><strong>Onderweg</strong> — verzonden bestellingen, met een lade om per regel te bevestigen wat er werkelijk kwam. De voorraad gaat dan automatisch omhoog. Zolang niet alles binnen is blijft de bestelling openstaan voor het restant.</li>
+    <li><strong>Factuur scannen naar voorraad</strong> — één foto die tegelijk de boekhouding én de voorraad bijwerkt.</li>
+    <li>Drie lege staten die elk iets anders zeggen: geen events gepland, wel events maar geen menu gekoppeld, of de voorraad dekt alles al.</li>
+  </ul>
+  <div class="meta"><span class="tag db">concept_inkoop_orders · inkoop_order_lines · order_overrides</span><span class="tag">bestelvoorstel = pure berekening</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/leveranciers</span><span class="nm">Leveranciers</span></header>
+  <p>Wie je leveranciers zijn, wat ze verkopen en wanneer de prijzen voor het laatst zijn opgehaald. Met een toevoeg-wizard die vier importroutes kent, zodat een onbekende leverancier geen bouwwerk vraagt.</p>
+  <ul>
+    <li>Herkende portalen: Bidfood, Sligro, Hanos, Makro, Vuur &amp; Rook, Baktotaal.</li>
+    <li>Per leverancier: status, aantal producten, laatste synchronisatie, knop "nu synchroniseren".</li>
+    <li><strong>Factuurvergelijking</strong> — wijkt de factuur af van de catalogusprijs? Een opslag van rond de tien procent is normaal en akkoord; het gaat om het zichtbaar maken, niet om overschrijven.</li>
+    <li><strong>Beoordelingslade</strong> voor voorgestelde prijsmutaties: goedkeuren of afwijzen per regel.</li>
+    <li><strong>Extensie-koppelpaneel</strong> om de browser-uitbreiding aan te sluiten.</li>
+  </ul>
+  <div class="meta"><span class="tag db">leveranciers · supplier_products · org_price_mutations</span><span class="tag">6 portalen</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/leveranciers/[id]/producten</span><span class="nm">Catalogus van één leverancier</span></header>
+  <p>De gesynchroniseerde producten met huidige prijs, verpakking en de <strong>prijs per kilo, liter of stuk</strong>. Zoeken gebeurt op de server, over alle producten — niet over de eerste honderd die toevallig binnen waren.</p>
+  <div class="meta"><span class="tag db">supplier_products · supplier_product_prices</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/leveranciers/[id]/prijslijsten</span><span class="nm">Prijslijsten</span></header>
+  <p>De PDF's van deze leverancier, met slepen-en-neerzetten voor nieuwe. Per upload de status; klaar? Dan opent de beoordelingslade. Uploads zijn te annuleren, opnieuw te proberen of te verwijderen.</p>
+  <div class="meta"><span class="tag db">org_pricelist_uploads</span><span class="tag ai">PDF-uitlezen met beeldherkenning</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/leveranciers/bulk-upload</span><span class="nm">Prijslijsten in bulk</span></header>
+  <p>Tot 25 PDF's tegelijk. De eerste wordt meteen verwerkt zodat je binnen dertig seconden ziet dat het werkt; de rest gaat via de goedkope batch-verwerking die 's nachts wordt opgehaald.</p>
+  <div class="meta"><span class="tag ai">Anthropic Batch API</span><span class="tag">alias-leren per klant</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/leveranciers/historie/[id]</span><span class="nm">Leveranciershistorie</span></header>
+  <p>Wat je bij deze leverancier hebt uitgegeven: aantal bonnen, totaal, en de BTW gesplitst naar 9% en 21%. Vergrendelde maanden zijn als zodanig gemarkeerd.</p>
+  <div class="meta"><span class="tag db">bonnen · maand_afsluitingen</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/bonnen</span><span class="nm">Bonnen scannen</span></header>
+  <p>Eén deur voor alle bonnen, die drie oude routes vervangt. Slepen, plakken uit het klembord, camera of bestandskiezer — foto, PDF, schermafbeelding of elektronische factuur (UBL-XML).</p>
+  <ul>
+    <li>Het model leest leverancier, datum, bedragen, BTW-splitsing en de regels.</li>
+    <li><strong>Dubbelherkenning</strong>: "deze bon staat al" of "lijkt op een bestaande factuur".</li>
+    <li>Ontbreekt de leverancier, dan vraagt hij erom in plaats van te gokken.</li>
+    <li>Jij bevestigt; pas dan wordt er weggeschreven.</li>
+  </ul>
+  <div class="meta"><span class="tag ai">bon uitlezen</span><span class="tag db">bonnen · supplier_invoices</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/archief</span><span class="nm">Bonnenkistje</span></header>
+  <p>Het doorzoekbare boekhoudarchief, gebouwd op zeven jaar bewaarplicht. Twee weergaven: kistje (kaarten) en tabel.</p>
+  <ul>
+    <li><strong>Zoeken tot op het woord</strong> in de tekst van elke bon, met een fragment dat de gevonden term toont.</li>
+    <li>Filters op periode, bedrag, soort (foto, PDF, e-mail), status en leverancier — allemaal in het adres, dus deelbaar.</li>
+    <li>Voorbeeldweergave met ingebouwde PDF-lezer.</li>
+    <li><strong>Boekhouderpakket exporteren</strong> als ZIP, met BTW-samenvatting.</li>
+    <li><strong>Deellink</strong> voor je boekhouder: een adres met een sleutel erin, dat een bevroren selectie toont zonder dat hij hoeft in te loggen.</li>
+    <li>Aparte inbox-lijst voor bonnen die per e-mail binnenkwamen.</li>
+  </ul>
+  <div class="meta"><span class="tag db">bonnen · bon_share_tokens · bon_audit_log</span><span class="tag">full-text zoeken (pg_trgm)</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/price-intelligence</span><span class="nm">Inkoopprijzen</span></header>
+  <p>Met ruim 4.300 regels het op één na grootste scherm. De prijsintelligentie: alles wat er over inkoopprijzen te weten valt, op één plek. Vier lanen.</p>
+  <ul>
+    <li><strong>Inbox</strong> — de hoofdroute. Leveranciers mailen hun prijslijst naar jouw eigen adres <code>pl-{naam}@in.bbqarchitect.app</code>; de app leest hem uit en zet een beoordeling klaar. Per verwerking staat de kostprijs eronder.</li>
+    <li><strong>Bonnen en facturen</strong> — gescande documenten met controle of de regels optellen tot het totaal, of de BTW klopt, en of het factuurnummer aanwezig is. Waarschuwt bij dubbel ingeboekte facturen.</li>
+    <li><strong>Prijslijsten</strong> — mappen per leverancier, CSV-import, bestandsarchief.</li>
+    <li><strong>Prijsbibliotheek</strong> — prijsontwikkeling per categorie, leveranciersvergelijking, concrete besparingen, "elders kopen"-advies, en een AI-leveranciersanalyse.</li>
+    <li>Elke uitlezing is te herzien vóór hij telt — nooit blind vertrouwen.</li>
+  </ul>
+  <div class="meta"><span class="tag ai">document lezen · analyse</span><span class="tag db">org_email_inbox · supplier_invoices</span><span class="tag">Cloudflare Email Worker</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/factuur-lezer</span><span class="nm">→ /archief</span></header>
+  <p>Was een tussenpagina met drie links waarvan er één kapot was. De scanfunctie zit op /bonnen, het archief op /archief.</p>
+</article>
+</div>
+
+<div class="hubhead"><h3>Geld</h3><span class="path">/financien · de boekhouder vervangen</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/financien</span><span class="nm">Financiën</span></header>
+  <p>Het financiële dashboard met de tabbladen die vroeger een aparte boekhoudpagina waren.</p>
+  <ul>
+    <li><strong>Winst &amp; verlies</strong>: netto omzet, totale kosten, personeelskosten, resultaat, theoretische foodcost.</li>
+    <li><strong>BTW-overzicht</strong>: af te dragen, terug te vorderen, saldo, voorbelasting gesplitst naar 9% en 21%.</li>
+    <li><strong>Debiteuren en crediteuren</strong>: nog te ontvangen, nog te betalen, netto positie, betaalratio.</li>
+    <li><strong>Cashflow-prognose</strong> over vier en dertien weken, met huidig banksaldo, vaste maandlasten, buffergrens en de week waarin het risico zit.</li>
+    <li><strong>Aangifte</strong>: BTW-concept voor de boekhouder, een "klopt het?"-controle vóór verzending, en een kwartaal vastzetten.</li>
+    <li><strong>Bank</strong>: MT940-afschrift importeren en afletteren tegen je facturen.</li>
+    <li><strong>Verouderingsoverzicht</strong> van openstaande posten en een waarschuwing bij te grote afhankelijkheid van één klant.</li>
+    <li><strong>Kosten-afwijkingsdonut</strong> die uitschieters aanwijst.</li>
+    <li><strong>Markt-pulse</strong> — anonieme prijstrend over meerdere klanten heen. Alleen zichtbaar als je zelf meedoet, alleen als er minstens vijf deelnemers zijn, alleen als percentage, nooit met leveranciersnaam.</li>
+    <li><strong>Pitmaster Copilot</strong>-kaart met het AI-budget van deze maand.</li>
+  </ul>
+  <div class="meta"><span class="tag db">facturen · bonnen · bank_transacties · btw_aangiftes</span><span class="tag">XAF-auditbestand · UBL</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/geld/boekhouder</span><span class="nm">Boekhouder</span></header>
+  <p>Het doel is groot: <em class="q">de maandelijkse boekhouder vervangen.</em> Dagelijkse verwerking en de BTW-aangifte gebeuren in de app; alleen de jaarrekening blijft jaarlijks werk. Vier tabbladen.</p>
+  <ul>
+    <li><strong>Bonnen-stapel</strong> — inkoopbonnen met een AI-voorstel voor de RGS-categorie en één tik om het over te nemen.</li>
+    <li><strong>Verkoop</strong> — verkoopfacturen met hun RGS-code.</li>
+    <li><strong>Pakket</strong> — genereer het maandpakket: PDF met de BTW-uitsplitsing per RGS, CSV met codes, ZIP met alle bonnen, en direct e-mailen naar je boekhouder.</li>
+    <li><strong>Twijfel</strong> — de gemarkeerde gevallen apart, zodat ze niet tussen de rest verdwijnen.</li>
+    <li><strong>Afsluiten</strong> — een maand vergrendelen en per kwartaal de exacte cijfers vastzetten.</li>
+    <li><strong>Bon toevoegen</strong>-lade: foto → uitlezen → per regel bevestigen of het ook naar de voorraad moet → wegschrijven als bon, voorraadmutatie én prijshistorie in één keer.</li>
+  </ul>
+  <div class="meta"><span class="tag db">boekhouder_pakketten · maand_afsluitingen · bonnen</span><span class="tag ai">RGS-categorisering</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/administratie</span><span class="nm">Administratie-overzicht</span></header>
+  <p>Een verzamelscherm met de administratieve kengetallen: omzet deze maand, openstaand, open lijsten, voorraadwaarde, items onder minimum, nieuwe klanten deze maand, de aftrek tot nu toe dit jaar en de urennorm van 1.225 uur.</p>
+  <div class="meta"><span class="tag db">meerdere bronnen</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/boekhouding · /geld</span><span class="nm">→ /financien</span></header>
+  <p>Twee financiële pagina's zijn er één geworden; alle vier de tabbladen leven nu onder /financien.</p>
+</article>
+</div>
+
+<div class="hubhead"><h3>Team &amp; Operatie</h3><span class="path">/uren · mensen en spullen</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/uren</span><span class="nm">Uren</span></header>
+  <p>In- en uitklokken, crew-uren en het maandoverzicht. Op de telefoon staat de klok-knop bovenaan, de status eronder en de eventkeuze onderaan — de volgorde waarin je ze op een eventdag nodig hebt.</p>
+  <ul><li><strong>Klokpaneel</strong> voor jezelf, met de melding "aan het werk" als je loopt.</li><li><strong>Crew klokken</strong> — meerdere mensen tegelijk in- en uitklokken.</li><li><strong>Maandoverzicht</strong> per persoon: functie, tarief, diensten, uren, totaal.</li><li><strong>Controlespoor</strong> van alle klokhandelingen.</li></ul>
+  <div class="meta"><span class="tag db">time_logs · personeel</span><span class="tag field">telefoon-eerst</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/uren/personeel</span><span class="nm">Personeel</span></header>
+  <p>Het personeelsbestand: naam, functie, e-mail, tarief, contractvorm (vast, oproep, freelance/zzp, stagiair) en of iemand actief is. Alleen actieve mensen verschijnen in het crew-blok.</p>
+  <div class="meta"><span class="tag db">personeel</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/materieel</span><span class="nm">Materieel</span></header>
+  <p>Begonnen als paklijst, uitgegroeid tot de hele keukeninventaris — smoker, pannen, machines, opslag. De geïnventariseerde vervangingswaarde ligt inmiddels rond de €58.600.</p>
+  <ul>
+    <li>Per stuk: naam, categorie, aantal, status (in gebruik, aandacht nodig, defect), locatie, aanschafdatum, nieuwwaarde en valuta, afmetingen, materiaal, kleur, notitie.</li>
+    <li><strong>Specificaties</strong> als vrij veld, zodat een machine zijn eigen eigenschappen kan dragen.</li>
+    <li><strong>Onderhoudslogboek</strong> per stuk.</li>
+    <li><strong>Product scannen</strong> — foto of productlink erin, het model leest merk, type en specificaties eruit (drie tot acht seconden), jij keurt goed vóór het wordt opgeslagen.</li>
+    <li><strong>Gastronorm tellen</strong> — de maten van GN-bakken liggen wereldwijd vast, dus je hoeft alleen te zeggen hoevéél je er hebt en waar ze liggen. Een teller naast een lijstje, geen formulier per bak.</li>
+    <li><strong>Opslaglocaties</strong> als eigen begrip.</li>
+    <li><strong>"Wat kan ik niet"</strong> — het gemis-rapport. Elke techniek noemt zijn apparaat, de materieellijst noemt wat er staat, en het verschil is je gemiste repertoire. Het rapport zegt bewust <em>niet</em> "je kunt dit niet" maar <em>"dit staat niet in je lijst"</em> — bij de eerste meting bleken 36 van de 44 technieken gesloten terwijl de oven en de vacuümmachine gewoon in de keuken staan, alleen nog niet ingevoerd.</li>
+  </ul>
+  <div class="meta"><span class="tag db">materieel · gn_maten · opslag_locaties · technieken</span><span class="tag ai">productscan</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/administratie/rittenregistratie</span><span class="nm">Rittenregistratie</span></header>
+  <p>Een sluitende kilometeradministratie, met de bewaarplicht van zeven jaar in het achterhoofd. €0,23 per kilometer volgens de Belastingdienst.</p>
+  <ul>
+    <li>Ritten vanuit een event overnemen, of los aanmaken.</li>
+    <li>Per rit: voertuig, activiteit, kilometerstand voor en na, afstand, doorgaande route, route-stappen en kaart.</li>
+    <li><strong>Foto van de kilometerstand</strong> die door het model wordt uitgelezen.</li>
+    <li>Kosten en bonnen: brandstof (of geschat), tol en parkeren, slijtage en onderhoud, totaal werkelijke kosten tegenover de vergoeding.</li>
+    <li>Fiscale verwerking, aftrekbaarheid, export, en doorzetten naar Moneybird.</li>
+    <li>Eens per maand een controle op vergeten ritten.</li>
+  </ul>
+  <div class="meta"><span class="tag db">ritten · voertuigen · rtr_items</span><span class="tag ai">kilometerstand uit foto · maandsamenvatting</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/logistiek</span><span class="nm">Logistiek</span></header>
+  <p>Wat er mee moet en hoe het er komt. Drie kolommen: kengetallen (events deze week, open controles vandaag, bus gereed), een tijdlijn van events met zes voortgangsbalkjes per categorie, en een zijrail met recente AI-voorstellen.</p>
+  <ul><li>Per event een checklist die door de AI wordt voorgesteld zodra een offerte is geaccepteerd, en die jij aanpast.</li><li>Vaste knop onderaan: "Open veldmodus".</li></ul>
+  <div class="meta"><span class="tag db">event_checklist_items · pack_lists</span><span class="tag ai">checklistvoorstel</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/logistiek/field</span><span class="nm">Logistiek veldmodus</span></header>
+  <p>De inpaklijst voor de dag zelf, gebouwd voor handschoenen: knoppen van 72 pixels, geen enkel tekstveld, alleen schakelaars en een bulk-actie, trilling bij elke tik, en hoog contrast (geel is te doen, groen is klaar).</p>
+  <div class="meta"><span class="tag field">72 px · geen toetsenbord</span></div>
+</article>
+</div>
+
+<div class="hubhead"><h3>Systeem</h3><span class="path">/systeem · instellen en beheren</span></div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/systeem</span><span class="nm">Controlekamer</span></header>
+  <p>De ingang tot alle beheerschermen, met bovenaan vier statuschips: AI-kosten deze maand, AI-aanroepen deze maand, actieve gebruikers en gerechten die in de wizard staan. Daaronder zes kaarten naar de onderdelen. Valt een query uit, dan toont hij nul in plaats van te breken.</p>
+  <div class="meta"><span class="tag db">ai_usage · organization_members · gerechten</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen</span><span class="nm">Instellingen</span></header>
+  <p>Het langste instellingenscherm van de app, en de plek waar de huisstijl van een klant wordt bepaald.</p>
+  <ul>
+    <li><strong>Bedrijfsgegevens</strong>: naam, adres, telefoon, e-mail, website, KVK, BTW-nummer, IBAN.</li>
+    <li><strong>Facturatie</strong>: voorvoegsel voor offerte- en factuurnummers, betalingsvoorwaarden.</li>
+    <li><strong>Huisstijl</strong>: kleuren voor primair, secundair, accent, achtergrond, kaarten en tekst — met een contrastcontrole per combinatie, zodat je geen onleesbare knop kunt maken.</li>
+    <li><strong>Klantportaal-stijl</strong>: hoe de offerte er voor de klant uitziet.</li>
+    <li><strong>PDF-sjablonen</strong> voor offerte, factuur, bon en HACCP-rapport, met voorbeeld en download.</li>
+    <li><strong>Menukaart-stijl</strong>: tien miniaturen, twee kleurkiezers, en de keuze om alle sjablonen bij te werken of alleen de geselecteerde. Wat je hier kiest wordt de standaard voor elke nieuwe offerte; offertes met eigen aanpassingen houden die.</li>
+    <li>Voorkeuren voor events, facturen, recepten, materieel, filters en opvolging.</li>
+  </ul>
+  <div class="meta"><span class="tag db">settings · organizations</span><span class="tag">white-label</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen/ai-usage</span><span class="nm">AI-gebruik en kosten</span></header>
+  <p>Volledige inzage in wat de AI kost: per maand, per soort actie, met de trefkans van de prompt-cache, de voortgang tegen het plafond van je pakket, en de laatste vijftig aanroepen met model, actie, tijd en kosten.</p>
+  <div class="meta"><span class="tag db">ai_usage</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen/data-export</span><span class="nm">Data-export</span></header>
+  <p>Twee knoppen, allebei voor de AVG: je volledige gegevensexport downloaden (artikel 20), en demo-data verwijderen na de kennismaking.</p>
+  <div class="meta"><span class="tag">AVG artikel 20</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen/integraties</span><span class="nm">Integraties</span></header>
+  <p>Vijf koppelingen met hun status (verbonden of niet geconfigureerd): <strong>Moneybird</strong> en <strong>Exact Online</strong> voor de boekhouding, <strong>Mollie</strong> voor betalingen, <strong>Google Agenda</strong> en <strong>iCal-export</strong> voor de planning, en <strong>webhooks</strong> voor eigen automatisering.</p>
+  <div class="meta"><span class="tag db">integration_tokens · org_webhooks</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen/integraties/accounting</span><span class="nm">Boekhoud-instellingen</span></header>
+  <p>Drie kolommen: algemeen (grootboekrekening, termijnen, e-mailsjabloon), Moneybird (administratie-nummer en drie BTW-tarief-verwijzingen) en Exact Online (divisiecode). Hiermee hoeft niets meer hardgecodeerd te zijn.</p>
+  <div class="meta"><span class="tag db">accountingConfig</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/instellingen/referral</span><span class="nm">Referral</span></header>
+  <p>Eén actieve verwijslink per organisatie plus de historie: wacht op aanmelding, aangemeld, proefperiode actief, uitbetaald, verlopen. Maximaal tien actieve verwijzingen.</p>
+  <div class="meta"><span class="tag db">referrals</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/gebruikers</span><span class="nm">Gebruikers</span></header>
+  <p>Teambeheer: wie heeft toegang, met welke rol, en uitnodigingen versturen. Een uitnodiging wordt via een aparte, snelheidsbegrensde route opgezocht, zodat niemand kan raden welke codes bestaan.</p>
+  <div class="meta"><span class="tag db">organization_members · invitations</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/mailbox</span><span class="nm">Mailbox</span></header>
+  <p>E-mail en sjablonen op één plek. Per categorie een sjabloon (algemeen, offerte, factuur, na het event) met onderwerp en inhoud, plus een opstelvenster om direct te mailen. Toont ook je eigen inkomende adres voor leveranciers-PDF's, met een kopieerknop.</p>
+  <div class="meta"><span class="tag db">email_templates · org_email_inbox</span><span class="tag">Resend</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/website</span><span class="nm">Website-beheer</span></header>
+  <p>De publieke site van de caterer wordt vanuit de app gevuld — zonder een tweede systeem.</p>
+  <ul>
+    <li><strong>Hero-diavoorstelling</strong> en <strong>galerij</strong> met eigen bijschriften en volgorde.</li>
+    <li><strong>Signature Menu</strong>: gangen en gerechten met beschrijving, foto, minimum aantal, allergenen (de veertien wettelijke) en dieet-informatie, elk zichtbaar of verborgen.</li>
+    <li><strong>Veelgestelde vragen</strong> met eigen volgorde.</li>
+    <li><strong>Voettekst en contactgegevens</strong>: adres, telefoon, e-mail, KvK, BTW.</li>
+    <li>Afbeeldingen tot 10 MB, JPG/PNG/WebP.</li>
+  </ul>
+  <div class="meta"><span class="tag db">settings · gerechten</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/hulp</span><span class="nm">Help Center</span></header>
+  <p>Artikelen doorzoeken, en als het antwoord er niet bij staat een ticket aanmaken: vraag, bug of feature-verzoek, met urgentie. Antwoorden van support komen op dezelfde plek terug.</p>
+  <div class="meta"><span class="tag db">help_articles · support_tickets</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/hulp/sitemap</span><span class="nm">Sitemap</span></header>
+  <p>Alle pagina's op één lijst, gegroepeerd per hub. Bedoeld voor wie iets kwijt is — en als eerlijke spiegel van hoe groot de app is.</p>
+</article>
+
+<article class="route">
+  <header><span class="path">/admin</span><span class="nm">Platformbeheer</span></header>
+  <p>Alleen voor platformbeheerders (herkend aan hun e-mailadres). Vijf tabbladen: overzicht, organisaties, klanten, health en analytics.</p>
+  <ul><li>Organisaties aanmaken, uitklappen, functievlaggen zetten, huisstijlkleur instellen.</li><li><strong>Gezondheidsscore</strong> per organisatie uit activiteit (40%), datarijkdom (30%) en adoptie (30%); onder de 30 is risico, onder de 15 kritiek.</li><li>Dagelijks/wekelijks/maandelijks actieve gebruikers, kleefkracht, fouten, tickets, teamgrootte.</li><li>Waarschuwing sturen, tijdelijk inloggen als een klant, gegevens exporteren, bewaartermijnen.</li></ul>
+  <div class="meta"><span class="tag db">organizations · activity_log</span><span class="tag">alleen platformbeheer</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/admin/funnel</span><span class="nm">Activatietrechter</span></header>
+  <p>De vijf meetpunten uit deel 2, echt gemeten: aanmeldingen per week over twaalf weken, conversie per mijlpaal (aanmelding → quiz voltooid → eerste offerte concept → eerste offerte verstuurd → geactiveerd), en de mediane tijd tot de eerste offerte. Plus de laatste tien gebeurtenissen met hun gegevens.</p>
+  <div class="meta"><span class="tag db">activation_events · funnel_events</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/onboarding</span><span class="nm">Onboarding</span></header>
+  <p>De weg van aanmelding naar de eerste verstuurde offerte, met als doel: binnen een uur. Stappen: bedrijfsgegevens (KVK, BTW, adres), wat voor caterer je bent (bruiloften, bedrijfsevents, foodtruck, mix), demo-data inladen, integraties, rondleiding, en de eerste offerte.</p>
+  <ul><li>De demo-data-vulling is generiek en herhaalbaar: 10 klanten, 15 gerechten, 20 voorraaditems, 5 leveranciers, 8 events, 3 facturen — met een knop om ze later weer weg te halen.</li><li>Elke stap wordt geregistreerd, zodat de trechter klopt.</li><li>Alles overslaanbaar.</li></ul>
+  <div class="meta"><span class="tag db">organizations · activation_events</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/ai-chat</span><span class="nm">AI Pitmaster</span></header>
+  <p>Het volledige chatscherm, voor wie liever een gesprek voert dan een formulier invult. Dezelfde motor als het zijpaneel, maar met alle ruimte.</p>
+  <div class="meta"><span class="tag ai">chat</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/template-editor</span><span class="nm">Sjablooneditor</span></header>
+  <p>De editor voor PDF-sjablonen (offerte, factuur, bon, HACCP). De menukaart-opmaak is hier weggehaald en zit nu per offerte.</p>
+  <div class="meta"><span class="tag db">pdf_templates</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/sectie/[slug]</span><span class="nm">Sectie-overzicht</span></header>
+  <p>Een generieke hub-pagina die op basis van de navigatieconfiguratie kengetallen en doorklikkaarten toont voor één sectie.</p>
+</article>
+
+<article class="route">
+  <header><span class="path">/dev/ai-blocks</span><span class="nm">Blokken-etalage</span></header>
+  <p>Ontwikkelaarspagina zonder aanroepen naar buiten: alle acht AI-antwoordblokken naast elkaar, om visueel te controleren of ze goed weergeven.</p>
+  <div class="meta"><span class="tag">alleen voor ontwikkeling</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/berichten · /faq</span><span class="nm">→ /mailbox, /hulp</span></header>
+  <p>De interne berichtenmodule is opgegaan in de mailbox; de losse veelgestelde vragen in het Help Center.</p>
+</article>
+</div>
+</section>
+
+<!-- ══════════ DEEL 7 ══════════ -->
+<section id="p7">
+<div class="parthead">
+  <span class="num">Deel 07</span>
+  <h2>De klantkant</h2>
+  <p>Zes schermen die geen inlog vragen. Ze dragen jouw logo en kleuren, niet die van ons — dat is het verschil tussen software die je gebruikt en software die je verkoopt.</p>
+  <div class="fire"></div>
+</div>
+
+<div class="routes">
+<article class="route">
+  <header><span class="path">/q/[token]</span><span class="nm">Klantportaal — de offerte</span></header>
+  <p>Wat je klant ziet als hij op de link in je mail klikt. Het adres draagt een sleutel, geen offertenummer — niemand kan door andermans offertes bladeren.</p>
+  <ul>
+    <li>Menu per gang met omschrijvingen, opgemaakt in jouw huisstijl.</li>
+    <li>Totaaloverzicht met BTW inbegrepen, berekend over het hele menu.</li>
+    <li><strong>CO₂-voetafdruk</strong> van het menu.</li>
+    <li><strong>Digitaal ondertekenen</strong>: naam invullen, met de vinger tekenen, wissen en opnieuw als het misgaat.</li>
+    <li><strong>Aanbetaling via iDEAL</strong> direct na ondertekening (Mollie).</li>
+    <li><strong>Bericht sturen</strong> zonder te mailen — het komt binnen in jouw mailbox.</li>
+    <li>Na tekenen een bedankscherm met een agenda-bestand om de datum op te slaan.</li>
+    <li>Eigen toestanden voor "verlopen" (met de datum tot wanneer hij gold) en "niet gevonden".</li>
+    <li>Werkt zonder JavaScript-bibliotheken voor iconen — alles is inline getekend, zodat de pagina razendsnel laadt.</li>
+  </ul>
+  <div class="meta"><span class="tag pub">geen inlog · sleutel in adres</span><span class="tag">Mollie iDEAL</span><span class="tag">white-label</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/aanvraag/[slug]</span><span class="nm">Publiek aanvraagformulier</span></header>
+  <p>Het formulier dat je op je site of in je Instagram-bio zet. Drie stappen: je event, jouw gegevens, versturen.</p>
+  <ul><li>Type event kiezen, datum, aantal gasten, wensen.</li><li>Belofte van reactie binnen 24 uur, vrijblijvend, met een persoonlijke reactie van de eigenaar.</li><li>Bevestiging per e-mail naar de aanvrager.</li><li>Doorsteek naar de arrangement-configurator voor wie zelf wil samenstellen.</li><li>Link naar de privacyverklaring; volledig in jouw huisstijl met "mogelijk gemaakt door" onderaan.</li></ul>
+  <div class="meta"><span class="tag pub">landt in /verkoop/leads</span><span class="tag db">leads</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/arrangement/[slug]</span><span class="nm">Zelf je arrangement samenstellen</span></header>
+  <p>De klant kiest per gang een niveau en ziet de indicatieprijs meebewegen. Het populairste niveau is gemarkeerd, sommige gangen zijn optioneel.</p>
+  <ul><li>Aantal gasten instellen, met een minimum dat jij bepaalt.</li><li>Budget-indicatie tijdens het samenstellen; het genoemde bedrag is nadrukkelijk een indicatie, geen offerte.</li><li>Eindigt in een aanvraag met de samenstelling erbij, zodat jij een voorstel op maat maakt.</li><li>Elke stap wordt geteld voor de trechter in het beheerscherm.</li></ul>
+  <div class="meta"><span class="tag pub">trechter gemeten</span><span class="tag db">arrangementen</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/share/[token]</span><span class="nm">Boekhouder-deellink</span></header>
+  <p>Geen inlog voor je boekhouder. Het adres met de sleutel toont een <strong>bevroren selectie</strong>: de datumrange en de leveranciers zoals ze waren toen jij de link maakte.</p>
+  <ul><li>De bonnenlijst met totaalbedrag en BTW-samenvatting.</li><li>Klik op een bon opent de PDF via een ondertekende link.</li><li>Het hele pakket als ZIP te downloaden.</li></ul>
+  <div class="meta"><span class="tag pub">alleen lezen</span><span class="tag db">bon_share_tokens</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/welkom</span><span class="nm">Marketingpagina</span></header>
+  <p>De publieke voorkant: "van lead tot factuur — in één flow", drie pijlers waar de concurrentie tekortschiet, een voorbeeld van een event, en de belofte dat AI in het abonnement zit zonder facturering per gebruik.</p>
+  <div class="meta"><span class="tag pub">publiek</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/pricing</span><span class="nm">Prijzen</span></header>
+  <p>De drie pakketten naast elkaar plus de volledige vergelijkingstabel over zes groepen: basis, AI, commercieel, operatie, groei en grenzen. Zesentwintig functieregels, en veelgestelde vragen eronder.</p>
+  <div class="meta"><span class="tag pub">publiek</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/login · /signup · /invite · /contact</span><span class="nm">Toegang</span></header>
+  <p>Inloggen, aanmelden, een uitnodiging accepteren, en een contactformulier waarvan het support-adres en telefoonnummer uit de omgeving komen — zodat een andere klant zijn eigen gegevens kan tonen. De uitnodigingspagina kent drie eindstanden: geldig, al geaccepteerd, verlopen.</p>
+  <div class="meta"><span class="tag pub">publiek</span></div>
+</article>
+
+<article class="route">
+  <header><span class="path">/legal/privacy · /legal/voorwaarden · /legal/dpa</span><span class="nm">Juridisch</span></header>
+  <p>Privacyverklaring, algemene voorwaarden en verwerkersovereenkomst. Publiek toegankelijk omdat het aanvraagformulier ernaar verwijst.</p>
+  <div class="meta"><span class="tag pub">publiek</span></div>
+</article>
+
+<article class="route dead">
+  <header><span class="path">/e2e-test/menukaart/[templateId]</span><span class="nm">Testroute</span></header>
+  <p>Alleen bereikbaar als de testvlag aan staat. Rendert een menukaart-sjabloon zonder inlog of database, zodat de beeldvergelijkingstests kunnen draaien.</p>
+</article>
+</div>
+</section>
+
+<!-- ══════════ DEEL 8 ══════════ -->
+<section id="p8">
+<div class="parthead">
+  <span class="num">Deel 08</span>
+  <h2>De AI-laag</h2>
+  <p>Geen chatbot in een hoekje, maar een laag die overal doorheen loopt — met een riem en bretels eromheen.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>Hoe het gesprek werkt</h3>
+<p>Er is één chatroute, die per pagina een andere systeeminstructie meekrijgt. De AI weet dus waar je staat, met welke offerte of welk event je bezig bent, en welke handelingen op die pagina zinvol zijn. Wie je bent is <strong>ingebakken</strong>: de instructie vraagt nooit "voor welk bedrijf werk je" — dat staat vast.</p>
+
+<h4>Drie denkstanden</h4>
+<div class="tbl"><table>
+<thead><tr><th>Stand</th><th>Wat het doet</th><th>Waarvoor</th></tr></thead>
+<tbody>
+<tr><td><strong>Snel</strong></td><td>Korte, directe antwoorden, hooguit drie zinnen</td><td>Operator op locatie, of een vlugge vraag</td></tr>
+<tr><td><strong>Standaard</strong></td><td>Kort en krachtig, rond de tweehonderd woorden</td><td>Dagelijks werk</td></tr>
+<tr><td><strong>Diep</strong></td><td>Uitgebreide analyse mét het denkproces zichtbaar</td><td>Strategie, brainstorm, bulkwerk zoals receptenmatrices</td></tr>
+</tbody></table></div>
+<p>De stand bepaalt zowel het model als de antwoordlengte — één plek, geen verspreide instellingen. Elke pagina heeft een verstandige beginstand.</p>
+
+<h4>Antwoorden in blokken, niet in lappen tekst</h4>
+<p>De AI antwoordt niet met proza maar met acht soorten blokken, die als echte UI verschijnen: <strong>metriek, opsomming, informatie, waarschuwing, succes, actiehint, navigatiekaart</strong> en — de belangrijkste — de <strong>actiekaart</strong>.</p>
+
+<h4>De actiekaart: 45 handelingen</h4>
+<p>Een actiekaart is een voorstel met een knop. Er zijn 45 geregistreerde soorten, elk met een label, de tabel die hij raakt, de bewerking (toevoegen, wijzigen, verwijderen, bulk) en de pagina's waar hij mag verschijnen:</p>
+<ul>
+<li><strong>Events</strong> — aanmaken, bijwerken, verwijderen</li>
+<li><strong>Recepten en gerechten</strong> — aanmaken, bijwerken, verwijderen; bulk-aanmaken; concepten brainstormen; filteren; zwakke gerechten markeren</li>
+<li><strong>Voorraad</strong> — aanmaken, bijwerken, verwijderen; bon verwerken</li>
+<li><strong>Leveranciers</strong> — aanmaken, bijwerken</li>
+<li><strong>HACCP</strong> — registratie aanmaken</li>
+<li><strong>Uren</strong> — aanmaken, bijwerken, verwijderen</li>
+<li><strong>Materieel</strong> — aanmaken, bijwerken, bulk-aanmaken</li>
+<li><strong>Prep-taken</strong> — aanmaken, bijwerken, verwijderen</li>
+<li><strong>Offertes en facturen</strong> — aanmaken, bijwerken, status wijzigen</li>
+<li><strong>Klanten</strong> — aanmaken, bijwerken</li>
+<li><strong>Samengesteld</strong> — e-mail opstellen, gesprek bewaren, map maken, preplijst genereren, inkooplijst genereren, eventbriefing genereren, winstgevendheid van een event opvragen</li>
+</ul>
+<div class="note rule">
+  <span class="lbl">De grens</span>
+  <p>Een actiekaart voert nooit vanzelf iets uit. Je ziet wat er gaat gebeuren, en pas als jij op de knop drukt gebeurt het — en dan nog via dezelfde gevalideerde route als wanneer je het met de hand had gedaan.</p>
+</div>
+
+<h3>Waar de AI nog meer zit</h3>
+<div class="tbl"><table>
+<thead><tr><th>Plek</th><th>Wat het doet</th><th>Klasse</th></tr></thead>
+<tbody>
+<tr><td>Offerte-wizard</td><td>Menu voorstellen bij gasten, gangen en prijs</td><td>A + D voor de prijs</td></tr>
+<tr><td>Bonnen en facturen</td><td>Leverancier, datum, bedragen, BTW en regels uit een foto of PDF lezen</td><td>H — jij bevestigt</td></tr>
+<tr><td>Boekhouder</td><td>RGS-categorie voorstellen per bon</td><td>H — één tik om over te nemen</td></tr>
+<tr><td>Prijslijsten</td><td>PDF's van leveranciers uitlezen, met alias-leren per klant</td><td>H — beoordelingslade</td></tr>
+<tr><td>Receptuur-ontleder</td><td>Een recept in micro-stappen uit elkaar halen, met handtijd en wachttijd</td><td>H — per recept goedkeuren</td></tr>
+<tr><td>Kok-coach</td><td>Uitleggen waarom iets misgaat in de keuken</td><td>A</td></tr>
+<tr><td>Allergenen-detectie</td><td>Voorstellen welke allergenen in een gerecht zitten</td><td>H — bevestigen per gerecht</td></tr>
+<tr><td>Vervangingsadvies</td><td>Alternatief ingrediënt met prijsverschil</td><td>H</td></tr>
+<tr><td>Dagbriefing</td><td>De ochtendtekst op de startpagina</td><td>A</td></tr>
+<tr><td>HACCP-plan</td><td>Controlelijst per event, stromend meegetypt</td><td>H — normen horen uit de tabel te komen</td></tr>
+<tr><td>Logistiek-checklist</td><td>Inpaklijst voorstellen na acceptatie van een offerte</td><td>H</td></tr>
+<tr><td>Plattegrond</td><td>Zaalindeling voorstellen</td><td>H</td></tr>
+<tr><td>Klantgesprek</td><td>Losse notities omzetten naar gestructureerde velden</td><td>H</td></tr>
+<tr><td>Materieel- en productscan</td><td>Merk, type en specificaties uit een foto of link</td><td>H</td></tr>
+<tr><td>Kilometerstand</td><td>De stand van de teller uit een foto lezen</td><td>H</td></tr>
+<tr><td>Service-feedback</td><td>Ruwe aantekeningen omzetten naar kernpunten en actiepunten</td><td>A</td></tr>
+<tr><td>Menukaart-opmaak</td><td>Tekstsuggesties per gang</td><td>A</td></tr>
+<tr><td>Leveranciersanalyse</td><td>Waar je te duur uit bent en wat het alternatief is</td><td>A op basis van D-cijfers</td></tr>
+</tbody></table></div>
+
+<h3>De rem: wat de AI mag kosten</h3>
+<p>Elke aanroep wordt geregistreerd in de tabel <code>ai_usage</code> met model, actiesoort, tokens en kosten. Daarboven staat een tweetrapsplafond per pakket:</p>
+<div class="tbl"><table>
+<thead><tr><th>Pakket</th><th>Waarschuwing bij</th><th>Blokkade bij</th><th>Brutomarge</th></tr></thead>
+<tbody>
+<tr><td>Starter</td><td class="n">€3,00</td><td class="n">€4,50</td><td class="n">90%</td></tr>
+<tr><td>Pro</td><td class="n">€15,00</td><td class="n">€22,50</td><td class="n">89%</td></tr>
+<tr><td>Enterprise</td><td class="n">€50,00</td><td class="n">€75,00</td><td class="n">85%</td></tr>
+</tbody></table></div>
+<p>Bij de waarschuwing verschijnt een balk. Bij de blokkade worden nieuwe aanroepen geweigerd <em>vóórdat</em> ze Anthropic raken. Kosten worden verder gedrukt door <strong>prompt-caching</strong> (het vaste deel van de instructie wordt hergebruikt) en door goedkope modellen te gebruiken waar dat kan.</p>
+
+<h3>De AI wordt zelf getest</h3>
+<p>Twee testsystemen naast elkaar. <strong>Twintig eigen testsets</strong> in <code>docs/ai-evals/</code>, met vijf gevallen per eindpunt, gedraaid tegen een lopende server; onder de negentig procent nauwkeurigheid faalt de test. Daarnaast <strong>elf Promptfoo-testbestanden</strong> voor de zwaarste prompts: HACCP-checklist, prijslijst-uitlezen, offerte-wizard-verankering, prep-planning, kilometerstand, vervangingsadvies.</p>
+</section>
+
+<!-- ══════════ DEEL 9 ══════════ -->
+<section id="p9">
+<div class="parthead">
+  <span class="num">Deel 09</span>
+  <h2>De achterkant</h2>
+  <p>198 serverroutes en ruim 110 tabellen. Hier staat wat waar woont — nuttig als je ooit wilt weten waar een getal vandaan komt.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>De serverroutes, gegroepeerd</h3>
+<div class="tbl"><table>
+<thead><tr><th>Groep</th><th>Aantal</th><th>Wat erin zit</th></tr></thead>
+<tbody>
+<tr><td><strong>AI en chat</strong></td><td class="n">~14</td><td>Chat, actie-uitvoering, kok-coach, receptgeneratie en -verbetering, prijsverfijning, allergenendetectie, vervangingsadvies, kostprijs-engineering, combinatie-ontdekking, dagbriefing</td></tr>
+<tr><td><strong>Recepten en gerechten</strong></td><td class="n">~14</td><td>Gerechten en hun componenten, doorrekening, ontleden in stappen, uit de catalogus bouwen, ingrediënten matchen, promptregeneratie</td></tr>
+<tr><td><strong>Leveranciers en prijslijsten</strong></td><td class="n">~24</td><td>Catalogus, producten, prijslijsten uploaden en beoordelen, aliassen leren, prijsmutaties goedkeuren, factuurvergelijking, batchverwerking</td></tr>
+<tr><td><strong>Browser-uitbreiding</strong></td><td class="n">~16</td><td>Aanmelden, sleutels, taken claimen, controlepunten, hartslag, pauzeren, hervatten, annuleren — de hele hervatbare synchronisatie</td></tr>
+<tr><td><strong>Bonnen en boekhouder</strong></td><td class="n">~14</td><td>Uitlezen, wegschrijven, classificeren, maandpakket genereren en mailen, afsluiten, margelek</td></tr>
+<tr><td><strong>Financiën</strong></td><td class="n">~9</td><td>Samenvatting, BTW-aangifte en concept, bank, XAF-auditbestand, transport, investeringsaftrek-scenario, naar de boekhouder sturen</td></tr>
+<tr><td><strong>Voorraad en inkoop</strong></td><td class="n">~8</td><td>Bestelvoorstel, vraagberekening, verbruik, herberekening, marge-alarmen, mutaties</td></tr>
+<tr><td><strong>Prep en keuken</strong></td><td class="n">~10</td><td>Taken bulk-inplannen, starten, afronden, overslaan, uitstellen, herverdelen, apparaat-koppeling; mise-en-place</td></tr>
+<tr><td><strong>HACCP</strong></td><td class="n">~8</td><td>Plan genereren, sjabloon, registratie, corrigerende actie, foto, trends</td></tr>
+<tr><td><strong>Events en service</strong></td><td class="n">~8</td><td>Plattegrond ophalen en opslaan, zones, gast-pins, AI-voorstel, logistiek-checklist</td></tr>
+<tr><td><strong>Verkoop</strong></td><td class="n">~9</td><td>Publieke offerte, offerte accepteren, publiek leadformulier, publiek arrangement met telling, menukaart-PDF, menu-suggesties</td></tr>
+<tr><td><strong>Integraties</strong></td><td class="n">~12</td><td>Moneybird (koppelen, terugkoppeling, factuur, bon), Exact, Mollie (betaling en webhook), Google Agenda, iCal, webhooks, Resend</td></tr>
+<tr><td><strong>Beheer</strong></td><td class="n">~10</td><td>Organisaties, analytics, health, functievlaggen, tijdelijk inloggen, waarschuwing sturen, tickets, export, bewaartermijnen, inactiviteitscontrole</td></tr>
+<tr><td><strong>Nachtelijke taken</strong></td><td class="n">8</td><td>Zie het schema in deel 4</td></tr>
+<tr><td><strong>Overig</strong></td><td class="n">~34</td><td>Organisatie en uitnodigingen, hulpartikelen, archief-export en ondertekende links, foutregistratie, wijzigingslogboek, activiteit, ritten, materieelscan, documenten lezen, sjablonen, onboarding-vulling, facturering</td></tr>
+</tbody></table></div>
+
+<h3>De database, per domein</h3>
+<div class="tbl"><table>
+<thead><tr><th>Domein</th><th>Belangrijkste tabellen</th></tr></thead>
+<tbody>
+<tr><td>Organisatie</td><td><code>organizations</code> · <code>organization_members</code> · <code>invitations</code> · <code>settings</code> · <code>user_settings</code> · <code>personeel</code></td></tr>
+<tr><td>Verkoop</td><td><code>leads</code> · <code>offertes</code> · <code>facturen</code> · <code>klanten</code> · <code>arrangementen</code> · <code>arrangement_categorieen</code> · <code>categorie_niveaus</code> · <code>offerte_margin_alerts</code></td></tr>
+<tr><td>Planning</td><td><code>events</code> · <code>courses</code> · <code>event_allergies</code> · <code>event_checklist_items</code> · <code>event_haccp_plans</code> · <code>agenda_categories</code> · <code>agenda_personal</code></td></tr>
+<tr><td>Keuken</td><td><code>gerechten</code> · <code>components</code> · <code>component_ingredients</code> · <code>gerecht_components</code> · <code>recepten</code> · <code>recipe_steps</code> · <code>recipe_cost_snapshots</code> · <code>menu_templates</code> · <code>menu_template_items</code> · <code>technieken</code> · <code>smaak_assen</code> · <code>gerecht_profielen</code> · <code>ingredient_profielen</code></td></tr>
+<tr><td>Allergenen en HACCP</td><td><code>allergens</code> · <code>component_allergens</code> · <code>ingredient_allergens</code> · <code>haccp_records</code> · <code>haccp_corrective_actions</code> · <code>haccp_anomaly_findings</code> · <code>gerecht_haccp_templates</code> · <code>component_haccp_points</code></td></tr>
+<tr><td>Prep en service</td><td><code>prep_tasks</code> · <code>prep_task_dependencies</code> · <code>mep_items</code> · <code>kitchen_stations</code> · <code>service_state</code> · <code>service_zones</code> · <code>floor_plans</code> · <code>floor_plan_guests</code> · <code>kds_device_sessions</code> · <code>kds_audit_logs</code></td></tr>
+<tr><td>Voorraad en inkoop</td><td><code>inventory</code> · <code>stock_movements</code> · <code>price_history</code> · <code>marge_alerts</code> · <code>inkooplijsten</code> · <code>concept_inkoop_orders</code> · <code>inkoop_order_lines</code> · <code>order_overrides</code> · <code>order_templates</code></td></tr>
+<tr><td>Leveranciers</td><td><code>leveranciers</code> · <code>supplier_products</code> · <code>supplier_product_prices</code> · <code>supplier_product_observations</code> · <code>supplier_invoices</code> · <code>supplier_invoice_lines</code> · <code>leverancier_sync_runs</code> · <code>supplier_sync_tasks</code> · <code>supplier_sync_checkpoints</code> · <code>org_product_aliases</code> · <code>org_price_mutations</code> · <code>org_pricelist_uploads</code> · <code>meat_taxonomy</code></td></tr>
+<tr><td>Bonnen en geld</td><td><code>bonnen</code> · <code>bon_share_tokens</code> · <code>bon_audit_log</code> · <code>btw_aangiftes</code> · <code>bank_transacties</code> · <code>maand_afsluitingen</code> · <code>boekhouder_pakketten</code> · <code>balans_correcties</code></td></tr>
+<tr><td>Operatie</td><td><code>materieel</code> · <code>gn_maten</code> · <code>opslag_locaties</code> · <code>pack_lists</code> · <code>ritten</code> · <code>voertuigen</code> · <code>rtr_items</code> · <code>ritten_moneybird_pushes</code></td></tr>
+<tr><td>AI en systeem</td><td><code>ai_usage</code> · <code>ai_action_proposals</code> · <code>activity_log</code> · <code>audit_log</code> · <code>funnel_events</code> · <code>onboarding_events</code> · <code>notifications</code> · <code>changelog_entries</code> · <code>org_webhooks</code> · <code>org_email_inbox</code> · <code>org_extension_api_keys</code> · <code>integration_tokens</code></td></tr>
+</tbody></table></div>
+
+<h3>Twee eigenaardigheden om te onthouden</h3>
+<ul>
+<li><strong>Twee catalogi die je nooit mag samenvoegen op nummer.</strong> Catalogus A is jouw eigen bibliotheek (componenten, voorraad); catalogus B is wat de leverancier verkoopt. Ze koppelen via een expliciete verwijzing, nooit via een gedeeld id.</li>
+<li><strong>Gemengde sleutel-typen.</strong> Gerechten hebben een UUID, offertes een geheel getal. Dat is historisch en het is niet erg — zolang je het weet als je twee tabellen aan elkaar knoopt.</li>
+</ul>
+
+<h3>Er wordt op gelet</h3>
+<ul>
+<li><code>node scripts/schema-audit.mjs</code> vindt queries die kolommen opvragen die niet bestaan. Zulke queries mislukken namelijk <em>helemaal</em> — één verkeerde kolomnaam en de hele vraag komt leeg terug.</li>
+<li><code>npm run lint:contrast</code> controleert of elke kleurcombinatie leesbaar blijft.</li>
+<li><code>npm run btw:afwijkingen</code> zoekt BTW-splitsingen die niet kloppen.</li>
+<li>73 testbestanden met Vitest voor het rekenwerk; Playwright voor de menukaart-sjablonen.</li>
+</ul>
+</section>
+
+<!-- ══════════ DEEL 10 ══════════ -->
+<section id="p10">
+<div class="parthead">
+  <span class="num">Deel 10</span>
+  <h2>Waar het nu staat</h2>
+  <p>Wat af is, wat er ligt te wachten, en de ene blokkade die alles bepaalt.</p>
+  <div class="fire"></div>
+</div>
+
+<h3>Wat er staat</h3>
+<p>De keten werkt end-to-end: aanvraag → offerte → event → menu → bestellijst → kookbord → servicebord → factuur → bon → aangifte. De informatiestructuur is opgeruimd (van 26 zijbalk-items naar acht hubs), de toegankelijkheid getoetst, de activatiemeting draait sinds mei, het beheerdersdashboard leeft, en de zeventien plekken waar opslaan stil mislukte zijn dicht.</p>
+
+<div class="note warn">
+  <span class="lbl">De grootste blokkade — gemeten op 1 september 2026</span>
+  <p>Het gerechtenboek is leeg. Van de vijftien actieve gerechten hebben er <strong>negen geen enkel gekoppeld ingrediënt</strong>, hebben er <strong>vier een kostprijs</strong>, <strong>drie allergenen</strong>, <strong>één receptstappen</strong> en <strong>nul handtijd</strong>. Volledig op alle vijf: <strong>nul van de vijftien.</strong></p>
+  <p>De oorzaak is niet luiheid maar de vorm van het scherm. Toevoegen en afmaken zijn dezelfde handeling: je maakt een gerecht aan met een naam, het staat meteen op actief, en niets brengt je ooit terug. Er bestaat geen begrip van <em>"af"</em>. Een half gerecht ziet er precies zo uit als een heel gerecht.</p>
+</div>
+
+<h3>De vijf stappen die daaruit volgen</h3>
+<ol>
+<li><strong>De prijsafleiding repareren.</strong> ✅ Gedaan. De afleiding bleek niet stuk — wat ontbrak was een controle op de <em>invoer</em>. Die staat er nu, met twee regels: prijs gelijk aan het pakgewicht, en goedkoper dan een levensmiddel kan zijn. Hij verandert nooit een bedrag, hij wijst aan en stelt de vraag.</li>
+<li><strong>"Af" zichtbaar maken.</strong> Vijf eisen per gerecht — ingrediënten uit de catalogus, dosering per gast, afgeleide kostprijs, allergenen, stappen met handtijd — met een balk per gerecht en één werklijst met wat ontbreekt.</li>
+<li><strong>Eén deur in plaats van vier.</strong> Er zijn nu vier ingangen naar een nieuw gerecht en alle vier leveren ze een ánder half gerecht op. <em>Uit de groothandel</em> wordt de standaardroute, want die pint echte producten vast en leidt de kostprijs af in plaats van hem te schatten. Bijvangst: allergenen hoeven dan niet meer getypt te worden — die volgen uit de aangewezen producten.</li>
+<li><strong>Vangnetten op de twee fouten die geld kosten.</strong> Deterministisch, geen model: een dosering boven een halve kilo per gast vraagt <em>bedoel je het pak?</em>, en een kostprijs onder een ondergrens per productgroep piept.</li>
+<li><strong>Pas dán de AI.</strong> De bedenker werkt nu buiten de catalogus om, dus zijn "marge" is geen berekening maar een constante — de verkoopprijs wordt gemaakt als kostprijs × 2,5, waardoor élk voorstel op zestig procent uitkomt. Laat hem kiezen uit wat er besteld kan worden, dan valt de kostprijs eruit.</li>
+</ol>
+<p><strong>De omvang is bewust klein:</strong> beginnen bij de acht gerechten van het event van 18 september. Die klus is echt, levert direct een kloppende bestellijst en een werkend kookbord op, en pas daarna is bekend wat één gerecht aan tijd kost.</p>
+
+<h3>De golven daarna</h3>
+<div class="tbl"><table>
+<thead><tr><th>Golf</th><th>Wat</th><th>Stand</th></tr></thead>
+<tbody>
+<tr><td class="n">0</td><td>Kennisbank, goedkeur-lade, receptuur-ontleder, gemis-rapport</td><td>✅ Draait</td></tr>
+<tr><td class="n">1</td><td>Recepten van actieve menu's ontleden; lessen en sjablonen eruit afleiden; het gerechtenboek vullen</td><td>Nu aan de beurt</td></tr>
+<tr><td class="n">2</td><td>Handtijd en wachttijd los van elkaar in de prep-planning; plaats en groepering</td><td>✅ Grotendeels — GN- en apparatuurcheck open</td></tr>
+<tr><td class="n">3</td><td>Keuken-modus: receptuur, planning en HACCP op één scherm; normen naar de tabel</td><td>Gepland</td></tr>
+<tr><td class="n">4</td><td>Receptuur-ontwerper in vier standen: op aanvraag, vanuit middelen, investeringsadvies, verbindende component</td><td>Gepland</td></tr>
+<tr><td class="n">5</td><td>Mail-intake afmaken: offerteconcept en opvolging — mag naar voren als het seizoen aantrekt</td><td>Gepland</td></tr>
+<tr><td class="n">6</td><td>Conceptbestellingen met goedkeuring — de eerste stap die naar buiten praat, dus als laatste</td><td>Gepland</td></tr>
+</tbody></table></div>
+
+<h3>Wat er nog open staat aan afwerking</h3>
+<ul>
+<li>Een veldtest met Lars op een echte eventdag — handschoenen, zonlicht, tablet. Geen code, wel de laatste toets vóór lancering.</li>
+<li>Twee AI-schermcomponenten van samen ruim drieduizend regels vereenvoudigen.</li>
+<li>313 hardgecodeerde afrondingen in 42 bestanden omzetten naar de vormtokens.</li>
+<li>De HACCP-normwaarden verhuizen van de prompt naar een tabel. Nu mag het model de wettelijke grens zélf invullen — dat staat aan de verkeerde kant van de lijn uit deel 3.</li>
+<li>Er is nog geen enkele plek waar je een receptstap met de hand kunt aanvullen. Zolang dat zo is kan handtijd alleen ontstaan als hij toevallig in de recepttekst staat.</li>
+</ul>
+</section>
+
+<!-- ══════════ DEEL 11 ══════════ -->
+<section id="p11">
+<div class="parthead">
+  <span class="num">Deel 11</span>
+  <h2>Woordenlijst</h2>
+  <p>De termen die in de app en in dit document terugkomen.</p>
+  <div class="fire"></div>
+</div>
+
+<div class="tbl"><table>
+<thead><tr><th>Term</th><th>Wat het is</th></tr></thead>
+<tbody>
+<tr><td><strong>Component</strong></td><td>Een bouwsteen van een gerecht — zelf bereid of ingekocht. Wijzig er één en elk gerecht waar hij in zit past mee.</td></tr>
+<tr><td><strong>Gerecht</strong></td><td>Wat je verkoopt. Opgebouwd uit componenten, met eigen kostprijs, allergenen en receptuur.</td></tr>
+<tr><td><strong>Catalogus A / B</strong></td><td>A is jouw eigen bibliotheek, B is wat de leverancier verkoopt. Nooit samenvoegen op nummer.</td></tr>
+<tr><td><strong>Foodcost</strong></td><td>Wat de inkoop van het eten kost, als bedrag of als percentage van de verkoopprijs.</td></tr>
+<tr><td><strong>Menu-marge</strong></td><td>(menuprijs − som van de gerechtkostprijzen) ÷ menuprijs. Het gerecht is een signaal, het menu is het oordeel.</td></tr>
+<tr><td><strong>Par-niveau</strong></td><td>De voorraad die je minimaal wilt hebben staan. Kom je eronder, dan verschijnt het op de bestellijst.</td></tr>
+<tr><td><strong>Snijverlies</strong></td><td>Wat er van een product overblijft na schoonmaken. Bepaalt hoeveel je écht moet inkopen.</td></tr>
+<tr><td><strong>Mise en place</strong></td><td>Alles wat vóór de service klaargemaakt moet zijn.</td></tr>
+<tr><td><strong>Prep</strong></td><td>Het voorbereidende werk in de dagen vóór een event.</td></tr>
+<tr><td><strong>Handtijd / wachttijd</strong></td><td>Handtijd is de tijd dat jij bezig bent; wachttijd is de tijd dat het vanzelf gaat (marineren, roken, koelen). Voor de planning zijn dat twee verschillende dingen.</td></tr>
+<tr><td><strong>Gastronorm (GN)</strong></td><td>De wereldwijd vastgelegde maat van keukenbakken (EN 631-1). Bepaalt hoeveel bakken je nodig hebt voor een hoeveelheid.</td></tr>
+<tr><td><strong>HACCP</strong></td><td>Het voedselveiligheidssysteem waar de NVWA op controleert: metingen, normen en corrigerende acties, bewijsbaar vastgelegd.</td></tr>
+<tr><td><strong>RGS</strong></td><td>Het Referentie Grootboekschema — de standaardcodes waarmee Nederlandse boekhouders kosten indelen.</td></tr>
+<tr><td><strong>UBL / Peppol</strong></td><td>Het bestandsformaat en netwerk voor elektronische facturen.</td></tr>
+<tr><td><strong>MT940</strong></td><td>Het bestandsformaat waarmee banken afschriften exporteren.</td></tr>
+<tr><td><strong>Rijbeveiliging (RLS)</strong></td><td>De database weigert zelf rijen van een andere organisatie te tonen. De reden dat één installatie meerdere klanten kan bedienen.</td></tr>
+<tr><td><strong>D / A / H</strong></td><td>De klasse van een taak: door code berekend, door AI geredeneerd, of hybride met goedkeuring. Zie deel 3.</td></tr>
+<tr><td><strong>Serveractie</strong></td><td>Een opslag- of wijzigingsroute die op de server draait, met validatie en controlespoor — in plaats van rechtstreeks vanuit de browser.</td></tr>
+<tr><td><strong>Prompt-caching</strong></td><td>Het vaste deel van een AI-instructie hergebruiken, zodat je er niet elke keer voor betaalt.</td></tr>
+<tr><td><strong>White-label</strong></td><td>De app draagt het logo en de kleuren van de caterer, niet die van ons. Vooral zichtbaar op alles wat de klant ziet.</td></tr>
+</tbody></table></div>
+
+<h3>Waar je verder kunt lezen</h3>
+<div class="tbl"><table>
+<thead><tr><th>Document</th><th>Waarvoor</th></tr></thead>
+<tbody>
+<tr><td><code>docs/ux-master.md</code></td><td>Status, principes, meetpunten, personas en open punten — het startdocument</td></tr>
+<tr><td><code>docs/agent-architectuur-plan.md</code></td><td>Het AI- en kennisbankplan v2.0: D/A/H, de kennisbibliotheek, de receptuur-motor, de golven</td></tr>
+<tr><td><code>docs/product-strategy.md</code></td><td>Markt, positionering, personas, prijsstelling, twaalfmaands-horizon</td></tr>
+<tr><td><code>docs/competitor-benchmark.md</code></td><td>Tien concurrenten op veertien dimensies</td></tr>
+<tr><td><code>docs/operatie-overzicht.md</code></td><td>De informatiestructuur-vereenvoudiging en de één-deur-regel</td></tr>
+<tr><td><code>src/lib/navigation.tsx</code></td><td>De enige echte bron voor de hub-indeling</td></tr>
+<tr><td><code>chrome-extension/README.md</code></td><td>De leverancierssynchronisatie in detail</td></tr>
+</tbody></table></div>
+</section>
+
+<footer class="end">
+  <p><strong>BBQ Architect — volledig overzicht.</strong> Geschreven op 1 september 2026 vanaf de code op branch <code>feat/kennisbank-en-keuken</code>: 103 pagina's, 198 serverroutes, 126 migraties, ongeveer 229.000 regels. Waar dit document een getal noemt, komt dat uit de code of uit een meting die in de projectdocumenten staat — nergens uit een schatting.</p>
+</footer>
+</main>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.rail a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if(!('IntersectionObserver' in window) || !targets.length) return;
+  var visible = new Map();
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ visible.set(e.target.id, e.isIntersecting ? e.intersectionRatio : 0); });
+    var best = null, bestRatio = 0;
+    visible.forEach(function(r, id){ if(r > bestRatio){ bestRatio = r; best = id; } });
+    if(!best) return;
+    links.forEach(function(a){ a.classList.toggle('on', a.getAttribute('href') === '#' + best); });
+  }, { rootMargin: '-10% 0px -70% 0px', threshold: [0, .25, .5, 1] });
+  targets.forEach(function(t){ io.observe(t); });
+})();
+</script>

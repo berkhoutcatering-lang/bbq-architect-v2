@@ -1,0 +1,250 @@
+/* ════════════════════════════════════════════════════════════════════════
+   Bestelstroom — publiek bestelformulier. Mobiel eerst, donker.
+   Briefing §1, §3, §7. Plan: docs/bestelstroom-bouwplan.md §7.
+
+   De kleuren staan als tokens bovenaan zodat een tweede cateraar ze ooit kan
+   overschrijven zonder dat er in de opmaak iets verandert. Nu vast op het
+   Hop & Bites-palet, want de briefing schrijft die kleuren voor.
+
+   Twee regels die je hier terugziet en die niet vrijblijvend zijn:
+     • VUUR is voor de enige actie op het scherm. Staat er een tweede oranje
+       ding, dan is er iets fout.
+     • Doorgemeten contrast op matzwart: crème 15,1:1 · vuur 5,8:1 ·
+       goud licht 5,3:1 · mat goud 3,6:1. Mat goud zakt onder de leesgrens,
+       dus dat is alleen lijnwerk. Kleine mono-labels krijgen goud licht.
+       En op de vuurknop staat matzwart, niet crème: crème op vuur haalt
+       2,6:1 en leest als een uitgezette knop.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.hb {
+  --zwart:       #141311;
+  --creme:       #EDE7D8;
+  --goud:        #8D6712;
+  --goud-licht:  #A88338;
+  --vuur:        #E86A2C;
+
+  --vlak:        #1C1A17;
+  --lijn:        color-mix(in srgb, var(--goud) 38%, transparent);
+  --lijn-zacht:  color-mix(in srgb, var(--creme) 12%, transparent);
+  --gedempt:     color-mix(in srgb, var(--creme) 62%, transparent);
+  --vuur-zacht:  color-mix(in srgb, var(--vuur) 14%, transparent);
+
+  --f-kop:   var(--font-cinzel), Cinzel, 'Playfair Display', Georgia, serif;
+  --f-tekst: var(--font-archivo), Archivo, ui-sans-serif, system-ui, sans-serif;
+  --f-mono:  var(--font-ibm-plex-mono), 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --r: 12px;
+
+  min-height: 100vh;
+  background: var(--zwart);
+  color: var(--creme);
+  font-family: var(--f-tekst);
+  -webkit-font-smoothing: antialiased;
+}
+.hb *, .hb *::before, .hb *::after { box-sizing: border-box; }
+/* Alleen wat een knop nodig heeft om geen browserknop meer te zijn. Zet hier
+   géén background/border/color neer: `.hb button` weegt zwaarder dan een losse
+   `.hb-knop`, en dan verdwijnt de oranje bestelknop — de enige actie op het
+   scherm — in het zwart. Dat is precies wat hier eerder gebeurde. */
+.hb button { font: inherit; cursor: pointer; }
+.hb a { color: var(--goud-licht); }
+
+.hb-wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+/* ── Labels: mono, hoofdletters, letterafstand. Alles in dit stramien is een
+      LABEL en nooit een kop. ─────────────────────────────────────────────── */
+.hb-label {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--goud-licht);
+  margin: 0 0 8px;
+  display: block;
+}
+
+.hb-kop {
+  font-family: var(--f-kop);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  margin: 0;
+}
+.hb-kop-groot { font-size: 34px; }
+.hb-kop-klein { font-size: 20px; margin-bottom: 4px; }
+
+.hb-uitleg { color: var(--gedempt); font-size: 14px; line-height: 1.55; margin: 6px 0 0; }
+.hb-klein  { color: var(--gedempt); font-size: 12.5px; line-height: 1.5; }
+
+.hb-hoofd { margin-bottom: 28px; }
+.hb-hoofd .hb-uitleg { margin-top: 10px; }
+
+.hb-blok { margin-bottom: 26px; }
+
+/* Mat goud is te donker voor tekst, maar precies goed voor een scheidingslijn. */
+.hb-streep { height: 1px; background: var(--lijn); border: 0; margin: 26px 0; }
+
+/* ── Teller: plus en min, geen uitklaplijst ──────────────────────────────── */
+.hb-teller {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--vlak);
+  border: 1px solid var(--lijn-zacht);
+  border-radius: var(--r);
+  padding: 12px 16px;
+}
+.hb-teller-knop {
+  width: 44px; height: 44px;             /* 44px = de kleinste maat die op een
+                                            telefoon betrouwbaar te raken is */
+  border-radius: 50%;
+  border: 1px solid var(--lijn);
+  background: transparent;
+  color: var(--creme);
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  transition: background .15s ease, opacity .15s ease;
+}
+.hb-teller-knop:hover:not(:disabled) { background: color-mix(in srgb, var(--creme) 8%, transparent); }
+.hb-teller-knop:disabled { opacity: .3; cursor: not-allowed; }
+.hb-teller-waarde {
+  flex: 1;
+  text-align: center;
+  font-family: var(--f-kop);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+.hb-teller-waarde span { font-family: var(--f-tekst); font-size: 14px; color: var(--gedempt); display: block; margin-top: 2px; }
+
+/* ── Velden ─────────────────────────────────────────────────────────────── */
+.hb-veld { margin-bottom: 18px; }
+.hb-veld input[type="text"],
+.hb-veld input[type="email"],
+.hb-veld input[type="tel"],
+.hb-veld textarea {
+  width: 100%;
+  background: var(--vlak);
+  border: 1px solid var(--lijn-zacht);
+  border-radius: var(--r);
+  color: var(--creme);
+  font-family: inherit;
+  font-size: 16px;                        /* onder 16px zoomt iOS bij focus in */
+  padding: 13px 14px;
+  transition: border-color .15s ease;
+}
+.hb-veld textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+.hb-veld input:focus, .hb-veld textarea:focus {
+  outline: none;
+  border-color: var(--goud-licht);
+}
+.hb-veld input::placeholder, .hb-veld textarea::placeholder { color: color-mix(in srgb, var(--creme) 34%, transparent); }
+.hb-hint { margin-top: 6px; }
+
+/* ── Afhaalmomenten: knoppen naast elkaar, geen lijst ────────────────────── */
+.hb-momenten { display: flex; flex-wrap: wrap; gap: 10px; }
+.hb-moment {
+  flex: 1 1 160px;
+  text-align: left;
+  background: var(--vlak);
+  border: 1px solid var(--lijn-zacht);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  transition: border-color .15s ease, background .15s ease;
+}
+.hb-moment b { display: block; font-weight: 600; font-size: 14.5px; }
+.hb-moment small { color: var(--gedempt); font-size: 12.5px; }
+.hb-moment[aria-pressed="true"] {
+  border-color: var(--goud-licht);
+  background: color-mix(in srgb, var(--goud) 16%, var(--vlak));
+}
+/* Een vol moment blijft staan en doorgestreept: zien dat iets vol is, zet aan
+   tot kiezen. Een moment dat voorbij is wordt niet doorgestreept maar
+   weggelaten — dat gebeurt in de API. */
+.hb-moment:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  text-decoration-color: var(--vuur);
+}
+
+/* ── Vinkje ─────────────────────────────────────────────────────────────── */
+.hb-vink { display: flex; gap: 11px; align-items: flex-start; cursor: pointer; }
+/* Een standaard vinkje is op zwart een groot wit vlak — het helderste ding op
+   het scherm, terwijl vuur de enige aandacht hoort te trekken. Daarom zelf
+   getekend: lege ruit met een gouden rand, en goud gevuld als hij aan staat. */
+.hb-vink input {
+  appearance: none;
+  width: 20px; height: 20px; margin: 1px 0 0; flex: none;
+  border: 1px solid var(--lijn);
+  border-radius: 5px;
+  background: var(--vlak);
+  display: grid;
+  place-content: center;
+  transition: border-color .15s ease;
+}
+.hb-vink input:checked { border-color: var(--goud-licht); }
+.hb-vink input:checked::after {
+  content: '';
+  width: 10px; height: 6px;
+  border-left: 2px solid var(--goud-licht);
+  border-bottom: 2px solid var(--goud-licht);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.hb-vink input:focus-visible { outline: 2px solid var(--goud-licht); outline-offset: 2px; }
+.hb-vink span { font-size: 14px; line-height: 1.45; }
+
+/* ── Afsluiting ─────────────────────────────────────────────────────────── */
+.hb-totaal {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--f-kop);
+  font-size: 17px;
+  margin-bottom: 14px;
+}
+.hb-totaal em { font-style: normal; color: var(--gedempt); font-family: var(--f-tekst); font-size: 14px; }
+
+/* De enige actie op dit scherm. Matzwart op vuur, niet crème. */
+.hb-knop {
+  width: 100%;
+  background: var(--vuur);
+  color: var(--zwart);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: .01em;
+  padding: 16px;
+  border-radius: var(--r);
+  transition: filter .15s ease, opacity .15s ease;
+}
+.hb-knop:hover:not(:disabled) { filter: brightness(1.07); }
+.hb-knop:disabled { opacity: .5; cursor: not-allowed; }
+
+.hb-rest { text-align: center; margin-top: 12px; }
+
+/* Foutmelding: zegt wat er gebeurd is en wat je nu doet. Rand en tekst, geen
+   gevuld oranje vlak — dat zou een tweede vuur-ding op dit scherm zijn. */
+.hb-fout {
+  border: 1px solid var(--vuur);
+  background: var(--vuur-zacht);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+/* Honeypot: onzichtbaar voor mensen, wel invulbaar voor een bot. */
+.hb-honing { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+.hb-voet { margin-top: 40px; text-align: center; }
+
+@media (min-width: 600px) {
+  .hb-wrap { padding-top: 56px; }
+  .hb-kop-groot { font-size: 40px; }
+}

@@ -62,8 +62,19 @@ function buildAdapterCtx(active, adapter) {
             });
             return (results && results[0] && results[0].result) || { records: [] };
         },
-        /* Huidige URL van de leverancier-tab (voor URL-gebaseerd bladeren). */
+        /* Huidige URL van de leverancier-tab (voor URL-gebaseerd bladeren).
+         *
+         * Het tabblad waar de gebruiker NU naar kijkt gaat voor. Zonder die
+         * voorkeur zocht dit alle vensters af en pakte de eerste actieve tab die
+         * toevallig op de leverancier stond — en dan start je een run op de
+         * categorie waar je gisteren was. Mathijs stond op chocolade en kreeg
+         * sauzen en oliën; één oud Bidfood-tabblad was genoeg. */
         async getTabUrl() {
+            const inVenster = await chrome.tabs.query({
+                url: `${active.origin}/*`, active: true, lastFocusedWindow: true,
+            });
+            if (inVenster && inVenster[0] && inVenster[0].url) return inVenster[0].url;
+
             const tabs = await chrome.tabs.query({ url: `${active.origin}/*` });
             const tab = tabs.find((t) => t.active) || tabs[0];
             return (tab && tab.url) || null;
@@ -72,7 +83,14 @@ function buildAdapterCtx(active, adapter) {
            race met de render). Time-out voorkomt vasthangen. */
         async navigateTab(url, opts = {}) {
             const timeoutMs = opts.timeoutMs || 15000;
-            const tabs = await chrome.tabs.query({ url: `${active.origin}/*` });
+            /* Zelfde voorkeur als getTabUrl: stuur het tabblad rond waar de
+               gebruiker naar kijkt, niet een vergeten tab in een ander venster. */
+            const inVenster = await chrome.tabs.query({
+                url: `${active.origin}/*`, active: true, lastFocusedWindow: true,
+            });
+            const tabs = (inVenster && inVenster.length)
+                ? inVenster
+                : await chrome.tabs.query({ url: `${active.origin}/*` });
             const tab = tabs.find((t) => t.active) || tabs[0];
             if (!tab || !tab.id) return { ok: false };
             const tabId = tab.id;

@@ -5,7 +5,7 @@ import {
     Settings, Building2, Users, Inbox, Globe,
     HelpCircle, Sparkles, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
-    Hammer, Truck, Archive,
+    Hammer, Truck, Archive, MonitorPlay,
 } from "lucide-react";
 
 export interface NavChild {
@@ -73,6 +73,7 @@ export const navSections: NavSection[] = [
             { label: "Componenten", icon: <Boxes size={16} />, href: "/gerechten/componenten", description: "Atomaire bouwstenen — zelf-bereid of inkoop. Wijzig één keer, alle gerechten passen mee" },
             { label: "Menukaarten", icon: <BookOpen size={16} />, href: "/gerechten/menukaarten", description: "Per gang kiezen wat erop staat; als sjabloon in één klik in een offerte" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
+            { label: "Keukenscherm", icon: <MonitorPlay size={16} />, href: "/keuken/scherm", description: "Het wandscherm: wat je nu doet, wat er straks komt. Alleen kijken — bedienen doe je op de tablet." },
             { label: "Analyse", icon: <TrendingUp size={16} />, href: "/gerechten/analyse", description: "Welke gerechten verdienen hun plek — populariteit × marge" },
         ],
     },

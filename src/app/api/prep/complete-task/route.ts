@@ -12,6 +12,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 import { validateCompleteTask } from '@/lib/prep/validators';
 import { appendKdsAudit } from '@/lib/prep/auditLog';
+import { schrijfMeting } from '@/lib/keukenplanner/meting';
+import { stelBij } from '@/lib/keukenplanner/bijstellen';
 
 export const runtime = 'nodejs';
 
@@ -27,12 +29,12 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
 
     const v = validateCompleteTask(body);
     if (!v.ok) return NextResponse.json({ error: (v as { ok: false; error: string }).error }, { status: 400 });
-    const { taskId, actualQty, notes } = v.data;
+    const { taskId, actualQty, notes, onderbroken } = v.data;
 
     // Re-fetch + org-check
     const { data: task, error: fetchErr } = await supabase
         .from('prep_tasks')
-        .select('id, organization_id, status, phase, target_qty, target_unit, gerecht_id, event_id, assignee_id')
+        .select('id, organization_id, status, phase, target_qty, target_unit, gerecht_id, event_id, assignee_id, started_at, recipe_step_id, schoonmaaktaak_id, bewerking_code, component_id, stuk_gewicht_kg')
         .eq('id', taskId)
         .maybeSingle();
 
@@ -94,6 +96,25 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         },
     });
 
+    /* De meting. Dit is waar de keukenplanner van leert: werkelijke duur uit
+       started_at → nu, met de hoeveelheid en de onderbroken-vlag erbij.
+       Best-effort — een mislukte meting mag de klaar-melding nooit blokkeren,
+       want dan staat de kok met een taak die niet weg wil. */
+    const meting = await schrijfMeting(supabase, orgId, {
+        taak: task,
+        actualQty,
+        onderbroken,
+        completedAt: updated.completed_at,
+    });
+
+    /* De leerlus sluiten: een meting alleen is niets waard als er nooit iets
+       mee gebeurt. Alleen bij een meting die meetelt, en alleen als er een
+       bewerking aan hangt — leren gebeurt op de bewerking, niet op de stap. */
+    let bijstelling = null;
+    if (meting.gemeten && task.bewerking_code) {
+        bijstelling = await stelBij(supabase, orgId, task.bewerking_code, task.component_id ?? null);
+    }
+
     // Inventory deduction is best-effort en alleen voor prep-phases.
     // Service-mode handelt smoke/grill/plate/service-aftrek af bij served-status.
     // Hier wordt het NIET geblokkeerd op fout — we willen de done-actie niet houden.
@@ -105,5 +126,12 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         ok: true,
         task: updated,
         inventoryDeducted,
+        meting,
+        bijstelling,
+        bericht: onderbroken
+            ? 'Klaar. Omdat je onderbroken was telt deze tijd niet mee in de schatting.'
+            : meting.gemeten
+                ? 'Klaar. Deze tijd telt mee.'
+                : 'Klaar.',
     });
 });

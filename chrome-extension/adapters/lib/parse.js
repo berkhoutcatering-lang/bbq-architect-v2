@@ -42,12 +42,23 @@ function singleSep(s, sep) {
 }
 
 const UNIT_MAP = {
-    g: 'g', gram: 'g', grams: 'g',
+    g: 'g', gr: 'g', gram: 'g', grams: 'g', grammen: 'g',
     kg: 'kg', kilo: 'kg', kilogram: 'kg',
-    ml: 'ml',
-    l: 'liter', liter: 'liter', ltr: 'liter',
+    ml: 'ml', cl: 'ml', dl: 'ml',
+    l: 'liter', lt: 'liter', liter: 'liter', ltr: 'liter',
     st: 'piece', stuk: 'piece', stuks: 'piece', stk: 'piece', piece: 'piece', pieces: 'piece', x: 'piece',
 };
+
+/* Centiliter en deciliter zijn geen aparte basiseenheid; we rekenen ze om naar
+   milliliter zodat "fles 75 cl" en "fles 750 ml" dezelfde inhoud opleveren. */
+const NAAR_ML = { cl: 10, dl: 100 };
+
+/**
+ * Verpakkingswoorden die Bidfood als telbare eenheid gebruikt. Alleen nodig als
+ * er verder geen gewicht of volume in de tekst staat — "doos 12 zakjes" met
+ * "40 gr" ervoor wordt al op gewicht gelezen.
+ */
+const STUK_WOORDEN = 'stuks?|stk|st|zakjes?|zakken|zak|doosjes?|dozen|repen|reep|rollen|rol|pakken|pak|bussen|bus|blikken|blik|cupjes?|sachets?|emmers?|potten|pot|trays?|flessen|fles|bakjes?|bakken|bak';
 
 /**
  * Parse een verpakkingsomschrijving → gestructureerde velden.
@@ -73,27 +84,27 @@ export function parsePackaging(raw) {
     const looksVariable = /vanggewicht|variabel|per\s*kg|€\s*\/\s*kg|\/\s*kg\b/.test(text);
 
     // Multipack: "24 × 330 ml", "6 x 1,5 l", "2 x 1 kg"
-    const multi = text.match(/(\d+)\s*[×x*]\s*([\d.,]+)\s*(kg|kilo|kilogram|gram|g|ml|liter|ltr|l|stuks?|stk|st)\b/);
+    const multi = text.match(/(\d+)\s*[×x*]\s*([\d.,]+)\s*(kg|kilo|kilogram|grammen|gram|gr|g|ml|liter|ltr|lt|l|cl|dl|stuks?|stk|st)\b/);
     if (multi) {
         result.packCount = String(parseInt(multi[1], 10));
-        result.contentPerItemQuantity = toNumberString(multi[2]);
+        result.contentPerItemQuantity = herschaal(toNumberString(multi[2]), multi[3]);
         result.contentPerItemUnit = UNIT_MAP[multi[3]] || null;
         result.priceBasis = 'package';
         return finalize(result);
     }
 
     // Enkel gewicht/volume: "2,5 kg", "750 g", "1,5 l", "330 ml"
-    const single = text.match(/([\d.,]+)\s*(kg|kilo|kilogram|gram|g|ml|liter|ltr|l)\b/);
+    const single = text.match(/([\d.,]+)\s*(kg|kilo|kilogram|grammen|gram|gr|g|ml|liter|ltr|lt|l|cl|dl)\b/);
     if (single && !looksVariable) {
         result.packCount = '1';
-        result.contentPerItemQuantity = toNumberString(single[1]);
+        result.contentPerItemQuantity = herschaal(toNumberString(single[1]), single[2]);
         result.contentPerItemUnit = UNIT_MAP[single[2]] || null;
         result.priceBasis = 'package';
         return finalize(result);
     }
 
     // Stuks: "12 stuks", "12 st", "doos 12"
-    const pieces = text.match(/(\d+)\s*(stuks?|stk|st)\b/);
+    const pieces = text.match(new RegExp(`(\\d+)\\s*(${STUK_WOORDEN})\\b`));
     if (pieces) {
         result.packCount = String(parseInt(pieces[1], 10));
         result.contentPerItemQuantity = '1';
@@ -117,6 +128,14 @@ function mapBasis(u) {
     if (u === 'l' || u === 'liter') return 'liter';
     if (u === 'st' || u === 'stuk') return 'piece';
     return 'unknown';
+}
+
+/** Rekent cl/dl om naar milliliter; alle andere eenheden blijven zoals ze zijn. */
+function herschaal(qty, eenheid) {
+    const factor = NAAR_ML[eenheid];
+    if (qty == null || !factor) return qty;
+    const n = Number(qty) * factor;
+    return Number.isInteger(n) ? String(n) : String(n);
 }
 
 function toNumberString(s) {

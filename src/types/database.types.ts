@@ -980,3 +980,82 @@ export interface RittenMoneybirdPush {
   pushed_by?: string | null;
   pushed_at: string;
 }
+
+// ── Keukenplanner — receptstappen ──
+// Zie docs/keukenplanner-bouwplan.md. Deze tabel stond al live maar had geen
+// type en geen enkele lezer in de code; golf 1 bouwt daar het scherm en de
+// ontleder omheen.
+
+/** Waar een stap gedaan wordt. */
+export type RecipeStepPlaats = 'thuis' | 'bus' | 'locatie';
+
+/** Waar de stap vandaan komt. `ontleder` = AI-voorstel dat is goedgekeurd. */
+export type RecipeStepBron = 'ontwerper' | 'ontleder' | 'handmatig' | null;
+
+export interface RecipeStep {
+  id: string;
+  organization_id: string;
+  /** Een stap hangt aan een gerecht OF aan een component — minstens één. */
+  gerecht_id?: string | null;
+  component_id?: number | null;
+  step_order: number;
+  /** Genormaliseerd werkwoord ("snijden", "emulgeren"). Te grof om op te
+   *  batchen — dat gebeurt op bewerking + component + apparaat. */
+  actie?: string | null;
+  tekst: string;
+  ingredient_ref?: string | null;
+  hoeveelheid?: number | null;
+  eenheid?: string | null;
+  prep_group?: string | null;
+  /** Tijd dat de kok bezet is. */
+  duur_actief_min?: number | null;
+  /** Tijd dat het ding staat te doen zonder hem — dit is de vulbare ruimte. */
+  duur_passief_min?: number | null;
+  plaats: RecipeStepPlaats;
+  toezicht_nodig: boolean;
+  /** Vrije tekst ("snijstation"). Wordt in golf 10 een echte station_id. */
+  station?: string | null;
+  apparaat?: string | null;
+  techniek_slug?: string | null;
+  temp_doel_c?: number | null;
+  hangt_af_van_stap_id?: string | null;
+  bron?: RecipeStepBron;
+  created_at: string;
+  /** Let op: geen trigger op deze kolom — gelijk aan created_at tenzij een
+   *  schrijver hem meestuurt. */
+  updated_at: string;
+}
+
+/** GN-formaat. Referentiedata; `vulgraad` staat per maat, niet één vaste 0,8. */
+export interface GnMaat {
+  code: string;
+  naam: string;
+  lengte_mm: number;
+  breedte_mm: number;
+  diepte_mm: number;
+  inhoud_liter?: number | null;
+  vulgraad?: number | null;
+  stapelbaar?: boolean | null;
+  bron?: string | null;
+  created_at: string;
+}
+
+export type OpslagLocatieSoort = 'lade' | 'deurvak' | 'plank' | 'zone' | 'rooster' | 'bak';
+
+/** Plek binnen een apparaat of ruimte. Draagt temperatuur en capaciteit. */
+export interface OpslagLocatie {
+  id: string;
+  organization_id: string;
+  materieel_id?: number | null;
+  code: string;
+  naam: string;
+  volgorde: number;
+  soort: OpslagLocatieSoort;
+  temp_min_c?: number | null;
+  temp_max_c?: number | null;
+  gn_capaciteit?: Record<string, number> | null;
+  max_belading_kg?: number | null;
+  notitie?: string | null;
+  created_at: string;
+  updated_at: string;
+}

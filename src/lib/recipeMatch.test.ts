@@ -112,3 +112,43 @@ describe('lineCostCents', () => {
         expect(lineCostCents(0, 'g', perGram)).toBe(0);
     });
 });
+
+describe('pickBestMatch — een passende eenheid geeft de doorslag', () => {
+    /* Uit de echte catalogus: Bidfood heeft karnemelk per ml, Makro dezelfde
+       karnemelk per stuk. Op naam scoren ze vrijwel gelijk. Zonder eenheid-hint
+       won de tweede, en dan ketste de regel af op "eenheid onvergelijkbaar"
+       terwijl de goede prijs gewoon in huis was. */
+    const perMl: CostCandidate = {
+        source: 'supplier_product', ref_id: 1, name: 'Karnemelk, pak 1 ltr',
+        centsPerBaseUnit: 0.121, baseUnit: 'ml',
+    };
+    const perStuk: CostCandidate = {
+        source: 'supplier', ref_id: 2, name: 'Campina Karnemelk 1 l',
+        centsPerBaseUnit: 125, baseUnit: 'stuk',
+    };
+
+    it('kiest het product waarvan de eenheid past', () => {
+        const uit = pickBestMatch('karnemelk', [perStuk, perMl], undefined, 'ml');
+        expect(uit?.candidate.ref_id).toBe(1);
+    });
+
+    it('laat een duidelijk betere naam nog steeds winnen', () => {
+        /* De bonus mag klein zijn: "zure room" verliest nooit van "room" omdat
+           die toevallig in grammen staat. */
+        const room: CostCandidate = {
+            source: 'supplier_product', ref_id: 3, name: 'Room 40%',
+            centsPerBaseUnit: 0.5, baseUnit: 'g',
+        };
+        const zureRoom: CostCandidate = {
+            source: 'supplier_product', ref_id: 4, name: 'Zure room 24%, pak 1 kg',
+            centsPerBaseUnit: 0.43, baseUnit: 'ml',
+        };
+        const uit = pickBestMatch('zure room', [room, zureRoom], undefined, 'g');
+        expect(uit?.candidate.ref_id).toBe(4);
+    });
+
+    it('gedraagt zich als vanouds zonder eenheid', () => {
+        const uit = pickBestMatch('karnemelk', [perStuk, perMl]);
+        expect(uit).not.toBeNull();
+    });
+});

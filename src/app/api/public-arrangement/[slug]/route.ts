@@ -298,7 +298,9 @@ export async function POST(
   try {
     await mailLeadBevestiging({
       clientEmail: d.email, clientNaam: d.naam,
-      eventType: 'Zelf samengesteld arrangement', bedrijfsnaam, brandColor, ondertitel,
+      eventType: 'Zelf samengesteld arrangement',
+      telefoon: t.settings?.telefoon || undefined,
+      bedrijfsnaam, brandColor, ondertitel,
     });
     if (t.settings?.email) {
       await mailLeadNotificatie({

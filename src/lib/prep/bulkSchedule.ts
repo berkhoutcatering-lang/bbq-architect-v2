@@ -21,6 +21,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateProductionPlan } from './productionQty';
 import { componentHoeveelheidVoorGasten } from '@/lib/gerecht-kosten';
+import { takenUitReceptuur, type ReceptStap } from './uitReceptuur';
+
+/** Alles wat de planner van een receptstap moet weten om er een taak van te maken. */
+const STAP_KOLOMMEN = 'id, step_order, tekst, gerecht_id, component_id, bewerking_code, duur_actief_min, duur_passief_min, temp_doel_c, kern_temp_c, materieel_id, station_id, kunde, toezicht_nodig, herhaal_interval_min, herhaal_duur_min, hangt_af_van_stap_id, prep_group, plaats';
 import { scheduledAtForPhase, PHASE_DURATION_MINUTES } from './prepTaskScheduler';
 import {
     findTemplateForDish,
@@ -108,6 +112,22 @@ export interface ScheduledTaskRow {
     component_id: number | null;
     duration_min: number | null;
     batch_key: string | null;
+    /* Uit de receptuur (kookbord v3). NULL voor de oudere bronnen — die kennen
+       geen stap, geen apparaat en geen splitsing tussen werk en wachten, en dat
+       is precies waarom de planner er niets mee kon. */
+    recipe_step_id?: string | null;
+    /* Waar het leren op hangt. `batch_key` is voor het bundelen op het bord,
+       `bewerking_code` is de sleutel waaronder de meting wordt opgeslagen —
+       leren gebeurt op de bewerking, niet op de losse stap. Alleen batch_key
+       vullen betekent dat er nooit iets geleerd wordt, en dat merk je pas als
+       je je afvraagt waarom alles na een half jaar nog "geschat" is. */
+    bewerking_code?: string | null;
+    materieel_id?: number | null;
+    duur_actief_min?: number | null;
+    duur_passief_min?: number | null;
+    toezicht_nodig?: boolean | null;
+    kunde?: string | null;
+    plaats?: string | null;
 }
 
 /**
@@ -273,8 +293,84 @@ export async function bulkScheduleEventPrep(
         componentsByDish.set(row.gerecht_id, arr);
     }
 
+    /* 6c. De receptuur zelf — de stappen die de receptlezer heeft opgebouwd.
+    
+           Dit is de belangrijkste bron en hij gaat vóór alle andere. Hier zit
+           alles in waar het om gaat: welk apparaat, welke temperatuur, welke
+           volgorde, wat vooruit mag en waar het op eindigt. Tot vandaag bleef
+           dat in de la liggen en werden de taken gemaakt uit een naam en een
+           hoeveelheid.
+    
+           Stappen van een bouwsteen hangen aan die bouwsteen en niet aan het
+           gerecht, dus die halen we er via `uit_gerecht_id` bij — anders mist
+           precies het deel dat vooruit gemaakt mag worden. */
+    const { data: eigenStappen } = await supabase
+        .from('recipe_steps')
+        .select(STAP_KOLOMMEN)
+        .in('gerecht_id', dishIds)
+        .eq('organization_id', orgId)
+        .order('step_order');
+
+    const { data: bouwstenen } = await supabase
+        .from('components')
+        .select('id, name, uit_gerecht_id')
+        .in('uit_gerecht_id', dishIds)
+        .eq('organization_id', orgId);
+
+    const componentVanGerecht = new Map<number, string>();
+    const componentNaam = new Map<number, string>();
+    for (const c of bouwstenen ?? []) {
+        componentVanGerecht.set(c.id as number, c.uit_gerecht_id as string);
+        componentNaam.set(c.id as number, c.name as string);
+    }
+
+    let deelStappen: Record<string, unknown>[] = [];
+    if (componentVanGerecht.size > 0) {
+        const { data } = await supabase
+            .from('recipe_steps')
+            .select(STAP_KOLOMMEN)
+            .in('component_id', [...componentVanGerecht.keys()])
+            .eq('organization_id', orgId)
+            .order('step_order');
+        deelStappen = (data ?? []) as Record<string, unknown>[];
+    }
+
+    const stappenPerGerecht = new Map<string, ReceptStap[]>();
+    for (const rij of [...(eigenStappen ?? []), ...deelStappen] as Record<string, unknown>[]) {
+        const compId = (rij.component_id as number | null) ?? null;
+        const gerechtId = compId != null
+            ? componentVanGerecht.get(compId) ?? null
+            : (rij.gerecht_id as string | null);
+        if (!gerechtId) continue;
+
+        const lijst = stappenPerGerecht.get(gerechtId) ?? [];
+        lijst.push({
+            id: rij.id as string,
+            step_order: rij.step_order as number,
+            tekst: rij.tekst as string,
+            component_id: compId,
+            componentNaam: compId != null ? componentNaam.get(compId) ?? null : null,
+            bewerking_code: (rij.bewerking_code as string | null) ?? null,
+            duur_actief_min: (rij.duur_actief_min as number | null) ?? null,
+            duur_passief_min: (rij.duur_passief_min as number | null) ?? null,
+            temp_doel_c: (rij.temp_doel_c as number | null) ?? null,
+            kern_temp_c: (rij.kern_temp_c as number | null) ?? null,
+            materieel_id: (rij.materieel_id as number | null) ?? null,
+            station_id: (rij.station_id as number | null) ?? null,
+            kunde: (rij.kunde as string | null) ?? null,
+            toezicht_nodig: (rij.toezicht_nodig as boolean | null) ?? null,
+            herhaal_interval_min: (rij.herhaal_interval_min as number | null) ?? null,
+            herhaal_duur_min: (rij.herhaal_duur_min as number | null) ?? null,
+            hangt_af_van_stap_id: (rij.hangt_af_van_stap_id as string | null) ?? null,
+            prep_group: (rij.prep_group as string | null) ?? null,
+            plaats: (rij.plaats as string | null) ?? null,
+        });
+        stappenPerGerecht.set(gerechtId, lijst);
+    }
+
     // 7. Genereer task rows per gerecht
     const taskRows: ScheduledTaskRow[] = [];
+    let receptuurCount = 0;
     let matchedTemplates = 0;
     let fallbackCount = 0;
     let componentCount = 0;
@@ -292,7 +388,58 @@ export async function bulkScheduleEventPrep(
         dishNames: string[];
         dishIds: string[];
     }>();
+    /* Eerst de receptuur. Een gerecht met eigen stappen krijgt die stappen als
+       taken, en verder niets — geen component-taken en geen sjabloon, want dan
+       zou hetzelfde werk er twee keer staan. */
     for (const dish of dishes as DishRow[]) {
+        const stappen = stappenPerGerecht.get(dish.id);
+        if (!stappen || stappen.length === 0) continue;
+
+        dishesWithComponents.add(dish.id);
+        const courseId = courseByGerecht.get(dish.id) ?? null;
+        const uitReceptuur = takenUitReceptuur({
+            gerechtId: dish.id,
+            gerechtNaam: dish.naam,
+            stappen,
+            uitlevering: eventStartISO,
+        });
+
+        for (const t of uitReceptuur) {
+            receptuurCount++;
+            taskRows.push({
+                event_id: eventId,
+                organization_id: orgId,
+                text: t.text,
+                /* De kookfase komt uit wat het toestel kan (`kunde`), niet uit
+                   de tekst — "rook" in een zin kan ook rookhout zijn. */
+                phase: t.fase,
+                scheduled_at: t.scheduled_at,
+                station_id: t.station_id,
+                gerecht_id: dish.id,
+                course_id: courseId,
+                target_qty: null,
+                target_unit: null,
+                qty_source: 'server_recipe',
+                priority: t.priority,
+                status: 'planned',
+                dagen: t.dagen,
+                component_id: t.component_id,
+                duration_min: t.duration_min,
+                batch_key: t.bewerking_code,
+                bewerking_code: t.bewerking_code,
+                recipe_step_id: t.recipe_step_id,
+                materieel_id: t.materieel_id,
+                duur_actief_min: t.duur_actief_min,
+                duur_passief_min: t.duur_passief_min,
+                toezicht_nodig: t.toezicht_nodig,
+                kunde: t.kunde,
+                plaats: t.plaats,
+            });
+        }
+    }
+
+    for (const dish of dishes as DishRow[]) {
+        if (dishesWithComponents.has(dish.id)) continue;
         const comps = componentsByDish.get(dish.id);
         if (!comps || comps.length === 0) continue;
         dishesWithComponents.add(dish.id);
@@ -358,6 +505,9 @@ export async function bulkScheduleEventPrep(
        blijven naast component-taken bestaan — componenten vullen aan.
        Alleen de generieke fallback vervalt als componenten het gerecht dekken. */
     for (const dish of dishes as DishRow[]) {
+        /* Uit de receptuur geplande gerechten zijn klaar. Het sjabloon is de
+           oude weg voor gerechten die nog geen stappen hebben. */
+        if (stappenPerGerecht.has(dish.id)) continue;
         const template = findTemplateForDish(dish.naam);
         const courseId = courseByGerecht.get(dish.id) ?? null;
         const ingredientForDish = productionPlan.filter((p) => p.gerecht_id === dish.id);
