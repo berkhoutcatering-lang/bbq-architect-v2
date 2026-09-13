@@ -59,3 +59,6 @@ docs/claude-design/
 # Design-handoff zip-extracten (Cloud Design v2/v3, offerte). Reference-only —
 # de productie-code leeft in src/. Niet in git history.
 .design-import/
+
+# myPOS configuratiepakket (eenmalig uit myPOS gekopieerd, bevat de private key)
+.mypos/
