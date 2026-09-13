@@ -155,7 +155,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             o.status_reden = null;
             o.reservering_tot = new Date(nu.getTime() + g.instellingen.reservering_minuten * 60_000).toISOString();
             o.betaalpoging += 1;
-            o.mypos_order_id = `${o.nummer}-${o.betaalpoging}`;
+            o.mypos_order_id = `${o.nummer}-${o.betaalpoging}-${o.token.slice(0, 6)}`;
             return { ok: true, waarde: zonderRegels(o) };
         },
 
