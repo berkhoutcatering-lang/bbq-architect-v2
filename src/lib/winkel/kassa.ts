@@ -145,8 +145,16 @@ export function meervoud(eenheid: string, aantal: number): string {
     return vast[enkel.toLowerCase()] ?? enkel;
 }
 
+/**
+ * Het ordernummer uit een myPOS-OrderID. De OrderID richting myPOS is
+ * "<nummer>-<poging>-<6 tekens van het token>": het token-stuk maakt hem
+ * uniek over omgevingen en tellerresets heen (preview en productie delen
+ * dezelfde myPOS-testwinkel, en myPOS weigert een OrderID die hij al kent —
+ * "E_INVALID_PARAMS: order_id: Duplicate value", 13 september 2026).
+ * Oudere OrderID's zonder token-stuk worden ook nog begrepen.
+ */
 export function nummerUitOrderId(orderId: string): string {
-    return orderId.replace(/-\d+$/, '');
+    return orderId.replace(/-\d+(-[a-f0-9]{6})?$/, '');
 }
 
 function isVerlopen(o: OrderRij, nu: Date): boolean {
@@ -382,7 +390,7 @@ export async function verwerkBetaalbericht(ctx: KassaContext, slug: string, body
     if (!bericht) return { status: 400, tekst: 'INVALID SIGNATURE' };
 
     const referentie = bericht.trnref ? `trn:${bericht.trnref}` : `hash:${createHash('sha256').update(body).digest('hex')}`;
-    /* OrderID richting myPOS is "<nummer>-<poging>"; een bericht voor een
+    /* OrderID richting myPOS is "<nummer>-<poging>-<token>"; een bericht voor een
        eerdere poging hoort nog steeds bij dezelfde order. */
     const order = await ctx.store.vindOrderOpNummer(tenant.orgId, nummerUitOrderId(bericht.orderId));
 

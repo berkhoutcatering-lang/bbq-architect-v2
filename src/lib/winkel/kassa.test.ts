@@ -2,7 +2,7 @@ import { createSign, generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MYPOS_TEST, onderteken, type MyposConfig, type Velden } from '@/lib/mypos/ipc';
 import { maakGeheugenStore, type GeheugenStore } from './geheugenStore';
-import { _resetControleKlok, betaalPagina, haalMomenten, haalStatus, offreer, plaatsOrder, terugUrlVoor, terugVanMypos, verwerkBetaalbericht, type KassaContext } from './kassa';
+import { _resetControleKlok, betaalPagina, haalMomenten, haalStatus, nummerUitOrderId, offreer, plaatsOrder, terugUrlVoor, terugVanMypos, verwerkBetaalbericht, type KassaContext } from './kassa';
 import type { Artikel } from './rekenen';
 
 /* ── Het "myPOS" van de test: een eigen sleutelpaar ────────────────────────── */
@@ -227,13 +227,13 @@ describe('betaalpagina', () => {
         expect(uit.soort).toBe('html');
         if (uit.soort !== 'html') return;
         expect(uit.html).toContain('action="https://mypos.test/ipc"');
-        expect(uit.html).toContain('name="OrderID" value="HB-2026-0001-1"');
+        expect(uit.html).toMatch(/name="OrderID" value="HB-2026-0001-1-[a-f0-9]{6}"/);
         expect(uit.html).toContain('name="Amount" value="119.60"');
         expect(uit.html).toContain(`value="https://bbq-architect-v2.vercel.app/api/public-winkel/hop-en-bites/betaal/${token}/terug?uitkomst=ok"`);
         expect(uit.html).toContain('value="https://bbq-architect-v2.vercel.app/api/public-winkel/hop-en-bites/mypos-webhook"');
         // Herladen is dezelfde poging.
         const nogEens = await betaalPagina(ctx, 'hop-en-bites', token);
-        expect(nogEens.soort === 'html' && nogEens.html).toContain('HB-2026-0001-1"');
+        expect(nogEens.soort === 'html' && nogEens.html).toMatch(/HB-2026-0001-1-[a-f0-9]{6}"/);
         expect(store.orders[0]?.betaalpoging).toBe(1);
     });
 
@@ -245,7 +245,7 @@ describe('betaalpagina', () => {
         expect(terug).toEqual({ soort: 'redirect', url: `https://hopbites.nl/bestelling/${token}` });
         expect((await haalStatus(ctx, 'hop-en-bites', token)).body).toMatchObject({ status: { status: 'afgebroken', betaalUrl: expect.stringContaining(token) } });
         const opnieuw = await betaalPagina(ctx, 'hop-en-bites', token);
-        expect(opnieuw.soort === 'html' && opnieuw.html).toContain('HB-2026-0001-2"');
+        expect(opnieuw.soort === 'html' && opnieuw.html).toMatch(/HB-2026-0001-2-[a-f0-9]{6}"/);
         expect(store.orders[0]?.status).toBe('wacht');
 
         await store.bevestigBetaling(1, { trnref: 'x', centen: 11960, methode: null });
@@ -297,7 +297,7 @@ describe('webhook', () => {
         const { token, order } = await orderMetPoging();
         await terugVanMypos(ctx, 'hop-en-bites', token, 'afgebroken');
         await betaalPagina(ctx, 'hop-en-bites', token); // poging 2
-        expect(order.mypos_order_id).toBe('HB-2026-0001-2');
+        expect(order.mypos_order_id).toMatch(/^HB-2026-0001-2-[a-f0-9]{6}$/);
         await verwerkBetaalbericht(ctx, 'hop-en-bites', notify('HB-2026-0001-1'));
         expect(store.orders[0]?.status).toBe('betaald');
     });
@@ -346,7 +346,8 @@ describe('webhook', () => {
         });
         await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!));
         expect(store.orders[0]).toMatchObject({ status: 'mislukt', status_reden: 'verlopen-en-vol', refund_status: 'gelukt' });
-        expect(refundAanroepen).toEqual(['IPCRefund:HB-2026-0001-1:119.60:TRN-1']);
+        expect(refundAanroepen).toEqual([`IPCRefund:${store.orders[0]?.mypos_order_id}:119.60:TRN-1`]);
+        expect(store.orders[0]?.mypos_order_id).toMatch(/^HB-2026-0001-1-[a-f0-9]{6}$/);
         expect(mails).toEqual([]);
         expect((await haalStatus(ctx, 'hop-en-bites', order.token)).body).toMatchObject({ status: { status: 'mislukt', betaalUrl: null } });
     });
@@ -407,5 +408,12 @@ describe('statuscontrole', () => {
         await haalStatus(ctx, 'hop-en-bites', token);
         expect(aanroepen).toBe(2);
         expect(store.orders[0]?.status).toBe('wacht');
+    });
+});
+
+describe('nummerUitOrderId', () => {
+    it('haalt het nummer uit een OrderID met en zonder token-stuk', () => {
+        expect(nummerUitOrderId('HB-2026-0042-1-c5f91d')).toBe('HB-2026-0042');
+        expect(nummerUitOrderId('HB-2026-0042-12')).toBe('HB-2026-0042');
     });
 });
