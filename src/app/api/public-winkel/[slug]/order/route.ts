@@ -18,6 +18,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
     }
     let body: unknown;
     try { body = await req.json(); } catch { return NextResponse.json({ ok: false, soort: 'validatie', fouten: ['Ongeldige aanvraag.'] }, { status: 400 }); }
-    const uit = await plaatsOrder(kassaContext(), slug, body);
+    const uit = await plaatsOrder(kassaContext(req), slug, body);
     return NextResponse.json(uit.body, { status: uit.status, headers: { 'Cache-Control': 'no-store' } });
 }

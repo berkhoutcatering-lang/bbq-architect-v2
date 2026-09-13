@@ -186,7 +186,7 @@ describe('berekenOfferte', () => {
         const uit = berekenOfferte(bron, mand([{ slug: 'kerst-box', aantal: 7, moment: 'd-24' }]), 'afhalen', null);
         expect(uit.ok).toBe(true);
         if (!uit.ok) return;
-        expect(uit.intern.offerte.regels[0]).toMatchObject({ bedragCenten: 7 * 2350, afhaalmoment: 'Afhalen op 24 december (de tijd staat in je bevestiging)' });
+        expect(uit.intern.offerte.regels[0]).toMatchObject({ bedragCenten: 7 * 2350, afhaalmoment: 'Afhalen op 24 december' });
         expect(uit.intern.regels[0]).toMatchObject({ moment_id: 'd-24', eenheden: 2 });
         expect(uit.intern.offerte.moment).toEqual({ id: 'd-24', datum: '2026-12-24', van: null, tot: null, vrij: 25 });
         expect(uit.intern.momentId).toBe('d-24');

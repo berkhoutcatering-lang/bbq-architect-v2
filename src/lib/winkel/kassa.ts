@@ -135,6 +135,14 @@ function regelsNaarContract(regels: OrderRegelRij[]): Offerteregel[] {
     }));
 }
 
+/** 'per persoon' × 7 → 'personen'; 'per zak' × 1 → 'zak'. */
+export function meervoud(eenheid: string, aantal: number): string {
+    const enkel = eenheid.replace(/^per\s+/i, '').trim();
+    if (aantal === 1) return enkel;
+    const vast: Record<string, string> = { persoon: 'personen', zak: 'zakken', fles: 'flessen', doos: 'dozen', stuk: 'stuks', pot: 'potten' };
+    return vast[enkel.toLowerCase()] ?? enkel;
+}
+
 export function nummerUitOrderId(orderId: string): string {
     return orderId.replace(/-\d+$/, '');
 }
@@ -286,14 +294,15 @@ export async function haalStatus(ctx: KassaContext, slug: string, token: string)
 }
 
 /**
- * Vraagt myPOS of de lopende poging betaald is. Alleen een antwoord met
- * Status 0, een transactiereferentie én het juiste bedrag telt als betaald.
+ * Vraagt myPOS of de lopende poging betaald is. Alleen een antwoord waarin
+ * de laatste gebeurtenis een betaling is (IPCPurchaseNotify), met een
+ * transactiereferentie én het juiste bedrag, telt als betaald.
  */
 async function controleerBijMypos(ctx: KassaContext, tenant: Tenant, order: OrderRij): Promise<OrderRij | null> {
     if (!ctx.mypos || !order.mypos_order_id) return null;
     try {
         const s = await getTxnStatus(ctx.mypos, order.mypos_order_id);
-        if (!s.ok || !s.trnref || s.amountCenten !== order.totaal_cents) return null;
+        if (!s.betaald || !s.trnref || s.amountCenten !== order.totaal_cents) return null;
         return verwerkBetaling(ctx, tenant, order, { trnref: s.trnref, centen: s.amountCenten, methode: 'statuscontrole', referentie: `txn:${s.trnref}`, methodeNaam: 'IPCGetTxnStatus', payload: s.ruw });
     } catch (e) {
         console.error('[winkel] statuscontrole bij myPOS faalde:', e instanceof Error ? e.message : e);
@@ -370,6 +379,25 @@ export async function verwerkBetaalbericht(ctx: KassaContext, slug: string, body
     const bericht = leesBetaalbericht(body, ctx.mypos.myposCert);
     if (!bericht) return { status: 400, tekst: 'INVALID SIGNATURE' };
 
+    const referentie = bericht.trnref ? `trn:${bericht.trnref}` : `hash:${createHash('sha256').update(body).digest('hex')}`;
+    /* OrderID richting myPOS is "<nummer>-<poging>"; een bericht voor een
+       eerdere poging hoort nog steeds bij dezelfde order. */
+    const order = await ctx.store.vindOrderOpNummer(tenant.orgId, nummerUitOrderId(bericht.orderId));
+
+    /* Een teruggedraaide betaling (myPOS stuurt IPCPurchaseRollback als de
+       betaling na een storing ongedaan is gemaakt): een wachtende order gaat
+       op 'mislukt' en kan opnieuw betaald worden. Een al betaalde order
+       draaien we niet automatisch terug — dat is iets voor Mathijs. */
+    if (bericht.methode === 'IPCPurchaseRollback') {
+        const nieuw = await ctx.store.registreerBetaalbericht(tenant.orgId, `rollback:${referentie}`, bericht.methode, bericht.velden, order?.id ?? null);
+        if (nieuw && order) {
+            if (order.status === 'wacht') await ctx.store.zetStatus(order.id, 'mislukt', 'teruggedraaid-door-mypos');
+            await ctx.store.noteerBetaalberichtUitkomst(tenant.orgId, `rollback:${referentie}`, order.status === 'betaald' ? 'rollback-na-betaling' : 'mislukt');
+            if (order.status === 'betaald') console.error('[winkel] rollback na betaling:', order.nummer);
+        }
+        return { status: 200, tekst: 'OK' };
+    }
+
     /* Alleen betaalberichten. Andere methodes bevestigen we wel (anders blijft
        myPOS ze sturen) maar doen we niets mee. */
     if (bericht.methode !== 'IPCPurchaseNotify') {
@@ -377,10 +405,6 @@ export async function verwerkBetaalbericht(ctx: KassaContext, slug: string, body
         return { status: 200, tekst: 'OK' };
     }
 
-    const referentie = bericht.trnref ? `trn:${bericht.trnref}` : `hash:${createHash('sha256').update(body).digest('hex')}`;
-    /* OrderID richting myPOS is "<nummer>-<poging>"; een bericht voor een
-       eerdere poging hoort nog steeds bij dezelfde order. */
-    const order = await ctx.store.vindOrderOpNummer(tenant.orgId, nummerUitOrderId(bericht.orderId));
     if (!order) {
         await ctx.store.registreerBetaalbericht(tenant.orgId, referentie, bericht.methode, bericht.velden, null);
         await ctx.store.noteerBetaalberichtUitkomst(tenant.orgId, referentie, 'order-onbekend');
@@ -434,16 +458,16 @@ export async function betaalPagina(ctx: KassaContext, slug: string, token: strin
     const o = poging.waarde;
     const regels = await ctx.store.laadRegels(o.id);
     const basis = (ctx.webhookUrl ?? ctx.appUrl).replace(/\/$/, '');
-    const [voornaam, ...rest] = o.contact_naam.trim().split(/\s+/);
     const velden = purchaseVelden(ctx.mypos, {
         orderId: o.mypos_order_id!,
         totaalCenten: o.totaal_cents,
-        regels: regels.map((r) => ({ naam: `${r.naam} (${r.aantal} ${r.eenheid.replace(/^per\s+/, '')})`, aantal: 1, stukCenten: r.bedrag_cents })),
+        regels: regels.map((r) => ({ naam: `${r.naam} — ${r.aantal} ${meervoud(r.eenheid, r.aantal)}`, aantal: 1, stukCenten: r.bedrag_cents })),
         leverkostenCenten: o.leverkosten_cents,
         urlOk: `${basis}/api/public-winkel/${slug}/betaal/${token}/terug?uitkomst=ok`,
         urlCancel: `${basis}/api/public-winkel/${slug}/betaal/${token}/terug?uitkomst=afgebroken`,
         urlNotify: `${basis}/api/public-winkel/${slug}/mypos-webhook`,
-        klant: { email: o.contact_email, voornaam: voornaam || o.contact_naam, achternaam: rest.join(' ') || voornaam || '-', telefoon: o.contact_telefoon ?? undefined },
+        /* Geen klantgegevens naar myPOS: bij afhalen is er geen adres, en de
+           klant hoeft op de betaalpagina alleen te betalen. */
         note: `${t.tenant.bedrijfsnaam} bestelling ${o.nummer}`,
     });
     return { soort: 'html', html: betaalFormulierHtml(ctx.mypos, velden, `${t.tenant.bedrijfsnaam} — naar de betaalpagina`) };

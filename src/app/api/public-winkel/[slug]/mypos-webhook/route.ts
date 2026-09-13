@@ -12,6 +12,6 @@ import { verwerkBetaalbericht } from '@/lib/winkel/kassa';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
     const body = await req.text();
-    const uit = await verwerkBetaalbericht(kassaContext(), slug, body);
+    const uit = await verwerkBetaalbericht(kassaContext(req), slug, body);
     return new NextResponse(uit.tekst, { status: uit.status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
 }

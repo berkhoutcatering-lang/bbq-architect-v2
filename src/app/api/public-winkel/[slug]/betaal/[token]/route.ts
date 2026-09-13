@@ -8,9 +8,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { kassaContext } from '@/lib/winkel/context';
 import { betaalPagina } from '@/lib/winkel/kassa';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ slug: string; token: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string; token: string }> }) {
     const { slug, token } = await params;
-    const uit = await betaalPagina(kassaContext(), slug, token);
+    const uit = await betaalPagina(kassaContext(req), slug, token);
     if (uit.soort === 'redirect') return NextResponse.redirect(uit.url, 303);
     if (uit.soort === 'fout') return new NextResponse(uit.tekst, { status: uit.status, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     return new NextResponse(uit.html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });

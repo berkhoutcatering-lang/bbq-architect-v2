@@ -1,7 +1,7 @@
 import { createPublicKey, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
-    MYPOS_TEST, betaalFormulierHtml, centenNaarBedrag, leesBetaalbericht, onderteken, purchaseVelden, verifieer, veldenUitBody,
+    MYPOS_TEST, betaalFormulierHtml, centenNaarBedrag, leesBetaalbericht, onderteken, purchaseVelden, verifieer, verifieerJson, veldenUitBody,
     type Velden,
 } from './ipc';
 
@@ -50,7 +50,6 @@ describe('IPCPurchase', () => {
         urlOk: 'https://hopbites.nl/bestelling/tok',
         urlCancel: 'https://hopbites.nl/bestelling/tok',
         urlNotify: 'https://bbq-architect-v2.vercel.app/api/public-winkel/hop-en-bites/mypos-webhook',
-        klant: { email: 'test@voorbeeld.nl', voornaam: 'Test', achternaam: 'Persoon', telefoon: '0612345678' },
     };
 
     it('bouwt de velden in SDK-volgorde, met de handtekening als laatste', () => {
@@ -65,7 +64,13 @@ describe('IPCPurchase', () => {
         expect(o.Amount_1).toBe('179.40');
         expect(o.Price_1).toBe('14.95');
         expect(o.PaymentMethod).toBe('3');
-        expect(o.customercountry).toBe('NLD');
+        expect(o.PaymentParametersRequired).toBe('3');
+        expect(o.customeremail).toBeUndefined();
+        // Met klantgegevens: variant 1, met de klantvelden erin.
+        const met = Object.fromEntries(purchaseVelden(MYPOS_TEST, { ...aanvraag, klant: { email: 'test@voorbeeld.nl', voornaam: 'Test', achternaam: 'Persoon', plaats: 'Schoonoord', postcode: '7848 BP', adres: 'Tramstraat 13' } }));
+        expect(met.PaymentParametersRequired).toBe('1');
+        expect(met.customercountry).toBe('NLD');
+        expect(met.customercity).toBe('Schoonoord');
         // De handtekening klopt met de eigen publieke sleutel van de testkey.
         const pub = createPublicKey(MYPOS_TEST.privateKey).export({ type: 'spki', format: 'pem' }) as string;
         expect(verifieer(v, pub)).toBe(true);
@@ -88,6 +93,18 @@ describe('IPCPurchase', () => {
         expect(html).toContain('name="Signature"');
         expect(html).toContain('&lt;b&gt;&quot;x&quot;&lt;/b&gt;');
         expect(html).not.toContain('<b>"x"</b>');
+    });
+});
+
+describe('verifieerJson', () => {
+    it('verifieert een echt antwoord van de myPOS-testomgeving (genest OrderStatus)', () => {
+        const json = JSON.parse('{"IPCMethod":"IPCGetTxnStatus","OrderID":"HB-2026-0001-1","OrderStatus":{"IPCmethod":"IPCPurchaseRollback","SID":"000000000000010","Amount":"164.50","Currency":"EUR","OrderID":"HB-2026-0001-1","Signature":"pXa7nGxqtdXJom5SMJt+5k4MwemR7sUhUORHdVJNOCeToWEzLIHht4Jrazo7vaawPcZ0hAu4EUJedbir/ekrBxRYnJsWZQhM44poH6ZmkP80KXDZEsjRMHGU0N8+TUEtAG9XCRJaO1fJOHNUhyo17DWYzv54rt8+5iSxXSiJ904="},"Status":0,"StatusMsg":"Success","Signature":"JHPrEV8eoafHqw583UkJTdkLRz0ZijBIHA2wbiAPmAWFSc28NpiIDnHvfMCQpCzeqEVVkuDJ5R2UUzgModd5JRpLOUc00oVgLTGrIrULjx1obo0fy/1ivHICJpByZq/hWIDxR+jvTlV5uL9jJAXngXt+VD4WAKlClImTSUirt3M="}');
+        expect(verifieerJson(json, MYPOS_TEST.myposCert)).toBe(true);
+        expect(verifieerJson({ ...json, Status: 1 }, MYPOS_TEST.myposCert)).toBe(false);
+    });
+    it('verifieert een echt antwoord op een onbekende OrderID', () => {
+        const json = { IPCMethod: 'IPCGetTxnStatus', OrderID: 'HB-TEST-BESTAAT-NIET-1', Status: '5', StatusMsg: 'There is no request with this OrderId: HB-TEST-BESTAAT-NIET-1', Signature: 'B6tMVntaAQ6H65WLquVUG5rApegZfaZj7p0KXoJXiuxRatFIBpdRvpW0mQvYQQQu1/Opi8Mc6POsBzvcqMhEA1uHeFJidVrapHrRKTv5qyMhRbTN/Whg4KB9ktsLuYcbEFmwonJzbgPaKSNIOc3lVu0mDZg2vkjAHUpwZSogaW4=' };
+        expect(verifieerJson(json, MYPOS_TEST.myposCert)).toBe(true);
     });
 });
 

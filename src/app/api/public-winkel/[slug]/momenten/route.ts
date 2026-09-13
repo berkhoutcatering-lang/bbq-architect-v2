@@ -12,6 +12,6 @@ import { haalMomenten } from '@/lib/winkel/kassa';
 export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
     const { slug } = await params;
     const groep = req.nextUrl.searchParams.get('artikel') || req.nextUrl.searchParams.get('groep') || 'agenda';
-    const uit = await haalMomenten(kassaContext(), slug, groep);
+    const uit = await haalMomenten(kassaContext(req), slug, groep);
     return NextResponse.json(uit.body, { status: uit.status, headers: { 'Cache-Control': 'no-store' } });
 }

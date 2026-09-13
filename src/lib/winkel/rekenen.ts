@@ -265,7 +265,7 @@ export function berekenOfferte(
                     momentFout ??= { ok: false, soort: 'moment-verlopen', melding: `Deze afhaaldag is niet meer beschikbaar voor ${a.naam}. Kies een andere dag.` };
                 } else {
                     moment_id = m.id;
-                    afhaalmoment = `Afhalen op ${dagInWoorden(m.datum)}${m.van ? ` vanaf ${m.van.slice(0, 5)}` : ' (de tijd staat in je bevestiging)'}`;
+                    afhaalmoment = `Afhalen op ${dagInWoorden(m.datum)}${m.van ? ` vanaf ${m.van.slice(0, 5)}` : ''}`;
                 }
             }
         }

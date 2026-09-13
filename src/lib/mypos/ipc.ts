@@ -126,7 +126,13 @@ export interface BetaalAanvraag {
     urlOk: string;
     urlCancel: string;
     urlNotify: string;
-    klant: { email: string; voornaam: string; achternaam: string; telefoon?: string };
+    /**
+     * Klantgegevens vooraf meegeven (PaymentParametersRequired 1). Dan zijn
+     * óók adres, postcode en plaats verplicht op de betaalpagina; bij afhalen
+     * hebben we die niet. Weggelaten = alleen kaartgegevens (3): de klant ziet
+     * op de betaalpagina niets anders dan de betaalmethode.
+     */
+    klant?: { email: string; voornaam: string; achternaam: string; telefoon?: string; plaats: string; postcode: string; adres: string };
     note?: string;
 }
 
@@ -136,9 +142,9 @@ export function centenNaarBedrag(centen: number): string {
 
 /**
  * De velden van een IPCPurchase, in de volgorde die de SDK gebruikt, met
- * handtekening als laatste. PaymentMethod 3 = alles (kaart én iDEAL);
- * PaymentParametersRequired 1 = wij leveren de klantgegevens, de klant hoeft
- * op de betaalpagina niets meer in te typen.
+ * handtekening als laatste. PaymentMethod 3 = alles (kaart én iDEAL).
+ * Zonder `klant` gaat PaymentParametersRequired op 3 en blijven de
+ * klantvelden weg, precies zoals de officiële SDK dat doet.
  */
 export function purchaseVelden(cfg: MyposConfig, a: BetaalAanvraag): Velden {
     if (a.orderId.length > 80) throw new Error('OrderID langer dan 80 tekens');
@@ -161,19 +167,22 @@ export function purchaseVelden(cfg: MyposConfig, a: BetaalAanvraag): Velden {
         ['URL_Notify', a.urlNotify],
         ['CardTokenRequest', '0'],
         ['KeyIndex', cfg.keyIndex],
-        ['PaymentParametersRequired', '1'],
+        ['PaymentParametersRequired', a.klant ? '1' : '3'],
         ['PaymentMethod', '3'],
-        ['customeremail', a.klant.email],
-        ['customerfirstnames', a.klant.voornaam],
-        ['customerfamilyname', a.klant.achternaam],
-        ['customerphone', a.klant.telefoon ?? ''],
-        ['customercountry', 'NLD'],
-        ['customercity', ''],
-        ['customerzipcode', ''],
-        ['customeraddress', ''],
-        ['Note', a.note ?? ''],
-        ['CartItems', String(regels.length)],
     ];
+    if (a.klant) {
+        velden.push(
+            ['customeremail', a.klant.email],
+            ['customerfirstnames', a.klant.voornaam],
+            ['customerfamilyname', a.klant.achternaam],
+            ['customerphone', a.klant.telefoon ?? ''],
+            ['customercountry', 'NLD'],
+            ['customercity', a.klant.plaats],
+            ['customerzipcode', a.klant.postcode],
+            ['customeraddress', a.klant.adres],
+        );
+    }
+    velden.push(['Note', a.note ?? ''], ['CartItems', String(regels.length)]);
     regels.forEach((r, i) => {
         const n = i + 1;
         velden.push(
@@ -214,18 +223,43 @@ ${inputs}
 
 /* ── Server-naar-server ────────────────────────────────────────────────────── */
 
-export interface TxnStatus {
-    ok: boolean;
-    /** 0 = gelukt (transactie bestaat); andere codes: zie StatusMsg. */
-    status: number | null;
-    statusMsg: string | null;
-    trnref: string | null;
-    amountCenten: number | null;
-    orderId: string | null;
-    ruw: Record<string, string>;
+/**
+ * Een JSON-antwoord van myPOS is ondertekend over álle waarden, in volgorde,
+ * geneste objecten platgeslagen (inclusief hún Signature), en alleen de
+ * buitenste Signature weggelaten. Gemeten op een echt antwoord uit de
+ * testomgeving, niet uit de documentatie.
+ */
+function platteWaarden(o: Record<string, unknown>, buitenste: boolean): string[] {
+    const uit: string[] = [];
+    for (const [k, v] of Object.entries(o)) {
+        if (buitenste && k === 'Signature') continue;
+        if (v && typeof v === 'object') uit.push(...platteWaarden(v as Record<string, unknown>, false));
+        else uit.push(String(v));
+    }
+    return uit;
 }
 
-async function postNaarMypos(cfg: MyposConfig, velden: Velden, timeoutMs = 8000): Promise<Record<string, string>> {
+export function verifieerJson(json: Record<string, unknown>, cert: string): boolean {
+    const sig = json.Signature;
+    if (typeof sig !== 'string') return false;
+    try {
+        const v = createVerify('RSA-SHA256');
+        v.update(Buffer.from(platteWaarden(json, true).join('-'), 'utf8').toString('base64'));
+        return v.verify(cert, sig, 'base64');
+    } catch {
+        return false;
+    }
+}
+
+interface MyposAntwoord {
+    /** Status 0 én een geldige handtekening. */
+    ok: boolean;
+    status: number | null;
+    statusMsg: string | null;
+    json: Record<string, unknown>;
+}
+
+async function postNaarMypos(cfg: MyposConfig, velden: Velden, timeoutMs = 8000): Promise<MyposAntwoord> {
     const stop = new AbortController();
     const klok = setTimeout(() => stop.abort(), timeoutMs);
     try {
@@ -236,31 +270,46 @@ async function postNaarMypos(cfg: MyposConfig, velden: Velden, timeoutMs = 8000)
             signal: stop.signal,
         });
         const tekst = await res.text();
-        let antwoord: Velden;
+        let json: Record<string, unknown>;
         try {
-            const json = JSON.parse(tekst) as Record<string, unknown>;
-            antwoord = Object.entries(json).map(([k, v]) => [k, String(v)]);
+            json = JSON.parse(tekst) as Record<string, unknown>;
         } catch {
-            return { _ruw: tekst, _http: String(res.status) };
+            return { ok: false, status: null, statusMsg: `geen JSON (HTTP ${res.status})`, json: { _ruw: tekst } };
         }
-        /* Ook een antwoord van myPOS is ondertekend, in de volgorde van de
-           JSON-velden. Klopt dat niet, dan is het geen antwoord van myPOS. */
-        if (!verifieer(antwoord, cfg.myposCert)) {
-            return { _fout: 'handtekening klopt niet', _http: String(res.status) };
+        if (!verifieerJson(json, cfg.myposCert)) {
+            return { ok: false, status: null, statusMsg: 'handtekening klopt niet', json };
         }
-        return Object.fromEntries(antwoord);
+        const status = json.Status != null ? Number(json.Status) : null;
+        return { ok: status === 0, status, statusMsg: json.StatusMsg != null ? String(json.StatusMsg) : null, json };
     } finally {
         clearTimeout(klok);
     }
 }
 
-function naarCenten(bedrag: string | undefined): number | null {
+function naarCenten(bedrag: unknown): number | null {
     if (bedrag == null || bedrag === '') return null;
     const n = Number(bedrag);
     return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
-/** Is deze OrderID bij myPOS betaald? (IPCGetTxnStatus) */
+export interface TxnStatus {
+    /** De statusvraag zelf is gelukt (de order is bekend bij myPOS). */
+    ok: boolean;
+    /** De laatste gebeurtenis was een betaling (OrderStatus.IPCmethod = IPCPurchaseNotify). */
+    betaald: boolean;
+    /** IPCPurchaseNotify, IPCPurchaseRollback, … of null als er nog niets gebeurd is. */
+    laatste: string | null;
+    trnref: string | null;
+    amountCenten: number | null;
+    statusMsg: string | null;
+    ruw: Record<string, unknown>;
+}
+
+/**
+ * Is deze OrderID bij myPOS betaald? (IPCGetTxnStatus) Status 0 betekent
+ * alleen "de vraag is beantwoord"; wat er met de betaling gebeurd is staat in
+ * het geneste OrderStatus.
+ */
 export async function getTxnStatus(cfg: MyposConfig, orderId: string): Promise<TxnStatus> {
     const velden: Velden = [
         ['IPCmethod', 'IPCGetTxnStatus'],
@@ -273,21 +322,22 @@ export async function getTxnStatus(cfg: MyposConfig, orderId: string): Promise<T
         ['OutputFormat', 'json'],
     ];
     velden.push(['Signature', onderteken(velden, cfg.privateKey)]);
-    const ruw = await postNaarMypos(cfg, velden);
-    const status = ruw.Status != null ? Number(ruw.Status) : null;
+    const a = await postNaarMypos(cfg, velden);
+    const os = (a.json.OrderStatus && typeof a.json.OrderStatus === 'object' ? a.json.OrderStatus : null) as Record<string, unknown> | null;
+    const laatste = os && typeof os.IPCmethod === 'string' ? os.IPCmethod : null;
     return {
-        ok: status === 0,
-        status,
-        statusMsg: ruw.StatusMsg ?? null,
-        trnref: ruw.IPC_Trnref ?? null,
-        amountCenten: naarCenten(ruw.Amount),
-        orderId: ruw.OrderID ?? null,
-        ruw,
+        ok: a.ok,
+        betaald: a.ok && laatste === 'IPCPurchaseNotify',
+        laatste,
+        trnref: os && typeof os.IPC_Trnref === 'string' ? os.IPC_Trnref : null,
+        amountCenten: os ? naarCenten(os.Amount) : null,
+        statusMsg: a.statusMsg,
+        ruw: a.json,
     };
 }
 
 /** Bedrag terugbetalen op een transactie. (IPCRefund) */
-export async function refund(cfg: MyposConfig, args: { orderId: string; trnref: string; centen: number }): Promise<{ ok: boolean; status: number | null; statusMsg: string | null; ruw: Record<string, string> }> {
+export async function refund(cfg: MyposConfig, args: { orderId: string; trnref: string; centen: number }): Promise<{ ok: boolean; status: number | null; statusMsg: string | null; ruw: Record<string, unknown> }> {
     const velden: Velden = [
         ['IPCmethod', 'IPCRefund'],
         ['IPCVersion', '1.4'],
@@ -302,9 +352,8 @@ export async function refund(cfg: MyposConfig, args: { orderId: string; trnref: 
         ['OutputFormat', 'json'],
     ];
     velden.push(['Signature', onderteken(velden, cfg.privateKey)]);
-    const ruw = await postNaarMypos(cfg, velden);
-    const status = ruw.Status != null ? Number(ruw.Status) : null;
-    return { ok: status === 0, status, statusMsg: ruw.StatusMsg ?? null, ruw };
+    const a = await postNaarMypos(cfg, velden);
+    return { ok: a.ok, status: a.status, statusMsg: a.statusMsg, ruw: a.json };
 }
 
 /* ── IPCPurchaseNotify: het inkomende bericht ──────────────────────────────── */

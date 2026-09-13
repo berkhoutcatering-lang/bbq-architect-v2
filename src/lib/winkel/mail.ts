@@ -31,7 +31,10 @@ export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, r
     const bc = tenant.brandColor || '#6B7A3F';
     const voornaam = order.contact_naam.trim().split(/\s+/)[0] || order.contact_naam;
     const afhaal = momentTekst(moment);
-    const vasteAfspraken = [...new Set(regels.map((r) => r.afhaalmoment_tekst).filter((t): t is string => Boolean(t)))];
+    /* Afspraken van regels die niet al het ordermoment zijn (plank + Kerst-Box). */
+    const vasteAfspraken = [...new Set(regels.filter((r) => r.moment_id !== order.moment_id).map((r) => r.afhaalmoment_tekst).filter((t): t is string => Boolean(t)))];
+    /* Een dag zonder tijdvak: de tijd is nog niet bekend, en dat zeggen we. */
+    const tijdVolgt = moment && !moment.van ? ' Het tijdvak laten we je nog weten.' : '';
 
     const rijen = regels.map((r, i) =>
         `<tr${i % 2 ? '' : ' style="background:#f8f8f8;"'}>`
@@ -42,7 +45,7 @@ export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, r
 
     const levering = order.leverwijze === 'verzenden'
         ? `<p><strong>Verzenden</strong> naar ${escH(order.adres?.straat ?? '')}, ${escH(order.adres?.postcode ?? '')} ${escH(order.adres?.plaats ?? '')}.</p>`
-        : `<p><strong>Afhalen</strong> in Schoonoord${afhaal ? ` op <strong>${escH(afhaal)}</strong>` : ''}.${vasteAfspraken.length ? ` ${escH(vasteAfspraken.join(' · '))}.` : ''}</p>`;
+        : `<p><strong>Afhalen</strong> in Schoonoord${afhaal ? ` op <strong>${escH(afhaal)}</strong>` : ''}.${escH(tijdVolgt)}${vasteAfspraken.length ? ` ${escH(vasteAfspraken.join(' · '))}.` : ''}</p>`;
 
     const html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'
         + '<body style="font-family:\'Segoe UI\',Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">'
@@ -69,7 +72,7 @@ export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, r
         + `\nTotaal (incl. btw): ${euro(order.totaal_cents)}\n\n`
         + (order.leverwijze === 'verzenden'
             ? `Verzenden naar ${order.adres?.straat ?? ''}, ${order.adres?.postcode ?? ''} ${order.adres?.plaats ?? ''}.\n`
-            : `Afhalen in Schoonoord${afhaal ? ` op ${afhaal}` : ''}.${vasteAfspraken.length ? ` ${vasteAfspraken.join(' · ')}.` : ''}\n`)
+            : `Afhalen in Schoonoord${afhaal ? ` op ${afhaal}` : ''}.${tijdVolgt}${vasteAfspraken.length ? ` ${vasteAfspraken.join(' · ')}.` : ''}\n`)
         + (order.opmerking ? `\nJe opmerking: ${order.opmerking}\n` : '')
         + (tenant.telefoon ? `\nVragen? Bel ${tenant.telefoon}${tenant.email ? ` of mail ${tenant.email}` : ''}.\n` : '')
         + `\nMet vriendelijke groet,\n${tenant.bedrijfsnaam}`;

@@ -16,6 +16,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     if (!rl.allowed) {
         return NextResponse.json({ ok: false, soort: 'niet-beschikbaar', melding: 'Te veel verzoeken.' }, { status: 429, headers: { 'Retry-After': String(rl.resetInSeconds) } });
     }
-    const uit = await haalStatus(kassaContext(), slug, token);
+    const uit = await haalStatus(kassaContext(req), slug, token);
     return NextResponse.json(uit.body, { status: uit.status, headers: { 'Cache-Control': 'no-store' } });
 }

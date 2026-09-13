@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createSign, generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MYPOS_TEST, onderteken, type MyposConfig, type Velden } from '@/lib/mypos/ipc';
 import { maakGeheugenStore, type GeheugenStore } from './geheugenStore';
@@ -10,6 +10,13 @@ const paar = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const myposPriv = paar.privateKey.export({ type: 'pkcs1', format: 'pem' }) as string;
 const myposPub = paar.publicKey.export({ type: 'spki', format: 'pem' }) as string;
 const mypos: MyposConfig = { ...MYPOS_TEST, myposCert: myposPub, ipcUrl: 'https://mypos.test/ipc' };
+
+/** Een JSON-antwoord zoals myPOS het ondertekent: alle waarden plat, buitenste Signature erbuiten. */
+function myposJson(json: Record<string, unknown>): string {
+    const plat = (o: Record<string, unknown>): string[] => Object.values(o).flatMap((v) => (v && typeof v === 'object' ? plat(v as Record<string, unknown>) : [String(v)]));
+    const sig = createSign('RSA-SHA256').update(Buffer.from(plat(json).join('-')).toString('base64')).sign(myposPriv, 'base64');
+    return JSON.stringify({ ...json, Signature: sig });
+}
 
 function bericht(v: Record<string, string>): string {
     const velden = Object.entries(v) as Velden;
@@ -335,14 +342,25 @@ describe('webhook', () => {
         vi.stubGlobal('fetch', async (_url: string, init: { body: string }) => {
             const velden = Object.fromEntries(new URLSearchParams(init.body));
             refundAanroepen.push(`${velden.IPCmethod}:${velden.OrderID}:${velden.Amount}:${velden.IPC_Trnref}`);
-            const antwoord: Velden = [['IPCMethod', 'IPCRefund'], ['Status', '0'], ['StatusMsg', 'Success']];
-            return new Response(JSON.stringify(Object.fromEntries([...antwoord, ['Signature', onderteken(antwoord, myposPriv)]])));
+            return new Response(myposJson({ IPCMethod: 'IPCRefund', Status: 0, StatusMsg: 'Success' }));
         });
         await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!));
         expect(store.orders[0]).toMatchObject({ status: 'mislukt', status_reden: 'verlopen-en-vol', refund_status: 'gelukt' });
         expect(refundAanroepen).toEqual(['IPCRefund:HB-2026-0001-1:119.60:TRN-1']);
         expect(mails).toEqual([]);
         expect((await haalStatus(ctx, 'hop-en-bites', order.token)).body).toMatchObject({ status: { status: 'mislukt', betaalUrl: null } });
+    });
+
+    it('een rollback zet een wachtende order op mislukt (opnieuw betalen kan), en raakt een betaalde niet', async () => {
+        const { token, order } = await orderMetPoging();
+        await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!, { IPCmethod: 'IPCPurchaseRollback' }));
+        expect(store.orders[0]).toMatchObject({ status: 'mislukt', status_reden: 'teruggedraaid-door-mypos' });
+        expect((await haalStatus(ctx, 'hop-en-bites', token)).body).toMatchObject({ status: { status: 'mislukt', betaalUrl: expect.stringContaining(token) } });
+        await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!, { IPC_Trnref: 'TRN-2' }));
+        expect(store.orders[0]?.status).toBe('betaald');
+        await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!, { IPCmethod: 'IPCPurchaseRollback', IPC_Trnref: 'TRN-2' }));
+        expect(store.orders[0]?.status).toBe('betaald');
+        expect(store.berichten.at(-1)?.uitkomst).toBe('rollback-na-betaling');
     });
 
     it('onbekende winkel, geen configuratie, onbekende order', async () => {
@@ -362,8 +380,7 @@ describe('statuscontrole', () => {
         let aanroepen = 0;
         vi.stubGlobal('fetch', async () => {
             aanroepen += 1;
-            const antwoord: Velden = [['IPCMethod', 'IPCGetTxnStatus'], ['OrderID', 'HB-2026-0001-1'], ['Status', '0'], ['StatusMsg', 'Success'], ['IPC_Trnref', 'TRN-9'], ['Amount', '119.60'], ['Currency', 'EUR']];
-            return new Response(JSON.stringify(Object.fromEntries([...antwoord, ['Signature', onderteken(antwoord, myposPriv)]])));
+            return new Response(myposJson({ IPCMethod: 'IPCGetTxnStatus', OrderID: 'HB-2026-0001-1', OrderStatus: { IPCmethod: 'IPCPurchaseNotify', SID: mypos.sid, Amount: '119.60', Currency: 'EUR', OrderID: 'HB-2026-0001-1', IPC_Trnref: 'TRN-9', Signature: 'x' }, Status: 0, StatusMsg: 'Success' }));
         });
         expect(await terugVanMypos(ctx, 'hop-en-bites', token, 'ok')).toEqual({ soort: 'redirect', url: `https://hopbites.nl/bestelling/${token}` });
         expect(aanroepen).toBe(1);
@@ -381,8 +398,7 @@ describe('statuscontrole', () => {
         let aanroepen = 0;
         vi.stubGlobal('fetch', async () => {
             aanroepen += 1;
-            const antwoord: Velden = [['IPCMethod', 'IPCGetTxnStatus'], ['OrderID', 'HB-2026-0001-1'], ['Status', '5'], ['StatusMsg', 'nog niet']];
-            return new Response(JSON.stringify(Object.fromEntries([...antwoord, ['Signature', onderteken(antwoord, myposPriv)]])));
+            return new Response(myposJson({ IPCMethod: 'IPCGetTxnStatus', OrderID: 'HB-2026-0001-1', OrderStatus: { IPCmethod: 'IPCPurchaseRollback', SID: mypos.sid, Amount: '119.60', Currency: 'EUR', OrderID: 'HB-2026-0001-1', Signature: 'x' }, Status: 0, StatusMsg: 'Success' }));
         });
         await haalStatus(ctx, 'hop-en-bites', token);
         await haalStatus(ctx, 'hop-en-bites', token);
