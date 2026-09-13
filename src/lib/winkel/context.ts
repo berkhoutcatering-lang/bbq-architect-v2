@@ -20,12 +20,25 @@ export function basisUit(req: Request): string {
     return process.env.NEXT_PUBLIC_APP_URL || new URL(req.url).origin;
 }
 
+/**
+ * Op een Vercel-preview staat Vercel Authentication voor de deur; myPOS kan
+ * daar niet langs. Met "Protection Bypass for Automation" aan zet Vercel
+ * VERCEL_AUTOMATION_BYPASS_SECRET, en die gaat dan als query-parameter mee op
+ * de URL's die myPOS aanroept. Alleen op previews — productie heeft geen deur.
+ */
+function previewBypass(): Record<string, string> | undefined {
+    const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    if (process.env.VERCEL_ENV === 'preview' && secret) return { 'x-vercel-protection-bypass': secret };
+    return undefined;
+}
+
 export function kassaContext(req: Request): KassaContext {
     return {
         store: maakSupabaseStore(),
         mypos: myposConfig(),
         appUrl: basisUit(req),
         webhookUrl: process.env.WINKEL_WEBHOOK_URL || undefined,
+        webhookQuery: previewBypass(),
         mail: stuurBevestigingsmail,
     };
 }

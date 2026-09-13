@@ -32,6 +32,8 @@ export interface KassaContext {
     appUrl: string;
     /** Basis-URL waarop myPOS ons bereikt (webhook, terugkeer). Meestal gelijk aan appUrl; lokaal anders. */
     webhookUrl?: string;
+    /** Extra query-parameters op de URL's die myPOS aanroept (Vercel-preview-bypass). */
+    webhookQuery?: Record<string, string>;
     mail: Bevestigingsmail;
     nu?: () => Date;
 }
@@ -458,14 +460,18 @@ export async function betaalPagina(ctx: KassaContext, slug: string, token: strin
     const o = poging.waarde;
     const regels = await ctx.store.laadRegels(o.id);
     const basis = (ctx.webhookUrl ?? ctx.appUrl).replace(/\/$/, '');
+    const metQuery = (url: string, extra: Record<string, string> = {}) => {
+        const q = new URLSearchParams({ ...extra, ...(ctx.webhookQuery ?? {}) }).toString();
+        return q ? `${url}?${q}` : url;
+    };
     const velden = purchaseVelden(ctx.mypos, {
         orderId: o.mypos_order_id!,
         totaalCenten: o.totaal_cents,
         regels: regels.map((r) => ({ naam: `${r.naam} — ${r.aantal} ${meervoud(r.eenheid, r.aantal)}`, aantal: 1, stukCenten: r.bedrag_cents })),
         leverkostenCenten: o.leverkosten_cents,
-        urlOk: `${basis}/api/public-winkel/${slug}/betaal/${token}/terug?uitkomst=ok`,
-        urlCancel: `${basis}/api/public-winkel/${slug}/betaal/${token}/terug?uitkomst=afgebroken`,
-        urlNotify: `${basis}/api/public-winkel/${slug}/mypos-webhook`,
+        urlOk: metQuery(`${basis}/api/public-winkel/${slug}/betaal/${token}/terug`, { uitkomst: 'ok' }),
+        urlCancel: metQuery(`${basis}/api/public-winkel/${slug}/betaal/${token}/terug`, { uitkomst: 'afgebroken' }),
+        urlNotify: metQuery(`${basis}/api/public-winkel/${slug}/mypos-webhook`),
         /* Geen klantgegevens naar myPOS: bij afhalen is er geen adres, en de
            klant hoeft op de betaalpagina alleen te betalen. */
         note: `${t.tenant.bedrijfsnaam} bestelling ${o.nummer}`,
