@@ -59,10 +59,21 @@ const STOPWORDS = new Set([
     'vers', 'verse', 'fijn', 'grof', 'gehakt', 'gesneden', 'geraspt', 'bio',
     'biologisch', 'naturel', 'per', 'stuk', 'stuks', 'g', 'gram', 'kg', 'ml',
     'l', 'liter', 'de', 'het', 'een', 'van', 'met', 'en',
+    /* Verpakking zegt niets over wat het product ís. Zonder deze lijst won
+       "Appelazijn, fles 500 ml" van "Appelazijn, can 5 ltr" — puur omdat
+       "can 5 ltr" één woord meer is — en dat scheelde een factor 8 in prijs. */
+    'fles', 'flessen', 'can', 'emmer', 'pot', 'potten', 'bus', 'zak', 'zakken',
+    'doos', 'dozen', 'doosje', 'tray', 'krat', 'tube', 'bag', 'box', 'pak', 'pakken',
+    'sachet', 'sachets', 'ltr', 'gr', 'st', 'stks', 'cm', 'mm', 'circa', 'ca',
 ]);
 
+/* Getallen zijn vrijwel altijd inhoud of stuks ("5", "500", "10") en horen
+   niet in de naam-score. Een percentage ("80%") verliest hierdoor ook zijn
+   getal — "Mayonaise 80%" en "Mayonaise" gelden dan als dezelfde naam, en
+   dat is precies de groep waaruit de middelste prijs mag kiezen. */
 function tokens(s: string): string[] {
-    return normalizeIngredientName(s).split(' ').filter((t) => t && !STOPWORDS.has(t));
+    return normalizeIngredientName(s).split(' ')
+        .filter((t) => t && !STOPWORDS.has(t) && !/^\d+$/.test(t));
 }
 
 /* ── Naam-score 0..1 ──────────────────────────────────────────────────────
@@ -85,9 +96,20 @@ export function nameScore(ingredient: string, candidate: string): number {
     }
     const coverage = overlap / a.length;          // hoeveel van het ingrediënt gedekt is
     const precision = overlap / b.length;         // hoe gericht de kandidaat is
+    /* Een gedeeltelijke dekking moet op een echt woord rusten. "Basterdsuiker
+       (wit)" ↔ "Molenaarsbrood wit" deelt alleen "wit" — dat is geen suiker. */
+    if (coverage < 1 && !a.some((t) => t.length >= 5 && setB.has(t))) return 0;
     // Coverage weegt het zwaarst; precision voorkomt dat een 10-woord-kandidaat
     // met 1 toevallig woord wint van een strakke match.
     return Math.min(1, coverage * 0.75 + precision * 0.25);
+}
+
+/** Deel van de ingrediënt-woorden dat in de kandidaat terugkomt (0..1). */
+export function coverageOf(ingredient: string, candidate: string): number {
+    const a = tokens(ingredient);
+    if (a.length === 0) return 0;
+    const setB = new Set(tokens(candidate));
+    return a.filter((t) => setB.has(t)).length / a.length;
 }
 
 export function confidenceFromScore(score: number): 'hoog' | 'middel' | 'laag' {
@@ -111,6 +133,12 @@ export function confidenceFromScore(score: number): 'hoog' | 'middel' | 'laag' {
 const HEAD_WINDOW = 2;      // hoofdwoord staat op positie 0 of 1 (na een merk)
 const MIN_LONG_NAME = 3;    // pas beoordelen bij namen van 3+ betekenisvolle woorden
 
+/** Positie van het eerste ingrediënt-woord in de kandidaatnaam (-1 = geen). */
+export function firstHitIndex(ingredient: string, candidate: string): number {
+    const setA = new Set(tokens(ingredient));
+    return tokens(candidate).findIndex((t) => setA.has(t));
+}
+
 export function isTailOnlyMatch(ingredient: string, candidate: string): boolean {
     const a = tokens(ingredient);
     const b = tokens(candidate);
@@ -129,6 +157,22 @@ export function isTailOnlyMatch(ingredient: string, candidate: string): boolean 
    prijs die hij daadwerkelijk onderhandeld heeft. Onderlinge volgorde bewust
    gelijk aan voorheen, alleen met de nieuwe bron eronder. */
 const SOURCE_RANK: Record<MatchSource, number> = { component: 4, inventory: 3, supplier: 2, supplier_product: 1 };
+
+/* Alleen kandidaten met dezelfde naam-score zijn "even goed": "Mayonaise,
+   fles 1 ltr" naast "Mayonaise, emmer 10 ltr". Een ruimere marge (0,15)
+   liet "Truffel mayonaise" en "Melkchocolade karamel zeezout" in de groep
+   toe, en dan koos de middelste prijs een smaakvariant. De marge dekt nu
+   alleen afrondingsruis. */
+const GELIJKE_NAAM_MARGE = 0.001;
+
+/* Middelste prijs (docs/leveranciersvoorkeur-plan.md, golf 1): bij vijf even
+   goed passende mayonaises niet de goedkoopste (verkeerde kwaliteit) en niet
+   de duurste, maar de middelste — uitwijkruimte naar beide kanten. Bij een
+   even aantal de onderste van de twee middelste. */
+function middelstePrijs<T extends { candidate: CostCandidate }>(rows: T[]): T {
+    const sorted = [...rows].sort((a, b) => a.candidate.centsPerBaseUnit - b.candidate.centsPerBaseUnit);
+    return sorted[Math.floor((sorted.length - 1) / 2)];
+}
 
 export function pickBestMatch(
     ingredientName: string,
@@ -152,31 +196,92 @@ export function pickBestMatch(
        van "room" omdat die toevallig in grammen staat. */
     const EENHEID_BONUS = 0.08;
 
-    let best: MatchResult | null = null;
-    let besteGewogen = -Infinity;
+    /* g en ml gelden als passend bij elkaar (zie isGramMlPaar): anders kreeg
+       "Olijfolie met witte truffel, fles 250 gr" de bonus boven alle gewone
+       olijfolies in ml, alleen omdat het recept "10 g" zei. */
+    const pastBij = (u: BaseUnit) => gewenst != null && (u === gewenst || isGramMlPaar(u, gewenst));
+    const scored = candidates
+        .map((c) => {
+            const score = nameScore(ingredientName, c.name);
+            return { candidate: c, score, gewogen: score + (pastBij(c.baseUnit) ? EENHEID_BONUS : 0) };
+        })
+        .filter((r) => r.score >= floor);
+    if (scored.length === 0) return null;
 
-    for (const c of candidates) {
-        const score = nameScore(ingredientName, c.name);
-        if (score < floor) continue;
+    /* Past de eenheid van het recept bij een kandidaat die op naam in de
+       buurt komt, dan gaan die voor: "Karnemelk" per stuk is niets waard voor
+       een regel in ml, ook al is de naam korter dan "Karnemelk pak 1 ltr".
+       Maar nooit een ánder product omdat de eenheid toevallig past — "zure
+       room" verliest niet van "room" in grammen. Vandaar de naam-grens. */
+    const EENHEID_NAAM_GRENS = 0.2;
+    const topAlles = Math.max(...scored.map((r) => r.gewogen));
+    const bruikbaar = gewenst != null
+        ? scored.filter((r) => pastBij(r.candidate.baseUnit) && r.gewogen >= topAlles - EENHEID_NAAM_GRENS)
+        : [];
+    const kandidaten = bruikbaar.length > 0 ? bruikbaar : scored;
 
-        const past = gewenst != null && c.baseUnit === gewenst;
-        const gewogen = score + (past ? EENHEID_BONUS : 0);
+    const top = Math.max(...kandidaten.map((r) => r.gewogen));
 
-        const beter = gewogen > besteGewogen
-            || (gewogen === besteGewogen && best != null
-                && SOURCE_RANK[c.source] > SOURCE_RANK[best.candidate.source]);
+    /* 1. Alles wat op naam even goed is als de beste. Staart-matches
+          ("… karamel zeezout") gaan eruit zodra er een gewone kandidaat is. */
+    let pool = kandidaten.filter((r) => r.gewogen >= top - GELIJKE_NAAM_MARGE);
+    const gewoon = pool.filter((r) => !isTailOnlyMatch(ingredientName, r.candidate.name));
+    if (gewoon.length > 0) pool = gewoon;
+    /* Hoofdwoord vooraan gaat vóór: "Roomboter ongezouten" ís boter,
+       "Croissant roomboter" is een croissant. Beide scoren gelijk op naam. */
+    const vooraan = pool.filter((r) => firstHitIndex(ingredientName, r.candidate.name) === 0);
+    if (vooraan.length > 0) pool = vooraan;
+    /* 2. Daarbinnen wint de bron die het dichtst bij de eigen administratie
+          staat (bibliotheek > voorraad > prijslijst > gescande catalogus). */
+    const bronTop = Math.max(...pool.map((r) => SOURCE_RANK[r.candidate.source]));
+    pool = pool.filter((r) => SOURCE_RANK[r.candidate.source] === bronTop);
+    /* 3. Blijven er meerdere over met dezelfde basis-eenheid: middelste prijs.
+          Verschillende eenheden zijn niet op prijs te vergelijken → dan toch
+          de hoogste naam-score. */
+    const eenheid = pool[0].candidate.baseUnit;
+    const zelfdeEenheid = pool.filter((r) => r.candidate.baseUnit === eenheid);
+    const gekozen = zelfdeEenheid.length === pool.length && pool.length > 1
+        ? middelstePrijs(pool)
+        : pool.reduce((a, b) => (b.gewogen > a.gewogen ? b : a));
 
-        if (best == null || beter) {
-            /* Staart-match → altijd 'laag', ook bij een hoge score. Anders
-               presenteert een knäckebröd-met-zeezout zich als zekere zout-match. */
-            const confidence = isTailOnlyMatch(ingredientName, c.name)
-                ? 'laag'
-                : confidenceFromScore(score);
-            best = { candidate: c, score, confidence };
-            besteGewogen = gewogen;
+    /* Uitschieter-rem, alleen voor catalogusprijzen (eigen bibliotheek en
+       voorraad zijn Sam's eigen cijfers). "Zwarte peper, pot 47 gr" stond
+       voor € 18,13 in de gescande catalogus — € 386/kg, een doos-prijs die
+       als potje is ingelezen — en won op naam van tien gewone pepers rond
+       € 30/kg. Is de winnaar meer dan 3× duurder dan de middenprijs van alle
+       kandidaten die het hele ingrediënt dekken, dan neemt die middenprijs
+       het over, met zekerheid 'middel' zodat de chip laat zien dat er is
+       ingegrepen. */
+    const UITSCHIETER_FACTOR = 3;
+    const isCatalogus = gekozen.candidate.source === 'supplier' || gekozen.candidate.source === 'supplier_product';
+    if (isCatalogus) {
+        /* De productfamilie: alles waarvan het hoofdwoord (vooraan) een
+           ingrediënt-woord is, in een vergelijkbare eenheid. Bij "zwarte
+           peper" zijn dat alle "Zwarte peper …"-producten; "Flambeergel
+           zwarte peper" hoort er niet bij. */
+        const familie = kandidaten.filter((r) =>
+            (r.candidate.baseUnit === gekozen.candidate.baseUnit || isGramMlPaar(r.candidate.baseUnit, gekozen.candidate.baseUnit))
+            && firstHitIndex(ingredientName, r.candidate.name) === 0);
+        if (familie.length >= 3) {
+            const grens = UITSCHIETER_FACTOR * middelstePrijs(familie).candidate.centsPerBaseUnit;
+            if (gekozen.candidate.centsPerBaseUnit > grens) {
+                /* Beste naam onder de normaal geprijsde familieleden; bij
+                   gelijke naam weer de middelste prijs. */
+                const normaal = familie.filter((r) => r.candidate.centsPerBaseUnit <= grens);
+                const topN = Math.max(...normaal.map((r) => r.gewogen));
+                const besteN = normaal.filter((r) => r.gewogen >= topN - GELIJKE_NAAM_MARGE);
+                const alt = besteN.length > 1 ? middelstePrijs(besteN) : besteN[0];
+                return { candidate: alt.candidate, score: alt.score, confidence: 'middel' };
+            }
         }
     }
-    return best;
+
+    /* Staart-match → altijd 'laag', ook bij een hoge score. Anders
+       presenteert een knäckebröd-met-zeezout zich als zekere zout-match. */
+    const confidence = isTailOnlyMatch(ingredientName, gekozen.candidate.name)
+        ? 'laag'
+        : confidenceFromScore(gekozen.score);
+    return { candidate: gekozen.candidate, score: gekozen.score, confidence };
 }
 
 export function toBaseUnit(unit: string): { base: BaseUnit; factor: number } | null {
@@ -206,8 +311,16 @@ export function lineCostCents(
     if (!Number.isFinite(qty) || qty <= 0) return 0;
     const conv = toBaseUnit(ingredientUnit);
     if (!conv) return null;
-    if (conv.base !== cand.baseUnit) return null; // g vs stuk → onvergelijkbaar
+    if (conv.base !== cand.baseUnit && !isGramMlPaar(conv.base, cand.baseUnit)) return null; // g vs stuk → onvergelijkbaar
     const qtyInBase = qty * conv.factor;
     const cents = qtyInBase * cand.centsPerBaseUnit;
     return Math.round(cents);
+}
+
+/* Gram ↔ milliliter: de AI schrijft "40 g mayonaise", Bidfood verkoopt per ml.
+   Voor sauzen, zuivel, olie en azijn scheelt dat hooguit ~10%; liever een
+   prijs mét "≈" dan het hoofdingrediënt zonder prijs. De regel geeft dat
+   door als benadering (unit_approx), zodat het geen stille aanname wordt. */
+export function isGramMlPaar(a: BaseUnit, b: BaseUnit): boolean {
+    return (a === 'g' && b === 'ml') || (a === 'ml' && b === 'g');
 }

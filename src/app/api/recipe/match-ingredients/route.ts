@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { matchIngredientenTegenCatalogus, type InIngredient } from '@/lib/ingredientMatchDb';
+import { matchIngredientenTegenCatalogus, kostprijsLeverancier, type InIngredient } from '@/lib/ingredientMatchDb';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -54,7 +54,11 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Geen ingrediënten' }, { status: 400 });
         }
 
-        const results = await matchIngredientenTegenCatalogus(sb, orgId, ingredients);
+        /* Leveranciersvoorkeur (golf 1): rekenen op de rang-1-leverancier.
+           De naam gaat mee terug zodat de UI "niet bij Bidfood" kan zeggen
+           i.p.v. een vaag "geen match". */
+        const lev = await kostprijsLeverancier(sb, orgId);
+        const results = await matchIngredientenTegenCatalogus(sb, orgId, ingredients, lev);
 
         const matched = results.filter((r) => r.match && r.match.line_cost_cents != null).length;
         const totalCents = results.reduce((s, r) => s + (r.match?.line_cost_cents ?? 0), 0);
@@ -66,6 +70,7 @@ export async function POST(req: NextRequest) {
                 matched_count: matched,
                 total_count: results.length,
                 kostprijs_pp_cents: totalCents,
+                kostprijs_leverancier: lev?.naam ?? null,
             },
         });
     } catch (e: any) {

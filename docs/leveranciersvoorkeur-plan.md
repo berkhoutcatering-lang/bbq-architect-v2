@@ -25,9 +25,28 @@
 - **Zichtbaar**: elke chip toont de leverancier ("mayonaise · 30 g · Bidfood").
 - **Tests** in `recipeMatch.test.ts`: rang-1 filter, middelste prijs, terugval bij geen instelling.
 
+### Golf 1 — gebouwd en gemeten (14 sep, PR volgt op #226)
+
+Gemeten op 22 echte regels tegen de live Bidfood-catalogus. Wat de meting blootlegde en wat er daardoor extra in zit:
+
+- **De zoekgreep kapte af op 25 zonder volgorde.** Bidfood heeft 58 mayonaises en 108 pepers; "Fijn zeezout, bus 500 gr" bestond maar viel buiten de greep. Nu 150 per bron en zoeken op de drie langste woorden i.p.v. alleen het langste ("versgemalen" vond geen enkele peper).
+- **Verpakkingswoorden en getallen tellen niet meer mee** in de naam-score. "Appelazijn, fles 500 ml" won van "Appelazijn, can 5 ltr" omdat "can 5 ltr" één woord langer was — factor 8 in prijs.
+- **"Even goed" = exact dezelfde naam-score.** Een ruimere marge liet "Truffel mayonaise" in de groep en dan koos de middenprijs een smaakvariant.
+- **Hoofdwoord vooraan gaat vóór**: "Roomboter ongezouten" is boter, "Croissant roomboter" een croissant.
+- **Uitschieter-rem**: "Zwarte peper, pot 47 gr" stond voor € 18,13 (€ 386/kg, een doos-prijs als potje ingelezen) en won op exacte naam. Is de winnaar > 3× de middenprijs van zijn productfamilie, dan neemt het beste normaal geprijsde familielid het over, zekerheid "middel". Eigen bibliotheek en voorraad blijven ongemoeid.
+- **Gram ≈ milliliter** voor sauzen, zuivel, olie: de AI schrijft "40 g mayonaise", Bidfood verkoopt per ml. Wordt 1:1 gerekend, zichtbaar als "≈", nooit "hoog".
+- **Eén kort gedeeld woord is geen match**: "Basterdsuiker (wit)" koppelde aan "Molenaarsbrood wit".
+
+Bekende gevallen die golf 1 níet oplost (bewust — dit is semantiek, dus golf 2):
+
+- **"roomboter" → "Roomboter apfelstrudel"**: Bidfood's gewone boter heet "Roomboter ongezouten kluit, doos 5 kg"; op woorden alleen is niet te zien dat de strudel iets *met* boter is.
+- **Merknaam in het recept** ("Hellmann's Real Mayonaise") maakt de vergelijkingsgroep leeg; de uitschieter-rem kan dan niet ingrijpen.
+- **Synoniemen**: "appelciderazijn" ↔ "appelazijn", "Worcestershiresaus" ↔ "Worcestershire saus".
+
 ## Golf 2 — Geen Bidfood-treffer → 3 alternatieven
 
 - **Route** `/api/recipe/alternatives`: ingrediënt + hoeveelheid → ruime zoekopdracht in de Bidfood-catalogus (per woord, ~40 kandidaten) → AI kiest de 3 dichtstbijzijnde met één regel waarom ("neutrale mayonaise, zelfde vetgehalte"). Levert niets op → AI stelt 3 zoektermen voor, zoek opnieuw. Prijs komt altijd uit de catalogusregel, nooit van de AI.
+- **Dezelfde AI-stap als controle bij twijfel**: bij een match met zekerheid "middel" of "laag" (roomboter → apfelstrudel) vraagt dezelfde route "is dit het ingrediënt, of iets dat ermee gemaakt is?" en biedt anders de 3 alternatieven aan.
 - **UI**: in de Bedenk-preview én in het gerecht-formulier krijgt een niet-gekoppelde regel een oranje chip "niet bij Bidfood" met de knop *3 alternatieven*. Kiezen pint het product vast; *Laat leeg* houdt de regel zonder kostprijs (eerlijk "nog geen kostprijs").
 - Daarvoor moeten de AI-ingrediëntregels in het formulier **bewerkbaar** worden: per regel *kies ander product* (catalogus-zoek, alleen rang-1) en *verwijder*. Dat vervangt het alleen-lezen blok.
 

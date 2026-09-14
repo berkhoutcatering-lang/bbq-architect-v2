@@ -44,7 +44,10 @@ export interface BedenkerResult {
     matchedCount: number;
     totalCount: number;
     /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
-    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean }>;
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean }>;
+    /* De leverancier waarop de kostprijs rekent (voorkeur_rang 1), of null als
+       er geen voorkeur is ingesteld en over alle leveranciers gezocht is. */
+    kostprijsLeverancier: string | null;
     /* Het complete formulier-payload, in dezelfde shape als de
        "AI: vul recept in"-knop levert, zodat het gerecht-formulier er
        niets anders mee hoeft te doen. */
@@ -120,6 +123,7 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
     let matches: any[] = [];
     let kostprijsCents = 0;
     let matchedCount = 0;
+    let kostprijsLeverancier: string | null = null;
     if (rows.length > 0) {
         try {
             const mr = await fetch('/api/recipe/match-ingredients', {
@@ -134,6 +138,7 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
                 matches = mb.data?.ingredients || [];
                 kostprijsCents = mb.data?.kostprijs_pp_cents || 0;
                 matchedCount = mb.data?.matched_count || 0;
+                kostprijsLeverancier = mb.data?.kostprijs_leverancier ?? null;
             }
         } catch { /* matcher stuk → receptuur blijft, kostprijs onbekend */ }
     }
@@ -198,7 +203,10 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
         ingredients: rows.map((i, idx) => ({
             naam: i.naam, qtyPp: i.qtyPp, unit: i.eenheid,
             matched: !!(matches[idx]?.match && matches[idx].match.line_cost_cents != null),
+            supplier: matches[idx]?.match?.supplier ?? (matches[idx]?.match ? 'eigen' : null),
+            approx: !!matches[idx]?.match?.unit_approx,
         })),
+        kostprijsLeverancier,
         fill,
         meta,
         battlePlan,
@@ -248,7 +256,9 @@ function summaryLines(r: BedenkerResult): Array<{ ok: boolean; text: string }> {
     const steps = r.fill.bereidingswijze ? r.fill.bereidingswijze.split('\n').filter(Boolean).length : 0;
     return [
         { ok: r.totalCount > 0, text: r.totalCount > 0 ? `${r.totalCount} ingrediënten met hoeveelheid` : 'Geen ingrediënten teruggekregen' },
-        { ok: r.matchedCount > 0, text: `${r.matchedCount} van ${r.totalCount} gekoppeld aan een echte prijs` },
+        { ok: r.matchedCount > 0, text: r.kostprijsLeverancier
+            ? `${r.matchedCount} van ${r.totalCount} gevonden bij ${r.kostprijsLeverancier} of in eigen bibliotheek`
+            : `${r.matchedCount} van ${r.totalCount} gekoppeld aan een echte prijs` },
         { ok: steps > 0, text: steps > 0 ? `${steps} bereidingsstappen` : 'Geen bereidingsstappen' },
         { ok: r.battlePlan.length > 0, text: r.battlePlan.length > 0 ? `Battle plan: ${r.battlePlan.length} stappen` : 'Geen battle plan' },
         { ok: r.prepTimeSeconds > 0, text: r.prepTimeSeconds > 0 ? `Bereidingstijd ≈ ${Math.round(r.prepTimeSeconds / 60)} min` : 'Geen bereidingstijd' },
@@ -410,7 +420,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                     {result.cost > 0 ? (
                                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                                             Kostprijs: {fmtEuro(result.cost)} p.p.
-                                            <span style={{ color: 'var(--muted)' }}> · {result.matchedCount} van {result.totalCount} ingrediënten gekoppeld</span>
+                                            <span style={{ color: 'var(--muted)' }}> · {result.matchedCount} van {result.totalCount} ingrediënten gekoppeld{result.kostprijsLeverancier ? ` (${result.kostprijsLeverancier})` : ''}</span>
                                         </span>
                                     ) : (
                                         <span style={{ color: 'var(--muted)' }}>Nog geen kostprijs — koppel de ingrediënten in het formulier</span>
@@ -424,7 +434,9 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                         <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten per portie</MREyebrow>
                                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                             {result.ingredients.map((c, i) => (
-                                                <span key={i} title={c.matched ? 'Gekoppeld aan een echte prijs' : 'Nog geen prijsbron gevonden'} style={{
+                                                <span key={i} title={c.matched
+                                                    ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
+                                                    : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden'} style={{
                                                     fontSize: 11, padding: '3px 8px', borderRadius: 5,
                                                     background: c.matched ? 'rgba(34,197,94,.07)' : 'rgba(196,163,90,.08)',
                                                     border: c.matched ? '1px solid rgba(34,197,94,.3)' : '1px solid rgba(196,163,90,.2)',
@@ -432,6 +444,8 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                                 }}>
                                                     {c.naam}
                                                     {c.qtyPp > 0 && <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}> · {fmtQty(c.qtyPp, c.unit)}</span>}
+                                                    {c.matched && c.supplier && c.supplier !== 'eigen' && <span style={{ color: 'var(--green, #22c55e)' }}> · {c.supplier}{c.approx ? ' ≈' : ''}</span>}
+                                                    {c.matched && c.supplier === 'eigen' && <span style={{ color: 'var(--green, #22c55e)' }}> · eigen</span>}
                                                 </span>
                                             ))}
                                         </div>
@@ -554,7 +568,9 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                     }}>{s.ok ? '✓ ' : '○ '}{s.text}</div>
                                 ))}
                                 <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>
-                                    Kostprijs komt uit je eigen catalogus en voorraad, niet uit de AI. Allergenen worden bij opslaan gecheckt en vastgelegd.
+                                    {result.kostprijsLeverancier
+                                        ? `Kostprijs rekent op ${result.kostprijsLeverancier} (je kostprijs-leverancier) plus je eigen bibliotheek en voorraad — niet op de AI.`
+                                        : 'Kostprijs komt uit je eigen catalogus en voorraad, niet uit de AI.'} Allergenen worden bij opslaan gecheckt en vastgelegd.
                                 </div>
                             </div>
                         ) : (

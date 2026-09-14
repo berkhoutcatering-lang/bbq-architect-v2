@@ -18,12 +18,29 @@ import {
     normalizeIngredientName,
     pickBestMatch,
     lineCostCents,
+    isGramMlPaar,
     toBaseUnit,
     type CostCandidate,
     type BaseUnit,
 } from '@/lib/recipeMatch';
 
 export interface InIngredient { naam: string; qty_pp?: number | null; eenheid?: string | null }
+
+/** De leverancier waarop gezocht wordt. null = alle leveranciers (geen voorkeur ingesteld). */
+export interface LeverancierScope { id: number; naam: string }
+
+/**
+ * De kostprijs-leverancier van een organisatie: voorkeur_rang = 1 (Hop & Bites:
+ * Bidfood). Zie docs/leveranciersvoorkeur-plan.md. null = niet ingesteld → de
+ * matcher zoekt zoals voorheen over alle leveranciers.
+ */
+export async function kostprijsLeverancier(sb: SupabaseClient, orgId: string): Promise<LeverancierScope | null> {
+    const { data } = await sb
+        .from('leveranciers').select('id, naam')
+        .eq('organization_id', orgId).eq('voorkeur_rang', 1).is('archived_at', null)
+        .limit(1).maybeSingle();
+    return data ? { id: data.id as number, naam: data.naam as string } : null;
+}
 
 export interface GematchteRegel {
     naam: string;
@@ -38,16 +55,26 @@ export interface GematchteRegel {
         confidence: 'hoog' | 'middel' | 'laag';
         line_cost_cents: number | null;
         unit_incompatible: boolean;
+        /** true = gram en milliliter 1:1 gerekend (sauzen, zuivel, olie). */
+        unit_approx: boolean;
         cents_per_base_unit: number;
         base_unit: string;
     } | null;
 }
 
-/** Langste betekenisvolle token — de ilike-zoekterm (bv. "verse tijm" → "tijm"). */
-function searchTerm(naam: string): string {
-    const toks = normalizeIngredientName(naam).split(' ').filter((t) => t.length >= 3);
-    if (toks.length === 0) return normalizeIngredientName(naam);
-    return toks.sort((a, b) => b.length - a.length)[0];
+/** Zoektermen voor de ilike-greep: de drie langste betekenisvolle woorden.
+ *  Eén term (de langste) was te smal: "zwarte peper (versgemalen)" zocht op
+ *  "versgemalen" en vond geen van de 108 pepers. De rangschikking daarna
+ *  gebeurt op de volledige naam, dus ruimer zoeken kost geen precisie. */
+function searchTerms(naam: string): string[] {
+    const toks = normalizeIngredientName(naam).split(' ').filter((t) => t.length >= 3 && !/^\d+$/.test(t));
+    if (toks.length === 0) return [normalizeIngredientName(naam)].filter(Boolean);
+    return [...new Set(toks)].sort((a, b) => b.length - a.length).slice(0, 3);
+}
+
+/** PostgREST-filter: kolom bevat één van de termen. */
+function ilikeAny(col: string, terms: string[]): string {
+    return terms.map((t) => `${col}.ilike.%${t.replace(/[%,()]/g, '')}%`).join(',');
 }
 
 /** components-rij → CostCandidate (centen per base-eenheid). */
@@ -130,7 +157,15 @@ export async function matchIngredientenTegenCatalogus(
     sb: SupabaseClient,
     orgId: string,
     ingredienten: InIngredient[],
+    /**
+     * Beperk de leverancier-bronnen tot één leverancier. Niet meegegeven →
+     * de kostprijs-leverancier (voorkeur_rang 1) van de organisatie; is die
+     * er niet, dan alle leveranciers. Expliciet null = alle leveranciers.
+     * Eigen bibliotheek en eigen voorraad worden altijd doorzocht.
+     */
+    scope?: LeverancierScope | null,
 ): Promise<GematchteRegel[]> {
+    const lev = scope === undefined ? await kostprijsLeverancier(sb, orgId) : scope;
     /* Leveranciersnamen één keer ophalen: supplier_products heeft alleen een
        supplier_id, en zonder naam staat er "onbekende leverancier" bij een
        product waarvan we de leverancier prima kennen. */
@@ -144,18 +179,30 @@ export async function matchIngredientenTegenCatalogus(
         const eenheid = String(ing.eenheid ?? '').trim();
         if (!naam) return { naam, qty_pp: qty, eenheid, match: null };
 
-        const term = searchTerm(naam);
-        if (!term) return { naam, qty_pp: qty, eenheid, match: null };
+        const terms = searchTerms(naam);
+        if (terms.length === 0) return { naam, qty_pp: qty, eenheid, match: null };
 
         const [comp, inv, sup, sprod] = await Promise.all([
             sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
-                .eq('organization_id', orgId).ilike('name', `%${term}%`).limit(15),
+                .eq('organization_id', orgId).or(ilikeAny('name', terms)).limit(30),
             sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
-                .eq('organization_id', orgId).ilike('naam', `%${term}%`).limit(15),
-            sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
-                .eq('organization_id', orgId).eq('actief', true).ilike('product_naam', `%${term}%`).limit(25),
-            sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
-                .eq('organization_id', orgId).eq('active', true).ilike('name', `%${term}%`).limit(25),
+                .eq('organization_id', orgId).or(ilikeAny('naam', terms)).limit(30),
+            /* Prijslijst (A) kent de leverancier alleen bij naam; de gescande
+               catalogus (B) bij id. Beide beperken tot de gekozen leverancier. */
+            (() => {
+                let q = sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
+                    .eq('organization_id', orgId).eq('actief', true).or(ilikeAny('product_naam', terms));
+                if (lev) q = q.ilike('leverancier', lev.naam);
+                return q.limit(150);
+            })(),
+            (() => {
+                let q = sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                    .eq('organization_id', orgId).eq('active', true).or(ilikeAny('name', terms));
+                if (lev) q = q.eq('supplier_id', lev.id);
+                /* Bidfood heeft 58 mayonaises en 108 pepers; een greep van 25
+                   zonder volgorde miste "Fijn zeezout" terwijl die er is. */
+                return q.limit(150);
+            })(),
         ]);
 
         const candidates: CostCandidate[] = [
@@ -169,6 +216,8 @@ export async function matchIngredientenTegenCatalogus(
         if (!best) return { naam, qty_pp: qty, eenheid, match: null };
 
         const line = lineCostCents(qty, eenheid, best.candidate);
+        const basis = toBaseUnit(eenheid)?.base ?? null;
+        const approx = basis != null && basis !== best.candidate.baseUnit && isGramMlPaar(basis, best.candidate.baseUnit);
         return {
             naam, qty_pp: qty, eenheid,
             match: {
@@ -177,10 +226,12 @@ export async function matchIngredientenTegenCatalogus(
                 name: best.candidate.name,
                 supplier: best.candidate.supplier ?? null,
                 master_product_id: best.candidate.masterProductId ?? null,
-                confidence: best.confidence,
+                /* Een g≈ml-benadering is nooit "hoog". */
+                confidence: approx && best.confidence === 'hoog' ? 'middel' : best.confidence,
                 /* null = eenheden onvergelijkbaar → geen valse zekerheid. */
                 line_cost_cents: line,
                 unit_incompatible: line === null,
+                unit_approx: approx,
                 cents_per_base_unit: best.candidate.centsPerBaseUnit,
                 base_unit: best.candidate.baseUnit,
             },
