@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       .from('bonnen')
       .select(`
         id, datum, totaal_bedrag, netto_bedrag, btw_laag_bedrag, btw_hoog_bedrag,
-        notities, categorie, raw_analysis, leverancier_id, event_id, locked_at,
+        notities, categorie, raw_analysis, winkel, leverancier_id, event_id, locked_at,
         leverancier:leverancier_id (naam, type)
       `)
       .in('id', ids);
@@ -140,13 +140,28 @@ export async function POST(req: NextRequest) {
           ? (bon.leverancier[0] || {})
           : (bon.leverancier || {});
 
+        // Naam van de factuur (winkel) als er nog geen leverancierskaart gekoppeld is —
+        // anders classificeert de AI blind op "(onbekend)" en belandt alles in twijfel.
+        const levNaam = lev.naam || bon.winkel || '(onbekend)';
+        // Uitgelezen factuurregels: de sterkste aanwijzing wat er gekocht is.
+        const regels: any[] = Array.isArray(bon.raw_analysis) ? bon.raw_analysis : [];
+        const regelsTekst = regels.slice(0, 25).map((r: any) => {
+          const naam = String(r?.naam || r?.name || '').trim();
+          if (!naam) return null;
+          const aantal = Number(r?.aantal ?? r?.qty) || null;
+          const totaal = Number(r?.totaal ?? r?.total) || null;
+          return `- ${naam}${aantal ? ` × ${aantal}` : ''}${totaal ? ` = €${totaal.toFixed(2)}` : ''}`;
+        }).filter(Boolean).join('\n');
+
         const userMessage = `BON-DATA:
-Leverancier: ${lev.naam || '(onbekend)'} ${lev.type ? `(type: ${lev.type})` : ''}
+Leverancier: ${levNaam} ${lev.type ? `(type: ${lev.type})` : ''}
 Datum: ${bon.datum || '(onbekend)'}
 Totaal: €${Number(bon.totaal_bedrag) || 0} (BTW 9%: €${Number(bon.btw_laag_bedrag) || 0}, BTW 21%: €${Number(bon.btw_hoog_bedrag) || 0})
 ${event ? `Gekoppeld event: ${event.name} (${event.date}, ${event.guests} gasten, type: ${event.type})` : 'Geen event-koppeling — vermoedelijk vaste voorraad/algemene kost.'}
 Bestaande categorie-label (legacy): ${bon.categorie || '(geen)'}
 Notities: ${bon.notities || '(geen)'}
+Factuurregels:
+${regelsTekst || '(geen regels uitgelezen)'}
 
 BESCHIKBARE RGS-CODES:
 ${rgsList}

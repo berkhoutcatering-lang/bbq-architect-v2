@@ -10,9 +10,11 @@ export const runtime = 'nodejs';
  *      List bonnen voor de boekhouder-stapel met RGS-info join.
  *
  * PATCH /api/boekhouder/bonnen
- *      Body: { id, action: 'accept'|'mark_twijfel'|'set_category',
- *              rgs_code?, event_id? }
+ *      Body: { id, action: 'accept'|'mark_twijfel'|'set_category'|'link_leverancier',
+ *              rgs_code?, event_id?, leverancier_naam? }
  *      Update categorie + status. Locked bonnen worden geweigerd.
+ *      link_leverancier: zoekt-of-maakt een leverancierskaart op de naam
+ *      van de factuur (bon.winkel) en koppelt die aan de bon.
  */
 
 export async function GET(req: NextRequest) {
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
       .from('bonnen')
       .select(`
         id, datum, totaal_bedrag, netto_bedrag, btw_laag_bedrag, btw_hoog_bedrag,
-        notities, categorie, image_url, status, processed_at,
+        notities, categorie, image_url, file_path, winkel, status, processed_at,
         leverancier_id, event_id, rgs_code, rgs_category_label,
         ai_classify_status, ai_classify_confidence, ai_classify_reasoning,
         classified_at, locked_at,
@@ -103,8 +105,16 @@ export async function GET(req: NextRequest) {
     const enriched = (data || []).map((b: any) => {
       const cat = b.rgs_code ? RGS_BY_CODE[b.rgs_code] : null;
       const event = b.event_id ? eventsById.get(b.event_id) : null;
+      // Leveranciersnaam: gekoppelde kaart wint, anders de naam zoals de
+      // scanner 'm van de factuur las (winkel). Zo staat er nooit
+      // "(geen leverancier)" terwijl de naam gewoon op de factuur staat.
+      const lev = Array.isArray(b.leverancier) ? (b.leverancier[0] || null) : (b.leverancier || null);
       return {
         ...b,
+        leverancier: lev,
+        leverancier_naam: lev?.naam || b.winkel || null,
+        leverancier_gekoppeld: !!lev,
+        heeft_bestand: !!(b.file_path || b.image_url),
         event,
         rgs_kind: cat?.kind || null,
         rgs_btw_default: cat?.btw_default || null,
@@ -132,10 +142,12 @@ export async function GET(req: NextRequest) {
 
 interface PatchBody {
   id: number;
-  action: 'accept' | 'mark_twijfel' | 'set_category';
+  action: 'accept' | 'mark_twijfel' | 'set_category' | 'link_leverancier';
   rgs_code?: string;
   event_id?: number | null;
   notes?: string;
+  /** link_leverancier: naam om te koppelen; default = bon.winkel (naam van de factuur) */
+  leverancier_naam?: string;
 }
 
 export async function PATCH(req: NextRequest) {
@@ -161,7 +173,7 @@ export async function PATCH(req: NextRequest) {
     // Eerst checken of bon niet vergrendeld is
     const { data: bonRow } = await supabase
       .from('bonnen')
-      .select('id, locked_at, rgs_code, ai_classify_status')
+      .select('id, locked_at, rgs_code, ai_classify_status, winkel, leverancier_id')
       .eq('id', body.id)
       .eq('organization_id', orgId)
       .single();
@@ -187,6 +199,36 @@ export async function PATCH(req: NextRequest) {
       updates.rgs_category_label = RGS_BY_CODE[code].label;
       updates.ai_classify_status = 'manual';
       if (body.event_id !== undefined) updates.event_id = body.event_id; // null = ontkoppel
+    } else if (body.action === 'link_leverancier') {
+      // Zelfde zoek-of-maak-patroon als /api/bonnen/commit (new_leverancier_naam):
+      // dedup op naam binnen de org, anders nieuwe kaart type 'inkoop'.
+      const naam = (body.leverancier_naam || bonRow.winkel || '').trim();
+      if (naam.length < 2) return NextResponse.json({ error: 'Geen leveranciersnaam bekend voor deze bon' }, { status: 400 });
+      const { data: existing } = await supabase
+        .from('leveranciers')
+        .select('id')
+        .eq('organization_id', orgId)
+        .ilike('naam', naam)
+        .limit(1)
+        .maybeSingle();
+      let levId: number | null = existing?.id ?? null;
+      if (!levId) {
+        const { data: newLev, error: levErr } = await supabase
+          .from('leveranciers')
+          .insert({ organization_id: orgId, naam, type: 'inkoop' })
+          .select('id')
+          .single();
+        if (levErr || !newLev) return NextResponse.json({ error: levErr?.message || 'Leverancier aanmaken mislukt' }, { status: 500 });
+        levId = newLev.id;
+      }
+      // Alleen de koppeling; classificatie-velden blijven onaangeroerd.
+      const { error: linkErr } = await supabase
+        .from('bonnen')
+        .update({ leverancier_id: levId, winkel: naam })
+        .eq('id', body.id)
+        .eq('organization_id', orgId);
+      if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true, leverancier_id: levId, created: !existing });
     } else {
       return NextResponse.json({ error: 'Onbekende action' }, { status: 400 });
     }

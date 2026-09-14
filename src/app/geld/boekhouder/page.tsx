@@ -5,12 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus, CalendarCheck,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus, CalendarCheck, Link2, RefreshCw,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 import BonAddSheet from './_components/BonAddSheet';
 import AfsluitenTab from './_components/AfsluitenTab';
 import { useToast } from '@/components/Toast';
+import { getSignedUrlAction } from '@/app/archief/actions';
 
 /**
  * /geld/boekhouder — Boekhouder-pakket UI
@@ -38,6 +39,12 @@ interface Row {
   categorie: string | null;
   event_id: number | null;
   image_url: string | null;
+  file_path: string | null;
+  winkel: string | null;
+  /** gekoppelde kaart, anders de naam zoals de scanner 'm van de factuur las */
+  leverancier_naam: string | null;
+  leverancier_gekoppeld: boolean;
+  heeft_bestand: boolean;
   rgs_code: string | null;
   rgs_category_label: string | null;
   rgs_kind: string | null;
@@ -51,6 +58,8 @@ interface Row {
   leverancier: { id: number; naam: string; type: string } | null;
   event: { id: number; name: string; date: string; guests: number } | null;
 }
+
+type PatchAction = 'accept' | 'mark_twijfel' | 'set_category' | 'link_leverancier';
 
 interface Counts {
   total: number;
@@ -80,6 +89,7 @@ function defaultMonth(): string {
 }
 
 export default function BoekhouderPage() {
+  const toast = useToast();
   const [tab, setTab] = useState<Tab>('stapel');
   const [month, setMonth] = useState<string>(defaultMonth());
   /* rangeMode 'last3' (default) toont 3 maanden zodat een bon van vorige maand
@@ -147,14 +157,43 @@ export default function BoekhouderPage() {
     }
   }
 
-  async function patchBon(id: number, action: 'accept' | 'mark_twijfel' | 'set_category', extra: Record<string, unknown> = {}) {
-    await fetch('/api/boekhouder/bonnen', {
+  async function patchBon(id: number, action: PatchAction, extra: Record<string, unknown> = {}) {
+    const r = await fetch('/api/boekhouder/bonnen', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ id, action, ...extra }),
     });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      toast(j.error || 'Bijwerken mislukt', 'error');
+    } else if (action === 'link_leverancier') {
+      const j = await r.json().catch(() => ({}));
+      toast(j.created ? 'Leverancierskaart aangemaakt en gekoppeld' : 'Gekoppeld aan bestaande leverancier', 'success');
+    }
     await fetchBonnen();
+  }
+
+  /** Eén bon opnieuw door de AI halen — bv. nadat de leverancier gekoppeld is. */
+  async function reclassifyOne(id: number) {
+    const r = await fetch('/api/boekhouder/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ bon_ids: [id] }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      toast(j.error || 'Classificeren mislukt', 'error');
+    }
+    await fetchBonnen();
+  }
+
+  /** Open de opgeslagen factuur (PDF/foto) in een nieuw tabblad via een tijdelijke link. */
+  async function openBonFile(id: number) {
+    const res = await getSignedUrlAction({ bonId: id });
+    if (!res.ok) { toast(res.error || 'Bestand niet gevonden', 'error'); return; }
+    window.open(res.url, '_blank', 'noopener');
   }
 
   const twijfelRows = useMemo(function () {
@@ -348,7 +387,7 @@ export default function BoekhouderPage() {
           ) : (
             <ul className="bh-rows">
               {visibleRows.map(r => (
-                <BonRow key={r.id} row={r} expanded={selectedId === r.id} onToggle={() => setSelectedId(selectedId === r.id ? null : r.id)} onPatch={patchBon} />
+                <BonRow key={r.id} row={r} expanded={selectedId === r.id} onToggle={() => setSelectedId(selectedId === r.id ? null : r.id)} onPatch={patchBon} onReclassify={reclassifyOne} onOpenFile={openBonFile} />
               ))}
             </ul>
           )}
@@ -369,11 +408,13 @@ function KpiTile({ label, value, tone, icon: I }: { label: string; value: number
   );
 }
 
-function BonRow({ row, expanded, onToggle, onPatch }: {
+function BonRow({ row, expanded, onToggle, onPatch, onReclassify, onOpenFile }: {
   row: Row;
   expanded: boolean;
   onToggle: () => void;
-  onPatch: (id: number, action: 'accept' | 'mark_twijfel' | 'set_category', extra?: Record<string, unknown>) => Promise<void>;
+  onPatch: (id: number, action: PatchAction, extra?: Record<string, unknown>) => Promise<void>;
+  onReclassify: (id: number) => Promise<void>;
+  onOpenFile: (id: number) => Promise<void>;
 }) {
   const status = row.ai_classify_status;
   const conf = row.ai_classify_confidence;
@@ -382,7 +423,12 @@ function BonRow({ row, expanded, onToggle, onPatch }: {
     <li className={'bh-row bh-row--' + (status || 'pending')}>
       <button className="bh-row__main" onClick={onToggle} aria-expanded={expanded}>
         <span className="bh-row__date">{fmtDate(row.datum)}</span>
-        <span className="bh-row__leverancier">{row.leverancier?.naam || '(geen leverancier)'}</span>
+        <span className="bh-row__leverancier">
+          {row.leverancier_naam || '(geen leverancier)'}
+          {row.leverancier_naam && !row.leverancier_gekoppeld && (
+            <span title="Naam van de factuur — nog geen leverancierskaart gekoppeld" style={{ marginLeft: 6, fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>niet gekoppeld</span>
+          )}
+        </span>
         <span className="bh-row__totaal">{fmtEur(row.totaal_bedrag)}</span>
         <span className="bh-row__cat">
           {cat ? (
@@ -414,7 +460,19 @@ function BonRow({ row, expanded, onToggle, onPatch }: {
             <span>BTW 9%: <strong>{fmtEur(row.btw_laag_bedrag)}</strong></span>
             <span>BTW 21%: <strong>{fmtEur(row.btw_hoog_bedrag)}</strong></span>
             {row.leverancier?.type && <span>Type: <strong>{row.leverancier.type}</strong></span>}
+            {row.leverancier?.id && (
+              <Link href={`/leveranciers/${row.leverancier.id}`} style={{ color: 'var(--gold, #c4a35a)' }}>leverancierskaart ↗</Link>
+            )}
           </div>
+
+          {row.winkel && !row.leverancier_gekoppeld && !row.locked_at && (
+            <div className="bh-row__reasoning" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span>Op de factuur staat <strong>{row.winkel}</strong>, maar er is nog geen leverancierskaart aan gekoppeld.</span>
+              <button className="bh-btn-secondary" onClick={() => onPatch(row.id, 'link_leverancier')}>
+                <Link2 size={12} /> Leverancier aanmaken &amp; koppelen
+              </button>
+            </div>
+          )}
 
           <div className="bh-row__cat-picker">
             <label style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>Categorie wijzigen:</label>
@@ -448,10 +506,15 @@ function BonRow({ row, expanded, onToggle, onPatch }: {
                   <AlertCircle size={12} /> Naar twijfel
                 </button>
               )}
-              {row.image_url && (
-                <Link href={`/archief?bon=${row.id}`} className="bh-btn-secondary">
-                  <FileText size={12} /> Open bon
-                </Link>
+              {status !== 'pending' && status !== null && (
+                <button className="bh-btn-secondary" onClick={() => onReclassify(row.id)} title="Laat de AI opnieuw kijken, nu met leverancier en factuurregels">
+                  <RefreshCw size={12} /> Opnieuw classificeren
+                </button>
+              )}
+              {row.heeft_bestand && (
+                <button className="bh-btn-secondary" onClick={() => onOpenFile(row.id)}>
+                  <FileText size={12} /> Open factuur
+                </button>
               )}
             </div>
           )}
