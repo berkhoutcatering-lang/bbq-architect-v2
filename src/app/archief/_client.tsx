@@ -11,10 +11,16 @@
  */
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useQueryState, parseAsStringEnum } from 'nuqs';
-import { Archive, Inbox as InboxIcon, LayoutGrid, List, Share2, FileArchive, SlidersHorizontal } from 'lucide-react';
-import type { BonRow, InboxItem, AuditLogEntry, StockMovementForBon } from '@/lib/dal/bonnen';
+import { Archive, Inbox as InboxIcon, LayoutGrid, List, Share2, FileArchive, SlidersHorizontal, MoreHorizontal, Plus } from 'lucide-react';
+import type { BonRow, InboxItem, AuditLogEntry, StockMovementForBon, Werkbank as WerkbankData } from '@/lib/dal/bonnen';
+import { useToast } from '@/components/Toast';
+import { getSignedUrlAction, setBonLeverancierAction } from './actions';
+import { Werkbank } from './_components/Werkbank';
+import { fmtEur } from './_components/format';
 import { BonSearchBar } from './_components/BonSearchBar';
 import { ActiveFilterPills } from './_components/ActiveFilterPills';
 import { BonFilters } from './_components/BonFilters';
@@ -34,6 +40,7 @@ interface Props {
     tags: string[];
     rgs: Array<{ code: string; label: string | null; count: number }>;
     inboxItems: InboxItem[];
+    werkbank: WerkbankData;
     orgSlug: string;
     orgEmail: string;
     isEmpty: boolean;
@@ -48,12 +55,15 @@ export function ArchiefClient({
     tags,
     rgs,
     inboxItems,
+    werkbank,
     orgSlug,
     orgEmail,
     isEmpty,
     loadAudit,
     loadStock,
 }: Props) {
+    const router = useRouter();
+    const toast = useToast();
     const [view, setView] = useQueryState(
         'view',
         parseAsStringEnum(['grid', 'list']).withDefault('grid'),
@@ -70,6 +80,38 @@ export function ArchiefClient({
     const [exportOpen, setExportOpen] = useState(false);
     const [deellinkOpen, setDeellinkOpen] = useState(false);
     const [sidebarVisible, setSidebarVisible] = useState(true);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!menuOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuOpen(false); };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+    }, [menuOpen]);
+
+    const nieuweInbox = inboxItems.filter((i) => !i.bon_id).length;
+
+    /** Open de opgeslagen factuur in een nieuw tabblad via een tijdelijke link. */
+    const openFile = async (bon: BonRow) => {
+        const res = await getSignedUrlAction({ bonId: bon.id });
+        if (!res.ok) { toast(res.error ?? 'Bestand niet gevonden', 'error'); return; }
+        window.open(res.url, '_blank', 'noopener');
+    };
+
+    /** Eén bon koppelen: kaart op de naam van de factuur (zoek-of-maak). */
+    const koppel = async (bon: BonRow) => {
+        const naam = bon.winkel?.trim() ?? '';
+        if (naam.length < 2) { toast('Geen leveranciersnaam op deze bon gevonden', 'error'); return; }
+        const res = await setBonLeverancierAction({ bonId: bon.id, nieuweNaam: naam });
+        if (!res.ok) { toast(res.error ?? 'Koppelen mislukt', 'error'); return; }
+        toast(`${naam} gekoppeld`, 'success');
+        router.refresh();
+    };
 
     const isInbox = tab === 'inbox';
     const isSearch = !!q && q.length > 0;
@@ -110,120 +152,100 @@ export function ArchiefClient({
 
             {/* Main content */}
             <div className="min-w-0 flex-1 px-4 py-5 md:px-6">
-                {/* Page header */}
-                <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+                {/* Page header — één primaire knop, de rest onder ⋯ */}
+                <div className="bk-head">
                     <div>
                         <h1 className="chassis-titel">Bonnenkistje</h1>
-                        <p className="chassis-onderschrift">
-                            Typ <strong className="font-mono text-[var(--brand-gold)]">baktotaal</strong> —
-                            vind elke bon over 7 jaar heen, tot op het woord.
-                        </p>
+                        <div className="bk-sub">
+                            <b>{bonnen.length}</b> {bonnen.length === 1 ? 'bon' : 'bonnen'}
+                            {bedragTotaal > 0 && <> · <b>{fmtEur(bedragTotaal)}</b></>}
+                            {' '}· bewaard tot {new Date().getFullYear() + 7}
+                        </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        {/* Archief ↔ Inbox toggle */}
-                        <div
-                            className="flex overflow-hidden rounded-[10px] border"
-                            style={{ borderColor: 'var(--border)', background: 'var(--bg-subtle)' }}
-                        >
-                            {(['archief', 'inbox'] as const).map((m) => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => void setTab(m)}
-                                    className="flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] font-semibold transition"
-                                    style={{
-                                        background: tab === m ? 'rgba(255,191,0,.08)' : 'transparent',
-                                        color: tab === m ? 'var(--text)' : 'var(--muted)',
-                                    }}
-                                >
-                                    {m === 'inbox' ? <InboxIcon size={14} /> : <Archive size={14} />}
-                                    {m === 'inbox' ? 'Inbox' : 'Archief'}
-                                    {m === 'inbox' && inboxItems.filter((i) => !i.bon_id).length > 0 && (
-                                        <span
-                                            className="rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold"
-                                            style={{
-                                                background: 'rgba(255,191,0,.2)',
-                                                color: 'var(--brand)',
-                                            }}
-                                        >
-                                            {inboxItems.filter((i) => !i.bon_id).length}
-                                        </span>
-                                    )}
-                                </button>
-                            ))}
+                    <div className="bk-actions">
+                        <div className="bk-seg" role="tablist" aria-label="Archief of inbox">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={!isInbox}
+                                className={!isInbox ? 'bk-btn--on' : ''}
+                                onClick={() => void setTab('archief')}
+                            >
+                                <Archive size={14} /> Archief
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={isInbox}
+                                className={isInbox ? 'bk-btn--on' : ''}
+                                onClick={() => void setTab('inbox')}
+                            >
+                                <InboxIcon size={14} /> Inbox
+                                {nieuweInbox > 0 && <span className="bk-count">{nieuweInbox}</span>}
+                            </button>
                         </div>
 
                         {!isInbox && !isEmpty && (
-                            <>
-                                {/* View toggle: kistje ↔ tabel */}
-                                <div
-                                    className="flex overflow-hidden rounded-[8px] border"
-                                    style={{ borderColor: 'var(--border)' }}
-                                >
-                                    {[
-                                        { id: 'grid' as const, icon: LayoutGrid, label: 'Kistje' },
-                                        { id: 'list' as const, icon: List, label: 'Tabel' },
-                                    ].map((v) => (
-                                        <button
-                                            key={v.id}
-                                            type="button"
-                                            onClick={() => void setView(v.id)}
-                                            aria-label={`${v.label}-weergave`}
-                                            className="flex px-2.5 py-1.5 transition"
-                                            style={{
-                                                background: view === v.id ? 'rgba(255,191,0,.08)' : 'transparent',
-                                                color: view === v.id ? 'var(--text)' : 'var(--muted)',
-                                            }}
-                                        >
-                                            <v.icon size={16} />
-                                        </button>
-                                    ))}
-                                </div>
-
+                            <div className="bk-seg" aria-label="Weergave">
                                 <button
                                     type="button"
-                                    onClick={() => setDeellinkOpen(true)}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)]"
+                                    aria-label="Kaarten-weergave"
+                                    aria-pressed={view === 'grid'}
+                                    className={view === 'grid' ? 'bk-btn--on' : ''}
+                                    onClick={() => void setView('grid')}
                                 >
-                                    <Share2 size={14} />
-                                    Deel
+                                    <LayoutGrid size={15} />
                                 </button>
-
                                 <button
                                     type="button"
-                                    onClick={openExport}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)]"
+                                    aria-label="Lijst-weergave"
+                                    aria-pressed={view === 'list'}
+                                    className={view === 'list' ? 'bk-btn--on' : ''}
+                                    onClick={() => void setView('list')}
                                 >
-                                    <FileArchive size={14} />
-                                    Export
+                                    <List size={15} />
                                 </button>
-
-                                {/* Mobile filter trigger */}
-                                <button
-                                    type="button"
-                                    onClick={() => setMobileFilterOpen(true)}
-                                    className="inline-flex items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-[12px] text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)] md:hidden"
-                                >
-                                    <SlidersHorizontal size={14} />
-                                    Filter
-                                </button>
-
-                                {/* Desktop sidebar toggle */}
-                                <button
-                                    type="button"
-                                    onClick={() => setSidebarVisible((v) => !v)}
-                                    aria-label={sidebarVisible ? 'Verberg filters' : 'Toon filters'}
-                                    className="hidden rounded-[8px] px-2 py-1.5 text-[var(--muted)] transition hover:bg-white/[0.05] hover:text-[var(--text)] md:flex"
-                                    title="Toggle filters"
-                                >
-                                    <SlidersHorizontal size={14} />
-                                </button>
-                            </>
+                            </div>
                         )}
+
+                        {!isInbox && !isEmpty && (
+                            <div className="bk-menu" ref={menuRef}>
+                                <button
+                                    type="button"
+                                    className="bk-btn bk-btn--ghost"
+                                    aria-label="Meer acties"
+                                    aria-expanded={menuOpen}
+                                    onClick={() => setMenuOpen((v) => !v)}
+                                >
+                                    <MoreHorizontal size={16} />
+                                </button>
+                                {menuOpen && (
+                                    <div className="bk-menu__panel" role="menu">
+                                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); openExport(); }}>
+                                            <FileArchive size={14} /> Exporteer {selectedIds.length > 0 ? `${selectedIds.length} geselecteerde` : 'bonnen'}
+                                        </button>
+                                        <button type="button" role="menuitem" onClick={() => { setMenuOpen(false); setDeellinkOpen(true); }}>
+                                            <Share2 size={14} /> Deel-link voor je boekhouder
+                                        </button>
+                                        <button type="button" role="menuitem" className="md:hidden" onClick={() => { setMenuOpen(false); setMobileFilterOpen(true); }}>
+                                            <SlidersHorizontal size={14} /> Filters
+                                        </button>
+                                        <button type="button" role="menuitem" className="hidden md:flex" onClick={() => { setMenuOpen(false); setSidebarVisible((v) => !v); }}>
+                                            <SlidersHorizontal size={14} /> {sidebarVisible ? 'Verberg filters' : 'Toon filters'}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <Link href="/bonnen" className="bk-btn bk-btn--primary">
+                            <Plus size={15} /> Bon toevoegen
+                        </Link>
                     </div>
                 </div>
 
+                {!isInbox && !isEmpty && <Werkbank data={werkbank} />}
                 {/* Content */}
                 {isEmpty ? (
                     <EmptyKistje orgSlug={orgSlug} />
@@ -265,6 +287,7 @@ export function ArchiefClient({
                                 onSelectAll={selectAll}
                                 onBonClick={(b) => setDetailBon(b)}
                                 onBulkExport={openExport}
+                                onKoppel={koppel}
                             />
                         ) : (
                             <BonGrid
@@ -272,6 +295,8 @@ export function ArchiefClient({
                                 selectedIds={selectedIds}
                                 onSelect={toggleSelect}
                                 onBonClick={(b) => setDetailBon(b)}
+                                onOpenFile={openFile}
+                                onKoppel={koppel}
                             />
                         )}
                     </>

@@ -185,12 +185,17 @@ export async function PATCH(req: NextRequest) {
       classified_by_user_id: user.id,
     };
 
+    // Eén status voor cateraar én boekhouder: het Bonnenkistje leest bonnen.status,
+    // dus die schrijven we hier mee (bevestigd / twijfel) — anders staat een bon
+    // in de boekhouder op "verified" en in het kistje nog op "wachtend".
     if (body.action === 'accept') {
       // Accepteer huidige AI-suggestie en mark als verified
       if (!bonRow.rgs_code) return NextResponse.json({ error: 'Geen AI-suggestie om te accepteren' }, { status: 400 });
       updates.ai_classify_status = 'verified';
+      updates.status = 'bevestigd';
     } else if (body.action === 'mark_twijfel') {
       updates.ai_classify_status = 'twijfel';
+      updates.status = 'twijfel';
       if (body.notes) updates.ai_classify_reasoning = body.notes;
     } else if (body.action === 'set_category') {
       const code = body.rgs_code || '';
@@ -198,6 +203,7 @@ export async function PATCH(req: NextRequest) {
       updates.rgs_code = code;
       updates.rgs_category_label = RGS_BY_CODE[code].label;
       updates.ai_classify_status = 'manual';
+      updates.status = 'bevestigd';
       if (body.event_id !== undefined) updates.event_id = body.event_id; // null = ontkoppel
     } else if (body.action === 'link_leverancier') {
       // Zelfde zoek-of-maak-patroon als /api/bonnen/commit (new_leverancier_naam):

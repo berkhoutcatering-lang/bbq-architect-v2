@@ -13,7 +13,7 @@
 
 import { ChevronRight, Calendar } from 'lucide-react';
 import type { BonRow } from '@/lib/dal/bonnen';
-import { BonReceiptThumb } from './BonReceiptThumb';
+import { BonDocThumb } from './BonDocThumb';
 import { sanitizeSnippet } from './sanitizeSnippet';
 
 interface Props {
@@ -26,7 +26,6 @@ export function BonkSnippet({ bon, onClick }: Props) {
     const fmtDate = (d: string | null) =>
         d ? new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
 
-    const fileType: 'pdf' | 'image' = bon.file_mime?.includes('pdf') ? 'pdf' : 'image';
     const snippetHtml = bon.snippet ? sanitizeSnippet(bon.snippet) : null;
 
     return (
@@ -35,11 +34,12 @@ export function BonkSnippet({ bon, onClick }: Props) {
             onClick={onClick}
             className="ar-search-row flex w-full cursor-pointer items-start gap-3.5 rounded-[12px] border border-transparent p-3.5 text-left transition-colors hover:border-[var(--border)] hover:bg-white/[0.02]"
         >
-            <div className="h-[68px] w-[54px] flex-shrink-0">
-                <BonReceiptThumb
-                    supplier={bon.leverancier_naam ?? bon.winkel ?? '—'}
-                    type={fileType}
-                    amount={Number(bon.totaal_bedrag ?? 0)}
+            <div className="h-[68px] w-[54px] flex-shrink-0 overflow-hidden rounded-[6px]">
+                <BonDocThumb
+                    bonId={bon.id}
+                    hasFile={!!(bon.file_path || bon.image_url)}
+                    alt={`Factuur ${bon.leverancier_naam ?? bon.winkel ?? ''}`}
+                    className="bk-thumb--mini"
                 />
             </div>
 

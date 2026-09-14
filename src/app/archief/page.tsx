@@ -18,6 +18,7 @@ import {
     listDistinctTags,
     listDistinctRgs,
     listInboxFacturen,
+    getWerkbank,
     listBonAuditLog,
     listStockMovementsForBon,
     type SearchInput,
@@ -28,7 +29,7 @@ import { expandFilterStatus, type DisplayStatus } from './_lib/statusMap';
 
 export const metadata = {
     title: 'Bonnenkistje — BBQ Architect',
-    description: 'Doorzoekbaar boekhoud-archief. Typ baktotaal, vind elke bon over 7 jaar heen, tot op het woord.',
+    description: 'Al je bonnen en facturen, 7 jaar doorzoekbaar tot op het woord.',
 };
 
 export const dynamic = 'force-dynamic';
@@ -152,12 +153,13 @@ export default async function ArchiefPage({ searchParams }: PageProps) {
         limit: 200,
     };
 
-    const [searchResult, tags, rgs, inboxItems, totalCount] = await Promise.all([
+    const [searchResult, tags, rgs, inboxItems, totalCount, werkbank] = await Promise.all([
         searchBonnen(sb, orgId, filters),
         listDistinctTags(sb, orgId),
         listDistinctRgs(sb, orgId),
         listInboxFacturen(sb, orgId, { onlyNew: false }),
         sb.from('bonnen').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+        getWerkbank(sb, orgId),
     ]);
 
     const isEmpty = (totalCount.count ?? 0) === 0;
@@ -182,6 +184,7 @@ export default async function ArchiefPage({ searchParams }: PageProps) {
             tags={tags}
             rgs={rgs}
             inboxItems={inboxItems}
+            werkbank={werkbank}
             orgSlug={orgSlug}
             orgEmail={orgEmail}
             isEmpty={isEmpty}
