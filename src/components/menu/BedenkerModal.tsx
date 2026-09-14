@@ -1,19 +1,32 @@
 /* ═══════════════════════════════════════════════════════════════
-   BedenkerModal — AI gerechten-brainstorm (3 modes + thinking trail)
+   BedenkerModal — AI gerechten-brainstorm (3 modes)
    Bucket C P0-3/P0-10. Wraps de bestaande /bedenker functionaliteit
    in een modal. Modal-state via URL ?modal=bedenker zodat refresh
    en deeplinks blijven werken (middleware redirect verbouwt /bedenker
    → /gerechten?modal=bedenker).
+
+   2026-09-14: de popup gooide de receptuur weg — alleen zes ingrediënt-
+   námen bleven over, de kostprijs was een AI-gok en het paneel rechts
+   toonde vaste teksten ("12 combinaties overwogen"). Nu bewaart hij de
+   hele receptuur (hoeveelheden, stappen, battle plan), laat de
+   catalogus-matcher de kostprijs afleiden uit echte prijzen en toont
+   rechts wat er wérkelijk opgeleverd en gekoppeld is.
    ═══════════════════════════════════════════════════════════════ */
 
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Pencil, Package, Users, Sparkles, X, Plus, RefreshCw, Bookmark } from 'lucide-react';
+import { Pencil, Package, Users, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { MRButton, MREyebrow, MRTag } from './atoms';
 import { fmtEuro } from './helpers';
+import type { AiFillResult, AiFillMeta, AiFillIngredient } from '@/components/RecipeAiButton';
 
 type BedenkerMode = 'vrij' | 'voorraad' | 'klant';
+
+/* Overdracht van een geaccepteerd resultaat naar het gerecht-formulier wanneer
+   de modal buiten dat formulier gemount is (layout, ?modal=bedenker). */
+export const BEDENKER_HANDOFF_KEY = 'bedenker:handoff';
+export const BEDENKER_HANDOFF_EVENT = 'bedenker:handoff';
 
 export interface BedenkerCitation {
     source_title: string;
@@ -24,16 +37,31 @@ export interface BedenkerResult {
     name: string;
     desc: string;
     gang: string;
+    /* Kostprijs p.p. in euro, afgeleid uit gekoppelde catalogus-rijen.
+       0 = niets gekoppeld → UI toont "nog geen kostprijs", geen bedrag. */
     cost: number;
-    price: number;
-    margin: number;
-    components: string[];
+    /* Hoeveel ingrediënten aan een echte prijs hangen, van het totaal. */
+    matchedCount: number;
+    totalCount: number;
+    /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean }>;
+    /* Het complete formulier-payload, in dezelfde shape als de
+       "AI: vul recept in"-knop levert, zodat het gerecht-formulier er
+       niets anders mee hoeft te doen. */
+    fill: AiFillResult;
+    meta: AiFillMeta;
+    /* Extra velden die AiFillResult niet kent maar het formulier wel. */
+    battlePlan: string[];
+    /* Bereidingstijd in seconden (formulier-veld target_prep_time). */
+    prepTimeSeconds: number;
+    /* Allergenen die de AI noemt — alleen ter info in de preview. Ze gaan
+       NIET automatisch het formulier in: de allergeencheck bij opslaan
+       legt ze vast mét herkomst. */
+    allergenenSuggestie: string[];
     /* P0-C (2026-05-25): Citations API output — per-claim source-attribution
-       uit het tenant-repertoire. Geeft user vertrouwen dat AI geen halluci-
-       natie produceert. */
+       uit het tenant-repertoire. */
     citations?: BedenkerCitation[];
     citationsEnabled?: boolean;
-    /* Inspired-by lijst uit recipe-generate response (stijl-bron-gerechten). */
     inspiredBy?: string[];
 }
 
@@ -43,22 +71,24 @@ interface Props {
     /* Optioneel: backend-hook die een idee genereert. Als undefined doet
        defaultGenerate een echte fetch naar /api/recipe-generate. */
     onGenerate?: (input: { mode: BedenkerMode; prompt: string }) => Promise<BedenkerResult | null>;
-    /* Aangeroepen als de gebruiker "Maak gerecht" klikt — meestal door
-       parent omgezet naar een navigatie naar /gerechten/[id] of een
-       saveGerecht-aanroep. */
+    /* Aangeroepen als de gebruiker "Maak gerecht" klikt — de parent opent
+       het gerecht-formulier en vult het met result.fill. */
     onAccept?: (result: BedenkerResult) => void;
 }
 
-/* P0-C: default API-call wanneer parent geen custom onGenerate injecteert.
-   Mapt recipe-generate response naar BedenkerResult shape. Citations worden
-   doorgegeven zodat de UI source-chips per claim kan tonen. */
+/* Ruwe ingrediënt-regel zoals /api/recipe-generate hem teruggeeft. */
+interface RawIngredient { naam?: string; hoeveelheid?: number | string; eenheid?: string }
+
+/* Stap 1: AI bedenkt het gerecht (naam, receptuur, stappen).
+   Stap 2: de catalogus-matcher koppelt elk ingrediënt aan een echte prijs-
+   bron en leidt de kostprijs af — de AI rekent hier niets. Faalt stap 2,
+   dan blijft de receptuur staan en is de kostprijs eerlijk "onbekend". */
 async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: string }): Promise<BedenkerResult | null> {
     const flavourContext: Record<string, unknown> = {};
-    /* Mode-mapping: 'vrij' → flavour=vrij; 'voorraad' → flavour=voorraad met
-       prompt als voorraad-string; 'klant' → flavour=klant met context. */
     if (mode === 'voorraad') flavourContext.voorraad = prompt;
     if (mode === 'klant') flavourContext.context = prompt;
 
+    const t0 = Date.now();
     const res = await fetch('/api/recipe-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,26 +104,120 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
     }
     const body = await res.json();
     const data = body.data ?? {};
-    const cost = Number(data.geschatte_kostprijs_pp ?? 0);
-    /* Verkoopprijs schatting: cost × 2.5 voor preview-marge ~60%. User
-       past dit aan in edit-modal na "Maak gerecht". */
-    const price = cost > 0 ? Math.round(cost * 2.5 * 100) / 100 : 0;
-    const margin = price > 0 ? Math.round((1 - cost / price) * 100) : 0;
-    const ingredients = Array.isArray(data.ingredienten)
-        ? data.ingredienten.slice(0, 6).map((i: { naam?: string }) => i.naam ?? '').filter(Boolean)
+
+    /* De AI geeft hoeveelheden voor `porties` (standaard 10); het formulier
+       en de matcher rekenen per portie (qty_pp). */
+    const porties = Math.max(1, Number(data.porties) || 10);
+    const raw: RawIngredient[] = Array.isArray(data.ingredienten) ? data.ingredienten : [];
+    const rows = raw
+        .map((i) => ({
+            naam: String(i.naam ?? '').trim(),
+            eenheid: String(i.eenheid ?? '').trim() || 'stuks',
+            qtyPp: Math.round((Number(i.hoeveelheid) || 0) / porties * 1000) / 1000,
+        }))
+        .filter((i) => i.naam.length > 0);
+
+    let matches: any[] = [];
+    let kostprijsCents = 0;
+    let matchedCount = 0;
+    if (rows.length > 0) {
+        try {
+            const mr = await fetch('/api/recipe/match-ingredients', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ingredients: rows.map((i) => ({ naam: i.naam, qty_pp: i.qtyPp, eenheid: i.eenheid })),
+                }),
+            });
+            const mb = await mr.json();
+            if (mr.ok && mb.success) {
+                matches = mb.data?.ingredients || [];
+                kostprijsCents = mb.data?.kostprijs_pp_cents || 0;
+                matchedCount = mb.data?.matched_count || 0;
+            }
+        } catch { /* matcher stuk → receptuur blijft, kostprijs onbekend */ }
+    }
+
+    const ingredient_costs: AiFillIngredient[] = rows.map((i, idx) => {
+        const m = matches[idx]?.match || null;
+        const hasCost = !!(m && m.line_cost_cents != null);
+        const perUnit = hasCost && i.qtyPp > 0 ? (m.line_cost_cents / 100) / i.qtyPp : null;
+        return {
+            naam: i.naam,
+            inventory_id: null,
+            qty_pp: i.qtyPp,
+            unit: i.eenheid,
+            yield: 1,
+            is_estimated: !hasCost,
+            estimated_price_eur: perUnit,
+            match: m,
+        };
+    });
+
+    const stappen: string[] = Array.isArray(data.instructies)
+        ? data.instructies.map((s: unknown) => String(s).trim()).filter(Boolean)
         : [];
+    const battlePlan: string[] = Array.isArray(data.battle_plan)
+        ? data.battle_plan.map((s: unknown) => String(s).trim()).filter(Boolean)
+        : [];
+    const allergenen: string[] = Array.isArray(data.allergenen)
+        ? data.allergenen.map((s: unknown) => String(s).trim()).filter(Boolean)
+        : [];
+    const tags: string[] = Array.isArray(data.tags)
+        ? data.tags.map((s: unknown) => String(s).trim()).filter(Boolean)
+        : [];
+
+    const fill: AiFillResult = {
+        naam: data.naam ?? 'Naamloos gerecht',
+        beschrijving: data.beschrijving ?? '',
+        porties,
+        ingredient_costs,
+        bereidingswijze: stappen.map((s, i) => `${i + 1}. ${s}`).join('\n'),
+        allergenen: [],   // compliance: nooit AI-afgeleid — de allergeencheck bij opslaan doet dit mét herkomst
+        tags,
+        wijn_suggestie: data.wijn_suggestie ?? '',
+        service_tip: data.service_tip ?? '',
+        kostprijs_pp_schatting: kostprijsCents / 100,
+        gangcategorie: data.gang ?? data.categorie ?? undefined,
+    };
+    const meta: AiFillMeta = {
+        inventory_size: 0,
+        matched_count: matchedCount,
+        estimated_count: Math.max(0, rows.length - matchedCount),
+        cost_cents: body.usage?.cost_eur_cents ?? 0,
+        elapsed_ms: Date.now() - t0,
+    };
+
     return {
-        name: data.naam ?? 'Naamloos gerecht',
-        desc: data.beschrijving ?? '',
-        gang: data.gang ?? data.categorie ?? 'Onbekend',
-        cost,
-        price,
-        margin,
-        components: ingredients,
+        name: fill.naam,
+        desc: fill.beschrijving,
+        gang: fill.gangcategorie ?? 'Onbekend',
+        cost: kostprijsCents / 100,
+        matchedCount,
+        totalCount: rows.length,
+        ingredients: rows.map((i, idx) => ({
+            naam: i.naam, qtyPp: i.qtyPp, unit: i.eenheid,
+            matched: !!(matches[idx]?.match && matches[idx].match.line_cost_cents != null),
+        })),
+        fill,
+        meta,
+        battlePlan,
+        prepTimeSeconds: Math.max(0, Math.round(Number(data.preptime) || 0)) * 60,
+        allergenenSuggestie: allergenen,
         citations: Array.isArray(body.citations) ? body.citations : [],
         citationsEnabled: Boolean(body.citationsEnabled),
         inspiredBy: Array.isArray(data.inspired_by) ? data.inspired_by : [],
     };
+}
+
+/* Hoeveelheid per portie leesbaar: 0.025 kg → "25 g", 0.5 → "0,5". */
+function fmtQty(qty: number, unit: string): string {
+    if (!qty) return '';
+    const u = unit.toLowerCase();
+    if (u === 'kg' && qty < 1) return `${Math.round(qty * 1000)} g`;
+    if ((u === 'l' || u === 'liter') && qty < 1) return `${Math.round(qty * 1000)} ml`;
+    const n = qty >= 10 ? Math.round(qty) : Math.round(qty * 100) / 100;
+    return `${String(n).replace('.', ',')} ${unit}`;
 }
 
 const MODES: Array<{ id: BedenkerMode; label: string; Icon: typeof Pencil }> = [
@@ -114,18 +238,23 @@ const PROMPT_LABELS: Record<BedenkerMode, string> = {
     klant: 'Beschrijf het event & dieetwensen',
 };
 
+/* Wat er écht gebeurt tijdens het wachten — twee stappen, geen toneel. */
 const THINKING_STEPS = [
-    'Analyseer keukencontext…',
-    'Zoek smaakcombinaties…',
-    'Bereken kostprijs…',
+    'AI schrijft receptuur en stappen…',
+    'Ingrediënten koppelen aan je catalogus…',
 ];
-
-const DONE_STEPS = [
-    '✓ Context geanalyseerd',
-    '✓ 12 combinaties overwogen',
-    '✓ Kostprijs berekend',
-    '✓ Allergenen gecheckt',
-];
+/* Feitelijke tellingen — elk regeltje is controleerbaar in het resultaat. */
+function summaryLines(r: BedenkerResult): Array<{ ok: boolean; text: string }> {
+    const steps = r.fill.bereidingswijze ? r.fill.bereidingswijze.split('\n').filter(Boolean).length : 0;
+    return [
+        { ok: r.totalCount > 0, text: r.totalCount > 0 ? `${r.totalCount} ingrediënten met hoeveelheid` : 'Geen ingrediënten teruggekregen' },
+        { ok: r.matchedCount > 0, text: `${r.matchedCount} van ${r.totalCount} gekoppeld aan een echte prijs` },
+        { ok: steps > 0, text: steps > 0 ? `${steps} bereidingsstappen` : 'Geen bereidingsstappen' },
+        { ok: r.battlePlan.length > 0, text: r.battlePlan.length > 0 ? `Battle plan: ${r.battlePlan.length} stappen` : 'Geen battle plan' },
+        { ok: r.prepTimeSeconds > 0, text: r.prepTimeSeconds > 0 ? `Bereidingstijd ≈ ${Math.round(r.prepTimeSeconds / 60)} min` : 'Geen bereidingstijd' },
+        { ok: false, text: r.allergenenSuggestie.length > 0 ? `AI noemt: ${r.allergenenSuggestie.join(', ')} — check bij opslaan` : 'Allergenen: check bij opslaan' },
+    ];
+}
 
 export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
     const [mode, setMode] = useState<BedenkerMode>('vrij');
@@ -278,24 +407,51 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>{result.desc}</div>
                                 <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                                     <MRTag>{result.gang}</MRTag>
-                                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>Kostprijs: {fmtEuro(result.cost)}</span>
-                                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>Verkoop: {fmtEuro(result.price)}</span>
-                                    <span style={{ color: 'var(--green, #22c55e)', fontWeight: 600 }}>Marge: {result.margin}%</span>
+                                    {result.cost > 0 ? (
+                                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                                            Kostprijs: {fmtEuro(result.cost)} p.p.
+                                            <span style={{ color: 'var(--muted)' }}> · {result.matchedCount} van {result.totalCount} ingrediënten gekoppeld</span>
+                                        </span>
+                                    ) : (
+                                        <span style={{ color: 'var(--muted)' }}>Nog geen kostprijs — koppel de ingrediënten in het formulier</span>
+                                    )}
+                                    {result.fill.porties ? <span style={{ color: 'var(--muted)' }}>Receptuur voor {result.fill.porties} porties</span> : null}
                                 </div>
 
                                 {/* Ingrediënten preview */}
-                                {result.components && result.components.length > 0 && (
+                                {result.ingredients.length > 0 && (
                                     <div style={{ marginTop: 12 }}>
-                                        <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten</MREyebrow>
+                                        <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten per portie</MREyebrow>
                                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                            {result.components.map((c, i) => (
-                                                <span key={i} style={{
+                                            {result.ingredients.map((c, i) => (
+                                                <span key={i} title={c.matched ? 'Gekoppeld aan een echte prijs' : 'Nog geen prijsbron gevonden'} style={{
                                                     fontSize: 11, padding: '3px 8px', borderRadius: 5,
-                                                    background: 'rgba(196,163,90,.08)', border: '1px solid rgba(196,163,90,.2)',
+                                                    background: c.matched ? 'rgba(34,197,94,.07)' : 'rgba(196,163,90,.08)',
+                                                    border: c.matched ? '1px solid rgba(34,197,94,.3)' : '1px solid rgba(196,163,90,.2)',
                                                     color: 'var(--text)',
-                                                }}>{c}</span>
+                                                }}>
+                                                    {c.naam}
+                                                    {c.qtyPp > 0 && <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}> · {fmtQty(c.qtyPp, c.unit)}</span>}
+                                                </span>
                                             ))}
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Bereiding — eerste stappen, de rest staat in het formulier */}
+                                {result.fill.bereidingswijze && (
+                                    <div style={{ marginTop: 12 }}>
+                                        <MREyebrow style={{ marginBottom: 6 }}>Bereiding</MREyebrow>
+                                        <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: 'var(--text)', lineHeight: 1.5 }}>
+                                            {result.fill.bereidingswijze.split('\n').slice(0, 4).map((s, i) => (
+                                                <li key={i}>{s.replace(/^\d+\.\s*/, '')}</li>
+                                            ))}
+                                        </ol>
+                                        {result.fill.bereidingswijze.split('\n').length > 4 && (
+                                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                                                + {result.fill.bereidingswijze.split('\n').length - 4} stappen meer in het formulier
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -339,7 +495,6 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                     <MRButton variant="primary" icon={<Plus size={13} />} sm onClick={() => onAccept?.(result)}>
                                         Maak gerecht
                                     </MRButton>
-                                    <MRButton variant="ghost" icon={<Bookmark size={13} />} sm>Opslaan</MRButton>
                                     <MRButton variant="ghost" icon={<RefreshCw size={13} />} sm onClick={handleGenerate}>Opnieuw</MRButton>
                                 </div>
                             </div>
@@ -367,7 +522,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                         display: 'flex', flexDirection: 'column', gap: 12,
                         background: 'rgba(0,0,0,.2)', overflowY: 'auto',
                     }}>
-                        <MREyebrow>AI Thinking Trail</MREyebrow>
+                        <MREyebrow>Wat de AI opleverde</MREyebrow>
                         {thinking ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {THINKING_STEPS.map((step, i) => (
@@ -391,17 +546,20 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                             </div>
                         ) : result ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {DONE_STEPS.map((s, i) => (
+                                {summaryLines(result).map((s, i) => (
                                     <div key={i} style={{
-                                        fontSize: 11, color: 'var(--green, #22c55e)',
+                                        fontSize: 11, color: s.ok ? 'var(--green, #22c55e)' : 'var(--muted)',
                                         padding: '6px 8px', borderRadius: 5,
-                                        background: 'rgba(34,197,94,.05)',
-                                    }}>{s}</div>
+                                        background: s.ok ? 'rgba(34,197,94,.05)' : 'rgba(255,255,255,.03)',
+                                    }}>{s.ok ? '✓ ' : '○ '}{s.text}</div>
                                 ))}
+                                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>
+                                    Kostprijs komt uit je eigen catalogus en voorraad, niet uit de AI. Allergenen worden bij opslaan gecheckt en vastgelegd.
+                                </div>
                             </div>
                         ) : (
                             <div style={{ fontSize: 12, color: 'var(--muted)', fontStyle: 'italic' }}>
-                                Genereer een gerecht om de AI-gedachtegang te zien.
+                                Genereer een gerecht; hier zie je wat er echt is opgeleverd en gekoppeld.
                             </div>
                         )}
                     </div>

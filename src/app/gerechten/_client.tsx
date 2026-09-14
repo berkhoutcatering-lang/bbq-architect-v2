@@ -19,6 +19,7 @@ import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
+import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
 import GerechtenKpiTiles from './_components/GerechtenKpiTiles';
 /* Bucket C (2026-05-25) — IA opschonen: nieuwe Menu-hub components vervangen
@@ -554,6 +555,42 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         }));
         showToast(`AI vulde recept in (${meta.matched_count} matched, ${meta.estimated_count} geschat — €${(meta.cost_cents / 100).toFixed(3)})`, 'success');
     }
+
+    /* "Maak gerecht" vanuit Bedenk met AI. Opent een leeg formulier en vult het
+       via dezelfde applyAiFill als de knop "AI: vul recept in" — receptuur met
+       hoeveelheden, bereidingsstappen, catalogus-gekoppelde kostprijs. Wat
+       AiFillResult niet kent (gang, battle plan, bereidingstijd) zetten we
+       apart. Geen verzonnen verkoopprijs meer: die vult Sam zelf. */
+    function acceptBedenkerResult(result: BedenkerResult) {
+        newGerecht();
+        const aiGang = String(result.gang ?? '').toLowerCase().trim();
+        const gangMatch = gangen.find((x) =>
+            (x.slug ?? '').toLowerCase() === aiGang || (x.naam ?? '').toLowerCase() === aiGang);
+        setForm((f: any) => Object.assign({}, f, {
+            gang_slug: gangMatch?.slug ?? f.gang_slug,
+            bron: 'ai',
+            battle_plan_steps: result.battlePlan,
+            target_prep_time: result.prepTimeSeconds || 0,
+        }));
+        applyAiFill(result.fill, result.meta);
+    }
+
+    /* Overdracht vanuit de URL-gestuurde modal (?modal=bedenker, gemount in
+       de layout): die kent dit formulier niet en legt het resultaat klaar. */
+    useEffect(() => {
+        function consume() {
+            try {
+                const raw = sessionStorage.getItem(BEDENKER_HANDOFF_KEY);
+                if (!raw) return;
+                sessionStorage.removeItem(BEDENKER_HANDOFF_KEY);
+                acceptBedenkerResult(JSON.parse(raw) as BedenkerResult);
+            } catch { /* kapotte overdracht → gewoon niets openen */ }
+        }
+        consume();
+        window.addEventListener(BEDENKER_HANDOFF_EVENT, consume);
+        return () => window.removeEventListener(BEDENKER_HANDOFF_EVENT, consume);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gangen.length]);
 
     /* "Maak component van dit Bidfood-product" — bewaart een leverancier-match
        als herbruikbare bought_in-component, zodat het ingrediënt de volgende
@@ -1807,26 +1844,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 onClose={() => setBedenkerOpen(false)}
                 onAccept={(result) => {
                     setBedenkerOpen(false);
-                    /* Maak gerecht-form aan met AI-resultaat als basis. */
-                    setEditing('new');
-                    /* Neem de door de AI voorgestelde gang over (bv. "Dessert")
-                       i.p.v. altijd de actieve/eerste gang — match op slug of naam. */
-                    const aiGang = String(result.gang ?? '').toLowerCase().trim();
-                    const gangMatch = gangen.find((x) =>
-                        (x.slug ?? '').toLowerCase() === aiGang || (x.naam ?? '').toLowerCase() === aiGang);
-                    setForm({
-                        naam: result.name,
-                        beschrijving: result.desc,
-                        gang_slug: gangMatch?.slug ?? activeGang ?? gangen[0]?.slug,
-                        kostprijs_pp: result.cost,
-                        verkoopprijs: result.price,
-                        bron: 'ai',
-                        status: 'concept',
-                        ingredienten: result.components,
-                        allergenen: [],
-                        tags: [],
-                        ingredient_costs: [],
-                    } as Record<string, any>);
+                    acceptBedenkerResult(result);
                 }}
             />
 
