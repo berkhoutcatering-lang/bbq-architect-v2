@@ -248,6 +248,8 @@ Classificeer deze bon. Output: alleen JSON.`;
               rgs_code: code,
               rgs_category_label: cat.label,
               ai_classify_status: status,
+              // Kistje-status meeschrijven: één beeld voor cateraar en boekhouder
+              status: status === 'twijfel' ? 'twijfel' : 'bevestigd',
               ai_classify_confidence: confidence,
               ai_classify_reasoning: parsed.reasoning || null,
               classified_at: new Date().toISOString(),

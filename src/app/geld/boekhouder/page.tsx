@@ -91,6 +91,11 @@ function defaultMonth(): string {
 export default function BoekhouderPage() {
   const toast = useToast();
   const [tab, setTab] = useState<Tab>('stapel');
+  // ?tab=twijfel (vanuit de werkbank in het Bonnenkistje) opent direct de twijfel-stapel
+  useEffect(function () {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (t === 'twijfel' || t === 'verkoop' || t === 'pakket' || t === 'afsluiten' || t === 'archief') setTab(t as Tab);
+  }, []);
   const [month, setMonth] = useState<string>(defaultMonth());
   /* rangeMode 'last3' (default) toont 3 maanden zodat een bon van vorige maand
      niet "verdwijnt" zodra Sam de nieuwe maand in gaat. Sam kan switchen naar

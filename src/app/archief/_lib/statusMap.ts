@@ -32,7 +32,7 @@ export interface StatusVisual {
    · vergrendeld=send (blauw). */
 export const STATUS_VISUAL: Record<DisplayStatus, StatusVisual> = {
     pending: {
-        label: 'Pending',
+        label: 'Wachtend',
         display: 'pending',
         icon: 'clock',
         color: 'slate',
@@ -104,4 +104,22 @@ export function expandFilterStatus(filter: DisplayStatus): BonStatus[] {
         case 'pending':   return ['pending'];
         case 'vergrendeld': return ['vergrendeld'];
     }
+}
+
+/**
+ * Status zoals de cateraar 'm ziet: het oordeel van de boekhouder wint.
+ * Vergrendeld > boekhouder (bevestigd/twijfel) > kistje-status. Oude rijen
+ * waar de boekhouder al iets zei maar `status` nog 'pending' stond, tonen
+ * zo toch het juiste beeld.
+ */
+export function getBonStatusVisual(bon: {
+    status: string | null | undefined;
+    ai_classify_status?: string | null;
+    locked_at?: string | null;
+}): StatusVisual {
+    if (bon.locked_at) return STATUS_VISUAL.vergrendeld;
+    const ai = bon.ai_classify_status;
+    if (ai === 'verified' || ai === 'auto_accepted' || ai === 'manual') return STATUS_VISUAL.bevestigd;
+    if (ai === 'twijfel') return STATUS_VISUAL.twijfel;
+    return getStatusVisual(bon.status);
 }

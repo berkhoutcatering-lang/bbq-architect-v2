@@ -23,8 +23,8 @@ import { useState } from 'react';
 import { useQueryState, parseAsStringEnum } from 'nuqs';
 import { ChevronUp, ChevronDown, Lock, Tag, Download, Sparkles } from 'lucide-react';
 import type { BonRow } from '@/lib/dal/bonnen';
-import { getStatusVisual } from '../_lib/statusMap';
-import { LeverancierKoppelChip } from './LeverancierKoppelChip';
+import { getBonStatusVisual } from '../_lib/statusMap';
+import { Link2 } from 'lucide-react';
 import { fmtEur, fmtDateShort } from './format';
 
 interface Props {
@@ -35,6 +35,7 @@ interface Props {
     onBonClick: (bon: BonRow) => void;
     onBulkTag?: () => void;
     onBulkExport?: () => void;
+    onKoppel: (bon: BonRow) => Promise<void>;
 }
 
 const columnHelper = createColumnHelper<BonRow>();
@@ -47,6 +48,7 @@ export function BonTable({
     onBonClick,
     onBulkTag,
     onBulkExport,
+    onKoppel,
 }: Props) {
     const [density, setDensity] = useQueryState(
         'density',
@@ -98,13 +100,31 @@ export function BonTable({
             columnHelper.accessor((row) => row.leverancier_naam ?? row.winkel, {
                 id: 'leverancier',
                 header: 'Leverancier',
-                cell: ({ row, getValue }) => (
-                    <div className="flex items-center gap-2 font-semibold">
-                        {(getValue() as string) ?? '—'}
-                        {row.original.locked_at && <Lock size={10} className="text-[var(--blue)]" />}
-                        <LeverancierKoppelChip bon={row.original} />
-                    </div>
-                ),
+                cell: ({ row, getValue }) => {
+                    const b = row.original;
+                    const gekoppeld = !!b.leverancier_id;
+                    const kanKoppelen = !gekoppeld && (b.winkel?.trim().length ?? 0) >= 2 && !b.locked_at;
+                    return (
+                        <div className="flex items-center gap-2 font-semibold">
+                            <span
+                                className={`bk-dot ${gekoppeld ? 'bk-dot--ok' : 'bk-dot--los'}`}
+                                title={gekoppeld ? 'Gekoppeld aan een leverancierskaart' : 'Nog geen leverancierskaart'}
+                            />
+                            {(getValue() as string) ?? '—'}
+                            {b.locked_at && <Lock size={10} className="text-[var(--blue)]" />}
+                            {kanKoppelen && (
+                                <button
+                                    type="button"
+                                    className="bk-link-inline"
+                                    onClick={(e) => { e.stopPropagation(); void onKoppel(b); }}
+                                    title={`Maak een leverancierskaart voor "${b.winkel}" aan en koppel deze bon`}
+                                >
+                                    <Link2 size={11} /> Koppel
+                                </button>
+                            )}
+                        </div>
+                    );
+                },
             }),
             columnHelper.accessor('totaal_bedrag', {
                 header: 'Bedrag',
@@ -140,8 +160,8 @@ export function BonTable({
             }),
             columnHelper.accessor('status', {
                 header: 'Status',
-                cell: ({ getValue }) => {
-                    const v = getStatusVisual(getValue());
+                cell: ({ row }) => {
+                    const v = getBonStatusVisual(row.original);
                     return (
                         <span
                             className={`inline-flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5 text-[10px] font-semibold ${v.pillClass}`}
@@ -175,7 +195,7 @@ export function BonTable({
                 enableSorting: false,
             }),
         ],
-        [allSelected, onSelect, onSelectAll, selectedIds],
+        [allSelected, onSelect, onSelectAll, selectedIds, onKoppel],
     );
 
     const table = useReactTable({

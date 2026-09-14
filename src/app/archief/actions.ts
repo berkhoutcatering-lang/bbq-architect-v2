@@ -544,3 +544,87 @@ export async function getSignedUrlAction(input: unknown) {
         return { ok: false as const, error: e instanceof Error ? e.message : 'Kon URL niet ophalen' };
     }
 }
+
+// ── Werkbank: alle losse facturen in één keer koppelen ────────────────
+//
+// Voor elke bon zonder leverancierskaart maar mét naam van de factuur
+// (winkel): zoek een bestaande kaart op die naam (hoofdletterongevoelig),
+// anders maak er één aan (type 'inkoop'), en hang de bon eraan. Dezelfde
+// naam op meerdere facturen krijgt één kaart. De UI laat vóór het klikken
+// zien welke namen dat worden — mens blijft de baas over de lijst.
+
+export async function linkAllLosseLeveranciersAction() {
+    try {
+        const { sb, orgId } = await getAuthContext();
+        const { getWerkbank } = await import('@/lib/dal/bonnen');
+        const { losse } = await getWerkbank(sb, orgId);
+        if (losse.length === 0) return { ok: true as const, bonnen: 0, nieuw: 0, hergebruikt: 0 };
+
+        const { data: bestaand } = await sb
+            .from('leveranciers')
+            .select('id, naam')
+            .eq('organization_id', orgId)
+            .is('archived_at', null);
+        const idByNaam = new Map<string, number>();
+        for (const l of bestaand ?? []) idByNaam.set(String(l.naam).trim().toLowerCase(), l.id);
+
+        let nieuw = 0;
+        let hergebruikt = 0;
+        let bonnen = 0;
+        const perNaam = new Map<string, WerkbankLosLike[]>();
+        for (const l of losse) {
+            const k = l.naam.toLowerCase();
+            if (!perNaam.has(k)) perNaam.set(k, []);
+            perNaam.get(k)!.push(l);
+        }
+
+        for (const [k, groep] of perNaam) {
+            let levId = idByNaam.get(k) ?? null;
+            if (levId) {
+                hergebruikt += 1;
+            } else {
+                const { data: ins, error: insErr } = await sb
+                    .from('leveranciers')
+                    .insert({ organization_id: orgId, naam: groep[0].naam, type: 'inkoop' })
+                    .select('id')
+                    .single();
+                if (insErr || !ins) throw new Error(insErr?.message ?? `Kon leverancier "${groep[0].naam}" niet aanmaken`);
+                levId = ins.id;
+                idByNaam.set(k, levId);
+                nieuw += 1;
+            }
+            const { error: updErr } = await sb
+                .from('bonnen')
+                .update({ leverancier_id: levId })
+                .eq('organization_id', orgId)
+                .in('id', groep.map((g) => g.id));
+            if (updErr) throw new Error(updErr.message);
+            bonnen += groep.length;
+        }
+
+        revalidatePath('/archief');
+        revalidatePath('/geld/boekhouder');
+        return { ok: true as const, bonnen, nieuw, hergebruikt };
+    } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Koppelen mislukt' };
+    }
+}
+
+type WerkbankLosLike = { id: number; naam: string };
+
+// ── Signed URLs in bulk — voor de echte thumbnails in het kistje ──────
+
+const signedUrlsSchema = z.object({ bonIds: z.array(z.number().int().positive()).max(60) });
+
+export async function getSignedUrlsAction(input: unknown) {
+    try {
+        const { bonIds } = signedUrlsSchema.parse(input);
+        const { sb } = await getAuthContext();
+        const { getBonSignedUrls } = await import('@/lib/dal/bonnen');
+        // RLS beperkt tot de eigen org; korte TTL want dit is alleen voor thumbnails
+        const urls = await getBonSignedUrls(sb, bonIds, 900);
+        return { ok: true as const, urls };
+    } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Kon bestanden niet ophalen' };
+    }
+}

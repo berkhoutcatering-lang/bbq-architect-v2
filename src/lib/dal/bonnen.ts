@@ -40,6 +40,8 @@ export interface BonRow {
     btw_hoog_bedrag: number | null;      // 21% aggregate
     netto_bedrag: number | null;
     status: BonStatus;
+    /** oordeel van de boekhouder (verified/auto_accepted/manual/twijfel/pending) — wint van `status` in de UI */
+    ai_classify_status?: string | null;
     source: BonSource;
     categorie: string | null;
     rgs_code: string | null;
@@ -130,7 +132,7 @@ export async function searchBonnen(
     // Zonder search-query: normale builder.
     let q = sb
         .from('bonnen')
-        .select('id, organization_id, leverancier_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, status, source, categorie, rgs_code, rgs_category_label, tags, notities, image_url, file_path, file_mime, locked_at, locked_by, voorbelasting_bevestigd, zakelijk_pct, voorbelasting_bevestigd_at, extracted_text, bon_items, created_at, updated_at, leveranciers(naam)')
+        .select('id, organization_id, leverancier_id, winkel, datum, totaal_bedrag, btw_laag_bedrag, btw_hoog_bedrag, netto_bedrag, status, ai_classify_status, source, categorie, rgs_code, rgs_category_label, tags, notities, image_url, file_path, file_mime, locked_at, locked_by, voorbelasting_bevestigd, zakelijk_pct, voorbelasting_bevestigd_at, extracted_text, bon_items, created_at, updated_at, leveranciers(naam)')
         .eq('organization_id', orgId)
         .order('datum', { ascending: false, nullsFirst: false })
         .limit(filters.limit)
@@ -434,4 +436,107 @@ export async function moveInboxToArchive(
     });
     if (error) throw error;
     return { bonId: data as number };
+}
+
+// ── Werkbank: wat moet er nog gebeuren in het kistje? ───────────────────
+//
+// Drie tellingen over de héle org (niet gefilterd), zodat de werkbank
+// bovenaan altijd klopt, ongeacht welke filters er aan staan:
+//   - losse: bon heeft een naam van de factuur (winkel) maar geen
+//     leverancierskaart — één klik koppelt ze allemaal
+//   - pending: nog niet door de AI-classificatie van de boekhouder
+//   - twijfel: de boekhouder twijfelt, mens moet kijken
+
+export interface WerkbankLos {
+    id: number;
+    naam: string;
+    datum: string | null;
+    totaal_bedrag: number;
+}
+
+export interface Werkbank {
+    losse: WerkbankLos[];
+    /** unieke namen uit `losse`, in volgorde van eerste voorkomen */
+    losseNamen: string[];
+    pending: Array<{ id: number; naam: string | null }>;
+    twijfel: { count: number; totaal_bedrag: number };
+}
+
+export async function getWerkbank(sb: SupabaseClient, orgId: string): Promise<Werkbank> {
+    const { data, error } = await sb
+        .from('bonnen')
+        .select('id, winkel, leverancier_id, ai_classify_status, totaal_bedrag, datum, leveranciers(naam)')
+        .eq('organization_id', orgId)
+        .is('locked_at', null)
+        .order('datum', { ascending: false })
+        .limit(1000);
+    if (error) throw error;
+
+    type Row = {
+        id: number; winkel: string | null; leverancier_id: number | null;
+        ai_classify_status: string | null; totaal_bedrag: number | string | null; datum: string | null;
+        leveranciers: { naam: string } | { naam: string }[] | null;
+    };
+    const rows = (data ?? []) as unknown as Row[];
+    const naamVan = (r: Row) => {
+        const lev = Array.isArray(r.leveranciers) ? r.leveranciers[0] : r.leveranciers;
+        return lev?.naam ?? r.winkel ?? null;
+    };
+
+    const losse: WerkbankLos[] = rows
+        .filter((r) => !r.leverancier_id && (r.winkel?.trim().length ?? 0) >= 2)
+        .map((r) => ({ id: r.id, naam: r.winkel!.trim(), datum: r.datum, totaal_bedrag: Number(r.totaal_bedrag ?? 0) }));
+    const losseNamen: string[] = [];
+    const seen = new Set<string>();
+    for (const l of losse) {
+        const k = l.naam.toLowerCase();
+        if (!seen.has(k)) { seen.add(k); losseNamen.push(l.naam); }
+    }
+
+    const pending = rows
+        .filter((r) => !r.ai_classify_status || r.ai_classify_status === 'pending')
+        .map((r) => ({ id: r.id, naam: naamVan(r) }));
+
+    const twijfelRows = rows.filter((r) => r.ai_classify_status === 'twijfel');
+    const twijfel = {
+        count: twijfelRows.length,
+        totaal_bedrag: twijfelRows.reduce((s, r) => s + Number(r.totaal_bedrag ?? 0), 0),
+    };
+
+    return { losse, losseNamen, pending, twijfel };
+}
+
+// ── Signed URLs in bulk (thumbnails in het kistje) ──────────────────────
+
+export async function getBonSignedUrls(
+    sb: SupabaseClient,
+    bonIds: number[],
+    ttlSeconds = 3600,
+): Promise<Record<number, { url: string; mime: string | null }>> {
+    if (bonIds.length === 0) return {};
+    const { data: bonnen, error } = await sb
+        .from('bonnen')
+        .select('id, file_path, file_mime, image_url')
+        .in('id', bonIds);
+    if (error || !bonnen) return {};
+
+    const out: Record<number, { url: string; mime: string | null }> = {};
+    const metPad = bonnen.filter((b) => !!b.file_path);
+    if (metPad.length > 0) {
+        const { data: signed } = await sb.storage
+            .from('bonnen')
+            .createSignedUrls(metPad.map((b) => b.file_path as string), ttlSeconds);
+        const byPath = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
+        for (const b of metPad) {
+            const url = byPath.get(b.file_path as string);
+            if (url) out[b.id] = { url, mime: b.file_mime };
+        }
+    }
+    // Legacy rows: data-URL of http-URL rechtstreeks
+    for (const b of bonnen) {
+        if (!out[b.id] && b.image_url && /^(data:|https?:)/.test(b.image_url)) {
+            out[b.id] = { url: b.image_url, mime: b.image_url.startsWith('data:application/pdf') ? 'application/pdf' : 'image/*' };
+        }
+    }
+    return out;
 }
