@@ -16,6 +16,7 @@ import { Check, Lock, Calendar } from 'lucide-react';
 import type { BonRow } from '@/lib/dal/bonnen';
 import { BonReceiptThumb } from './BonReceiptThumb';
 import { getStatusVisual } from '../_lib/statusMap';
+import { LeverancierKoppelChip } from './LeverancierKoppelChip';
 import { fmtEur, fmtDateShort } from './format';
 
 interface Props {
@@ -124,6 +125,8 @@ function BonMasonryCard({ bon, selected, onSelect, onClick, delay }: CardProps) 
             : bon.file_mime?.startsWith('image/')
               ? 'image'
               : 'pdf';
+    // Legacy-categorie wint (heeft eigen kleur); anders het RGS-label van de boekhouder
+    const catLabel = bon.categorie ?? bon.rgs_category_label ?? null;
     const catColor = bon.categorie ? CATEGORY_COLORS[bon.categorie] ?? 'var(--muted)' : 'var(--muted)';
 
     return (
@@ -198,12 +201,15 @@ function BonMasonryCard({ bon, selected, onSelect, onClick, delay }: CardProps) 
 
             {/* Content */}
             <div className="px-3.5 pt-3 pb-3.5">
-                <div
-                    className="mb-1 truncate text-[16px] font-light tracking-tight"
-                    style={{ fontFamily: 'var(--font-display)', color: 'var(--text)' }}
-                    title={bon.leverancier_naam ?? bon.winkel ?? ''}
-                >
-                    {bon.leverancier_naam ?? bon.winkel ?? '—'}
+                <div className="mb-1 flex items-center justify-between gap-2">
+                    <div
+                        className="truncate text-[16px] font-light tracking-tight"
+                        style={{ fontFamily: 'var(--font-display)', color: 'var(--text)' }}
+                        title={bon.leverancier_naam ?? bon.winkel ?? ''}
+                    >
+                        {bon.leverancier_naam ?? bon.winkel ?? '—'}
+                    </div>
+                    <LeverancierKoppelChip bon={bon} />
                 </div>
 
                 <div className="mb-2.5 flex items-center justify-between gap-2">
@@ -234,7 +240,7 @@ function BonMasonryCard({ bon, selected, onSelect, onClick, delay }: CardProps) 
                 )}
 
                 <div className="flex items-center justify-between gap-2">
-                    {bon.categorie ? (
+                    {catLabel ? (
                         <span
                             className="truncate rounded-[5px] px-1.5 py-0.5 text-[10px] font-semibold"
                             style={{
@@ -243,7 +249,7 @@ function BonMasonryCard({ bon, selected, onSelect, onClick, delay }: CardProps) 
                                 border: `1px solid color-mix(in srgb, ${catColor} 25%, transparent)`,
                             }}
                         >
-                            {bon.categorie}
+                            {catLabel}
                         </span>
                     ) : bon.source === 'email' ? (
                         <span

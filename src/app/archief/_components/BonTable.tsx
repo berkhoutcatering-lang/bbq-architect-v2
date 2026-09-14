@@ -24,6 +24,7 @@ import { useQueryState, parseAsStringEnum } from 'nuqs';
 import { ChevronUp, ChevronDown, Lock, Tag, Download, Sparkles } from 'lucide-react';
 import type { BonRow } from '@/lib/dal/bonnen';
 import { getStatusVisual } from '../_lib/statusMap';
+import { LeverancierKoppelChip } from './LeverancierKoppelChip';
 import { fmtEur, fmtDateShort } from './format';
 
 interface Props {
@@ -101,6 +102,7 @@ export function BonTable({
                     <div className="flex items-center gap-2 font-semibold">
                         {(getValue() as string) ?? '—'}
                         {row.original.locked_at && <Lock size={10} className="text-[var(--blue)]" />}
+                        <LeverancierKoppelChip bon={row.original} />
                     </div>
                 ),
             }),
@@ -127,7 +129,7 @@ export function BonTable({
                 header: 'Categorie (RGS)',
                 cell: ({ row, getValue }) => (
                     <div className="flex items-center gap-1.5">
-                        <span className="text-[var(--muted)]">{(getValue() as string) ?? '—'}</span>
+                        <span className="text-[var(--muted)]">{(getValue() as string) ?? row.original.rgs_category_label ?? '—'}</span>
                         {row.original.rgs_code && (
                             <span className="font-mono text-[10px] text-[var(--muted-light)]">
                                 {row.original.rgs_code}

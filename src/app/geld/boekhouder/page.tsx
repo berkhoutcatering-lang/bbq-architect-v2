@@ -419,14 +419,39 @@ function BonRow({ row, expanded, onToggle, onPatch, onReclassify, onOpenFile }: 
   const status = row.ai_classify_status;
   const conf = row.ai_classify_confidence;
   const cat = row.rgs_code ? RGS_BY_CODE[row.rgs_code] : null;
+  const [linking, setLinking] = useState(false);
   return (
     <li className={'bh-row bh-row--' + (status || 'pending')}>
-      <button className="bh-row__main" onClick={onToggle} aria-expanded={expanded}>
+      {/* div i.p.v. button: de koppel-knop in de regel mag niet in een button genest zitten */}
+      <div
+        className="bh-row__main"
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        aria-expanded={expanded}
+      >
         <span className="bh-row__date">{fmtDate(row.datum)}</span>
         <span className="bh-row__leverancier">
-          {row.leverancier_naam || '(geen leverancier)'}
-          {row.leverancier_naam && !row.leverancier_gekoppeld && (
-            <span title="Naam van de factuur — nog geen leverancierskaart gekoppeld" style={{ marginLeft: 6, fontSize: 10, color: 'var(--muted)', fontWeight: 400 }}>niet gekoppeld</span>
+          <span className="bh-row__leverancier-naam">{row.leverancier_naam || '(geen leverancier)'}</span>
+          {row.leverancier_gekoppeld ? (
+            <span className="bh-link bh-link--ok" title="Gekoppeld aan een leverancierskaart"><Check size={10} /> gekoppeld</span>
+          ) : row.winkel && !row.locked_at ? (
+            <button
+              type="button"
+              className="bh-link bh-link--todo"
+              disabled={linking}
+              title={`Maak een leverancierskaart voor "${row.winkel}" aan (of pak de bestaande) en koppel deze bon`}
+              onClick={async e => {
+                e.stopPropagation();
+                setLinking(true);
+                try { await onPatch(row.id, 'link_leverancier'); } finally { setLinking(false); }
+              }}
+            >
+              {linking ? <Loader2 size={10} className="bh-spin" /> : <Link2 size={10} />} Koppel leverancier
+            </button>
+          ) : (
+            <span className="bh-link bh-link--none" title="Geen naam op de bon gevonden">niet gekoppeld</span>
           )}
         </span>
         <span className="bh-row__totaal">{fmtEur(row.totaal_bedrag)}</span>
@@ -446,7 +471,7 @@ function BonRow({ row, expanded, onToggle, onPatch, onReclassify, onOpenFile }: 
           </span>
         )}
         <StatusBadge status={status} locked={!!row.locked_at} />
-      </button>
+      </div>
 
       {expanded && (
         <div className="bh-row__detail">
@@ -465,14 +490,6 @@ function BonRow({ row, expanded, onToggle, onPatch, onReclassify, onOpenFile }: 
             )}
           </div>
 
-          {row.winkel && !row.leverancier_gekoppeld && !row.locked_at && (
-            <div className="bh-row__reasoning" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span>Op de factuur staat <strong>{row.winkel}</strong>, maar er is nog geen leverancierskaart aan gekoppeld.</span>
-              <button className="bh-btn-secondary" onClick={() => onPatch(row.id, 'link_leverancier')}>
-                <Link2 size={12} /> Leverancier aanmaken &amp; koppelen
-              </button>
-            </div>
-          )}
 
           <div className="bh-row__cat-picker">
             <label style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>Categorie wijzigen:</label>
