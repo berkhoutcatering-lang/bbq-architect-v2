@@ -137,6 +137,13 @@ Eerst gecontroleerd, niet aangenomen: de ontleder laat tijden **bewust** leeg bi
 **Nagetest tot op het bord (15 sep, op verzoek van Mathijs):** proefrun van de planner (`/api/prep/bulk-schedule`, dryRun) op het event van 18 sep met de nieuwe gerechten. De BBQ-saus wordt 11 taken, teruggerekend vanaf de uitlevering (14:32 → 15:00), elk met bewerking en apparaat. Batch-sleutels (bewerking + onderdeel + apparaat + dag) doen wat ze moeten: rode ui en dille snijden van de coleslaw worden één snijblok, portioneren van saus en coleslaw gaat samen, de dressing wordt een dag naar voren getrokken.
 Gevonden en gefixt: Smokey's Chicken Sandwich stond met de ranchsaus **vier keer** op het bord. De opslagroute plakte bij een bouwsteen die al bestond de stappen erbíj (9 sep, vier keer opgeslagen). Nu worden de stappen van een bouwsteen vervangen, en de 14 oude dubbelen zijn opgeruimd (migratie `20260915140000`, live): 52 → 38 taken.
 
+**Receptuur zelf nagelezen als kok (15 sep, op verzoek van Mathijs).** BBQ-saus en coleslaw kloppen als recept: volgorde, apparaat, wat vooruit mag, dille pas vlak voor serveren. Drie dingen gevonden en in de controle-laag van de ontleder gezet (`controleer` / `metKeuzesVerwerkt`, met tests):
+- het model verwees naar het **gerecht zelf** als onderdeel → stil rechtgezet, geen vraag;
+- **"tot gebruik" kreeg 1440 minuten** — bedacht; een wachttijd van 4 uur of meer zonder getal of tijdwoord in de zin gaat eruit en wordt gemeten (korte duren bij handwerk blijven);
+- een **hittestap zonder apparaat** (25 min sudderen) erft het toestel van de stap ervoor in hetzelfde deel, mét vraag "zelfde inductieplaat?" — anders reserveert de planner de plaat niet;
+- afrondende stappen (proeven, portioneren, garneren) hangen aan de stap ervoor;
+- een keuze-antwoord landt nu ook op de stap als het geen temperatuur is: "elke 5 minuten roeren" → herhaling + toezicht, "25 minuten" → wachttijd, "doorlopend bij de pan" → toezicht. Eerder stond dat wél bij het gerecht maar niet waar de planner kijkt.
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.
