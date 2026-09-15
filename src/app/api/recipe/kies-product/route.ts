@@ -74,10 +74,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             ai_suggested: false,
             approved_at: new Date().toISOString(),
             approved_by: userId,
+            leverancier_naam: leverancier || null,
             description: leverancier ? `Ingekocht bij ${leverancier}. Prijs zelf ingevuld.` : 'Prijs zelf ingevuld.',
         };
         const { data: comp, error } = bestaand
-            ? await supabase.from('components').update({ base_quantity: 1, base_unit: per, base_cost_cents: rij.base_cost_cents, description: rij.description }).eq('id', bestaand.id).eq('organization_id', orgId).select('id').single()
+            ? await supabase.from('components').update({ base_quantity: 1, base_unit: per, base_cost_cents: rij.base_cost_cents, leverancier_naam: rij.leverancier_naam, description: rij.description }).eq('id', bestaand.id).eq('organization_id', orgId).select('id').single()
             : await supabase.from('components').insert(rij).select('id').single();
         if (error || !comp) return NextResponse.json({ error: error?.message ?? 'Bouwsteen aanmaken mislukte' }, { status: 500 });
 
