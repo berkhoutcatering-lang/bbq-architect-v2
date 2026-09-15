@@ -73,25 +73,36 @@ Bekende gevallen die golf 1 níet oplost (bewust — dit is semantiek, dus golf 
 - Strenger dan bij een recept: alleen een treffer als álle woorden van het item in het product zitten en de zekerheid niet "laag" is. "hotdog broodjes" landde anders op *Hotdog halal, blik 32 stuks*. Gevolg: "gerookte bavette" en "pastrami" komen in "niet bij Bidfood" — één keer *Koppel aan Bidfood* op de regel en ze staan er voortaan.
 - Meting: Bidfood 3 zekere treffers + 6 niet-bij (2 eigen productie); Sligro 2 + 7.
 
-## Golf 4 — Eén receptuur-pijplijn, met leren (gepland 15 sep)
+## Golf 4 — Koppelronde + leren (gepland 15 sep)
 
-Mathijs, 15 sep: *"Ik heb nog voor niks echt recepturen. Ik wil alles met AI gaan bedenken, en die AI moet dan uit zichzelf die micro-stappen erin zetten."* De 26 bestaande gerechten zijn aantekeningen, geen bibliotheek. Dat schrapt de eenmalige koppelronde en maakt Bedenk met AI dé ingang.
+Waarom: de woord-matcher kent geen synoniemen ("appelciderazijn" ↔ "Appelazijn"); golf 2 lost dat op, maar alleen op klik. En wat Mathijs één keer bevestigt, moet de app daarna gewoon wéten.
+
+Twee gevallen, één harde regel:
+- **Andere naam voor hetzelfde** (appelciderazijn = appelazijn = ciderazijn) → ja, automatisch.
+- **Ander product dat erop lijkt** (frietsaus naast mayonaise, 70% naast 80%) → nooit zonder Mathijs; de AI mag het voorstellen mét reden, niet kiezen.
+
+1. **Eenmalige koppelronde vanaf Mathijs' kant** — de bestaande gerechten tellen mee (Mathijs, 15 sep: "die moet je wel meedoen"). Alle ingrediëntnamen die al in de app staan (gemeten 15 sep: 51 uit gerechten, 63 componenten, 28 voorraad-items, ~150 uniek) → per naam het Bidfood-product via de alternatieven-route → **goedkeur-lijst** (patroon van de prijslijst-lezer): ingrediënt → voorgesteld product → prijs → reden; per regel *goed* / *ander product* / *laat leeg*. Kosten: enkele euro's, eenmalig.
+2. **Alias per bedrijf.** Wat Mathijs goedkeurt landt in `org_product_aliases` (bestaat al voor de prijslijst-lezer; de receptuur-matcher kijkt er nog niet in). Alias = genormaliseerde ingrediëntnaam → product (id + naam, zodat hij na een nieuwe prijslijst op naam terug te vinden is). De matcher kijkt eerst in de aliassen, dan pas in de catalogus.
+3. **Automatisch leren.** Vindt de woord-matcher niets (of alleen "laag"), dan draait de synoniemen-stap meteen mee bij het maken van het recept — niet pas op klik. Resultaat krijgt "?"; na een ja van Mathijs wordt het een alias. Een bekend ingrediënt is daarna direct goed, zonder AI.
+
+Niet: alle 10.125 Bidfood-producten door de AI benoemen (benoemt 9.900 producten die nooit in een recept komen; helpt bij vinden, niet bij kiezen; elke nieuwe prijslijst maakt het weer onvolledig).
+
+## Golf 5 — Eén receptuur-pijplijn (gepland 15 sep)
+
+Mathijs, 15 sep: *"Ik wil alles met AI gaan bedenken, en die AI moet dan uit zichzelf die micro-stappen erin zetten."*
 
 Nu zijn er twee werelden:
 - **Receptlezer / ontleder** (`/api/recipe/ontleed`, ook zonder foto: "bedenk dit gerecht op onze werkwijze") → `recipe_steps` met bewerking, handtijd, wachttijd, "hoort bij onderdeel". Hier werken kookbord, planner en batchen op (ui snipperen ×3 = één keer).
 - **Bedenk met AI** en **AI: vul recept in** (`/api/recipe-generate`, `/api/recipe/ai-fill`) → `bereidingswijze` als platte tekst. Onzichtbaar voor de keuken.
 
-Golf 4 maakt daar één pijplijn van:
-1. **Bedenk met AI gaat door de ontleder.** Idee → gerecht → onderdelen → micro-stappen op onze werkwijze → ingrediënten. Geen tekst-recept meer; de stappen zijn het formaat. "AI: vul recept in" in het formulier gaat dezelfde weg.
-2. **Ingrediënten meteen koppelen én leren.** Elk ingrediënt uit de ontleder gaat door de matcher (golf 1); geen of onzekere treffer → automatisch de synoniemen-/alternatieven-stap (golf 2), niet pas op klik; resultaat krijgt "?". Wat Mathijs bevestigt wordt een alias van zijn bedrijf in `org_product_aliases` (naam → product-id + productnaam, zodat hij na een nieuwe prijslijst op naam terug te vinden is). De matcher kijkt daar voortaan éérst; een bekend ingrediënt is direct goed, zonder AI.
-3. **Harde regel** in prompt én test: andere naam voor hetzelfde (appelciderazijn = appelazijn) = ja; ander product dat erop lijkt (frietsaus naast mayonaise, 70% naast 80%) = nooit zonder Mathijs.
-4. **Opslaan via de bestaande ontleed-opslagroute** — één plek voor gerecht + componenten + stappen + ingrediëntkoppelingen.
+Golf 5 maakt daar één pijplijn van:
+1. **Bedenk met AI gaat door de ontleder.** Idee → gerecht → onderdelen → micro-stappen op onze werkwijze → ingrediënten, meteen gekoppeld via golf 1–4. Geen tekst-recept meer; de stappen zijn het formaat. "AI: vul recept in" gaat dezelfde weg.
+2. **De bestaande gerechten** (26, met alleen tekst-bereiding) gaan één keer door de ontleder, met een goedkeur-lijst per gerecht zoals bij de receptlezer, zodat ook die op het bord komen en gebatcht kunnen worden.
+3. **Opslaan via de bestaande ontleed-opslagroute** — één plek voor gerecht + componenten + stappen + ingrediëntkoppelingen.
 
 Eerst controleren, niet aannemen (uit een eerdere sessie): vult de ontleder al een eerste schatting van de duren in (het bord kan niet plannen op "onbekend"), en verdampen de keuze-antwoorden van de kok nog bij opslaan.
 
-Vervalt: de eenmalige koppelronde over bestaande namen, en het benoemen van alle 10.125 Bidfood-producten (benoemt 9.900 producten die nooit in een recept komen; helpt bij vinden, niet bij kiezen).
-
-Volgorde: na merge van #226 en #227.
+Volgorde: golf 4 → golf 5, na merge van #226 en #227.
 
 ## Wat we bewust níet doen
 
