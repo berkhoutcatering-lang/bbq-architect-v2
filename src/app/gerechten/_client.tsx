@@ -18,6 +18,7 @@ import { LoadingState } from '@/components/LoadingState';
 import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
+import { ALLERGENEN } from '@/lib/constants';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
@@ -301,13 +302,24 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        hoeft niets te doen — als hij geen allergenen had ingevuld, vullen we 'm
        automatisch aan met door AI gedetecteerde codes. Bestaande user-codes
        blijven behouden (we mergen, geen overschrijving). */
+    /* De detectie-route antwoordt in lettercodes (E, M, G …); het gerecht en de
+       rest van de app werken met woorden (ei, mosterd, gluten). Vertalen op de
+       grens, anders staan er twee talen door elkaar in gerechten.allergenen —
+       en dan herkent een filter "E" niet als ei. V/VE zijn dieetwensen, geen
+       allergenen: die horen hier niet thuis. */
+    const ALLERGEEN_CODE_NAAR_WOORD: Record<string, string> = {
+        G: 'gluten', L: 'lactose', N: 'noten', E: 'ei', S: 'soja', F: 'vis', M: 'mosterd',
+    };
+    function allergenenVoorDetectie(saveData: Record<string, any>): string[] {
+        const fromCosts = Array.isArray(saveData.ingredient_costs)
+            ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
+            : [];
+        const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
+        return (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
+    }
     async function detectAllergensViaAi(saveData: Record<string, any>): Promise<string[]> {
         try {
-            const fromCosts = Array.isArray(saveData.ingredient_costs)
-                ? saveData.ingredient_costs.map((c) => c?.naam).filter(Boolean)
-                : [];
-            const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
-            const ingredients = (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
+            const ingredients = allergenenVoorDetectie(saveData);
             if (ingredients.length === 0) return [];
 
             const res = await fetch('/api/detect-allergens', {
@@ -321,7 +333,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (Array.isArray(body.allergens) && body.allergens.length > 0) {
                 track('ai_allergen_detect', { dish: saveData.naam, count: body.allergens.length });
             }
-            return Array.isArray(body.allergens) ? body.allergens : [];
+            const codes: string[] = Array.isArray(body.allergens) ? body.allergens : [];
+            return [...new Set(codes.map((c) => ALLERGEEN_CODE_NAAR_WOORD[String(c).toUpperCase()]).filter(Boolean))];
         } catch (e) {
             console.warn('[gerecht] allergen detection failed:', e);
             return [];
@@ -400,10 +413,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 /* Block save, open modal. Modal-onSubmit roept commitSave aan met
                    de definitieve allergenen-merge op basis van user-decisions. */
                 setPendingAllergenSave(saveData);
+                const gekeken = allergenenVoorDetectie(saveData).length;
                 setAllergenModalRows(newOnes.map((a: string, i: number) => ({
                     id: `save-${i}-${a}`,
                     allergen: a,
-                    source: `AI-detectie via ${saveData.ingredient_costs?.length ?? saveData.ingredienten?.length ?? 0} ingrediënten`,
+                    label: ALLERGENEN.find((x) => x.code === a)?.label ?? a,
+                    source: `AI-detectie via ${gekeken} ingrediënt${gekeken === 1 ? '' : 'en'}`,
                     confidence: 90,
                 })));
                 return;
@@ -760,7 +775,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         ];
     }
 
-    const ALLERGENEN_PRESETS = ['Glutenvrij', 'Lactosevrij', 'Notenvrij', 'Vegetarisch', 'Veganistisch', 'Vis', 'Schaaldieren'];
+    /* Eén taal voor allergenen: de woorden uit lib/constants (gluten, ei,
+       mosterd …), dezelfde die de AI-check oplevert. "Glutenvrij" en
+       "Vegetarisch" stonden hier als snelkeuze, maar dat zijn dieetwensen —
+       het omgekeerde van een allergeen. */
+    const ALLERGENEN_PRESETS = ALLERGENEN.map((a) => a.code);
+    const allergeenLabel = (code: string) => ALLERGENEN.find((a) => a.code === code)?.label ?? code;
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
 
     if (dataLoading) {
@@ -1365,7 +1385,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         {(form.allergenen || []).map(function (a: string, idx: number) {
                                             return (
                                                 <span key={idx} className="allergen-tag">
-                                                    {a}
+                                                    {allergeenLabel(a)}
                                                     <button type="button" className="tag-remove" onClick={function () { removeArrayItem('allergenen', idx); }}>×</button>
                                                 </span>
                                             );
@@ -1377,7 +1397,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                                     {ALLERGENEN_PRESETS.filter(function (p) { return !(form.allergenen || []).includes(p); }).map(function (p) {
-                                        return <button key={p} type="button" className="preset-chip" onClick={function () { addArrayItem('allergenen', p, setAllergeenInput); }}>+ {p}</button>;
+                                        return <button key={p} type="button" className="preset-chip" onClick={function () { addArrayItem('allergenen', p, setAllergeenInput); }}>+ {allergeenLabel(p)}</button>;
                                     })}
                                 </div>
                             </div>

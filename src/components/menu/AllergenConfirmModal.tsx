@@ -16,6 +16,8 @@ export interface AllergenRow {
     id: string;
     /* Display naam, bv "Gluten", "Lactose". */
     allergen: string;
+    /** Leesbare naam ("Ei"); zonder dit staat de opgeslagen code op het scherm. */
+    label?: string;
     /* Optioneel: waarom AI dit dacht (component-bron + gerecht). */
     source?: string;
     /* AI-confidence 0..100. */
@@ -164,7 +166,7 @@ export function AllergenConfirmModal({ open, onClose, rows, onSubmit }: Props) {
                                             <AlertTriangle size={16} color="#fbbf24" />
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#fbbf24' }}>{row.allergen}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 600, color: '#fbbf24' }}>{row.label ?? row.allergen}</div>
                                             {row.source && (
                                                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{row.source}</div>
                                             )}
