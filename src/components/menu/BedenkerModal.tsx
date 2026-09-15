@@ -23,6 +23,7 @@ import { fmtEuro } from './helpers';
 import type { AiFillResult, AiFillMeta, AiFillIngredient } from '@/components/RecipeAiButton';
 import type { MatchRegel } from '@/lib/ingredientMatchDb';
 import { IngredientAlternatieven } from './IngredientAlternatieven';
+import { vervangInTekst } from '@/lib/ingredientVervangen';
 
 type BedenkerMode = 'vrij' | 'voorraad' | 'klant';
 
@@ -430,24 +431,41 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
     /* Een gekozen alternatief (of "laat leeg") landt in fill.ingredient_costs
        én in de preview, en de kostprijs wordt opnieuw opgeteld uit de regels
        die een prijs hebben. De AI-gok komt er niet meer aan te pas. */
-    function zetKoppeling(idx: number, match: MatchRegel | null) {
+    function zetKoppeling(idx: number, match: MatchRegel | null, opties?: { vervanging: boolean; nieuweNaam: string }) {
         setResult((r) => {
             if (!r) return r;
+            /* Vervanging (spiering voor procureur): de regel gaat anders heten en
+               de bereiding, het battle plan en de pitch bewegen mee. */
+            const oudeNaam = r.fill.ingredient_costs[idx]?.naam ?? '';
+            const nieuweNaam = opties?.vervanging && opties.nieuweNaam ? opties.nieuweNaam : null;
             const rows = r.fill.ingredient_costs.map((row, i) => {
                 if (i !== idx) return row;
                 const hasCost = !!(match && match.line_cost_cents != null);
                 const perUnit = hasCost && row.qty_pp > 0 ? (match!.line_cost_cents! / 100) / row.qty_pp : null;
-                return { ...row, match, is_estimated: !hasCost, estimated_price_eur: perUnit };
+                return { ...row, naam: nieuweNaam ?? row.naam, match, is_estimated: !hasCost, estimated_price_eur: perUnit };
             });
             const cents = rows.reduce((s, row) => s + (row.match?.line_cost_cents ?? 0), 0);
             const matched = rows.filter((row) => row.match && row.match.line_cost_cents != null).length;
+            const tekst = (t: string) => (nieuweNaam ? vervangInTekst(t, oudeNaam, nieuweNaam) : t);
             return {
                 ...r,
-                fill: { ...r.fill, ingredient_costs: rows, kostprijs_pp_schatting: cents / 100 },
+                name: nieuweNaam ? tekst(r.name) : r.name,
+                desc: tekst(r.desc),
+                battlePlan: r.battlePlan.map(tekst),
+                fill: {
+                    ...r.fill,
+                    ingredient_costs: rows,
+                    kostprijs_pp_schatting: cents / 100,
+                    naam: nieuweNaam ? tekst(r.fill.naam) : r.fill.naam,
+                    beschrijving: tekst(r.fill.beschrijving),
+                    bereidingswijze: tekst(r.fill.bereidingswijze),
+                    service_tip: tekst(r.fill.service_tip),
+                },
                 cost: cents / 100,
                 matchedCount: matched,
                 ingredients: r.ingredients.map((ing, i) => i !== idx ? ing : {
                     ...ing,
+                    naam: nieuweNaam ?? ing.naam,
                     matched: !!(match && match.line_cost_cents != null),
                     supplier: match ? (match.supplier ?? (match.source === 'component' || match.source === 'inventory' ? 'eigen' : null)) : null,
                     approx: !!match?.unit_approx,
@@ -667,7 +685,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                                 qtyPp={result.ingredients[altIdx].qtyPp}
                                                 unit={result.ingredients[altIdx].unit}
                                                 huidige={(result.fill.ingredient_costs[altIdx]?.match as MatchRegel | null | undefined) ?? null}
-                                                onKies={(m) => zetKoppeling(altIdx, m)}
+                                                onKies={(m, opties) => zetKoppeling(altIdx, m, opties)}
                                                 onLeeg={() => zetKoppeling(altIdx, null)}
                                                 onSluit={() => setAltIdx(null)}
                                             />

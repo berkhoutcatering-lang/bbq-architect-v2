@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Check, X, Sparkles, Search, PenLine } from 'lucide-react';
 import type { MatchRegel } from '@/lib/ingredientMatchDb';
 import { MRButton, MREyebrow } from './atoms';
+import { isVervanging, korteProductnaam } from '@/lib/ingredientVervangen';
 import { fmtEuro } from './helpers';
 
 export interface AlternatiefUit {
@@ -27,7 +28,10 @@ interface Props {
     qtyPp: number;
     unit: string;
     huidige: MatchRegel | null;
-    onKies: (match: MatchRegel) => void;
+    /** vervanging = een ánder product (spiering voor procureur): de aanroeper
+        hernoemt de regel naar `nieuweNaam` en past de bereiding aan. Een
+        koppeling (zelfde product, andere pot) laat de naam staan. */
+    onKies: (match: MatchRegel, opties?: { vervanging: boolean; nieuweNaam: string }) => void;
     /** "Laat leeg, ik vul zelf in" — de regel blijft zonder kostprijs. */
     onLeeg: () => void;
     onSluit: () => void;
@@ -109,14 +113,19 @@ export function IngredientAlternatieven({ naam, qtyPp, unit, huidige, onKies, on
     }, [zoek]);
 
     async function bewaarKeuze(match: MatchRegel) {
+        const vervanging = isVervanging(naam, match.name);
         /* Alleen de allereerste keuze voor dit ingrediënt wordt de standaard;
            daarna geldt een keuze voor dít gerecht. Anders springt "paprika-
-           poeder" heen en weer tussen Bidfood (saus) en Van Beekum (rub). */
-        fetch('/api/recipe/aliases', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ alleen_als_nieuw: true, aliases: [{ naam, match: { source: match.source, ref_id: match.ref_id, name: match.name, supplier: match.supplier ?? null } }] }),
-        }).catch(() => { /* volgende keer opnieuw */ });
-        onKies(match);
+           poeder" heen en weer tussen Bidfood (saus) en Van Beekum (rub).
+           Een vervanging (spiering voor procureur) is geen synoniem en wordt
+           nooit een alias. */
+        if (!vervanging) {
+            fetch('/api/recipe/aliases', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alleen_als_nieuw: true, aliases: [{ naam, match: { source: match.source, ref_id: match.ref_id, name: match.name, supplier: match.supplier ?? null } }] }),
+            }).catch(() => { /* volgende keer opnieuw */ });
+        }
+        onKies(match, { vervanging, nieuweNaam: korteProductnaam(match.name) });
     }
 
     async function kiesEigenHit(h: { component_id: number }) {
@@ -250,7 +259,7 @@ export function IngredientAlternatieven({ naam, qtyPp, unit, huidige, onKies, on
                                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ alleen_als_nieuw: true, aliases: [{ naam, match: { source: gekozen.source, ref_id: gekozen.ref_id, name: gekozen.name, supplier: gekozen.supplier ?? null } }] }),
                                         }).catch(() => { /* volgende keer opnieuw */ });
-                                        onKies(gekozen);
+                                        onKies(gekozen, { vervanging: false, nieuweNaam: korteProductnaam(gekozen.name) });
                                     }}
                                     style={{
                                         textAlign: 'left', padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
