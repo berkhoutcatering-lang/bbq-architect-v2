@@ -89,6 +89,15 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         update.lead_time_days = Math.max(0, Math.min(365, Math.round(Number(body.lead_time_days))));
     }
 
+    /* Leveranciersvoorkeur (docs/leveranciersvoorkeur-plan.md): 1 = kostprijs-
+       leverancier, 2+ = volgorde voor de winkelkeuze, null = doet niet mee.
+       Per organisatie is elke rang één keer bezet (unieke index); een botsing
+       komt als 23505 terug en wordt hieronder in mensentaal vertaald. */
+    if (body?.voorkeur_rang === null) update.voorkeur_rang = null;
+    else if (body?.voorkeur_rang != null && Number.isInteger(Number(body.voorkeur_rang))) {
+        update.voorkeur_rang = Math.max(1, Math.min(9, Number(body.voorkeur_rang)));
+    }
+
     if (Object.keys(update).length === 0) return NextResponse.json({ error: 'niets te updaten' }, { status: 400 });
 
     const { data, error } = await supabase
@@ -99,7 +108,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         .select('*')
         .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+        if (error.code === '23505' && 'voorkeur_rang' in update) {
+            return NextResponse.json({ error: `Rang ${update.voorkeur_rang} is al bezet door een andere leverancier` }, { status: 409 });
+        }
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ data });
 }
 

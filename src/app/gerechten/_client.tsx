@@ -18,6 +18,8 @@ import { LoadingState } from '@/components/LoadingState';
 import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
+import { ALLERGENEN } from '@/lib/constants';
+import { IngredientRegels, kostprijsUitRegels } from '@/components/menu/IngredientRegels';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
@@ -301,13 +303,24 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        hoeft niets te doen — als hij geen allergenen had ingevuld, vullen we 'm
        automatisch aan met door AI gedetecteerde codes. Bestaande user-codes
        blijven behouden (we mergen, geen overschrijving). */
+    /* De detectie-route antwoordt in lettercodes (E, M, G …); het gerecht en de
+       rest van de app werken met woorden (ei, mosterd, gluten). Vertalen op de
+       grens, anders staan er twee talen door elkaar in gerechten.allergenen —
+       en dan herkent een filter "E" niet als ei. V/VE zijn dieetwensen, geen
+       allergenen: die horen hier niet thuis. */
+    const ALLERGEEN_CODE_NAAR_WOORD: Record<string, string> = {
+        G: 'gluten', L: 'lactose', N: 'noten', E: 'ei', S: 'soja', F: 'vis', M: 'mosterd',
+    };
+    function allergenenVoorDetectie(saveData: Record<string, any>): string[] {
+        const fromCosts = Array.isArray(saveData.ingredient_costs)
+            ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
+            : [];
+        const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
+        return (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
+    }
     async function detectAllergensViaAi(saveData: Record<string, any>): Promise<string[]> {
         try {
-            const fromCosts = Array.isArray(saveData.ingredient_costs)
-                ? saveData.ingredient_costs.map((c) => c?.naam).filter(Boolean)
-                : [];
-            const fromIngredienten = Array.isArray(saveData.ingredienten) ? saveData.ingredienten : [];
-            const ingredients = (fromCosts.length > 0 ? fromCosts : fromIngredienten).filter(Boolean);
+            const ingredients = allergenenVoorDetectie(saveData);
             if (ingredients.length === 0) return [];
 
             const res = await fetch('/api/detect-allergens', {
@@ -321,7 +334,8 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (Array.isArray(body.allergens) && body.allergens.length > 0) {
                 track('ai_allergen_detect', { dish: saveData.naam, count: body.allergens.length });
             }
-            return Array.isArray(body.allergens) ? body.allergens : [];
+            const codes: string[] = Array.isArray(body.allergens) ? body.allergens : [];
+            return [...new Set(codes.map((c) => ALLERGEEN_CODE_NAAR_WOORD[String(c).toUpperCase()]).filter(Boolean))];
         } catch (e) {
             console.warn('[gerecht] allergen detection failed:', e);
             return [];
@@ -400,10 +414,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                 /* Block save, open modal. Modal-onSubmit roept commitSave aan met
                    de definitieve allergenen-merge op basis van user-decisions. */
                 setPendingAllergenSave(saveData);
+                const gekeken = allergenenVoorDetectie(saveData).length;
                 setAllergenModalRows(newOnes.map((a: string, i: number) => ({
                     id: `save-${i}-${a}`,
                     allergen: a,
-                    source: `AI-detectie via ${saveData.ingredient_costs?.length ?? saveData.ingredienten?.length ?? 0} ingrediënten`,
+                    label: ALLERGENEN.find((x) => x.code === a)?.label ?? a,
+                    source: `AI-detectie via ${gekeken} ingrediënt${gekeken === 1 ? '' : 'en'}`,
                     confidence: 90,
                 })));
                 return;
@@ -760,7 +776,12 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         ];
     }
 
-    const ALLERGENEN_PRESETS = ['Glutenvrij', 'Lactosevrij', 'Notenvrij', 'Vegetarisch', 'Veganistisch', 'Vis', 'Schaaldieren'];
+    /* Eén taal voor allergenen: de woorden uit lib/constants (gluten, ei,
+       mosterd …), dezelfde die de AI-check oplevert. "Glutenvrij" en
+       "Vegetarisch" stonden hier als snelkeuze, maar dat zijn dieetwensen —
+       het omgekeerde van een allergeen. */
+    const ALLERGENEN_PRESETS = ALLERGENEN.map((a) => a.code);
+    const allergeenLabel = (code: string) => ALLERGENEN.find((a) => a.code === code)?.label ?? code;
     const TAG_PRESETS = ['Vega', 'Vegan', 'Signature', 'Populair', 'Nieuw', 'Seizoen'];
 
     if (dataLoading) {
@@ -1330,29 +1351,33 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                             )}
 
-                            {/* Oude kostprijsberekening — ALLEEN-LEZEN (2026-07-27).
-                                Componenten hierboven zijn voortaan de enige plek waar je
-                                kosten opbouwt. Dit blok toont alleen nog wat er historisch
-                                in staat, zodat bestaande data niet stil verdwijnt. */}
+                            {/* Ingrediëntregels uit de AI-receptuur (golf 2, 2026-09-15).
+                                Tellen mee zolang dit gerecht géén componenten heeft; daarna zijn
+                                componenten de enige kostprijs. Tot golf 2 was dit alleen-lezen,
+                                maar een verkeerde koppeling (roomboter → apfelstrudel) moet je
+                                hier kunnen rechtzetten — de AI stelt dan drie alternatieven voor. */}
                             {(form.ingredient_costs || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-                                        Oude kostprijsberekening (alleen lezen)
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+                                        Ingrediënten uit de receptuur
                                     </div>
                                     <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                                        Hier staan nog {(form.ingredient_costs || []).length} regels uit de oude manier van rekenen.
-                                        Ze tellen alleen mee zolang dit gerecht géén componenten heeft. Bouw het hierboven
-                                        opnieuw op met componenten — dan is er nog maar één kostprijs.
+                                        Elke regel hangt aan een product uit je kostprijs-catalogus. Klopt een koppeling niet,
+                                        kies dan een ander product — de AI stelt er drie voor. Deze regels tellen mee zolang
+                                        het gerecht geen componenten heeft.
                                     </p>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {(form.ingredient_costs || []).map(function (item: any, idx: number) {
-                                            return (
-                                                <span key={idx} style={{ fontSize: 11, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 9px' }}>
-                                                    {item.naam}{item.qty_pp ? ' \u00b7 ' + item.qty_pp + (item.unit || '') : ''}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
+                                    <IngredientRegels
+                                        rows={form.ingredient_costs || []}
+                                        onChange={function (rows) {
+                                            /* Kostprijs volgt de regels: opnieuw optellen uit wat een prijs heeft. */
+                                            const cents = kostprijsUitRegels(rows);
+                                            setForm(Object.assign({}, form, {
+                                                ingredient_costs: rows,
+                                                ingredienten: rows.map(function (r) { return r.naam; }),
+                                                kostprijs_pp: cents > 0 ? String((cents / 100).toFixed(2)) : form.kostprijs_pp,
+                                            }));
+                                        }}
+                                    />
                                 </div>
                             )}
                                 </>)}
@@ -1365,7 +1390,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                         {(form.allergenen || []).map(function (a: string, idx: number) {
                                             return (
                                                 <span key={idx} className="allergen-tag">
-                                                    {a}
+                                                    {allergeenLabel(a)}
                                                     <button type="button" className="tag-remove" onClick={function () { removeArrayItem('allergenen', idx); }}>×</button>
                                                 </span>
                                             );
@@ -1377,7 +1402,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
                                     {ALLERGENEN_PRESETS.filter(function (p) { return !(form.allergenen || []).includes(p); }).map(function (p) {
-                                        return <button key={p} type="button" className="preset-chip" onClick={function () { addArrayItem('allergenen', p, setAllergeenInput); }}>+ {p}</button>;
+                                        return <button key={p} type="button" className="preset-chip" onClick={function () { addArrayItem('allergenen', p, setAllergeenInput); }}>+ {allergeenLabel(p)}</button>;
                                     })}
                                 </div>
                             </div>

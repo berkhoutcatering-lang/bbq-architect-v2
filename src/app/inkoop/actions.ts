@@ -151,6 +151,9 @@ export async function linkSupplierProductAction(input: unknown) {
 const sendSchema = z.object({
     concept_order_id: z.string().uuid(),
     note: z.string().max(2000).optional(),
+    /* Winkel-modus: dezelfde keuze als op het scherm, anders verstuur je de
+       "zoals gekoppeld"-lijst terwijl je naar de Sligro-lijst keek. */
+    winkel_id: z.number().int().positive().nullable().optional(),
 });
 
 export async function sendOrderToSupplierAction(input: unknown) {
@@ -166,7 +169,7 @@ export async function sendOrderToSupplierAction(input: unknown) {
         // 2. Recompute de bestelvoorstel-snapshot zodat we de meest actuele
         //    qty's verzenden (overrides toegepast). We filteren op deze ene
         //    leverancier-bucket.
-        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false });
+        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, winkel: parsed.winkel_id ?? null });
         const bucket = summary.per_leverancier.find(function (b) {
             return b.leverancier_id === order.leverancier_id
                 || (b.leverancier_id == null && order.leverancier_id == null);

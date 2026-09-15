@@ -43,6 +43,8 @@ interface Leverancier {
     scope_filter: 'alles' | 'food_drinks' | 'custom' | null;
     scope_keywords: string[] | null;
     lead_time_days: number | null;
+    /* 1 = kostprijs-leverancier, 2+ = volgorde winkelkeuze, null = doet niet mee. */
+    voorkeur_rang: number | null;
     created_at: string;
     pendingMutations?: number;
 }
@@ -257,6 +259,26 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
             showToast('Levertijd opslaan mislukt', 'error');
         }
     }
+    /* Leveranciersvoorkeur (golf 1): rang 1 rekent de kostprijs van elk recept,
+       rang 2+ is de volgorde voor "vandaag naar de …" in de bestellijst. */
+    async function saveRang(raw: string) {
+        const val = raw === '' ? null : Number(raw);
+        if ((val ?? null) === (lev.voorkeur_rang ?? null)) return;
+        try {
+            const r = await fetch(`/api/leveranciers/${lev.id}`, {
+                method: 'PATCH', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ voorkeur_rang: val }),
+            });
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(body.error || 'Opslaan mislukt');
+            showToast(val === 1
+                ? `${lev.naam} rekent voortaan de kostprijs van je recepten`
+                : val == null ? `${lev.naam} doet niet meer mee in de voorkeur` : `${lev.naam} is keus ${val} in de bestellijst`, 'success');
+            onRefresh();
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        }
+    }
     const isRunning = lev.last_sync_status === 'running';
     const isFailed = lev.last_sync_status === 'failed';
     const hasPending = (lev.pendingMutations ?? 0) > 0;
@@ -355,6 +377,25 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
             </Link>
 
             <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                {/* Voorkeur-rang: 1 = rekent de kostprijs, 2+ = winkelkeuze in de bestellijst */}
+                <select
+                    value={lev.voorkeur_rang ?? ''}
+                    onChange={(e) => saveRang(e.target.value)}
+                    aria-label={`Voorkeur ${lev.naam}`}
+                    title="1 = de groothandel waarop de kostprijs van je recepten rekent. 2 en verder = de volgorde waarin je in de bestellijst kunt kiezen waar je heen gaat. Leeg = doet niet mee."
+                    style={{
+                        height: 34, padding: '0 8px', borderRadius: 8, fontSize: 12,
+                        border: lev.voorkeur_rang === 1 ? `1px solid ${GOLD}` : '1px solid var(--border)',
+                        background: lev.voorkeur_rang === 1 ? `${GOLD}1a` : 'transparent',
+                        color: lev.voorkeur_rang === 1 ? GOLD : 'var(--muted)', cursor: 'pointer',
+                    }}
+                >
+                    <option value="">Geen voorkeur</option>
+                    <option value="1">1 · rekent kostprijs</option>
+                    <option value="2">2 · tweede keus</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                </select>
                 {/* Levertijd in dagen — stuurt de 'bestel vóór'-deadline op /inkoop (fix #3) */}
                 <div
                     title="Levertijd in dagen — bepaalt hoe vroeg 'bestel vóór' op /inkoop waarschuwt. Leeg = standaard 8 dagen."

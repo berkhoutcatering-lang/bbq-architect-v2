@@ -82,6 +82,97 @@ describe('pickBestMatch', () => {
     });
 });
 
+describe('pickBestMatch — middelste prijs bij even goede kandidaten (golf 1)', () => {
+    const mayo = (id: number, cents: number, name = 'Mayonaise emmer 5 kg'): CostCandidate =>
+        ({ source: 'supplier_product', ref_id: id, name, centsPerBaseUnit: cents, baseUnit: 'g' });
+
+    it('vijf even goede mayonaises → de middelste prijs, niet de goedkoopste of duurste', () => {
+        const r = pickBestMatch('mayonaise', [mayo(1, 0.9), mayo(2, 0.3), mayo(3, 1.4), mayo(4, 0.6), mayo(5, 2.1)]);
+        expect(r?.candidate.ref_id).toBe(1);   // 0,3 · 0,6 · [0,9] · 1,4 · 2,1
+    });
+    it('even aantal → de onderste van de twee middelste', () => {
+        const r = pickBestMatch('mayonaise', [mayo(1, 0.9), mayo(2, 0.3), mayo(3, 1.4), mayo(4, 0.6)]);
+        expect(r?.candidate.ref_id).toBe(4);   // 0,3 · [0,6] · 0,9 · 1,4
+    });
+    it('een duidelijk betere naam wint nog steeds van een goedkopere bijna-match', () => {
+        const r = pickBestMatch('zure room', [
+            { source: 'supplier_product', ref_id: 1, name: 'Room 35% 1 l', centsPerBaseUnit: 0.1, baseUnit: 'ml' },
+            { source: 'supplier_product', ref_id: 2, name: 'Zure room 10% 1 l', centsPerBaseUnit: 0.5, baseUnit: 'ml' },
+        ]);
+        expect(r?.candidate.ref_id).toBe(2);
+    });
+    it('een smaakvariant hoort niet in de groep: "Mayonaise" wint van "Truffel mayonaise", ook al is die goedkoper', () => {
+        const r = pickBestMatch('mayonaise', [
+            { source: 'supplier_product', ref_id: 1, name: 'Truffel mayonaise, pot 500 ml', centsPerBaseUnit: 0.2, baseUnit: 'ml' },
+            { source: 'supplier_product', ref_id: 2, name: 'Mayonaise, fles 1 ltr', centsPerBaseUnit: 0.9, baseUnit: 'ml' },
+            { source: 'supplier_product', ref_id: 3, name: 'Mayonaise, emmer 10 ltr', centsPerBaseUnit: 0.4, baseUnit: 'ml' },
+        ]);
+        expect([2, 3]).toContain(r?.candidate.ref_id);   // middelste van de twee echte mayonaises
+        expect(r?.candidate.ref_id).not.toBe(1);
+    });
+    it('één kort gedeeld woord ("wit") is geen match', () => {
+        const r = pickBestMatch('basterdsuiker (wit)', [
+            { source: 'supplier_product', ref_id: 1, name: 'Molenaarsbrood wit 600 gr per stuk, doos 12 stuks', centsPerBaseUnit: 0.3, baseUnit: 'g' },
+        ]);
+        expect(r).toBeNull();
+    });
+    it('uitschieter-rem: een exacte naam met een absurde catalogusprijs verliest van de middenprijs', () => {
+        const peper = (id: number, name: string, eurKg: number): CostCandidate =>
+            ({ source: 'supplier_product', ref_id: id, name, centsPerBaseUnit: eurKg / 10, baseUnit: 'g' });
+        const r = pickBestMatch('zwarte peper', [
+            peper(1, 'Zwarte peper, pot 47 gr', 386),          // exacte naam, doos-prijs als potje ingelezen
+            peper(2, 'Zwarte peper gemalen, bus 500 gr', 25),
+            peper(3, 'Zwarte peper gemalen, bus 460 gr', 37),
+            peper(4, 'Zwarte peper steak, bus 400 gr', 39),
+        ]);
+        expect(r?.candidate.ref_id).toBe(3);   // middenprijs van 25 · [37] · 39 · 386
+        expect(r?.confidence).toBe('middel');
+    });
+    it('uitschieter-rem raakt eigen bibliotheek en voorraad niet', () => {
+        const r = pickBestMatch('zwarte peper', [
+            { source: 'component', ref_id: 1, name: 'Zwarte peper', centsPerBaseUnit: 40, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 2, name: 'Zwarte peper gemalen, bus 500 gr', centsPerBaseUnit: 2.5, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 3, name: 'Zwarte peper gemalen, bus 460 gr', centsPerBaseUnit: 3.7, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 4, name: 'Zwarte peper steak, bus 400 gr', centsPerBaseUnit: 3.9, baseUnit: 'g' },
+        ]);
+        expect(r?.candidate.ref_id).toBe(1);
+    });
+    it('hoofdwoord vooraan wint van hetzelfde woord achteraan ("Roomboter ongezouten" vs "Croissant roomboter")', () => {
+        const r = pickBestMatch('roomboter', [
+            { source: 'supplier_product', ref_id: 1, name: 'Croissant roomboter 60 gr per stuk, doos 70 stuks', centsPerBaseUnit: 0.4, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 2, name: 'Roomboter ongezouten, pak 250 gr', centsPerBaseUnit: 0.9, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 3, name: 'Koekjes roomboter, doos 2 kg', centsPerBaseUnit: 0.6, baseUnit: 'g' },
+        ]);
+        expect(r?.candidate.ref_id).toBe(2);
+    });
+    it('uitschieter-rem werkt ook als een ingrediënt-woord in geen enkele naam voorkomt', () => {
+        const peper = (id: number, name: string, eurKg: number): CostCandidate =>
+            ({ source: 'supplier_product', ref_id: id, name, centsPerBaseUnit: eurKg / 10, baseUnit: 'g' });
+        const r = pickBestMatch('zwarte peper (versgemalen)', [
+            peper(1, 'Zwarte peper, pot 47 gr', 386),
+            peper(2, 'Zwarte peper gemalen, bus 500 gr', 25),
+            peper(3, 'Zwarte peper gemalen, bus 460 gr', 37),
+            peper(4, 'Zwarte peper steak, bus 400 gr', 39),
+        ]);
+        expect(r?.candidate.ref_id).toBe(3);
+    });
+    it('een staart-match valt uit de groep zodra er een gewone kandidaat is', () => {
+        const r = pickBestMatch('fijn zeezout', [
+            { source: 'supplier_product', ref_id: 1, name: 'Melkchocolade karamel zeezout, doos 35 stuks', centsPerBaseUnit: 0.5, baseUnit: 'g' },
+            { source: 'supplier_product', ref_id: 2, name: 'Fijn zeezout, bus 500 gr', centsPerBaseUnit: 0.1, baseUnit: 'g' },
+        ]);
+        expect(r?.candidate.ref_id).toBe(2);
+        expect(r?.confidence).not.toBe('laag');
+    });
+    it('binnen de groep wint de eenheid die bij het recept past (ml-regel → ml-product)', () => {
+        const r = pickBestMatch('karnemelk', [
+            { source: 'supplier_product', ref_id: 1, name: 'Karnemelk pak 1 ltr', centsPerBaseUnit: 0.1, baseUnit: 'ml' },
+            { source: 'supplier_product', ref_id: 2, name: 'Karnemelk', centsPerBaseUnit: 120, baseUnit: 'stuk' },
+        ], undefined, 'ml');
+        expect(r?.candidate.ref_id).toBe(1);   // 'Karnemelk' (stuk) scoort hoger op naam, maar is per stuk onbruikbaar voor ml
+    });
+});
+
 describe('toBaseUnit', () => {
     it('kg → g met factor 1000', () => {
         expect(toBaseUnit('kg')).toEqual({ base: 'g', factor: 1000 });
@@ -91,6 +182,15 @@ describe('toBaseUnit', () => {
     });
     it('onbekende eenheid → null', () => {
         expect(toBaseUnit('snufje')).toBeNull();
+    });
+});
+
+describe('lineCostCents — gram ≈ milliliter', () => {
+    it('40 g mayonaise tegen een ml-prijs rekent 1:1', () => {
+        expect(lineCostCents(40, 'g', { centsPerBaseUnit: 0.5, baseUnit: 'ml' })).toBe(20);
+    });
+    it('gram tegen stuk blijft onvergelijkbaar', () => {
+        expect(lineCostCents(40, 'g', { centsPerBaseUnit: 50, baseUnit: 'stuk' })).toBeNull();
     });
 });
 
