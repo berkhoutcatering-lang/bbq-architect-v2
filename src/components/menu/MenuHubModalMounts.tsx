@@ -10,7 +10,7 @@
 
 import { useCallback } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { BedenkerModal } from './BedenkerModal';
+import { BedenkerModal, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT, type BedenkerResult } from './BedenkerModal';
 
 export default function MenuHubModalMounts() {
     const router = useRouter();
@@ -25,9 +25,22 @@ export default function MenuHubModalMounts() {
         router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }, [router, pathname, searchParams]);
 
+    /* "Maak gerecht": leg het resultaat klaar voor het gerecht-formulier op
+       /gerechten en ga daarheen. Staat dat formulier al op de pagina, dan pakt
+       het het event meteen op; anders leest het sessionStorage bij mounten. */
+    const acceptToGerechten = useCallback((result: BedenkerResult) => {
+        try { sessionStorage.setItem(BEDENKER_HANDOFF_KEY, JSON.stringify(result)); } catch { /* privémodus */ }
+        closeModal();
+        if (pathname === '/gerechten') {
+            window.dispatchEvent(new Event(BEDENKER_HANDOFF_EVENT));
+        } else {
+            router.push('/gerechten');
+        }
+    }, [closeModal, pathname, router]);
+
     return (
         <>
-            <BedenkerModal open={modal === 'bedenker'} onClose={closeModal} />
+            <BedenkerModal open={modal === 'bedenker'} onClose={closeModal} onAccept={acceptToGerechten} />
             {/* Pitmaster modal komt in volgende iteratie — voor nu fungeert
                 ?modal=pitmaster als een no-op die door middleware naar
                 /gerechten?modal=pitmaster wordt geleid. Mounten van een
