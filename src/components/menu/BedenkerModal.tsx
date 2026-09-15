@@ -47,10 +47,12 @@ export interface BedenkerResult {
     matchedCount: number;
     totalCount: number;
     /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
-    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null; toelichting: string | null }>;
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null; toelichting: string | null; gratis: boolean; viaAlias: boolean }>;
     /* De leverancier waarop de kostprijs rekent (voorkeur_rang 1), of null als
        er geen voorkeur is ingesteld en over alle leveranciers gezocht is. */
     kostprijsLeverancier: string | null;
+    /* Koppelen mislukt (time-out, netwerk): eerlijk melden i.p.v. "0 van 18". */
+    koppelFout: string | null;
     /* Het complete formulier-payload, in dezelfde shape als de
        "AI: vul recept in"-knop levert, zodat het gerecht-formulier er
        niets anders mee hoeft te doen. */
@@ -123,10 +125,15 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
         }))
         .filter((i) => i.naam.length > 0);
 
+    /* Eerst de snelle koppelronde zonder AI (een paar seconden); de AI-
+       synoniemenstap volgt daarna in porties (verrijkMetAi), zodat een recept
+       met 18 ingrediënten niet tegen de 30 s van Vercel aanloopt — dat gaf op
+       productie een 504 en een popup met "0 van 18 gekoppeld". */
     let matches: any[] = [];
     let kostprijsCents = 0;
     let matchedCount = 0;
     let kostprijsLeverancier: string | null = null;
+    let koppelFout: string | null = null;
     if (rows.length > 0) {
         try {
             const mr = await fetch('/api/recipe/match-ingredients', {
@@ -134,18 +141,20 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ingredients: rows.map((i) => ({ naam: i.naam, qty_pp: i.qtyPp, eenheid: i.eenheid })),
-                    /* Golf 4: geen treffer → de AI zoekt synoniemen, meteen. */
-                    ai: true,
                 }),
             });
-            const mb = await mr.json();
+            const mb = await mr.json().catch(() => ({}));
             if (mr.ok && mb.success) {
                 matches = mb.data?.ingredients || [];
                 kostprijsCents = mb.data?.kostprijs_pp_cents || 0;
                 matchedCount = mb.data?.matched_count || 0;
                 kostprijsLeverancier = mb.data?.kostprijs_leverancier ?? null;
+            } else {
+                koppelFout = mb.error || mb.message || `Koppelen mislukt (${mr.status})`;
             }
-        } catch { /* matcher stuk → receptuur blijft, kostprijs onbekend */ }
+        } catch (e) {
+            koppelFout = e instanceof Error ? e.message : 'Koppelen mislukt (geen verbinding)';
+        }
     }
 
     const ingredient_costs: AiFillIngredient[] = rows.map((i, idx) => {
@@ -213,15 +222,10 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
         ingredients: rows.map((i, idx) => ({
             naam: i.naam, qtyPp: i.qtyPp, unit: i.eenheid,
             matched: !!(matches[idx]?.match && matches[idx].match.line_cost_cents != null),
-            supplier: matches[idx]?.match?.supplier ?? (matches[idx]?.match ? 'eigen' : null),
-            approx: !!matches[idx]?.match?.unit_approx,
-            confidence: matches[idx]?.match?.confidence ?? null,
-            toelichting: matches[idx]?.match?.via_alias ? 'Eerder door jou bevestigd'
-                : matches[idx]?.match?.via_ai ? `AI: ${matches[idx].match.ai_reden ?? 'zelfde product, andere naam'}`
-                : matches[idx]?.ai_voorstel ? `AI stelt voor: ${matches[idx].ai_voorstel.name} — ${matches[idx].ai_voorstel.reden} (ander product, jij beslist)`
-                : null,
+            ...chipUitRegel(matches[idx]),
         })),
         kostprijsLeverancier,
+        koppelFout,
         fill,
         meta,
         battlePlan,
@@ -231,6 +235,86 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
         citationsEnabled: Boolean(body.citationsEnabled),
         inspiredBy: Array.isArray(data.inspired_by) ? data.inspired_by : [],
     };
+}
+
+/* Wat een chip laat zien voor één matcher-regel. */
+function chipUitRegel(regel: any): { matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null; toelichting: string | null; gratis: boolean; viaAlias: boolean } {
+    const m = regel?.match ?? null;
+    return {
+        matched: !!(m && m.line_cost_cents != null),
+        supplier: m?.supplier ?? (m ? 'eigen' : null),
+        approx: !!m?.unit_approx,
+        confidence: m?.confidence ?? null,
+        toelichting: regel?.gratis ? 'Kost niets (kraanwater)'
+            : m?.via_alias ? 'Eerder door jou bevestigd'
+            : m?.via_ai ? `AI: ${m.ai_reden ?? 'zelfde product, andere naam'}`
+            : m?.ai_reden ? `AI: ${m.ai_reden}`
+            : regel?.ai_voorstel ? `AI stelt voor: ${regel.ai_voorstel.name} — ${regel.ai_voorstel.reden} (ander product, jij beslist)`
+            : null,
+        gratis: !!regel?.gratis,
+        viaAlias: !!m?.via_alias,
+    };
+}
+
+/* Matcher-regels (subset, op naam) in een bestaand resultaat zetten en de
+   kostprijs opnieuw optellen. Gebruikt door de AI-verrijking in porties. */
+function pasRegelsToe(r: BedenkerResult, regels: any[]): BedenkerResult {
+    const opNaam = new Map<string, any>(regels.map((x) => [String(x.naam), x]));
+    const rows = r.fill.ingredient_costs.map((row) => {
+        const u = opNaam.get(row.naam);
+        if (!u) return row;
+        const m = u.match ?? null;
+        const hasCost = !!(m && m.line_cost_cents != null);
+        const perUnit = hasCost && row.qty_pp > 0 ? (m.line_cost_cents / 100) / row.qty_pp : null;
+        return { ...row, match: m, is_estimated: !hasCost, estimated_price_eur: perUnit };
+    });
+    const cents = rows.reduce((s, row) => s + (row.match?.line_cost_cents ?? 0), 0);
+    const matched = rows.filter((row) => row.match && row.match.line_cost_cents != null).length;
+    return {
+        ...r,
+        fill: { ...r.fill, ingredient_costs: rows, kostprijs_pp_schatting: cents / 100 },
+        cost: cents / 100,
+        matchedCount: matched,
+        ingredients: r.ingredients.map((ing) => {
+            const u = opNaam.get(ing.naam);
+            return u ? { ...ing, ...chipUitRegel(u) } : ing;
+        }),
+    };
+}
+
+/* Golf 4, in porties: de AI-synoniemenstap voor de regels zonder zekere
+   treffer, maximaal zes per aanroep (≈10 s), tot alles bekeken is. Elke
+   portie landt meteen in de preview. */
+export async function verrijkMetAi(start: BedenkerResult, update: (r: BedenkerResult) => void): Promise<BedenkerResult> {
+    let r = start;
+    for (let ronde = 0; ronde < 5; ronde++) {
+        const open = r.ingredients.filter((i) => !i.gratis && !i.viaAlias && (!i.matched || i.confidence !== 'hoog') && !i.toelichting?.startsWith('AI'));
+        if (open.length === 0) break;
+        const portie = open.slice(0, 6);
+        try {
+            const mr = await fetch('/api/recipe/match-ingredients', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ingredients: portie.map((i) => ({ naam: i.naam, qty_pp: i.qtyPp, eenheid: i.unit })), ai: true }),
+            });
+            const mb = await mr.json().catch(() => ({}));
+            if (!mr.ok || !mb.success) { r = { ...r, koppelFout: mb.error || mb.message || `AI-stap mislukt (${mr.status})` }; update(r); break; }
+            r = pasRegelsToe(r, mb.data?.ingredients ?? []);
+            /* Alles in deze portie is nu door de AI bekeken. Wat geen 'AI:'-
+               toelichting kreeg (niets gevonden, of de AI keurde goed zonder
+               reden) krijgt er een, anders komt de regel elke ronde terug. */
+            const bekeken = new Set(portie.map((i) => i.naam));
+            r = { ...r, ingredients: r.ingredients.map((i) => bekeken.has(i.naam) && !i.toelichting?.startsWith('AI')
+                ? { ...i, toelichting: i.matched ? 'AI: gecontroleerd' : 'AI: niets gelijkwaardigs gevonden' }
+                : i) };
+            update(r);
+        } catch (e) {
+            r = { ...r, koppelFout: e instanceof Error ? e.message : 'AI-stap mislukt' };
+            update(r);
+            break;
+        }
+    }
+    return r;
 }
 
 /* Hoeveelheid per portie leesbaar: 0.025 kg → "25 g", 0.5 → "0,5". */
@@ -341,6 +425,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
     const [error, setError] = useState<string | null>(null);
     /* Welke ingrediënt-chip het alternatieven-paneel open heeft. */
     const [altIdx, setAltIdx] = useState<number | null>(null);
+    const [aiBezig, setAiBezig] = useState(false);
 
     /* Een gekozen alternatief (of "laat leeg") landt in fill.ingredient_costs
        én in de preview, en de kostprijs wordt opnieuw opgeteld uit de regels
@@ -367,7 +452,8 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                     supplier: match ? (match.supplier ?? (match.source === 'component' || match.source === 'inventory' ? 'eigen' : null)) : null,
                     approx: !!match?.unit_approx,
                     confidence: match?.confidence ?? null,
-                    toelichting: match ? 'Door jou gekozen' : null,
+                    toelichting: match ? 'Door jou gekozen' : 'Door jou leeg gelaten',
+                    viaAlias: false,
                 }),
             };
         });
@@ -397,6 +483,13 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
             const generator = onGenerate ?? defaultGenerate;
             const r = await generator({ mode, prompt });
             setResult(r);
+            /* De preview staat; nu de AI-synoniemenstap in porties erachteraan.
+               Alleen bij de standaard-route (de matcher is van ons). */
+            if (!onGenerate && r && !r.koppelFout) {
+                setThinking(false);
+                setAiBezig(true);
+                try { await verrijkMetAi(r, (nr) => setResult(nr)); } finally { setAiBezig(false); }
+            }
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'AI-call mislukt';
             setError(msg);
@@ -528,6 +621,16 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                     )}
                                     {result.fill.porties ? <span style={{ color: 'var(--muted)' }}>Receptuur voor {result.fill.porties} porties</span> : null}
                                 </div>
+                                {result.koppelFout && (
+                                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--red, #ef4444)' }}>
+                                        Koppelen aan de catalogus is mislukt: {result.koppelFout}. De receptuur staat; klik “Opnieuw” of koppel de ingrediënten in het formulier.
+                                    </div>
+                                )}
+                                {aiBezig && (
+                                    <div style={{ marginTop: 8, fontSize: 12, color: 'var(--brand)' }}>
+                                        AI zoekt synoniemen voor {result.ingredients.filter((i) => !i.gratis && !i.viaAlias && (!i.matched || i.confidence !== 'hoog') && !i.toelichting?.startsWith('AI')).length} ingrediënten…
+                                    </div>
+                                )}
 
                                 {/* Ingrediënten preview */}
                                 {result.ingredients.length > 0 && (
