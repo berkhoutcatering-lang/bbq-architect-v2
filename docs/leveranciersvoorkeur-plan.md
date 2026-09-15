@@ -65,6 +65,14 @@ Bekende gevallen die golf 1 níet oplost (bewust — dit is semantiek, dus golf 
 - Kies je Sligro: elke regel wordt opnieuw gekoppeld met de matcher beperkt tot Sligro. Wat niet gevonden wordt staat in een apart blok "Niet bij Sligro (n)" met de knop *toch bij Bidfood*.
 - De keuze geldt voor die ronde; de vaste koppeling per voorraad-item blijft de Bidfood-standaard.
 
+### Golf 3 — gebouwd en gemeten (15 sep)
+
+- Balk bovenaan /inkoop: *Bestellen bij — Zoals gekoppeld · Bidfood · Sligro* (de leveranciers met een rang). Keuze in de URL (`?winkel=<id>`), dus herladen en delen werkt. "Verstuur" stuurt dezelfde winkel mee, anders verzond je de andere lijst.
+- Winkel gekozen → elk tekort-item wordt op naam gezocht in de catalogus van die winkel (zelfde matcher als de receptuur). Gevonden → in de winkel-bucket met productnaam, zekerheidsstip, pakmaat en **catalogusprijs** van die winkel (gaat vóór de laatste bonprijs). Niet gevonden → blok "Niet bij … (n)" met de vaste leverancier erachter.
+- Twee lessen uit de meting: voorraad-items heten naar de winkel ("kippendij makro", "bavette beef club 29") — die woorden gaan uit de zoeknaam; en "hop&bites pulled pork" is eigen productie → nooit naar een winkel (op bedrijfsnaam herkend).
+- Strenger dan bij een recept: alleen een treffer als álle woorden van het item in het product zitten en de zekerheid niet "laag" is. "hotdog broodjes" landde anders op *Hotdog halal, blik 32 stuks*. Gevolg: "gerookte bavette" en "pastrami" komen in "niet bij Bidfood" — één keer *Koppel aan Bidfood* op de regel en ze staan er voortaan.
+- Meting: Bidfood 3 zekere treffers + 6 niet-bij (2 eigen productie); Sligro 2 + 7.
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.

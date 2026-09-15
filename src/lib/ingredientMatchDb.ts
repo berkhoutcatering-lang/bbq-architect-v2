@@ -75,7 +75,7 @@ export function alleZoektermen(naam: string): string[] {
  *  Eén term (de langste) was te smal: "zwarte peper (versgemalen)" zocht op
  *  "versgemalen" en vond geen van de 108 pepers. De rangschikking daarna
  *  gebeurt op de volledige naam, dus ruimer zoeken kost geen precisie. */
-function searchTerms(naam: string): string[] {
+export function searchTerms(naam: string): string[] {
     const toks = normalizeIngredientName(naam).split(' ').filter((t) => t.length >= 3 && !/^\d+$/.test(t));
     if (toks.length === 0) return [normalizeIngredientName(naam)].filter(Boolean);
     return [...new Set(toks)].sort((a, b) => b.length - a.length).slice(0, 3);

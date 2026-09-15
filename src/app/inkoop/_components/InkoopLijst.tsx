@@ -161,6 +161,7 @@ export default function InkoopLijst(props: InkoopLijstProps) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <WinkelKeuzeBalk summary={optimisticSummary} />
             <Header summary={optimisticSummary} />
 
             <MissingSupplierBanner
@@ -192,9 +193,14 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                 );
             })}
 
+            {optimisticSummary.winkel && optimisticSummary.niet_bij_winkel.length > 0 && (
+                <NietBijWinkel summary={optimisticSummary} />
+            )}
+
             {pdfPreviewFor && (
                 <PdfPreviewModal
                     bucket={pdfPreviewFor}
+                    winkelId={optimisticSummary.winkel?.id ?? null}
                     onClose={() => setPdfPreviewFor(null)}
                     onAfterSend={function () {
                         setPdfPreviewFor(null);
@@ -204,6 +210,96 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                 />
             )}
         </div>
+    );
+}
+
+/* "Vandaag naar de …": één winkel voor de hele ronde (golf 3, docs/
+   leveranciersvoorkeur-plan.md). De knoppen zijn de leveranciers met een
+   voorkeur-rang; "Zoals gekoppeld" = elk item bij zijn vaste leverancier.
+   De keuze staat in de URL, dus herladen of delen geeft dezelfde lijst. */
+function WinkelKeuzeBalk({ summary }: { summary: BestelvoorstelSummary }) {
+    const router = useRouter();
+    if (summary.winkel_keuzes.length === 0) return null;
+    const actief = summary.winkel?.id ?? null;
+    const knop = (id: number | null, label: string, sub: string | null) => {
+        const on = actief === id;
+        return (
+            <button
+                key={String(id)}
+                type="button"
+                onClick={() => router.push(id == null ? '/inkoop' : `/inkoop?winkel=${id}`)}
+                aria-pressed={on}
+                style={{
+                    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1,
+                    padding: '8px 14px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
+                    background: on ? 'rgba(255,191,0,.10)' : 'transparent',
+                    border: on ? '1px solid rgba(255,191,0,.35)' : '1px solid var(--border)',
+                    color: on ? 'var(--brand, #FFBF00)' : 'var(--text)',
+                }}
+            >
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{label}</span>
+                {sub && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{sub}</span>}
+            </button>
+        );
+    };
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            padding: '10px 14px', borderRadius: 'var(--radius-md, 12px)',
+            background: 'var(--card)', border: '1px solid var(--border)',
+        }}>
+            <Store size={16} style={{ color: 'var(--muted)' }} />
+            <span style={{ fontSize: 12, color: 'var(--muted)', marginRight: 4 }}>Bestellen bij</span>
+            {knop(null, 'Zoals gekoppeld', 'elk item bij zijn vaste leverancier')}
+            {summary.winkel_keuzes.map((k) => knop(k.id, k.naam, k.rang === 1 ? 'rekent ook de kostprijs' : `${k.rang}e keus`))}
+            {summary.winkel && (
+                <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 'auto' }}>
+                    Alles voor deze ronde naar {summary.winkel.naam}; je vaste koppelingen blijven staan.
+                </span>
+            )}
+        </div>
+    );
+}
+
+/* Wat de gekozen winkel niet heeft. Die regels blijven bij hun vaste
+   leverancier — zet de balk terug op "Zoals gekoppeld" om ze daar te bestellen. */
+function NietBijWinkel({ summary }: { summary: BestelvoorstelSummary }) {
+    const items = summary.niet_bij_winkel;
+    const naam = summary.winkel?.naam ?? 'deze winkel';
+    return (
+        <article style={{
+            background: 'var(--card)', border: '1px solid rgba(239,68,68,.25)',
+            borderRadius: 'var(--radius-lg, 14px)', overflow: 'hidden',
+        }}>
+            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid var(--border)' }}>
+                <div style={{
+                    width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.22)', color: 'var(--red, #ef4444)', flexShrink: 0,
+                }}>
+                    <AlertTriangle size={18} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600 }}>Niet bij {naam} ({items.length})</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+                        Niet gevonden in de catalogus van {naam}. Deze regels blijven bij hun vaste leverancier — kies bovenaan “Zoals gekoppeld” om ze daar te bestellen, of koppel ze aan een {naam}-product onder Leveranciers.
+                    </div>
+                </div>
+            </div>
+            <div>
+                {items.map((it, i) => (
+                    <div key={it.inventory_id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px',
+                        borderBottom: i === items.length - 1 ? 'none' : '1px solid var(--border)', fontSize: 13,
+                    }}>
+                        <span style={{ fontWeight: 600, flex: 1, minWidth: 0 }}>{it.naam}</span>
+                        <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtQty(it.qty, it.unit)}</span>
+                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                            → {it.vaste_leverancier_naam ?? 'nog te kiezen'}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </article>
     );
 }
 
@@ -695,6 +791,19 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                         {item.price_unknown ? 'n.t.b.' : fmtEur(item.est_total_eur)}
                     </span>
                 </div>
+                {item.winkel_product && item.winkel_product.name !== item.naam && (
+                    <div style={{ marginTop: 5, fontSize: 11, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
+                        title={item.winkel_product.confidence === 'hoog' ? 'Op naam gevonden in de catalogus' : 'Twijfel — controleer dit product'}>
+                        <span style={{
+                            display: 'inline-block', width: 7, height: 7, borderRadius: 999,
+                            background: item.winkel_product.confidence === 'hoog' ? 'var(--green, #22c55e)'
+                                : item.winkel_product.confidence === 'middel' ? 'var(--brand, #FFBF00)' : 'var(--red, #ef4444)',
+                        }} />
+                        <span style={{ color: 'var(--muted)' }}>bij {firstWord(bucket.leverancier_naam)}:</span>
+                        <span style={{ color: 'var(--text)' }}>{item.winkel_product.name}</span>
+                        {item.price_source === 'catalogus' && <span style={{ color: 'var(--muted)' }}>· catalogusprijs</span>}
+                    </div>
+                )}
                 {item.pack_label && (
                     <div style={{ marginTop: 5, fontSize: 11, color: 'var(--muted)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <span>nodig {fmtQty(item.qty_needed, item.unit)}</span>
@@ -927,11 +1036,13 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
 // ── PDF preview modal ─────────────────────────────────────────────────
 function PdfPreviewModal({
     bucket,
+    winkelId,
     onClose,
     onAfterSend,
     showToast,
 }: {
     bucket: BestelvoorstelLeverancier;
+    winkelId: number | null;
     onClose: () => void;
     onAfterSend: () => void;
     showToast: (msg: any, type?: any) => void;
@@ -953,6 +1064,7 @@ function PdfPreviewModal({
             const res = await sendOrderToSupplierAction({
                 concept_order_id: bucket.concept_order_id!,
                 note: note || undefined,
+                winkel_id: winkelId ?? null,
             });
             if (!res.ok) {
                 showToast(res.error || 'Versturen mislukt', 'error');

@@ -27,6 +27,19 @@ import { ensureConceptOrder } from './inkoopOrders';
 import { getOverridesForOrg, type OrderOverride } from './orderOverrides';
 import { roundUpToPack, type RoundingReason } from './packRounding';
 import { pakVoorstel } from '../voorraadTelling';
+import { zoekKandidaten, searchTerms, leveranciersOpId } from '../ingredientMatchDb';
+import { pickBestMatch, lineCostCents, normalizeIngredientName, coverageOf, type CostCandidate } from '../recipeMatch';
+
+/* Voorraad-items heten naar waar ze gekocht worden: "kippendij makro", "gerookte
+   bavette beef club 29". Dat woord staat nooit in de catalogus van een andere
+   winkel, dus voor het zoeken gaat het eruit. Staat de eigen bedrijfsnaam erin
+   ("hop&bites pulled pork"), dan is het eigen productie — dat koop je nergens. */
+function zoeknaamZonderWinkel(naam: string, winkelWoorden: Set<string>, eigenWoorden: Set<string>): { zoeknaam: string; eigenProductie: boolean } {
+  const tokens = normalizeIngredientName(naam).split(' ').filter(Boolean);
+  const eigenProductie = eigenWoorden.size > 0 && tokens.some(function (t) { return eigenWoorden.has(t); });
+  const rest = tokens.filter(function (t) { return !winkelWoorden.has(t) && !eigenWoorden.has(t); });
+  return { zoeknaam: rest.join(' ') || naam, eigenProductie };
+}
 
 /** "5000 g" → "5 kg", "1500 ml" → "1,5 liter". Alleen voor het label; het
  *  bestelde aantal blijft in de eenheid van het voorraad-item staan. */
@@ -53,7 +66,8 @@ export interface BestelvoorstelItem {
   product_url: string | null; // deep-link naar de productpagina bij de leverancier (bestellen in 1 klik)
   unit: string;
   unit_price_eur: number | null;
-  price_source: 'last_price' | 'purchase_price' | 'unknown';
+  /** 'catalogus' = prijs uit de catalogus van de gekozen winkel (winkel-modus). */
+  price_source: 'last_price' | 'purchase_price' | 'catalogus' | 'unknown';
   price_unknown: boolean;
   est_total_eur: number; // 0 bij onbekende prijs (zie price_unknown) — nooit "stil" een prijs verzinnen
   last_price_at: string | null;
@@ -71,6 +85,18 @@ export interface BestelvoorstelItem {
   target_qty: number;            // reserved + derving + par
   current_stock: number;         // wat er al ligt
   in_flight_qty: number;         // wat al onderweg is (verzonden, niet ontvangen)
+  /* Winkel-modus ("vandaag naar de Sligro"): het product dat bij de gekozen
+     winkel gevonden is voor dit voorraad-item, of null als die het niet heeft.
+     De vaste koppeling blijft staan; dit geldt voor deze ronde. */
+  winkel_product: {
+    name: string;
+    confidence: 'hoog' | 'middel' | 'laag';
+    source: 'supplier' | 'supplier_product';
+    ref_id: number;
+  } | null;
+  /* De leverancier waar dit item normaal heen gaat — in winkel-modus is dat
+     de plek waar een niet-gevonden item alsnog besteld wordt. */
+  vaste_leverancier_naam: string | null;
 }
 
 export interface BestelvoorstelLeverancier {
@@ -94,8 +120,20 @@ export interface OrderBlocker {
   affected_events: Array<{ event_id: number; event_name: string; event_date: string; qty: number }>;
 }
 
+export interface WinkelKeuze {
+  id: number;
+  naam: string;
+  rang: number;
+}
+
 export interface BestelvoorstelSummary {
   per_leverancier: BestelvoorstelLeverancier[];
+  /* Winkel-modus. null = "zoals gekoppeld" (elk item bij zijn vaste leverancier). */
+  winkel: WinkelKeuze | null;
+  /* Leveranciers met een voorkeur-rang, in volgorde — de knoppen bovenaan. */
+  winkel_keuzes: WinkelKeuze[];
+  /* Items die de gekozen winkel niet heeft; die blijven bij hun vaste leverancier. */
+  niet_bij_winkel: BestelvoorstelItem[];
   totals: {
     items_total: number;
     leveranciers_count: number;
@@ -131,9 +169,23 @@ export async function buildBestelvoorstel(
   supabase: SupabaseClient,
   orgId: string,
   windowDays: number = 14,
-  opts: { persistConcepts?: boolean } = {},
+  opts: { persistConcepts?: boolean; winkel?: number | null } = {},
 ): Promise<BestelvoorstelSummary> {
   const persistConcepts = opts.persistConcepts !== false;
+
+  /* Winkelkeuze (docs/leveranciersvoorkeur-plan.md, golf 3): leveranciers met
+     een voorkeur-rang zijn de knoppen; is er één gekozen, dan gaat élke regel
+     naar die winkel — voor deze ronde, de vaste koppeling blijft staan. */
+  const { data: rangRows } = await supabase
+    .from('leveranciers').select('id, naam, voorkeur_rang')
+    .eq('organization_id', orgId).not('voorkeur_rang', 'is', null).is('archived_at', null)
+    .order('voorkeur_rang', { ascending: true });
+  const winkelKeuzes: WinkelKeuze[] = (rangRows || []).map(function (l: any) {
+    return { id: l.id as number, naam: l.naam as string, rang: Number(l.voorkeur_rang) };
+  });
+  const winkel: WinkelKeuze | null = opts.winkel != null
+    ? (winkelKeuzes.find(function (k) { return k.id === opts.winkel; }) ?? null)
+    : null;
 
   // 1. Demand-snapshot (bevat al derving + par + in-flight in de shortfall).
   const demand = await getInventoryWithDemand(supabase, orgId, windowDays);
@@ -153,6 +205,9 @@ export async function buildBestelvoorstel(
   if (shortItems.length === 0) {
     return {
       per_leverancier: [],
+      winkel,
+      winkel_keuzes: winkelKeuzes,
+      niet_bij_winkel: [],
       totals: { items_total: 0, leveranciers_count: 0, estimated_total_eur: 0, window_days: windowDays },
       has_unknown_supplier: demand.unmatched.length > 0,
       unmatched_ingredients: demand.unmatched,
@@ -218,6 +273,71 @@ export async function buildBestelvoorstel(
     });
   }
 
+  // 4b. Winkel-modus: elk item op naam koppelen aan een product van de winkel.
+  //     Zelfde matcher als de receptuur (naam-overlap, middenprijs, uitschieter-
+  //     rem), beperkt tot deze leverancier. Niets gevonden → blijft bij de vaste
+  //     leverancier en komt in "niet bij …".
+  type WinkelTreffer = { cand: CostCandidate; confidence: 'hoog' | 'middel' | 'laag' };
+  const winkelTreffer = new Map<number, WinkelTreffer>();
+  const winkelSpMeta = new Map<number, any>();
+  const eigenProductie = new Set<number>();
+  if (winkel) {
+    const levById = await leveranciersOpId(supabase, orgId);
+    const scope = { id: winkel.id, naam: winkel.naam };
+    /* Woorden die naar een winkel of naar onszelf verwijzen, uit de zoeknaam. */
+    const winkelWoorden = new Set<string>();
+    levById.forEach(function (naam) {
+      normalizeIngredientName(naam).split(' ').filter(function (t) { return t.length >= 2; }).forEach(function (t) { winkelWoorden.add(t); });
+    });
+    const { data: org } = await supabase.from('organizations').select('name').eq('id', orgId).maybeSingle();
+    const eigenWoorden = new Set<string>(
+      normalizeIngredientName(String(org?.name ?? '')).split(' ').filter(function (t) { return t.length >= 3; }),
+    );
+    /* "Hop & Bites" wordt "hop bites"; in itemnamen staat vaak "hop&bites" → "hop bites" na normalisatie, dus dat dekt elkaar. */
+    await Promise.all(shortItems.map(async function (r) {
+      const invMeta = invMap.get(r.id) || {};
+      const spGekoppeld = typeof invMeta.preferred_supplier_product_id === 'number'
+        ? spById.get(invMeta.preferred_supplier_product_id) : null;
+      /* Al vast aan deze winkel gekoppeld → dat product, geen zoekwerk. */
+      if (spGekoppeld && spGekoppeld.supplier_id === winkel.id) return;
+      const { zoeknaam, eigenProductie: eigen } = zoeknaamZonderWinkel(r.naam, winkelWoorden, eigenWoorden);
+      if (eigen) { eigenProductie.add(r.id); return; }
+      const terms = searchTerms(zoeknaam);
+      const kandidaten = (await zoekKandidaten(supabase, orgId, terms, scope, levById))
+        .filter(function (c) { return c.source === 'supplier' || c.source === 'supplier_product'; });
+      const best = pickBestMatch(zoeknaam, kandidaten, undefined, r.unit);
+      /* Strenger dan bij een recept: een bestelling gaat de deur uit. Alle
+         woorden van het item moeten in het product zitten — "hotdog broodjes"
+         mag niet op "Hotdog halal, blik 32 stuks" landen. Twijfel → "niet bij". */
+      if (best && best.confidence !== 'laag' && coverageOf(zoeknaam, best.candidate.name) === 1) {
+        winkelTreffer.set(r.id, { cand: best.candidate, confidence: best.confidence });
+      }
+    }));
+    /* Pakmaat + productlink van de gevonden catalogus-B-producten. */
+    const ids = Array.from(winkelTreffer.values())
+      .map(function (t) { return t.cand.supplierProductId; })
+      .filter(function (id): id is number { return typeof id === 'number'; });
+    if (ids.length > 0) {
+      const { data: rows } = await supabase
+        .from('supplier_products')
+        .select('id, supplier_id, package_size, package_unit, product_url')
+        .eq('organization_id', orgId)
+        .in('id', ids);
+      (rows || []).forEach(function (s: any) { winkelSpMeta.set(s.id, s); });
+    }
+    if (!(winkel.id in suppliers)) {
+      const { data: l } = await supabase
+        .from('leveranciers').select('id, naam, type, email, tel, lead_time_days').eq('id', winkel.id).maybeSingle();
+      if (l) {
+        suppliers[winkel.id] = {
+          naam: l.naam, type: l.type || 'Overig', email: l.email || null, phone: l.tel || null,
+          lead_time_days: (l.lead_time_days != null && Number.isFinite(Number(l.lead_time_days))) ? Number(l.lead_time_days) : null,
+        };
+      }
+    }
+  }
+  const nietBijWinkel: BestelvoorstelItem[] = [];
+
   // 5. Groeperen + overrides + pak-afronding + prijs.
   const grouped = new Map<number | string, BestelvoorstelLeverancier>();
 
@@ -248,14 +368,24 @@ export async function buildBestelvoorstel(
     if (ov?.removed) return;
 
     const invMeta = invMap.get(r.id) || {};
-    const sp = typeof invMeta.preferred_supplier_product_id === 'number'
+    const spVast = typeof invMeta.preferred_supplier_product_id === 'number'
       ? spById.get(invMeta.preferred_supplier_product_id)
       : null;
 
     // Leverancier-bucket: order-override → vaste binding → last-price → legacy FK.
     const defaultSupId: number | null =
-      sp?.supplier_id ?? invMeta.last_price_leverancier_id ?? invMeta.leverancier_id ?? r.leverancier_id ?? null;
-    const effectiveSupId = ov?.override_leverancier_id ?? defaultSupId;
+      spVast?.supplier_id ?? invMeta.last_price_leverancier_id ?? invMeta.leverancier_id ?? r.leverancier_id ?? null;
+    const vasteSupId = ov?.override_leverancier_id ?? defaultSupId;
+
+    /* Winkel-modus: gevonden bij de winkel → die bucket, met het gevonden
+       product (pakmaat, link, catalogusprijs). Niet gevonden → apart blok,
+       en de regel houdt zijn vaste leverancier. */
+    const treffer = winkel ? winkelTreffer.get(r.id) : undefined;
+    const alVastBijWinkel = !!(winkel && spVast && spVast.supplier_id === winkel.id);
+    const bijWinkel = !!winkel && (alVastBijWinkel || !!treffer);
+    const spTreffer = treffer?.cand.supplierProductId != null ? winkelSpMeta.get(treffer.cand.supplierProductId) : null;
+    const sp = bijWinkel ? (alVastBijWinkel ? spVast : spTreffer) : spVast;
+    const effectiveSupId = bijWinkel ? winkel!.id : vasteSupId;
 
     // Nodig (kaal tekort of user-override) → afronden op pakmaat van het supplier_product.
     const originalQty = r.shortfall;
@@ -272,7 +402,7 @@ export async function buildBestelvoorstel(
 
     // Prijs per inventory-eenheid: last_price (bon-historie) → purchase_price → onbekend.
     let unitPriceEur: number | null = null;
-    let priceSource: 'last_price' | 'purchase_price' | 'unknown';
+    let priceSource: BestelvoorstelItem['price_source'];
     if (invMeta.last_price_eur != null) {
       unitPriceEur = Number(invMeta.last_price_eur);
       priceSource = 'last_price';
@@ -281,6 +411,17 @@ export async function buildBestelvoorstel(
       priceSource = 'purchase_price';
     } else {
       priceSource = 'unknown';
+    }
+    /* Winkel-modus met een gevonden catalogusproduct: de catalogusprijs van
+       díe winkel is wat je straks betaalt — die gaat vóór de laatste bonprijs
+       (die kan van een andere leverancier zijn). Eenheden onvergelijkbaar →
+       terug naar de bonprijs. */
+    if (treffer) {
+      const cents = lineCostCents(1, r.unit, treffer.cand);
+      if (cents != null && cents > 0) {
+        unitPriceEur = cents / 100;
+        priceSource = 'catalogus';
+      }
     }
     const priceUnknown = priceSource === 'unknown' || unitPriceEur == null || !(unitPriceEur > 0);
     const estTotal = priceUnknown ? 0 : Math.round(packed.qty_ordered * (unitPriceEur as number) * 100) / 100;
@@ -322,7 +463,18 @@ export async function buildBestelvoorstel(
       target_qty: r.target_qty,
       current_stock: r.current_stock,
       in_flight_qty: r.in_flight_qty,
+      winkel_product: treffer
+        ? { name: treffer.cand.name, confidence: treffer.confidence, source: treffer.cand.source as 'supplier' | 'supplier_product', ref_id: treffer.cand.ref_id }
+        : (alVastBijWinkel && spVast ? { name: r.naam, confidence: 'hoog', source: 'supplier_product', ref_id: spVast.id } : null),
+      vaste_leverancier_naam: eigenProductie.has(r.id)
+        ? 'eigen productie'
+        : (vasteSupId != null ? (suppliers[vasteSupId]?.naam ?? null) : null),
     };
+
+    if (winkel && !bijWinkel) {
+      nietBijWinkel.push(item);
+      return;
+    }
 
     const bucket = getBucket(effectiveSupId);
     bucket.items.push(item);
@@ -360,6 +512,9 @@ export async function buildBestelvoorstel(
 
   return {
     per_leverancier: list,
+    winkel,
+    winkel_keuzes: winkelKeuzes,
+    niet_bij_winkel: nietBijWinkel.sort(function (a, b) { return b.qty - a.qty; }),
     totals: {
       items_total: totalItems,
       leveranciers_count: list.filter(function (l) { return l.leverancier_id != null; }).length,

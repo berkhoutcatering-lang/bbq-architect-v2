@@ -23,7 +23,13 @@ import FactuurNaarVoorraadButton from './_components/FactuurNaarVoorraadButton';
 
 export const dynamic = 'force-dynamic';
 
-export default async function InkoopPage() {
+export default async function InkoopPage({ searchParams }: { searchParams: Promise<{ winkel?: string }> }) {
+    /* ?winkel=<leverancier-id> = "vandaag naar de …": elke regel naar die winkel.
+       Zonder param: elk item bij zijn vaste leverancier. In de URL, zodat een
+       herlaad of een gedeelde link dezelfde lijst geeft. */
+    const sp = await searchParams;
+    const winkelParam = Number(sp?.winkel);
+    const winkel = Number.isInteger(winkelParam) && winkelParam > 0 ? winkelParam : null;
     const sb = await createServerSupabase();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) redirect('/login?next=/inkoop');
@@ -46,7 +52,7 @@ export default async function InkoopPage() {
        rij. De twee getallen die de empty-state nodig had komen nu mee in
        summary.demand_meta. */
     const [summary, leveranciersRes, sentOrdersRes] = await Promise.all([
-        buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true }).catch((e) => {
+        buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true, winkel }).catch((e) => {
             console.error('[/inkoop] buildBestelvoorstel failed', e);
             return null;
         }),
