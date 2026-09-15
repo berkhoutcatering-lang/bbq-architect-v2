@@ -19,6 +19,7 @@ import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import { ALLERGENEN } from '@/lib/constants';
+import { IngredientRegels, kostprijsUitRegels } from '@/components/menu/IngredientRegels';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
@@ -1350,29 +1351,33 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 </div>
                             )}
 
-                            {/* Oude kostprijsberekening — ALLEEN-LEZEN (2026-07-27).
-                                Componenten hierboven zijn voortaan de enige plek waar je
-                                kosten opbouwt. Dit blok toont alleen nog wat er historisch
-                                in staat, zodat bestaande data niet stil verdwijnt. */}
+                            {/* Ingrediëntregels uit de AI-receptuur (golf 2, 2026-09-15).
+                                Tellen mee zolang dit gerecht géén componenten heeft; daarna zijn
+                                componenten de enige kostprijs. Tot golf 2 was dit alleen-lezen,
+                                maar een verkeerde koppeling (roomboter → apfelstrudel) moet je
+                                hier kunnen rechtzetten — de AI stelt dan drie alternatieven voor. */}
                             {(form.ingredient_costs || []).length > 0 && (
                                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, marginTop: 4 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
-                                        Oude kostprijsberekening (alleen lezen)
+                                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-accent-gold)', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 8 }}>
+                                        Ingrediënten uit de receptuur
                                     </div>
                                     <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-                                        Hier staan nog {(form.ingredient_costs || []).length} regels uit de oude manier van rekenen.
-                                        Ze tellen alleen mee zolang dit gerecht géén componenten heeft. Bouw het hierboven
-                                        opnieuw op met componenten — dan is er nog maar één kostprijs.
+                                        Elke regel hangt aan een product uit je kostprijs-catalogus. Klopt een koppeling niet,
+                                        kies dan een ander product — de AI stelt er drie voor. Deze regels tellen mee zolang
+                                        het gerecht geen componenten heeft.
                                     </p>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                        {(form.ingredient_costs || []).map(function (item: any, idx: number) {
-                                            return (
-                                                <span key={idx} style={{ fontSize: 11, color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 9px' }}>
-                                                    {item.naam}{item.qty_pp ? ' \u00b7 ' + item.qty_pp + (item.unit || '') : ''}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
+                                    <IngredientRegels
+                                        rows={form.ingredient_costs || []}
+                                        onChange={function (rows) {
+                                            /* Kostprijs volgt de regels: opnieuw optellen uit wat een prijs heeft. */
+                                            const cents = kostprijsUitRegels(rows);
+                                            setForm(Object.assign({}, form, {
+                                                ingredient_costs: rows,
+                                                ingredienten: rows.map(function (r) { return r.naam; }),
+                                                kostprijs_pp: cents > 0 ? String((cents / 100).toFixed(2)) : form.kostprijs_pp,
+                                            }));
+                                        }}
+                                    />
                                 </div>
                             )}
                                 </>)}

@@ -22,6 +22,7 @@ import {
     toBaseUnit,
     type CostCandidate,
     type BaseUnit,
+    type MatchSource,
 } from '@/lib/recipeMatch';
 
 export interface InIngredient { naam: string; qty_pp?: number | null; eenheid?: string | null }
@@ -42,12 +43,16 @@ export async function kostprijsLeverancier(sb: SupabaseClient, orgId: string): P
     return data ? { id: data.id as number, naam: data.naam as string } : null;
 }
 
-export interface GematchteRegel {
+export type GematchteRegel = {
     naam: string;
     qty_pp: number;
     eenheid: string;
-    match: {
-        source: string;
+    match: MatchRegel | null;
+};
+
+/** De koppeling zoals de UI hem kent: bron + prijs + hoe zeker we zijn. */
+export interface MatchRegel {
+        source: MatchSource;
         ref_id: number;
         name: string;
         supplier: string | null;
@@ -58,8 +63,12 @@ export interface GematchteRegel {
         /** true = gram en milliliter 1:1 gerekend (sauzen, zuivel, olie). */
         unit_approx: boolean;
         cents_per_base_unit: number;
-        base_unit: string;
-    } | null;
+        base_unit: BaseUnit;
+}
+
+/** Alle betekenisvolle woorden — de ruime greep voor de alternatieven-route. */
+export function alleZoektermen(naam: string): string[] {
+    return [...new Set(normalizeIngredientName(naam).split(' ').filter((t) => t.length >= 3 && !/^\d+$/.test(t)))];
 }
 
 /** Zoektermen voor de ilike-greep: de drie langste betekenisvolle woorden.
@@ -169,9 +178,7 @@ export async function matchIngredientenTegenCatalogus(
     /* Leveranciersnamen één keer ophalen: supplier_products heeft alleen een
        supplier_id, en zonder naam staat er "onbekende leverancier" bij een
        product waarvan we de leverancier prima kennen. */
-    const { data: levs } = await sb
-        .from('leveranciers').select('id, naam').eq('organization_id', orgId);
-    const levById = new Map<number, string>((levs ?? []).map((l: any) => [l.id, l.naam]));
+    const levById = await leveranciersOpId(sb, orgId);
 
     return Promise.all(ingredienten.map(async (ing) => {
         const naam = String(ing.naam ?? '').trim();
@@ -182,6 +189,33 @@ export async function matchIngredientenTegenCatalogus(
         const terms = searchTerms(naam);
         if (terms.length === 0) return { naam, qty_pp: qty, eenheid, match: null };
 
+        const candidates = await zoekKandidaten(sb, orgId, terms, lev, levById);
+        const best = pickBestMatch(naam, candidates, undefined, eenheid);
+        if (!best) return { naam, qty_pp: qty, eenheid, match: null };
+        return { naam, qty_pp: qty, eenheid, match: maakMatchRegel(best.candidate, best.confidence, qty, eenheid) };
+    }));
+}
+
+/** Naam → leverancier voor Catalogus B, die alleen een supplier_id heeft. */
+export async function leveranciersOpId(sb: SupabaseClient, orgId: string): Promise<Map<number, string>> {
+    const { data: levs } = await sb
+        .from('leveranciers').select('id, naam').eq('organization_id', orgId);
+    return new Map<number, string>((levs ?? []).map((l: any) => [l.id, l.naam]));
+}
+
+/**
+ * Alle kandidaten uit de vier bronnen voor een set zoektermen. Gedeeld door de
+ * matcher en door de alternatieven-route, zodat die dezelfde catalogus zien.
+ */
+export async function zoekKandidaten(
+    sb: SupabaseClient,
+    orgId: string,
+    terms: string[],
+    lev: LeverancierScope | null,
+    levById: Map<number, string>,
+): Promise<CostCandidate[]> {
+    if (terms.length === 0) return [];
+    {
         const [comp, inv, sup, sprod] = await Promise.all([
             sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
                 .eq('organization_id', orgId).or(ilikeAny('name', terms)).limit(30),
@@ -205,36 +239,38 @@ export async function matchIngredientenTegenCatalogus(
             })(),
         ]);
 
-        const candidates: CostCandidate[] = [
+        return [
             ...(comp.data || []).map(fromComponent),
             ...(inv.data || []).map(fromInventory),
             ...(sup.data || []).map(fromSupplierPrice),
             ...(sprod.data || []).map((r: any) => fromSupplierProduct(r, levById.get(r.supplier_id) ?? null)),
         ].filter((c): c is CostCandidate => c !== null);
+    }
+}
 
-        const best = pickBestMatch(naam, candidates, undefined, eenheid);
-        if (!best) return { naam, qty_pp: qty, eenheid, match: null };
-
-        const line = lineCostCents(qty, eenheid, best.candidate);
-        const basis = toBaseUnit(eenheid)?.base ?? null;
-        const approx = basis != null && basis !== best.candidate.baseUnit && isGramMlPaar(basis, best.candidate.baseUnit);
-        return {
-            naam, qty_pp: qty, eenheid,
-            match: {
-                source: best.candidate.source,
-                ref_id: best.candidate.ref_id,
-                name: best.candidate.name,
-                supplier: best.candidate.supplier ?? null,
-                master_product_id: best.candidate.masterProductId ?? null,
-                /* Een g≈ml-benadering is nooit "hoog". */
-                confidence: approx && best.confidence === 'hoog' ? 'middel' : best.confidence,
-                /* null = eenheden onvergelijkbaar → geen valse zekerheid. */
-                line_cost_cents: line,
-                unit_incompatible: line === null,
-                unit_approx: approx,
-                cents_per_base_unit: best.candidate.centsPerBaseUnit,
-                base_unit: best.candidate.baseUnit,
-            },
-        };
-    }));
+/** Kandidaat + hoeveelheid → de regel zoals de UI hem toont en opslaat. */
+export function maakMatchRegel(
+    cand: CostCandidate,
+    confidence: 'hoog' | 'middel' | 'laag',
+    qty: number,
+    eenheid: string,
+): MatchRegel {
+    const line = lineCostCents(qty, eenheid, cand);
+    const basis = toBaseUnit(eenheid)?.base ?? null;
+    const approx = basis != null && basis !== cand.baseUnit && isGramMlPaar(basis, cand.baseUnit);
+    return {
+        source: cand.source,
+        ref_id: cand.ref_id,
+        name: cand.name,
+        supplier: cand.supplier ?? null,
+        master_product_id: cand.masterProductId ?? null,
+        /* Een g≈ml-benadering is nooit "hoog". */
+        confidence: approx && confidence === 'hoog' ? 'middel' : confidence,
+        /* null = eenheden onvergelijkbaar → geen valse zekerheid. */
+        line_cost_cents: line,
+        unit_incompatible: line === null,
+        unit_approx: approx,
+        cents_per_base_unit: cand.centsPerBaseUnit,
+        base_unit: cand.baseUnit,
+    };
 }

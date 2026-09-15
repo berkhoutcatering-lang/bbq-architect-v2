@@ -50,6 +50,15 @@ Bekende gevallen die golf 1 níet oplost (bewust — dit is semantiek, dus golf 
 - **UI**: in de Bedenk-preview én in het gerecht-formulier krijgt een niet-gekoppelde regel een oranje chip "niet bij Bidfood" met de knop *3 alternatieven*. Kiezen pint het product vast; *Laat leeg* houdt de regel zonder kostprijs (eerlijk "nog geen kostprijs").
 - Daarvoor moeten de AI-ingrediëntregels in het formulier **bewerkbaar** worden: per regel *kies ander product* (catalogus-zoek, alleen rang-1) en *verwijder*. Dat vervangt het alleen-lezen blok.
 
+### Golf 2 — gebouwd en gemeten (15 sep)
+
+- Route `/api/recipe/alternatives` (Opus, lage inspanning, ~1–2 ct per vraag, 4–8 s): ruime greep op alle woorden → bij minder dan 5 kandidaten eerst zoekwoorden van de AI (synoniemen) → AI beoordeelt de huidige koppeling en kiest max. 3 nummers uit de lijst → prijs uit de catalogusregel.
+- Gemeten: "roomboter" met apfelstrudel gekoppeld → *"Een apfelstrudel gemaakt met roomboter is geen roomboter als ingrediënt"* + kluit 5 kg en rol 1 kg. "appelciderazijn" → Appelazijn can 5 ltr. "Worcestershiresaus" → Worcestersaus. "kersenhoutsnippers" → eerlijk niets.
+- Valkuil onderweg: de 60 kandidaten voor het model waren alfabetisch gesorteerd, en bij "koude ongezouten roomboter, in blokjes" viel de kluit buiten de 60. Nu gesorteerd op naam-gelijkenis.
+- Zelfde kluit staat twee keer in Catalogus B (twee regels, iets andere prijs) → ontdubbeld op naam.
+- UI: chips in Bedenk met AI zijn klikbaar (groen = prijs, ? = twijfel, kies = niets gevonden); het gerecht-formulier heeft nu bewerkbare regels (`IngredientRegels`) met product, leverancier, prijs p.p., zekerheid, "ander product" en verwijderen. Kostprijs p.p. telt opnieuw op na elke wijziging. Een keuze van de kok wordt "hoog".
+- Meegenomen: de allergeencheck sloeg lettercodes op (E, M) naast woorden (ei); nu één taal, datamigratie gedraaid.
+
 ## Golf 3 — Bestellijst: kies de winkel
 
 - Bovenaan het bestelvoorstel: *Bestellen bij: Bidfood (online) · Sligro (ophalen)*. Standaard = rang 1.

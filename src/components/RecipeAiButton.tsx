@@ -17,7 +17,7 @@ import { useToast } from '@/components/Toast';
 const GOLD = '#c4a35a';
 
 export interface IngredientMatch {
-  source: 'component' | 'inventory' | 'supplier';
+  source: 'component' | 'inventory' | 'supplier' | 'supplier_product';
   ref_id: number;
   name: string;
   supplier: string | null;
@@ -26,6 +26,8 @@ export interface IngredientMatch {
   line_cost_cents: number | null;   // kostprijs p.p. voor deze regel; null = eenheden onvergelijkbaar
   cents_per_base_unit: number;
   base_unit: 'g' | 'ml' | 'stuk';
+  /** true = gram en milliliter 1:1 gerekend (sauzen, zuivel, olie). */
+  unit_approx?: boolean;
 }
 
 export interface AiFillIngredient {

@@ -20,6 +20,8 @@ import { Pencil, Package, Users, Sparkles, X, Plus, RefreshCw } from 'lucide-rea
 import { MRButton, MREyebrow, MRTag } from './atoms';
 import { fmtEuro } from './helpers';
 import type { AiFillResult, AiFillMeta, AiFillIngredient } from '@/components/RecipeAiButton';
+import type { MatchRegel } from '@/lib/ingredientMatchDb';
+import { IngredientAlternatieven } from './IngredientAlternatieven';
 
 type BedenkerMode = 'vrij' | 'voorraad' | 'klant';
 
@@ -44,7 +46,7 @@ export interface BedenkerResult {
     matchedCount: number;
     totalCount: number;
     /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
-    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean }>;
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null }>;
     /* De leverancier waarop de kostprijs rekent (voorkeur_rang 1), of null als
        er geen voorkeur is ingesteld en over alle leveranciers gezocht is. */
     kostprijsLeverancier: string | null;
@@ -205,6 +207,7 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
             matched: !!(matches[idx]?.match && matches[idx].match.line_cost_cents != null),
             supplier: matches[idx]?.match?.supplier ?? (matches[idx]?.match ? 'eigen' : null),
             approx: !!matches[idx]?.match?.unit_approx,
+            confidence: matches[idx]?.match?.confidence ?? null,
         })),
         kostprijsLeverancier,
         fill,
@@ -272,10 +275,43 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
     const [thinking, setThinking] = useState(false);
     const [result, setResult] = useState<BedenkerResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    /* Welke ingrediënt-chip het alternatieven-paneel open heeft. */
+    const [altIdx, setAltIdx] = useState<number | null>(null);
+
+    /* Een gekozen alternatief (of "laat leeg") landt in fill.ingredient_costs
+       én in de preview, en de kostprijs wordt opnieuw opgeteld uit de regels
+       die een prijs hebben. De AI-gok komt er niet meer aan te pas. */
+    function zetKoppeling(idx: number, match: MatchRegel | null) {
+        setResult((r) => {
+            if (!r) return r;
+            const rows = r.fill.ingredient_costs.map((row, i) => {
+                if (i !== idx) return row;
+                const hasCost = !!(match && match.line_cost_cents != null);
+                const perUnit = hasCost && row.qty_pp > 0 ? (match!.line_cost_cents! / 100) / row.qty_pp : null;
+                return { ...row, match, is_estimated: !hasCost, estimated_price_eur: perUnit };
+            });
+            const cents = rows.reduce((s, row) => s + (row.match?.line_cost_cents ?? 0), 0);
+            const matched = rows.filter((row) => row.match && row.match.line_cost_cents != null).length;
+            return {
+                ...r,
+                fill: { ...r.fill, ingredient_costs: rows, kostprijs_pp_schatting: cents / 100 },
+                cost: cents / 100,
+                matchedCount: matched,
+                ingredients: r.ingredients.map((ing, i) => i !== idx ? ing : {
+                    ...ing,
+                    matched: !!(match && match.line_cost_cents != null),
+                    supplier: match ? (match.supplier ?? (match.source === 'component' || match.source === 'inventory' ? 'eigen' : null)) : null,
+                    approx: !!match?.unit_approx,
+                    confidence: match?.confidence ?? null,
+                }),
+            };
+        });
+        setAltIdx(null);
+    }
 
     /* Reset bij open */
     useEffect(() => {
-        if (open) { setMode('vrij'); setPrompt(''); setResult(null); setThinking(false); }
+        if (open) { setMode('vrij'); setPrompt(''); setResult(null); setThinking(false); setAltIdx(null); }
     }, [open]);
 
     useEffect(() => {
@@ -434,10 +470,11 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                         <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten per portie</MREyebrow>
                                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                             {result.ingredients.map((c, i) => (
-                                                <span key={i} title={c.matched
+                                                <button type="button" key={i} onClick={() => setAltIdx(altIdx === i ? null : i)} title={c.matched
                                                     ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
                                                     : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden'} style={{
-                                                    fontSize: 11, padding: '3px 8px', borderRadius: 5,
+                                                    fontSize: 11, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', fontFamily: 'var(--font-sans)',
+                                                    outline: altIdx === i ? '2px solid var(--brand)' : 'none',
                                                     background: c.matched ? 'rgba(34,197,94,.07)' : 'rgba(196,163,90,.08)',
                                                     border: c.matched ? '1px solid rgba(34,197,94,.3)' : '1px solid rgba(196,163,90,.2)',
                                                     color: 'var(--text)',
@@ -446,9 +483,24 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                                     {c.qtyPp > 0 && <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}> · {fmtQty(c.qtyPp, c.unit)}</span>}
                                                     {c.matched && c.supplier && c.supplier !== 'eigen' && <span style={{ color: 'var(--green, #22c55e)' }}> · {c.supplier}{c.approx ? ' ≈' : ''}</span>}
                                                     {c.matched && c.supplier === 'eigen' && <span style={{ color: 'var(--green, #22c55e)' }}> · eigen</span>}
-                                                </span>
+                                                    {(!c.matched || c.confidence !== 'hoog') && <span style={{ color: 'var(--brand)' }}> · {c.matched ? '?' : 'kies'}</span>}
+                                                </button>
                                             ))}
                                         </div>
+                                        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 6 }}>
+                                            Klik op een ingrediënt voor alternatieven. Groen = gekoppeld aan een echte prijs, ? = twijfel, kies = niets gevonden.
+                                        </div>
+                                        {altIdx != null && result.ingredients[altIdx] && (
+                                            <IngredientAlternatieven
+                                                naam={result.ingredients[altIdx].naam}
+                                                qtyPp={result.ingredients[altIdx].qtyPp}
+                                                unit={result.ingredients[altIdx].unit}
+                                                huidige={(result.fill.ingredient_costs[altIdx]?.match as MatchRegel | null | undefined) ?? null}
+                                                onKies={(m) => zetKoppeling(altIdx, m)}
+                                                onLeeg={() => zetKoppeling(altIdx, null)}
+                                                onSluit={() => setAltIdx(null)}
+                                            />
+                                        )}
                                     </div>
                                 )}
 
