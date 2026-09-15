@@ -18,7 +18,9 @@ import { fmtEuro } from './helpers';
 
 interface Props {
     rows: AiFillIngredient[];
-    onChange: (rows: AiFillIngredient[]) => void;
+    /** hernoemd = een vervanging (spiering voor procureur): de aanroeper past
+        de bereidingstekst aan. */
+    onChange: (rows: AiFillIngredient[], hernoemd?: { van: string; naar: string }) => void;
     kostprijsLeverancier?: string | null;
 }
 
@@ -36,14 +38,16 @@ const KLEUR = {
 export function IngredientRegels({ rows, onChange, kostprijsLeverancier }: Props) {
     const [open, setOpen] = useState<number | null>(null);
 
-    function zet(idx: number, match: MatchRegel | null) {
+    function zet(idx: number, match: MatchRegel | null, opties?: { vervanging: boolean; nieuweNaam: string }) {
+        const oudeNaam = rows[idx]?.naam ?? '';
+        const nieuweNaam = opties?.vervanging && opties.nieuweNaam ? opties.nieuweNaam : null;
         const next = rows.map((r, i) => {
             if (i !== idx) return r;
             const hasCost = !!(match && match.line_cost_cents != null);
             const perUnit = hasCost && r.qty_pp > 0 ? (match!.line_cost_cents! / 100) / r.qty_pp : null;
-            return { ...r, match, is_estimated: !hasCost, estimated_price_eur: perUnit, inventory_id: null };
+            return { ...r, naam: nieuweNaam ?? r.naam, match, is_estimated: !hasCost, estimated_price_eur: perUnit, inventory_id: null };
         });
-        onChange(next);
+        onChange(next, nieuweNaam ? { van: oudeNaam, naar: nieuweNaam } : undefined);
         setOpen(null);
     }
 
@@ -108,7 +112,7 @@ export function IngredientRegels({ rows, onChange, kostprijsLeverancier }: Props
                                 qtyPp={r.qty_pp}
                                 unit={r.unit}
                                 huidige={m}
-                                onKies={(match) => zet(idx, match)}
+                                onKies={(match, opties) => zet(idx, match, opties)}
                                 onLeeg={() => zet(idx, null)}
                                 onSluit={() => setOpen(null)}
                             />

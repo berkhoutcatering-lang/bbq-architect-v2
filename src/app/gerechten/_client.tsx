@@ -21,6 +21,7 @@ import { formatEur } from '@/lib/format';
 import { ALLERGENEN } from '@/lib/constants';
 import { allergeenCodesNaarWoorden } from '@/lib/allergenCodes';
 import { IngredientRegels, kostprijsUitRegels } from '@/components/menu/IngredientRegels';
+import { vervangInTekst } from '@/lib/ingredientVervangen';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
 import RecipeFineTuneButton, { type FineTune, type RecipeForTune } from '@/components/RecipeFineTuneButton';
@@ -1396,13 +1397,18 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                     </p>
                                     <IngredientRegels
                                         rows={form.ingredient_costs || []}
-                                        onChange={function (rows) {
-                                            /* Kostprijs volgt de regels: opnieuw optellen uit wat een prijs heeft. */
+                                        onChange={function (rows, hernoemd) {
+                                            /* Kostprijs volgt de regels: opnieuw optellen uit wat een prijs heeft.
+                                               Bij een vervanging (spiering voor procureur) gaat de bereiding mee. */
                                             const cents = kostprijsUitRegels(rows);
+                                            const tekst = function (t: string) { return hernoemd ? vervangInTekst(t || '', hernoemd.van, hernoemd.naar) : t; };
                                             setForm(Object.assign({}, form, {
                                                 ingredient_costs: rows,
                                                 ingredienten: rows.map(function (r) { return r.naam; }),
                                                 kostprijs_pp: cents > 0 ? String((cents / 100).toFixed(2)) : form.kostprijs_pp,
+                                                bereidingswijze: tekst(form.bereidingswijze),
+                                                beschrijving: tekst(form.beschrijving),
+                                                battle_plan_steps: hernoemd ? (form.battle_plan_steps || []).map(function (s: string) { return tekst(s); }) : form.battle_plan_steps,
                                             }));
                                         }}
                                     />
