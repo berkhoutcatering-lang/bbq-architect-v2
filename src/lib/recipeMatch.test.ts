@@ -264,6 +264,9 @@ describe('aliasSleutel — naam zonder hoeveelheid en eenheid (golf 4)', () => {
         expect(aliasSleutel('Fijn zeezout')).toBe('fijn zeezout');
         expect(aliasSleutel('grof zeezout')).not.toBe(aliasSleutel('fijn zeezout'));
     });
+    it('haakjes tellen niet: "procureur (varkensnek, am been)" is procureur', () => {
+        expect(aliasSleutel('procureur (varkensnek, am been)')).toBe('procureur');
+    });
     it('appelciderazijn en Appelciderazijn zijn dezelfde sleutel', () => {
         expect(aliasSleutel('Appelciderazijn')).toBe(aliasSleutel('appelciderazijn'));
     });
