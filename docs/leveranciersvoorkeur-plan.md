@@ -73,6 +73,25 @@ Bekende gevallen die golf 1 níet oplost (bewust — dit is semantiek, dus golf 
 - Strenger dan bij een recept: alleen een treffer als álle woorden van het item in het product zitten en de zekerheid niet "laag" is. "hotdog broodjes" landde anders op *Hotdog halal, blik 32 stuks*. Gevolg: "gerookte bavette" en "pastrami" komen in "niet bij Bidfood" — één keer *Koppel aan Bidfood* op de regel en ze staan er voortaan.
 - Meting: Bidfood 3 zekere treffers + 6 niet-bij (2 eigen productie); Sligro 2 + 7.
 
+## Golf 4 — Koppelronde + leren (gepland 15 sep)
+
+Waarom: de woord-matcher kent geen synoniemen ("appelciderazijn" ↔ "Appelazijn"); golf 2 lost dat op, maar alleen op klik. En wat Mathijs één keer bevestigt, moet de app daarna gewoon wéten.
+
+Twee gevallen, één harde regel:
+- **Andere naam voor hetzelfde** (appelciderazijn = appelazijn = ciderazijn) → ja, automatisch.
+- **Ander product dat erop lijkt** (frietsaus naast mayonaise, 70% naast 80%) → nooit zonder Mathijs; de AI mag het voorstellen mét reden, niet kiezen.
+
+Niet: alle 10.125 Bidfood-producten door de AI benoemen. Dat benoemt 9.900 producten die nooit in een recept komen en plakt "mayonaise" op 58 producten — helpt bij vinden, niet bij kiezen, en elke nieuwe prijslijst maakt het weer onvolledig.
+
+Wel:
+1. **Eenmalige koppelronde vanaf Mathijs' kant.** Alle ingrediëntnamen die al in de app staan (gemeten 15 sep: 51 uit gerechten, 63 componenten, 28 voorraad-items, ~150 uniek) → per naam het Bidfood-product via dezelfde alternatieven-route → **goedkeur-lijst** (patroon van de prijslijst-lezer): ingrediënt → voorgesteld product → prijs → reden; per regel *goed* / *ander product* / *laat leeg*. Kosten: enkele euro's, eenmalig.
+2. **Alias per bedrijf.** Wat Mathijs goedkeurt landt in `org_product_aliases` (bestaat al voor de prijslijst-lezer; de receptuur-matcher kijkt er nog niet in). Alias = genormaliseerde ingrediëntnaam → product (id + naam, zodat hij na een nieuwe prijslijst op naam terug te vinden is). De matcher kijkt eerst in de aliassen, dan pas in de catalogus.
+3. **Automatisch leren.** Vindt de woord-matcher niets (of alleen "laag"), dan draait de synoniemen-stap meteen mee bij het maken van het recept — niet pas op klik. Resultaat krijgt "?"; na een ja van Mathijs wordt het een alias. Een bekend ingrediënt is daarna direct goed, zonder AI.
+
+Mathijs hoeft vooraf niets aan te leveren: de ronde draait over wat er al staat, en de bibliotheek leert mee terwijl hij recepten toevoegt (foto/boek/Bedenk met AI). Wil hij zijn hele receptuur in één keer erin, dan is de receptlezer de weg (kaarten fotograferen) gevolgd door nog één koppelronde.
+
+Volgorde: na merge van #226 en #227.
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.
