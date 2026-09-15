@@ -134,6 +134,9 @@ Eerst gecontroleerd, niet aangenomen: de ontleder laat tijden **bewust** leeg bi
 - Gemeten — BBQ-saus (bestaand): 11 stappen, apparaat per stap (inductieplaat, koelwerkbank), 3 min werk + 25 min wachten, 8 nog te meten, "saus op de barbecue" vervallen met reden ("de pelletgrill blijft vrij voor vlees"); gerecht bijgewerkt, prijzen intact. Coleslaw (nieuw via Bedenk): 2 delen, 15 stappen, bouwsteen "Gerookte paprika-dressing" aangemaakt, gang bijgerecht, concept, € 1,06 met 12 van 13 geprijsd, allergenen ei/mosterd, aliassen geleerd. Doorlooptijd ~1,5 min (Bedenk ~40 s + ontleder ~50 s).
 - Wat het formulier nog heeft: `bereidingswijze` als tekst blijft meegaan (kitchen mode, PDF); de stappen zijn de bron voor bord en planner.
 
+**Nagetest tot op het bord (15 sep, op verzoek van Mathijs):** proefrun van de planner (`/api/prep/bulk-schedule`, dryRun) op het event van 18 sep met de nieuwe gerechten. De BBQ-saus wordt 11 taken, teruggerekend vanaf de uitlevering (14:32 → 15:00), elk met bewerking en apparaat. Batch-sleutels (bewerking + onderdeel + apparaat + dag) doen wat ze moeten: rode ui en dille snijden van de coleslaw worden één snijblok, portioneren van saus en coleslaw gaat samen, de dressing wordt een dag naar voren getrokken.
+Gevonden en gefixt: Smokey's Chicken Sandwich stond met de ranchsaus **vier keer** op het bord. De opslagroute plakte bij een bouwsteen die al bestond de stappen erbíj (9 sep, vier keer opgeslagen). Nu worden de stappen van een bouwsteen vervangen, en de 14 oude dubbelen zijn opgeruimd (migratie `20260915140000`, live): 52 → 38 taken.
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.

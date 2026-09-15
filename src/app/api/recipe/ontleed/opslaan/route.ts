@@ -291,6 +291,22 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         };
     });
 
+    /* Een bouwsteen die al bestond (ranchsaus, salsa) kreeg tot nu toe zijn
+       stappen erbíj geplakt bij elke nieuwe opslag — op 9 september stond de
+       ranchsaus na vier keer opslaan vier keer op het bord. De werkwijze van
+       een bouwsteen is één recept: wat er stond wordt vervangen, en dat is
+       precies wat "Zet op onze werkwijze" belooft. Alleen bouwstenen waar we
+       nu stappen voor hebben; de rest blijft ongemoeid. */
+    const componentenMetStappen = [...new Set(rijen.map((r) => r.component_id).filter((id): id is number => id != null))];
+    if (componentenMetStappen.length > 0) {
+        const { error: schoon } = await supabase
+            .from('recipe_steps')
+            .delete()
+            .in('component_id', componentenMetStappen)
+            .eq('organization_id', orgId);
+        if (schoon) return NextResponse.json({ error: `Oude bouwsteen-stappen opruimen mislukte: ${schoon.message}` }, { status: 500 });
+    }
+
     const { data: opgeslagen, error: stapFout } = await supabase
         .from('recipe_steps')
         .insert(rijen)
