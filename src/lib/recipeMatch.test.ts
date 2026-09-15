@@ -8,6 +8,7 @@ import {
     toBaseUnit,
     lineCostCents,
     type CostCandidate,
+    aliasSleutel,
 } from './recipeMatch';
 
 describe('normalizeIngredientName', () => {
@@ -250,5 +251,19 @@ describe('pickBestMatch — een passende eenheid geeft de doorslag', () => {
     it('gedraagt zich als vanouds zonder eenheid', () => {
         const uit = pickBestMatch('karnemelk', [perStuk, perMl]);
         expect(uit).not.toBeNull();
+    });
+});
+
+describe('aliasSleutel — naam zonder hoeveelheid en eenheid (golf 4)', () => {
+    it('haalt hoeveelheid en eenheid uit oude tekst-ingrediënten', () => {
+        expect(aliasSleutel('0,05 stuks kaneelstokje')).toBe('kaneelstokje');
+        expect(aliasSleutel('200 g bavette')).toBe('bavette');
+    });
+    it('laat beschrijvende woorden staan: fijn en grof zeezout zijn twee aliassen', () => {
+        expect(aliasSleutel('Fijn zeezout')).toBe('fijn zeezout');
+        expect(aliasSleutel('grof zeezout')).not.toBe(aliasSleutel('fijn zeezout'));
+    });
+    it('appelciderazijn en Appelciderazijn zijn dezelfde sleutel', () => {
+        expect(aliasSleutel('Appelciderazijn')).toBe(aliasSleutel('appelciderazijn'));
     });
 });

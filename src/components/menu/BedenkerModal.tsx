@@ -46,7 +46,7 @@ export interface BedenkerResult {
     matchedCount: number;
     totalCount: number;
     /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
-    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null }>;
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null; toelichting: string | null }>;
     /* De leverancier waarop de kostprijs rekent (voorkeur_rang 1), of null als
        er geen voorkeur is ingesteld en over alle leveranciers gezocht is. */
     kostprijsLeverancier: string | null;
@@ -133,6 +133,8 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ingredients: rows.map((i) => ({ naam: i.naam, qty_pp: i.qtyPp, eenheid: i.eenheid })),
+                    /* Golf 4: geen treffer → de AI zoekt synoniemen, meteen. */
+                    ai: true,
                 }),
             });
             const mb = await mr.json();
@@ -208,6 +210,10 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
             supplier: matches[idx]?.match?.supplier ?? (matches[idx]?.match ? 'eigen' : null),
             approx: !!matches[idx]?.match?.unit_approx,
             confidence: matches[idx]?.match?.confidence ?? null,
+            toelichting: matches[idx]?.match?.via_alias ? 'Eerder door jou bevestigd'
+                : matches[idx]?.match?.via_ai ? `AI: ${matches[idx].match.ai_reden ?? 'zelfde product, andere naam'}`
+                : matches[idx]?.ai_voorstel ? `AI stelt voor: ${matches[idx].ai_voorstel.name} — ${matches[idx].ai_voorstel.reden} (ander product, jij beslist)`
+                : null,
         })),
         kostprijsLeverancier,
         fill,
@@ -303,6 +309,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                     supplier: match ? (match.supplier ?? (match.source === 'component' || match.source === 'inventory' ? 'eigen' : null)) : null,
                     approx: !!match?.unit_approx,
                     confidence: match?.confidence ?? null,
+                    toelichting: match ? 'Door jou gekozen' : null,
                 }),
             };
         });
@@ -470,9 +477,12 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                         <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten per portie</MREyebrow>
                                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                             {result.ingredients.map((c, i) => (
-                                                <button type="button" key={i} onClick={() => setAltIdx(altIdx === i ? null : i)} title={c.matched
-                                                    ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
-                                                    : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden'} style={{
+                                                <button type="button" key={i} onClick={() => setAltIdx(altIdx === i ? null : i)} title={[
+                                                    c.matched
+                                                        ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
+                                                        : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden',
+                                                    c.toelichting,
+                                                ].filter(Boolean).join(' · ')} style={{
                                                     fontSize: 11, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', fontFamily: 'var(--font-sans)',
                                                     outline: altIdx === i ? '2px solid var(--brand)' : 'none',
                                                     background: c.matched ? 'rgba(34,197,94,.07)' : 'rgba(196,163,90,.08)',

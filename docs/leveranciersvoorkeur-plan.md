@@ -87,6 +87,16 @@ Twee gevallen, één harde regel:
 
 Niet: alle 10.125 Bidfood-producten door de AI benoemen (benoemt 9.900 producten die nooit in een recept komen; helpt bij vinden, niet bij kiezen; elke nieuwe prijslijst maakt het weer onvolledig).
 
+### Golf 4 — gebouwd en gemeten (15 sep)
+
+- **Tabel `ingredient_aliases`** (migratie `20260915110000`, live): naam-sleutel → bron + id + productnaam, uniek per organisatie. Eigen tabel naast `org_product_aliases` (die hangt aan master_products/Catalogus A; Bidfood zit in B en een alias mag ook naar bibliotheek/voorraad wijzen). Sleutel = naam zonder hoeveelheid en eenheid ("0,05 stuks kaneelstokje" → "kaneelstokje"); beschrijvende woorden blijven ("fijn zeezout" ≠ "grof zeezout").
+- **Matcher kijkt eerst in de aliassen** → `via_alias`, zekerheid hoog, geen AI. Is de rij weg (nieuwe prijslijst) → op productnaam in dezelfde bron, anders gewoon zoeken.
+- **AI-synoniemenstap automatisch** in `/api/recipe/match-ingredients` met `ai: true` (Bedenk met AI en foto-flow sturen dat mee): max. 8 regels per aanroep, vier tegelijk. Alleen `zelfde_product: true` wordt gekozen (zekerheid middel, "?"); een ánder product komt terug als `ai_voorstel` en wacht op de kok. Fouten worden geteld en gelogd, niet stil geslikt.
+- **Leren op bevestiging**: keuze in het alternatieven-paneel → alias; opslaan van een gerecht → alle regels met zekerheid hoog worden alias (een "?" niet).
+- **Koppelronde** op `/gerechten/koppelronde` (knop in de gerechten-kop): alle ingrediënten uit de gerechten (bibliotheek en voorraad niet — die koppelen alleen aan zichzelf), per acht door de matcher, goedkeur-lijst met *goed* / *ander product* / *laat leeg* en "n groene goedkeuren" in één keer. Voorstellen overleven een herlaad in de browser.
+- Gemeten: 51 ingrediënten in 70 s voor € 0,17 — 17 exact, 4 via AI ("appelciderazijn = appelazijn", "frietsaus = fritessaus 25%"), 7 AI-voorstellen met eerlijke reden ("ananas op sap in blik is geen verse ananas", "piripirisaus is een saus, geen marinade"), 1 niets, 22 ter beoordeling. Leer-lus bewezen: na één "goed" komt "knoflook" terug als via_alias.
+- Bekend gat dat blijft: een woord-treffer met zekerheid hoog op een ánder product ("roomboter" → "Roomboter apfelstrudel") gaat niet langs de AI; de koppelronde is precies de plek waar dat één keer rechtgezet wordt.
+
 ## Golf 5 — Eén receptuur-pijplijn (gepland 15 sep)
 
 Mathijs, 15 sep: *"Ik wil alles met AI gaan bedenken, en die AI moet dan uit zichzelf die micro-stappen erin zetten."*

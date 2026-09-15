@@ -53,6 +53,19 @@ export function normalizeIngredientName(s: string): string {
         .trim();
 }
 
+/* Sleutel voor een alias (golf 4): de naam zonder hoeveelheid en eenheid.
+   Oude tekst-ingrediënten dragen die mee ("0,05 stuks kaneelstokje", "200 g
+   bavette") en dan zou de app "0 05 stuks kaneelstokje" leren in plaats van
+   "kaneelstokje". Beschrijvende woorden blijven staan: "fijn zeezout" en
+   "grof zeezout" zijn twee aliassen. */
+const EENHEID_WOORDEN = new Set(['g', 'gr', 'gram', 'kg', 'kilo', 'ml', 'l', 'ltr', 'liter', 'stuk', 'stuks', 'st', 'el', 'tl', 'snuf', 'snufje', 'pp', 'p']);
+export function aliasSleutel(naam: string): string {
+    return normalizeIngredientName(naam)
+        .split(' ')
+        .filter((t) => t && !/^\d+$/.test(t) && !EENHEID_WOORDEN.has(t))
+        .join(' ');
+}
+
 /* Ruis-woorden die niets zeggen over identiteit — tellen niet mee in de score
    zodat "verse tijm" ↔ "tijm" nog steeds hoog matcht. */
 const STOPWORDS = new Set([

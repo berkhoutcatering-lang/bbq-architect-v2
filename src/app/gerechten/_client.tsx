@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X, Store, BookOpen } from 'lucide-react';
+import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X, Store, BookOpen, Link2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { track, trackOnce } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
@@ -385,8 +385,25 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht bijgewerkt!');
         }
+        onthoudKoppelingen(dbData.ingredient_costs);
         setEditing(null);
         loadData();
+    }
+
+    /* Golf 4: wat je opslaat met een zekere koppeling (op naam gevonden, via
+       een alias, of door jou gekozen) onthoudt de app als alias. Een "?" van
+       de AI telt niet — die heb je nog niet bevestigd. Stil op de achtergrond;
+       mislukt het, dan wordt het de volgende keer gewoon opnieuw gezocht. */
+    function onthoudKoppelingen(rows: unknown) {
+        if (!Array.isArray(rows)) return;
+        const aliases = rows
+            .filter((r: any) => r?.naam && r?.match && r.match.confidence === 'hoog' && r.match.line_cost_cents != null)
+            .map((r: any) => ({ naam: r.naam, match: { source: r.match.source, ref_id: r.match.ref_id, name: r.match.name, supplier: r.match.supplier ?? null } }));
+        if (aliases.length === 0) return;
+        fetch('/api/recipe/aliases', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aliases }),
+        }).catch(() => { /* volgende keer opnieuw zoeken */ });
     }
 
     /* P0-A entry-point: detect → modal of direct commit. */
@@ -853,6 +870,17 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                             >
                                 <BookOpen size={14} /> Uit een boek
+                            </button>
+                            {/* Golf 4: alle ingrediënten één keer aan een product hangen;
+                                wat je goedkeurt onthoudt de app. */}
+                            <button
+                                type="button"
+                                onClick={() => router.push('/gerechten/koppelronde')}
+                                className="btn btn-ghost btn-sm"
+                                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                                title="Koppel al je ingrediënten in één keer aan producten uit je kostprijs-catalogus"
+                            >
+                                <Link2 size={14} /> Koppelronde
                             </button>
                             <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
                         </>
