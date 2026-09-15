@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X, Store, BookOpen } from 'lucide-react';
+import { UtensilsCrossed, Pencil, Trash2, Star, Flame, Sparkles, Hammer, Lightbulb, Armchair, Plus, FileText, Layers, ShieldCheck, X, Store, BookOpen, Link2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { track, trackOnce } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
@@ -19,6 +19,7 @@ import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import { ALLERGENEN } from '@/lib/constants';
+import { allergeenCodesNaarWoorden } from '@/lib/allergenCodes';
 import { IngredientRegels, kostprijsUitRegels } from '@/components/menu/IngredientRegels';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
@@ -303,14 +304,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        hoeft niets te doen — als hij geen allergenen had ingevuld, vullen we 'm
        automatisch aan met door AI gedetecteerde codes. Bestaande user-codes
        blijven behouden (we mergen, geen overschrijving). */
-    /* De detectie-route antwoordt in lettercodes (E, M, G …); het gerecht en de
-       rest van de app werken met woorden (ei, mosterd, gluten). Vertalen op de
-       grens, anders staan er twee talen door elkaar in gerechten.allergenen —
-       en dan herkent een filter "E" niet als ei. V/VE zijn dieetwensen, geen
-       allergenen: die horen hier niet thuis. */
-    const ALLERGEEN_CODE_NAAR_WOORD: Record<string, string> = {
-        G: 'gluten', L: 'lactose', N: 'noten', E: 'ei', S: 'soja', F: 'vis', M: 'mosterd',
-    };
     function allergenenVoorDetectie(saveData: Record<string, any>): string[] {
         const fromCosts = Array.isArray(saveData.ingredient_costs)
             ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
@@ -334,8 +327,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (Array.isArray(body.allergens) && body.allergens.length > 0) {
                 track('ai_allergen_detect', { dish: saveData.naam, count: body.allergens.length });
             }
-            const codes: string[] = Array.isArray(body.allergens) ? body.allergens : [];
-            return [...new Set(codes.map((c) => ALLERGEEN_CODE_NAAR_WOORD[String(c).toUpperCase()]).filter(Boolean))];
+            return allergeenCodesNaarWoorden(body.allergens);
         } catch (e) {
             console.warn('[gerecht] allergen detection failed:', e);
             return [];
@@ -385,8 +377,25 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (error) { showToast('Fout: ' + error.message, 'error'); return; }
             showToast('Gerecht bijgewerkt!');
         }
+        onthoudKoppelingen(dbData.ingredient_costs);
         setEditing(null);
         loadData();
+    }
+
+    /* Golf 4: wat je opslaat met een zekere koppeling (op naam gevonden, via
+       een alias, of door jou gekozen) onthoudt de app als alias. Een "?" van
+       de AI telt niet — die heb je nog niet bevestigd. Stil op de achtergrond;
+       mislukt het, dan wordt het de volgende keer gewoon opnieuw gezocht. */
+    function onthoudKoppelingen(rows: unknown) {
+        if (!Array.isArray(rows)) return;
+        const aliases = rows
+            .filter((r: any) => r?.naam && r?.match && r.match.confidence === 'hoog' && r.match.line_cost_cents != null)
+            .map((r: any) => ({ naam: r.naam, match: { source: r.match.source, ref_id: r.match.ref_id, name: r.match.name, supplier: r.match.supplier ?? null } }));
+        if (aliases.length === 0) return;
+        fetch('/api/recipe/aliases', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aliases }),
+        }).catch(() => { /* volgende keer opnieuw zoeken */ });
     }
 
     /* P0-A entry-point: detect → modal of direct commit. */
@@ -583,8 +592,14 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         const gangMatch = gangen.find((x) =>
             (x.slug ?? '').toLowerCase() === aiGang || (x.naam ?? '').toLowerCase() === aiGang);
         setForm((f: any) => Object.assign({}, f, {
-            gang_slug: gangMatch?.slug ?? f.gang_slug,
+            /* De AI zegt bv. "Saus"; bestaat die gang niet, dan de actieve gang,
+               en anders de eerste — nooit leeg, want dan toont het formulier
+               de eerste optie terwijl de database niets krijgt. */
+            gang_slug: gangMatch?.slug ?? f.gang_slug ?? gangen[0]?.slug ?? null,
             bron: 'ai',
+            /* Een bedacht gerecht komt als concept binnen: zonder verkoopprijs
+               hoort het nog niet in de offerte-wizard. */
+            status: 'concept',
             battle_plan_steps: result.battlePlan,
             target_prep_time: result.prepTimeSeconds || 0,
         }));
@@ -853,6 +868,17 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
                                 style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                             >
                                 <BookOpen size={14} /> Uit een boek
+                            </button>
+                            {/* Golf 4: alle ingrediënten één keer aan een product hangen;
+                                wat je goedkeurt onthoudt de app. */}
+                            <button
+                                type="button"
+                                onClick={() => router.push('/gerechten/koppelronde')}
+                                className="btn btn-ghost btn-sm"
+                                style={{ minHeight: 32, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                                title="Koppel al je ingrediënten in één keer aan producten uit je kostprijs-catalogus"
+                            >
+                                <Link2 size={14} /> Koppelronde
                             </button>
                             <button type="button" onClick={newGang} className="btn btn-ghost btn-sm" style={{ minHeight: 32 }}>+ Gang</button>
                         </>

@@ -138,6 +138,7 @@ export default function RecipeAiButton({ defaultName = '', defaultPorties = 10, 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               ingredients: rawIngredients.map((i) => ({ naam: i.naam, qty_pp: i.qty_pp, eenheid: i.eenheid })),
+              ai: true,
             }),
           });
           const mb = await mr.json();

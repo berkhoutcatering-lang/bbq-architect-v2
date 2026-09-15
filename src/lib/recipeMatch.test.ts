@@ -8,6 +8,8 @@ import {
     toBaseUnit,
     lineCostCents,
     type CostCandidate,
+    aliasSleutel,
+    isGratis,
 } from './recipeMatch';
 
 describe('normalizeIngredientName', () => {
@@ -250,5 +252,34 @@ describe('pickBestMatch — een passende eenheid geeft de doorslag', () => {
     it('gedraagt zich als vanouds zonder eenheid', () => {
         const uit = pickBestMatch('karnemelk', [perStuk, perMl]);
         expect(uit).not.toBeNull();
+    });
+});
+
+describe('aliasSleutel — naam zonder hoeveelheid en eenheid (golf 4)', () => {
+    it('haalt hoeveelheid en eenheid uit oude tekst-ingrediënten', () => {
+        expect(aliasSleutel('0,05 stuks kaneelstokje')).toBe('kaneelstokje');
+        expect(aliasSleutel('200 g bavette')).toBe('bavette');
+    });
+    it('laat beschrijvende woorden staan: fijn en grof zeezout zijn twee aliassen', () => {
+        expect(aliasSleutel('Fijn zeezout')).toBe('fijn zeezout');
+        expect(aliasSleutel('grof zeezout')).not.toBe(aliasSleutel('fijn zeezout'));
+    });
+    it('appelciderazijn en Appelciderazijn zijn dezelfde sleutel', () => {
+        expect(aliasSleutel('Appelciderazijn')).toBe(aliasSleutel('appelciderazijn'));
+    });
+});
+
+describe('nameScore — hoofdwoord en haakjes (golf 4)', () => {
+    it('een gedeeld bijvoeglijk naamwoord is geen treffer: bruine basterdsuiker ↔ Bruine bonen', () => {
+        expect(nameScore('bruine basterdsuiker', 'Bruine bonen, zak 1 kg')).toBe(0);
+        expect(nameScore('Worcestershire sauce', 'Hemp sauce, fles 750 ml')).toBe(0);
+    });
+    it('haakjes zijn toelichting: zwarte peper (versgemalen) vindt gewoon zwarte peper', () => {
+        expect(nameScore('zwarte peper (versgemalen)', 'Zwarte peper gemalen, bus 500 gr')).toBeGreaterThan(0.8);
+    });
+    it('water is gratis, in elke vorm', () => {
+        expect(isGratis('water')).toBe(true);
+        expect(isGratis('koud water')).toBe(true);
+        expect(isGratis('Coconut water')).toBe(false);
     });
 });

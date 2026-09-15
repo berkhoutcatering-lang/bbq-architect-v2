@@ -283,6 +283,28 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
         (voorstel.componenten ?? []).map((c) => normaliseerComponentnaam(c.naam).toLowerCase()),
     );
 
+    /* Voor de apparaat-erfenis hieronder: het toestel van de vorige stap in
+       hetzelfde deel (gerecht of bouwsteen), op volgnummer. */
+    const gesorteerd = [...voorstel.stappen].sort((a, b) => a.volgnummer - b.volgnummer);
+    const vorigeApparaat = new Map<number, number>();
+    const vorigeStap = new Map<number, number>();
+    const laatstePerDeel = new Map<string, number>();
+    const laatsteStapPerDeel = new Map<string, number>();
+    for (const st of gesorteerd) {
+        const deel = (st.voorComponent ?? '').toLowerCase();
+        const vorig = laatstePerDeel.get(deel);
+        if (vorig != null) vorigeApparaat.set(st.volgnummer, vorig);
+        if (st.materieelId != null) laatstePerDeel.set(deel, st.materieelId);
+        const vorigeNr = laatsteStapPerDeel.get(deel);
+        if (vorigeNr != null) vorigeStap.set(st.volgnummer, vorigeNr);
+        laatsteStapPerDeel.set(deel, st.volgnummer);
+    }
+    /* Proeven, portioneren, garneren: dat doe je aan het eind, na wat ervoor
+       kwam. Het model laat die stappen soms zonder "na stap …" — dan mocht de
+       planner "proeven" vóór het mengen zetten. */
+    const AFRONDING = /^(afsmaken|proeven|portioneren|garneren|opmaken|serveren|etiketteren|verpakken)$/i;
+    const gerechtNaamLc = (voorstel.gerechtNaam ?? '').toLowerCase().trim();
+
     const stappen: GecontroleerdeStap[] = voorstel.stappen.map((rauwIn) => {
         /* Nul is geen herhaling maar de afwezigheid ervan. Het model vult die
            velden soms met 0 in plaats van ze weg te laten, en dan meldde de
@@ -303,11 +325,44 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
 
         if (eigenTemp != null && rauw.materieelId != null) standVan.set(rauw.materieelId, eigenTemp);
 
+        /* Het model verwees naar het gerécht als onderdeel ("hoort bij Hop &
+           Bites Signature BBQ Saus") — dat is geen bouwsteen maar het gerecht
+           zelf. Stil rechtzetten; een vraag hierover is een vraag over niets. */
+        const voorComponentRuw = rauw.voorComponent ? normaliseerComponentnaam(rauw.voorComponent) : null;
+        const voorComponent = voorComponentRuw && voorComponentRuw.toLowerCase().trim() === gerechtNaamLc ? null : voorComponentRuw;
+
+        /* Verzin geen tijden (harde regel 1) — ook niet als het model het toch
+           doet. "Afgedekt wegzetten tot gebruik" kreeg 1440 minuten: geen getal
+           en geen tijdwoord in de zin, dus bedacht — en zo'n wachttijd trekt de
+           hele bouwsteen een dag naar voren. Alleen lange wachttijden (vanaf
+           vier uur) zonder houvast in de zin gaan eruit; een korte duur bij
+           snijwerk verandert de dag niet en wordt toch gemeten. */
+        const zinNoemtTijd = /\d|\b(minu|uur|uren|nacht|dag|dagen|week|weken|seconde|sec|kwartier|etmaal)\b/i.test(rauw.tekst ?? '');
+        const actiefMin = rauw.actiefMin;
+        const passiefMin = (rauw.passiefMin ?? 0) >= 240 && !zinNoemtTijd ? undefined : rauw.passiefMin;
+
+        /* Een hittestap zonder toestel, direct na een stap mét toestel in
+           hetzelfde deel: dezelfde pan staat nog op dezelfde plaat. Het model
+           liet "25 minuten sudderen" zonder apparaat, en dan reserveert de
+           planner de inductieplaat niet voor die 25 minuten. Geen gok — de
+           vorige stap zei welke plaat — maar wel vragen: "klopt toch" bevestigt. */
+        const HITTE = /^(sudderen|koken|reduceren|inkoken|bakken|fruiten|garen|grillen|roken|smoren|stoven|braden|verhitten|opwarmen|frituren|pocheren|blancheren|karamelliseren|roosteren)$/i;
+        const geerfdApparaat = rauw.materieelId == null && HITTE.test(rauw.bewerking ?? '')
+            ? vorigeApparaat.get(rauw.volgnummer) ?? null
+            : null;
+
+        const hangtAfVanVolgnummer = rauw.hangtAfVanVolgnummer
+            ?? (AFRONDING.test(rauw.bewerking ?? '') ? vorigeStap.get(rauw.volgnummer) ?? null : null);
+
         const s: VoorstelStap = {
             ...rauw,
+            hangtAfVanVolgnummer,
+            actiefMin,
+            passiefMin,
             kernTempC: kern,
             tempC: eigenTemp ?? erfelijk,
-            voorComponent: rauw.voorComponent ? normaliseerComponentnaam(rauw.voorComponent) : null,
+            voorComponent,
+            materieelId: rauw.materieelId ?? geerfdApparaat ?? null,
         };
         const basis = { ...s, duurBron: 'geschat' as const };
         const apparaat = s.materieelId != null ? perId.get(s.materieelId) : undefined;
@@ -316,6 +371,9 @@ export function controleer(voorstel: Voorstel, context: ControleContext): Contro
                erger dan geen keuze: het ziet er ingevuld uit. */
         if (s.materieelId != null && !apparaat) {
             return vraag(basis, `Apparaat ${s.materieelId} staat niet in het materieel — welk toestel wordt dit?`);
+        }
+        if (geerfdApparaat != null && apparaat) {
+            return vraag(basis, `Geen apparaat genoemd bij "${s.bewerking}" — zelfde ${apparaat.naam} als de stap ervoor?`);
         }
 
         /* Wacht deze stap op een keuze die de kok toch al voorgelegd krijgt?
@@ -585,15 +643,58 @@ export function temperatuurUitKeuze(optie: string): number | null {
  * stap hebben zonder temperatuur. Eén plek, gebruikt door het scherm om te tonen
  * wat er gaat gebeuren en door de opslagroute om het te schrijven.
  */
+/** "elke 5 minuten kort doorroeren" → 5. */
+export function herhalingUitKeuze(optie: string): number | null {
+    const m = /\b(?:elke|iedere|om de)\s+(\d{1,3})\s*min/i.exec(optie);
+    return m ? Number(m[1]) : null;
+}
+
+/** "25 minuten — volle nappe-consistentie" → 25. Niet bij "elke 5 minuten": dat is een herhaling. */
+export function duurUitKeuze(optie: string): number | null {
+    if (herhalingUitKeuze(optie) != null) return null;
+    const m = /(\d{1,4})\s*(?:min\b|minuten|minuut)/i.exec(optie);
+    if (m) return Number(m[1]);
+    const u = /(\d{1,2})\s*(?:uur|uren)\b/i.exec(optie);
+    return u ? Number(u[1]) * 60 : null;
+}
+
+/** "doorlopend bij de pan blijven staan" → erbij blijven. */
+export function toezichtUitKeuze(optie: string): boolean {
+    return /doorlopend|onafgebroken|blijf(?:t|en)? (?:erbij|bij de pan|in de buurt|staan)/i.test(optie);
+}
+
+const HITTE_OF_WACHTEN = /^(sudderen|koken|reduceren|inkoken|bakken|fruiten|garen|grillen|roken|smoren|stoven|braden|verhitten|opwarmen|frituren|pocheren|blancheren|karamelliseren|roosteren|wachten|rusten|marineren|pekelen|koelen|terugkoelen|rijzen|uitlekken|trekken|weken)$/i;
+
 export function metKeuzesVerwerkt(controle: Controle, antwoorden: Antwoorden = {}): GecontroleerdeStap[] {
     const gekozen = antwoorden.keuzes ?? {};
 
     return controle.stappen.map((stap) => {
-        if (stap.wachtOpKeuze == null || stap.tempC != null) return stap;
+        if (stap.wachtOpKeuze == null) return stap;
         const antwoord = gekozen[stap.wachtOpKeuze];
         if (!antwoord) return stap;
+
+        /* Het antwoord is een zin; wat erin zit gaat naar het veld waar de
+           planner kijkt. Eerder alleen temperatuur ("150 °C"); "elke 5
+           minuten roeren" stond netjes bij het gerecht maar niet op de stap,
+           en dan reserveert de planner de kok niet elke vijf minuten. */
+        let uit: GecontroleerdeStap = stap;
         const temp = temperatuurUitKeuze(antwoord);
-        return temp == null ? stap : { ...stap, tempC: temp };
+        if (temp != null && uit.tempC == null) uit = { ...uit, tempC: temp };
+
+        const interval = herhalingUitKeuze(antwoord);
+        if (interval != null && uit.herhaalIntervalMin == null) {
+            uit = { ...uit, herhaalIntervalMin: interval, herhaalDuurMin: uit.herhaalDuurMin ?? 1, toezichtNodig: true };
+        }
+
+        const duur = duurUitKeuze(antwoord);
+        if (duur != null && uit.actiefMin == null && uit.passiefMin == null) {
+            uit = HITTE_OF_WACHTEN.test(uit.bewerking ?? '')
+                ? { ...uit, passiefMin: duur, duurOnbekend: false }
+                : { ...uit, actiefMin: duur, duurOnbekend: false };
+        }
+
+        if (toezichtUitKeuze(antwoord)) uit = { ...uit, toezichtNodig: true };
+        return uit;
     });
 }
 

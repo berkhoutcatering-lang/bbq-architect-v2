@@ -87,6 +87,25 @@ Twee gevallen, één harde regel:
 
 Niet: alle 10.125 Bidfood-producten door de AI benoemen (benoemt 9.900 producten die nooit in een recept komen; helpt bij vinden, niet bij kiezen; elke nieuwe prijslijst maakt het weer onvolledig).
 
+### Golf 4 — gebouwd en gemeten (15 sep)
+
+- **Tabel `ingredient_aliases`** (migratie `20260915110000`, live): naam-sleutel → bron + id + productnaam, uniek per organisatie. Eigen tabel naast `org_product_aliases` (die hangt aan master_products/Catalogus A; Bidfood zit in B en een alias mag ook naar bibliotheek/voorraad wijzen). Sleutel = naam zonder hoeveelheid en eenheid ("0,05 stuks kaneelstokje" → "kaneelstokje"); beschrijvende woorden blijven ("fijn zeezout" ≠ "grof zeezout").
+- **Matcher kijkt eerst in de aliassen** → `via_alias`, zekerheid hoog, geen AI. Is de rij weg (nieuwe prijslijst) → op productnaam in dezelfde bron, anders gewoon zoeken.
+- **AI-synoniemenstap automatisch** in `/api/recipe/match-ingredients` met `ai: true` (Bedenk met AI en foto-flow sturen dat mee): max. 8 regels per aanroep, vier tegelijk. Alleen `zelfde_product: true` wordt gekozen (zekerheid middel, "?"); een ánder product komt terug als `ai_voorstel` en wacht op de kok. Fouten worden geteld en gelogd, niet stil geslikt.
+- **Leren op bevestiging**: keuze in het alternatieven-paneel → alias; opslaan van een gerecht → alle regels met zekerheid hoog worden alias (een "?" niet).
+- **Koppelronde** op `/gerechten/koppelronde` (knop in de gerechten-kop): alle ingrediënten uit de gerechten (bibliotheek en voorraad niet — die koppelen alleen aan zichzelf), per acht door de matcher, goedkeur-lijst met *goed* / *ander product* / *laat leeg* en "n groene goedkeuren" in één keer. Voorstellen overleven een herlaad in de browser.
+- Gemeten: 51 ingrediënten in 70 s voor € 0,17 — 17 exact, 4 via AI ("appelciderazijn = appelazijn", "frietsaus = fritessaus 25%"), 7 AI-voorstellen met eerlijke reden ("ananas op sap in blik is geen verse ananas", "piripirisaus is een saus, geen marinade"), 1 niets, 22 ter beoordeling. Leer-lus bewezen: na één "goed" komt "knoflook" terug als via_alias.
+- Bekend gat dat blijft: een woord-treffer met zekerheid hoog op een ánder product ("roomboter" → "Roomboter apfelstrudel") gaat niet langs de AI; de koppelronde is precies de plek waar dat één keer rechtgezet wordt.
+
+**Eindtest "American Barbecue Saus" (15 sep, op verzoek van Mathijs)** — één gerecht van idee tot database. Eerste ronde: 7 van 16 goed, en vijf fout mét prijs ("bruine basterdsuiker" → *Bruine bonen*, "Worcestershire sauce" → *Hemp sauce*, "water" → *Coconut Water*, "melasse" → *Granaatappelmelasse*, "droge mosterd" → natte mosterd). Oorzaken en fixes:
+- een gedeeltelijke naam-treffer moet het **hoofdwoord** (langste woord, haakjes tellen niet) bevatten — "bruine" of "sauce" alleen is niets;
+- de AI controleert nu **ook de twijfelgevallen** ("?"), niet alleen de lege: klopt het niet → hetzelfde product onder een andere naam, of leeg met een voorstel ("vloeibare rook" → *Softijsmix* werd afgekeurd);
+- **water is gratis**;
+- de synoniemenstap draait ook als er wél kandidaten zijn maar niets écht lijkt, en zoekt **per woord apart** (één OR-greep met gedeelde limiet liet "Worcestersaus" weer buiten de 150 vallen); via synoniemen gevonden producten gaan vooraan, gewogen naar hoe specifiek het synoniem is ("worcestersaus" wint van "saus");
+- **dieetclaims** (vegan, glutenvrij, …) uit de AI-tags gehaald — hij zette "vegan" op een saus met Worcestersaus (ansjovis);
+- gang nooit leeg (viel op null terwijl het formulier "Bites" toonde), en een bedacht gerecht komt als **concept** binnen.
+Tweede ronde: 13 van 15 met prijs en reden, 2 eerlijk leeg (basterdsuiker, melasse — Bidfood heeft ze niet), allergenen *mosterd, gluten* in één taal, 9 aliassen geleerd bij opslaan. ~15 ct AI per gerecht, ~30 s. Micro-stappen: 0 — dat is golf 5.
+
 ## Golf 5 — Eén receptuur-pijplijn (gepland 15 sep)
 
 Mathijs, 15 sep: *"Ik wil alles met AI gaan bedenken, en die AI moet dan uit zichzelf die micro-stappen erin zetten."*
@@ -103,6 +122,27 @@ Golf 5 maakt daar één pijplijn van:
 Eerst controleren, niet aannemen (uit een eerdere sessie): vult de ontleder al een eerste schatting van de duren in (het bord kan niet plannen op "onbekend"), en verdampen de keuze-antwoorden van de kok nog bij opslaan.
 
 Volgorde: golf 4 → golf 5, na merge van #226 en #227.
+
+### Golf 5 — gebouwd en gemeten (15 sep)
+
+Eerst gecontroleerd, niet aangenomen: de ontleder laat tijden **bewust** leeg bij een bedacht recept ("het gerecht mag je bedenken, de tijden niet") — die worden per bewerking gemeten en geleerd (schatter). Dat is de regel "verzin geen getallen" en blijft zo; het bord toont "nog te meten". De keuze-antwoorden van de kok worden sinds migratie 20260909 bewaard. Beide punten waren dus geen werk.
+
+- **Bedenk met AI → ontleder.** "Maak gerecht met werkwijze" zet het bedachte recept (ingrediënten voor het hele recept + bereiding + planning) als tekst klaar en opent /gerechten/ontleden, die meteen ontleedt met de opdracht "verander de ingrediënten niet". Wat Bedenk al wist (pitch, ingrediënten mét Bidfood-prijs, battle plan, tijd, wijn, tags, gang) gaat als `extra` mee naar de opslagroute. "Alleen formulier" blijft als tweede knop.
+- **Opslagroute** (`/api/recipe/ontleed/opslaan`): `extra` (alleen bekende kolommen) op het gerecht; `gang_naam` wordt server-side een gang van de organisatie, nooit leeg; `gerechtId` = bestaand gerecht bijwerken (porties, keuzes, extra) en zijn stappen vervangen i.p.v. een tweede gerecht ernaast. Bij een bestaand gerecht wordt nooit iets verwijderd bij een fout.
+- **Bestaande gerechten**: op de gerecht-pagina een blok "Nog geen werkwijze → Zet op onze werkwijze" (alleen als er 0 stappen zijn); dat opent ontleden met de tekst-bereiding van dat gerecht.
+- **Na opslaan**: allergeencheck met bevestig-modal (zelfde als het formulier, één taal) en aliassen leren van de zekere koppelingen.
+- Gemeten — BBQ-saus (bestaand): 11 stappen, apparaat per stap (inductieplaat, koelwerkbank), 3 min werk + 25 min wachten, 8 nog te meten, "saus op de barbecue" vervallen met reden ("de pelletgrill blijft vrij voor vlees"); gerecht bijgewerkt, prijzen intact. Coleslaw (nieuw via Bedenk): 2 delen, 15 stappen, bouwsteen "Gerookte paprika-dressing" aangemaakt, gang bijgerecht, concept, € 1,06 met 12 van 13 geprijsd, allergenen ei/mosterd, aliassen geleerd. Doorlooptijd ~1,5 min (Bedenk ~40 s + ontleder ~50 s).
+- Wat het formulier nog heeft: `bereidingswijze` als tekst blijft meegaan (kitchen mode, PDF); de stappen zijn de bron voor bord en planner.
+
+**Nagetest tot op het bord (15 sep, op verzoek van Mathijs):** proefrun van de planner (`/api/prep/bulk-schedule`, dryRun) op het event van 18 sep met de nieuwe gerechten. De BBQ-saus wordt 11 taken, teruggerekend vanaf de uitlevering (14:32 → 15:00), elk met bewerking en apparaat. Batch-sleutels (bewerking + onderdeel + apparaat + dag) doen wat ze moeten: rode ui en dille snijden van de coleslaw worden één snijblok, portioneren van saus en coleslaw gaat samen, de dressing wordt een dag naar voren getrokken.
+Gevonden en gefixt: Smokey's Chicken Sandwich stond met de ranchsaus **vier keer** op het bord. De opslagroute plakte bij een bouwsteen die al bestond de stappen erbíj (9 sep, vier keer opgeslagen). Nu worden de stappen van een bouwsteen vervangen, en de 14 oude dubbelen zijn opgeruimd (migratie `20260915140000`, live): 52 → 38 taken.
+
+**Receptuur zelf nagelezen als kok (15 sep, op verzoek van Mathijs).** BBQ-saus en coleslaw kloppen als recept: volgorde, apparaat, wat vooruit mag, dille pas vlak voor serveren. Drie dingen gevonden en in de controle-laag van de ontleder gezet (`controleer` / `metKeuzesVerwerkt`, met tests):
+- het model verwees naar het **gerecht zelf** als onderdeel → stil rechtgezet, geen vraag;
+- **"tot gebruik" kreeg 1440 minuten** — bedacht; een wachttijd van 4 uur of meer zonder getal of tijdwoord in de zin gaat eruit en wordt gemeten (korte duren bij handwerk blijven);
+- een **hittestap zonder apparaat** (25 min sudderen) erft het toestel van de stap ervoor in hetzelfde deel, mét vraag "zelfde inductieplaat?" — anders reserveert de planner de plaat niet;
+- afrondende stappen (proeven, portioneren, garneren) hangen aan de stap ervoor;
+- een keuze-antwoord landt nu ook op de stap als het geen temperatuur is: "elke 5 minuten roeren" → herhaling + toezicht, "25 minuten" → wachttijd, "doorlopend bij de pan" → toezicht. Eerder stond dat wél bij het gerecht maar niet waar de planner kijkt.
 
 ## Wat we bewust níet doen
 

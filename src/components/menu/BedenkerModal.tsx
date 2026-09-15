@@ -16,6 +16,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil, Package, Users, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { MRButton, MREyebrow, MRTag } from './atoms';
 import { fmtEuro } from './helpers';
@@ -46,7 +47,7 @@ export interface BedenkerResult {
     matchedCount: number;
     totalCount: number;
     /* Ingrediënten mét hoeveelheid per portie, voor de preview-chips. */
-    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null }>;
+    ingredients: Array<{ naam: string; qtyPp: number; unit: string; matched: boolean; supplier: string | null; approx: boolean; confidence: 'hoog' | 'middel' | 'laag' | null; toelichting: string | null }>;
     /* De leverancier waarop de kostprijs rekent (voorkeur_rang 1), of null als
        er geen voorkeur is ingesteld en over alle leveranciers gezocht is. */
     kostprijsLeverancier: string | null;
@@ -133,6 +134,8 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ingredients: rows.map((i) => ({ naam: i.naam, qty_pp: i.qtyPp, eenheid: i.eenheid })),
+                    /* Golf 4: geen treffer → de AI zoekt synoniemen, meteen. */
+                    ai: true,
                 }),
             });
             const mb = await mr.json();
@@ -170,8 +173,13 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
     const allergenen: string[] = Array.isArray(data.allergenen)
         ? data.allergenen.map((s: unknown) => String(s).trim()).filter(Boolean)
         : [];
+    /* Stijl-tags (BBQ, rook, zomer) mogen van de AI komen; dieetclaims niet.
+       Hij plakte "vegan" en "glutenvrij" op een saus met Worcestersaus
+       (ansjovis) waar de allergeencheck gluten op zette. Zo'n claim doet de
+       kok, na de allergeencheck — niet het model. */
+    const DIEETCLAIMS = new Set(['vegan', 'veganistisch', 'vega', 'vegetarisch', 'glutenvrij', 'lactosevrij', 'notenvrij', 'halal', 'kosher', 'koosjer', 'suikervrij']);
     const tags: string[] = Array.isArray(data.tags)
-        ? data.tags.map((s: unknown) => String(s).trim()).filter(Boolean)
+        ? data.tags.map((s: unknown) => String(s).trim()).filter((t: string) => t && !DIEETCLAIMS.has(t.toLowerCase()))
         : [];
 
     const fill: AiFillResult = {
@@ -208,6 +216,10 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
             supplier: matches[idx]?.match?.supplier ?? (matches[idx]?.match ? 'eigen' : null),
             approx: !!matches[idx]?.match?.unit_approx,
             confidence: matches[idx]?.match?.confidence ?? null,
+            toelichting: matches[idx]?.match?.via_alias ? 'Eerder door jou bevestigd'
+                : matches[idx]?.match?.via_ai ? `AI: ${matches[idx].match.ai_reden ?? 'zelfde product, andere naam'}`
+                : matches[idx]?.ai_voorstel ? `AI stelt voor: ${matches[idx].ai_voorstel.name} — ${matches[idx].ai_voorstel.reden} (ander product, jij beslist)`
+                : null,
         })),
         kostprijsLeverancier,
         fill,
@@ -269,7 +281,59 @@ function summaryLines(r: BedenkerResult): Array<{ ok: boolean; text: string }> {
     ];
 }
 
+/* Golf 5: het bedachte recept als tekst, zoals de ontleder een boekpagina
+   leest. Hoeveelheden voor het hele recept (per portie × porties), want zo
+   staat het ook in een boek. */
+export function receptAlsTekst(r: BedenkerResult): string {
+    const porties = r.fill.porties || 10;
+    const ingr = r.fill.ingredient_costs.map((i) => {
+        const totaal = i.qty_pp > 0 ? Math.round(i.qty_pp * porties * 100) / 100 : null;
+        return `- ${totaal != null ? `${String(totaal).replace('.', ',')} ${i.unit} ` : ''}${i.naam}`;
+    });
+    return [
+        `Recept: ${r.name}`,
+        r.desc,
+        `Voor ${porties} porties.`,
+        ingr.length ? `\nIngrediënten:\n${ingr.join('\n')}` : '',
+        r.fill.bereidingswijze ? `\nBereiding:\n${r.fill.bereidingswijze}` : '',
+        r.battlePlan.length ? `\nPlanning vooraf:\n${r.battlePlan.map((s) => `- ${s}`).join('\n')}` : '',
+    ].filter(Boolean).join('\n');
+}
+
+/* Wat er naast de werkwijze op het gerecht komt: alles wat Bedenk al wist. */
+export function receptExtra(r: BedenkerResult): Record<string, unknown> {
+    return {
+        beschrijving: r.desc,
+        gang_naam: r.gang,
+        ingredient_costs: r.fill.ingredient_costs,
+        ingredienten: r.fill.ingredient_costs.map((i) => i.naam),
+        kostprijs_pp: r.cost > 0 ? r.cost : null,
+        bereidingswijze: r.fill.bereidingswijze,
+        battle_plan_steps: r.battlePlan,
+        target_prep_time: r.prepTimeSeconds || 0,
+        wijn_suggestie: r.fill.wijn_suggestie,
+        service_tip: r.fill.service_tip,
+        tags: r.fill.tags,
+    };
+}
+
 export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
+    const router = useRouter();
+    /* Golf 5: naar de ontleder voor de werkwijze (micro-stappen op onze
+       apparatuur) — één pijplijn. Het formulier zonder stappen blijft als
+       tweede knop bestaan. */
+    function naarWerkwijze(r: BedenkerResult) {
+        try {
+            sessionStorage.setItem('ontleden:van-bedenk', JSON.stringify({
+                naam: r.name,
+                tekst: receptAlsTekst(r),
+                extra: receptExtra(r),
+                ingredientNamen: r.fill.ingredient_costs.map((i) => i.naam),
+            }));
+        } catch { /* privémodus → val terug op het formulier */ onAccept?.(r); return; }
+        onClose();
+        router.push('/gerechten/ontleden');
+    }
     const [mode, setMode] = useState<BedenkerMode>('vrij');
     const [prompt, setPrompt] = useState('');
     const [thinking, setThinking] = useState(false);
@@ -303,6 +367,7 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                     supplier: match ? (match.supplier ?? (match.source === 'component' || match.source === 'inventory' ? 'eigen' : null)) : null,
                     approx: !!match?.unit_approx,
                     confidence: match?.confidence ?? null,
+                    toelichting: match ? 'Door jou gekozen' : null,
                 }),
             };
         });
@@ -470,9 +535,12 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                         <MREyebrow style={{ marginBottom: 6 }}>Ingrediënten per portie</MREyebrow>
                                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                                             {result.ingredients.map((c, i) => (
-                                                <button type="button" key={i} onClick={() => setAltIdx(altIdx === i ? null : i)} title={c.matched
-                                                    ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
-                                                    : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden'} style={{
+                                                <button type="button" key={i} onClick={() => setAltIdx(altIdx === i ? null : i)} title={[
+                                                    c.matched
+                                                        ? `Prijs uit ${c.supplier === 'eigen' ? 'je eigen bibliotheek of voorraad' : c.supplier ?? 'de catalogus'}${c.approx ? ' — gram en milliliter 1:1 gerekend' : ''}`
+                                                        : result.kostprijsLeverancier ? `Niet gevonden bij ${result.kostprijsLeverancier}` : 'Nog geen prijsbron gevonden',
+                                                    c.toelichting,
+                                                ].filter(Boolean).join(' · ')} style={{
                                                     fontSize: 11, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', fontFamily: 'var(--font-sans)',
                                                     outline: altIdx === i ? '2px solid var(--brand)' : 'none',
                                                     background: c.matched ? 'rgba(34,197,94,.07)' : 'rgba(196,163,90,.08)',
@@ -558,9 +626,14 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                 ) : null}
 
                                 <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                                    <MRButton variant="primary" icon={<Plus size={13} />} sm onClick={() => onAccept?.(result)}>
-                                        Maak gerecht
+                                    <MRButton variant="primary" icon={<Plus size={13} />} sm onClick={() => naarWerkwijze(result)}>
+                                        Maak gerecht met werkwijze
                                     </MRButton>
+                                    {onAccept && (
+                                        <MRButton variant="ghost" sm onClick={() => onAccept(result)} >
+                                            Alleen formulier
+                                        </MRButton>
+                                    )}
                                     <MRButton variant="ghost" icon={<RefreshCw size={13} />} sm onClick={handleGenerate}>Opnieuw</MRButton>
                                 </div>
                             </div>

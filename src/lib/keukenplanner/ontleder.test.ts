@@ -831,3 +831,87 @@ describe('nul is geen herhaling', () => {
         expect(uit.stappen[0].oordeel).toBe('vraag');
     });
 });
+
+describe('controleer — golf 5: wat het model bedenkt en de code rechtzet', () => {
+    const apparaten = [{ id: 38, naam: 'inductieplaat', korteNaam: 'inductie', maaktMogelijk: [], temp_min_c: null, temp_max_c: null, kookoppervlakCm2: null, stationId: null }] as unknown as ApparaatMetKundes[];
+    const ctx = { apparaten };
+
+    it('een lange wachttijd zonder tijdwoord in de zin is bedacht en gaat eruit', () => {
+        const uit = controleer(
+            { gerechtNaam: 'Test', stappen: [{ volgnummer: 1, tekst: 'Dressing afgedekt wegzetten in de koeling tot gebruik.', bewerking: 'koelen', passiefMin: 1440 }] },
+            ctx,
+        );
+        expect(uit.stappen[0].passiefMin).toBeUndefined();
+        expect(uit.stappen[0].duurOnbekend).toBe(true);
+    });
+    it('een lange wachttijd mét tijdwoord blijft ("een nacht")', () => {
+        const uit = controleer(
+            { gerechtNaam: 'Test', stappen: [{ volgnummer: 1, tekst: 'Een nacht laten pekelen.', bewerking: 'pekelen', passiefMin: 720 }] },
+            ctx,
+        );
+        expect(uit.stappen[0].passiefMin).toBe(720);
+    });
+    it('een verwijzing naar het gerecht zelf als onderdeel wordt stil rechtgezet', () => {
+        const uit = controleer(
+            { gerechtNaam: 'BBQ Saus', stappen: [{ volgnummer: 1, tekst: 'Sudderen.', bewerking: 'sudderen', voorComponent: 'BBQ Saus', materieelId: 38 }] },
+            ctx,
+        );
+        expect(uit.stappen[0].voorComponent).toBeNull();
+        expect(uit.vragen).toHaveLength(0);
+    });
+    it('een hittestap zonder apparaat erft het toestel van de stap ervoor, met een vraag', () => {
+        const uit = controleer(
+            { gerechtNaam: 'Test', stappen: [
+                { volgnummer: 1, tekst: 'Aan de kook brengen.', bewerking: 'koken', materieelId: 38 },
+                { volgnummer: 2, tekst: '25 minuten sudderen.', bewerking: 'sudderen', passiefMin: 25 },
+            ] },
+            ctx,
+        );
+        expect(uit.stappen[1].materieelId).toBe(38);
+        expect(uit.stappen[1].oordeel).toBe('vraag');
+        expect(uit.stappen[1].bezwaar).toMatch(/zelfde inductieplaat/);
+    });
+});
+
+describe('controleer — afrondende stappen hangen aan de stap ervoor', () => {
+    it('proeven zonder "na stap" krijgt de vorige stap van hetzelfde deel', () => {
+        const uit = controleer(
+            { gerechtNaam: 'Test', stappen: [
+                { volgnummer: 1, tekst: 'Alles mengen.', bewerking: 'mengen' },
+                { volgnummer: 2, tekst: 'Proeven en bijstellen.', bewerking: 'afsmaken' },
+                { volgnummer: 3, tekst: 'Wortel raspen.', bewerking: 'raspen' },
+            ] },
+            { apparaten: [] },
+        );
+        expect(uit.stappen[1].hangtAfVanVolgnummer).toBe(1);
+        expect(uit.stappen[2].hangtAfVanVolgnummer ?? null).toBeNull();   // los voorwerk blijft los
+    });
+});
+
+describe('metKeuzesVerwerkt — het antwoord landt op de stap', () => {
+    const basis = (extra: Record<string, unknown>) => ({
+        volgnummer: 1, tekst: 'Sudderen.', bewerking: 'sudderen', oordeel: 'akkoord' as const, bezwaar: null,
+        duurBron: 'geschat' as const, materieelNaam: null, wachtOpKeuze: 'Hoe vaak roeren?', ...extra,
+    }) as unknown as import('./ontleder').GecontroleerdeStap;
+    const controle = (stap: unknown) => ({ gerechtNaam: 'T', stappen: [stap], keuzes: [], ingredienten: [], componenten: [], vervallen: [], vragen: [], samenvatting: { actiefMin: 0, passiefMin: 0, stappen: 1, zonderTijd: 0 } }) as unknown as import('./ontleder').Controle;
+
+    it('"elke 5 minuten kort doorroeren" wordt een herhaling met toezicht', () => {
+        const [s] = metKeuzesVerwerkt(controle(basis({})), { keuzes: { 'Hoe vaak roeren?': 'elke 5 minuten kort doorroeren' } });
+        expect(s.herhaalIntervalMin).toBe(5);
+        expect(s.toezichtNodig).toBe(true);
+    });
+    it('"25 minuten — nappe" wordt een wachttijd bij een hittestap', () => {
+        const [s] = metKeuzesVerwerkt(controle(basis({})), { keuzes: { 'Hoe vaak roeren?': '25 minuten — volle nappe-consistentie' } });
+        expect(s.passiefMin).toBe(25);
+        expect(s.actiefMin ?? null).toBeNull();
+    });
+    it('"doorlopend bij de pan blijven staan" zet toezicht aan zonder herhaling', () => {
+        const [s] = metKeuzesVerwerkt(controle(basis({})), { keuzes: { 'Hoe vaak roeren?': 'doorlopend bij de pan blijven staan' } });
+        expect(s.toezichtNodig).toBe(true);
+        expect(s.herhaalIntervalMin ?? null).toBeNull();
+    });
+    it('een temperatuur werkt nog zoals eerst', () => {
+        const [s] = metKeuzesVerwerkt(controle(basis({ wachtOpKeuze: 'Welke temp?' })), { keuzes: { 'Welke temp?': '150 °C — langzaam' } });
+        expect(s.tempC).toBe(150);
+    });
+});

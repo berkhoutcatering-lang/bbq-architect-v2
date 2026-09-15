@@ -16,6 +16,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supplierProductBaseCost } from '@/lib/supplierSync/recipeCost';
 import {
     normalizeIngredientName,
+    aliasSleutel,
+    isGratis,
     pickBestMatch,
     lineCostCents,
     isGramMlPaar,
@@ -48,6 +50,10 @@ export type GematchteRegel = {
     qty_pp: number;
     eenheid: string;
     match: MatchRegel | null;
+    /** Golf 4: de AI vond wel iets, maar een ánder product — de kok beslist. */
+    ai_voorstel?: { name: string; reden: string } | null;
+    /** Water: geen product, geen kostprijs, en ook geen "niet gevonden". */
+    gratis?: boolean;
 };
 
 /** De koppeling zoals de UI hem kent: bron + prijs + hoe zeker we zijn. */
@@ -64,6 +70,84 @@ export interface MatchRegel {
         unit_approx: boolean;
         cents_per_base_unit: number;
         base_unit: BaseUnit;
+        /** Gevonden via een door de kok bevestigde alias (golf 4). */
+        via_alias?: boolean;
+        /** Gekozen door de AI-synoniemenstap (golf 4); wacht op een ja van de kok. */
+        via_ai?: boolean;
+        ai_reden?: string;
+}
+
+/* ── Aliassen (golf 4) ──────────────────────────────────────────────────────
+   "appelciderazijn" → "Appelazijn, can 5 ltr", één keer bevestigd. De matcher
+   kijkt hier eerst. Een alias wijst op bron + id; is die rij weg (nieuwe
+   prijslijst), dan zoeken we op de bewaarde productnaam in dezelfde bron. */
+export interface AliasRij {
+    alias_normalized: string;
+    source: MatchSource;
+    ref_id: number;
+    product_name: string;
+    supplier_name: string | null;
+}
+
+export async function leesAliassen(sb: SupabaseClient, orgId: string, namen: string[]): Promise<Map<string, AliasRij>> {
+    const keys = [...new Set(namen.map(aliasSleutel).filter(Boolean))];
+    if (keys.length === 0) return new Map();
+    const { data } = await sb
+        .from('ingredient_aliases')
+        .select('alias_normalized, source, ref_id, product_name, supplier_name')
+        .eq('organization_id', orgId)
+        .in('alias_normalized', keys);
+    const map = new Map<string, AliasRij>();
+    (data ?? []).forEach((r: any) => map.set(r.alias_normalized, r as AliasRij));
+    return map;
+}
+
+/** De catalogusregel waar een alias naar wijst, als kandidaat met prijs. */
+export async function kandidaatVanAlias(
+    sb: SupabaseClient,
+    orgId: string,
+    alias: AliasRij,
+    levById: Map<number, string>,
+): Promise<CostCandidate | null> {
+    const opId = async (): Promise<CostCandidate | null> => {
+        switch (alias.source) {
+            case 'component': {
+                const { data } = await sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
+                    .eq('organization_id', orgId).eq('id', alias.ref_id).maybeSingle();
+                return data ? fromComponent(data) : null;
+            }
+            case 'inventory': {
+                const { data } = await sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
+                    .eq('organization_id', orgId).eq('id', alias.ref_id).maybeSingle();
+                return data ? fromInventory(data) : null;
+            }
+            case 'supplier': {
+                const { data } = await sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
+                    .eq('organization_id', orgId).eq('actief', true).eq('id', alias.ref_id).maybeSingle();
+                return data ? fromSupplierPrice(data) : null;
+            }
+            case 'supplier_product': {
+                const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                    .eq('organization_id', orgId).eq('active', true).eq('id', alias.ref_id).maybeSingle();
+                return data ? fromSupplierProduct(data, levById.get(data.supplier_id) ?? null) : null;
+            }
+        }
+    };
+    const direct = await opId();
+    if (direct) return direct;
+    /* Rij weg of inactief (nieuwe prijslijst): zelfde productnaam in dezelfde bron. */
+    const naam = alias.product_name;
+    if (alias.source === 'supplier_product') {
+        const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+            .eq('organization_id', orgId).eq('active', true).ilike('name', naam).limit(1).maybeSingle();
+        return data ? fromSupplierProduct(data, levById.get(data.supplier_id) ?? null) : null;
+    }
+    if (alias.source === 'supplier') {
+        const { data } = await sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
+            .eq('organization_id', orgId).eq('actief', true).ilike('product_naam', naam).limit(1).maybeSingle();
+        return data ? fromSupplierPrice(data) : null;
+    }
+    return null;
 }
 
 /** Alle betekenisvolle woorden — de ruime greep voor de alternatieven-route. */
@@ -179,12 +263,25 @@ export async function matchIngredientenTegenCatalogus(
        supplier_id, en zonder naam staat er "onbekende leverancier" bij een
        product waarvan we de leverancier prima kennen. */
     const levById = await leveranciersOpId(sb, orgId);
+    /* Golf 4: wat de kok al bevestigd heeft gaat vóór alles. */
+    const aliassen = await leesAliassen(sb, orgId, ingredienten.map((i) => String(i.naam ?? '')));
 
     return Promise.all(ingredienten.map(async (ing) => {
         const naam = String(ing.naam ?? '').trim();
         const qty = Number(ing.qty_pp) || 0;
         const eenheid = String(ing.eenheid ?? '').trim();
         if (!naam) return { naam, qty_pp: qty, eenheid, match: null };
+        /* Water kost niets en hoort niet aan "Coconut Water" te hangen. */
+        if (isGratis(naam)) return { naam, qty_pp: qty, eenheid, match: null, gratis: true };
+
+        const alias = aliassen.get(aliasSleutel(naam));
+        if (alias) {
+            const cand = await kandidaatVanAlias(sb, orgId, alias, levById);
+            if (cand) {
+                return { naam, qty_pp: qty, eenheid, match: { ...maakMatchRegel(cand, 'hoog', qty, eenheid), via_alias: true } };
+            }
+            /* Alias wijst naar iets dat niet meer bestaat → gewoon zoeken. */
+        }
 
         const terms = searchTerms(naam);
         if (terms.length === 0) return { naam, qty_pp: qty, eenheid, match: null };
@@ -215,37 +312,53 @@ export async function zoekKandidaten(
     levById: Map<number, string>,
 ): Promise<CostCandidate[]> {
     if (terms.length === 0) return [];
-    {
+    /* Per zoekwoord een eigen greep, niet één OR-greep met een gedeelde limiet:
+       "saus" haalt honderden producten op en dan valt "Worcestersaus" buiten
+       de 150 — zonder ORDER BY is de greep willekeurig. Met een greep per
+       woord krijgt elk woord zijn eigen 150, en de kandidaten worden daarna
+       op id ontdubbeld. */
+    const perTerm = await Promise.all(terms.map(async (term) => {
+        const pat = `%${term.replace(/[%,()]/g, '')}%`;
         const [comp, inv, sup, sprod] = await Promise.all([
             sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
-                .eq('organization_id', orgId).or(ilikeAny('name', terms)).limit(30),
+                .eq('organization_id', orgId).ilike('name', pat).limit(30),
             sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
-                .eq('organization_id', orgId).or(ilikeAny('naam', terms)).limit(30),
+                .eq('organization_id', orgId).ilike('naam', pat).limit(30),
             /* Prijslijst (A) kent de leverancier alleen bij naam; de gescande
                catalogus (B) bij id. Beide beperken tot de gekozen leverancier. */
             (() => {
                 let q = sb.from('supplier_prices').select('id,product_naam,prijs,prijs_per_kg,prijs_per_stuk,eenheid,leverancier,master_product_id')
-                    .eq('organization_id', orgId).eq('actief', true).or(ilikeAny('product_naam', terms));
+                    .eq('organization_id', orgId).eq('actief', true).ilike('product_naam', pat);
                 if (lev) q = q.ilike('leverancier', lev.naam);
                 return q.limit(150);
             })(),
             (() => {
                 let q = sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
-                    .eq('organization_id', orgId).eq('active', true).or(ilikeAny('name', terms));
+                    .eq('organization_id', orgId).eq('active', true).ilike('name', pat);
                 if (lev) q = q.eq('supplier_id', lev.id);
                 /* Bidfood heeft 58 mayonaises en 108 pepers; een greep van 25
                    zonder volgorde miste "Fijn zeezout" terwijl die er is. */
                 return q.limit(150);
             })(),
         ]);
-
         return [
             ...(comp.data || []).map(fromComponent),
             ...(inv.data || []).map(fromInventory),
             ...(sup.data || []).map(fromSupplierPrice),
             ...(sprod.data || []).map((r: any) => fromSupplierProduct(r, levById.get(r.supplier_id) ?? null)),
         ].filter((c): c is CostCandidate => c !== null);
+    }));
+    const gezien = new Set<string>();
+    const uit: CostCandidate[] = [];
+    for (const lijst of perTerm) {
+        for (const c of lijst) {
+            const k = `${c.source}:${c.ref_id}`;
+            if (gezien.has(k)) continue;
+            gezien.add(k);
+            uit.push(c);
+        }
     }
+    return uit;
 }
 
 /** Kandidaat + hoeveelheid → de regel zoals de UI hem toont en opslaat. */

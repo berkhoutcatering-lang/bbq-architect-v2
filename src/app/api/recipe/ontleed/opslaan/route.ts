@@ -7,6 +7,15 @@
  *
  * Wat er niet gebeurt: kostprijzen afleiden, allergenen invullen, hoeveelheden
  * verzinnen. Dat komt uit componenten en metingen, niet uit een kookboek.
+ *
+ * Golf 5 (docs/leveranciersvoorkeur-plan.md): twee toevoegingen.
+ *   - `extra`: wat Bedenk met AI al wist (pitch, ingrediënten mét Bidfood-prijs,
+ *     battle plan, wijn, tags) komt op het gerecht te staan — de ontleder
+ *     levert de werkwijze, Bedenk de rest. Prijzen zijn daar al door de
+ *     catalogus-matcher gezet, dus ook hier verzint niemand een getal.
+ *   - `gerechtId`: een bestaand gerecht (tekst-bereiding, geen stappen) krijgt
+ *     zijn werkwijze erbij in plaats van een tweede gerecht ernaast. Had het al
+ *     stappen, dan worden die vervangen — dat zegt het scherm er vooraf bij.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -33,6 +42,23 @@ interface Body {
     antwoorden?: Antwoorden;
     /** Componenten die aangemaakt mogen worden, mét de eenheid die de kok koos. */
     nieuweComponenten?: Array<{ naam: string; eenheid: string }>;
+    /** Bestaand gerecht dat zijn werkwijze krijgt (golf 5). */
+    gerechtId?: string;
+    /** Velden uit Bedenk met AI (golf 5). Alleen bekende kolommen komen door. */
+    extra?: Record<string, unknown>;
+}
+
+/* Kolommen die Bedenk met AI mag meegeven. Geen status, geen organisatie,
+   geen kostprijs-rollup: die bepaalt deze route of de database zelf. */
+const EXTRA_KOLOMMEN = new Set([
+    'beschrijving', 'gang_slug', 'ingredient_costs', 'ingredienten', 'kostprijs_pp',
+    'bereidingswijze', 'battle_plan_steps', 'target_prep_time', 'wijn_suggestie',
+    'service_tip', 'tags', 'is_in_wizard',
+]);
+function alleenBekendeExtra(extra: Record<string, unknown> | undefined): Record<string, unknown> {
+    const uit: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(extra ?? {})) if (EXTRA_KOLOMMEN.has(k) && v !== undefined) uit[k] = v;
+    return uit;
 }
 
 export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, userId }: TenantAuthCtx) => {
@@ -69,11 +95,64 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
     
            `bron` is 'ai' omdat de kolom alleen manual en ai kent; dat het uit
            de ontleder komt staat op elke stap (recipe_steps.bron). */
-    const { data: gerecht, error: gerechtFout } = await supabase
+    const extra = alleenBekendeExtra(body.extra);
+    /* Bedenk zegt "Saus" of "Dessert"; de gangen van de organisatie bepalen
+       wat dat wordt. Geen treffer → de eerste gang, nooit leeg (een leeg veld
+       toonde in het formulier "Bites" terwijl de database niets had). */
+    if (!extra.gang_slug) {
+        const gewenst = String(body.extra?.gang_naam ?? '').toLowerCase().trim();
+        const { data: gangen } = await supabase
+            .from('gangen').select('slug, naam').eq('organization_id', orgId).order('volgorde', { ascending: true });
+        const lijst = (gangen ?? []) as Array<{ slug: string; naam: string }>;
+        const treffer = gewenst
+            ? lijst.find((g) => g.slug?.toLowerCase() === gewenst || g.naam?.toLowerCase() === gewenst)
+                ?? lijst.find((g) => g.naam?.toLowerCase().includes(gewenst) || gewenst.includes(g.slug?.toLowerCase() ?? '\u0000'))
+            : undefined;
+        const slug = treffer?.slug ?? lijst[0]?.slug;
+        if (slug) extra.gang_slug = slug;
+    }
+    const keuzesRij = controle.keuzes
+        .map((k) => ({
+            vraag: k.vraag,
+            antwoord: (antwoorden.keuzes ?? {})[k.vraag] ?? null,
+            op: new Date().toISOString(),
+            door: userId,
+        }))
+        .filter((k) => k.antwoord != null);
+
+    /* Bestaand gerecht: werkwijze erbij, oude stappen eruit. Het gerecht zelf
+       blijft (naam, prijs, foto) — alleen porties en keuzes gaan mee, plus wat
+       Bedenk eventueel aanlevert. */
+    let bestaandGerecht: { id: string } | null = null;
+    let vervangenStappen = 0;
+    if (body.gerechtId) {
+        const { data: g, error } = await supabase
+            .from('gerechten').select('id').eq('id', body.gerechtId).eq('organization_id', orgId).maybeSingle();
+        if (error || !g) return NextResponse.json({ error: 'Gerecht niet gevonden' }, { status: 404 });
+        bestaandGerecht = { id: String(g.id) };
+        const { error: upd } = await supabase
+            .from('gerechten')
+            .update({ porties: controle.porties ?? antwoorden.porties ?? 10, keuzes: keuzesRij, ...extra })
+            .eq('id', bestaandGerecht.id).eq('organization_id', orgId);
+        if (upd) return NextResponse.json({ error: upd.message }, { status: 500 });
+        const { data: oud } = await supabase
+            .from('recipe_steps').select('id').eq('gerecht_id', bestaandGerecht.id).eq('organization_id', orgId);
+        vervangenStappen = oud?.length ?? 0;
+        if (vervangenStappen > 0) {
+            const { error: del } = await supabase
+                .from('recipe_steps').delete().eq('gerecht_id', bestaandGerecht.id).eq('organization_id', orgId);
+            if (del) return NextResponse.json({ error: `Oude stappen opruimen mislukte: ${del.message}` }, { status: 500 });
+        }
+    }
+
+    const { data: gerecht, error: gerechtFout } = bestaandGerecht
+        ? { data: bestaandGerecht, error: null }
+        : await supabase
         .from('gerechten')
         .insert({
             organization_id: orgId,
             naam: controle.gerechtNaam,
+            ...extra,
             /* Nooit stilzwijgend tien: als het boek geen aantal noemt heeft de
                kok het ingevuld, en zonder allebei mag dit niet eens opgeslagen
                worden (openstaandeVragen blokkeert het hierboven). */
@@ -83,16 +162,9 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             /* De beslissingen die de kok nam, met de vraag erbij. Zonder dit is
                over een half jaar niet meer te achterhalen waarom de porchetta
                op 150 °C staat en niet op 130. */
-            keuzes: controle.keuzes
-                .map((k) => ({
-                    vraag: k.vraag,
-                    antwoord: (antwoorden.keuzes ?? {})[k.vraag] ?? null,
-                    /* Wie en wanneer erbij: een logboek zonder datum is een
-                       mening, met datum is het bewijs. */
-                    op: new Date().toISOString(),
-                    door: userId,
-                }))
-                .filter((k) => k.antwoord != null),
+            /* Wie en wanneer erbij: een logboek zonder datum is een mening,
+               met datum is het bewijs. */
+            keuzes: keuzesRij,
         })
         .select('id')
         .single();
@@ -136,7 +208,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
             })),
         ).select('id, name');
         if (error) {
-            await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
+            if (!bestaandGerecht) await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
             return NextResponse.json({ error: `Bouwsteen aanmaken mislukte: ${error.message}` }, { status: 500 });
         }
         for (const c of gemaakt ?? []) {
@@ -219,6 +291,22 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         };
     });
 
+    /* Een bouwsteen die al bestond (ranchsaus, salsa) kreeg tot nu toe zijn
+       stappen erbíj geplakt bij elke nieuwe opslag — op 9 september stond de
+       ranchsaus na vier keer opslaan vier keer op het bord. De werkwijze van
+       een bouwsteen is één recept: wat er stond wordt vervangen, en dat is
+       precies wat "Zet op onze werkwijze" belooft. Alleen bouwstenen waar we
+       nu stappen voor hebben; de rest blijft ongemoeid. */
+    const componentenMetStappen = [...new Set(rijen.map((r) => r.component_id).filter((id): id is number => id != null))];
+    if (componentenMetStappen.length > 0) {
+        const { error: schoon } = await supabase
+            .from('recipe_steps')
+            .delete()
+            .in('component_id', componentenMetStappen)
+            .eq('organization_id', orgId);
+        if (schoon) return NextResponse.json({ error: `Oude bouwsteen-stappen opruimen mislukte: ${schoon.message}` }, { status: 500 });
+    }
+
     const { data: opgeslagen, error: stapFout } = await supabase
         .from('recipe_steps')
         .insert(rijen)
@@ -229,7 +317,8 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
            uit en is het niet. Alles terugdraaien wat we net hebben neergezet —
            óók de bouwstenen, want die staan nu vóór de stappen en blijven
            anders als wees achter die niemand besteld heeft. */
-        await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
+        /* Een bestaand gerecht laten we staan: dat was er al vóór ons. */
+        if (!bestaandGerecht) await supabase.from('gerechten').delete().eq('id', gerecht.id).eq('organization_id', orgId);
         if (zelfGemaakt.length > 0) {
             await supabase.from('components').delete().in('id', zelfGemaakt).eq('organization_id', orgId);
         }
@@ -288,7 +377,9 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         if (!error) ingredientenWeggeschreven += regels.length;
     }
 
-    if (eigenIngredienten.length > 0) {
+    /* Bedenk levert de ingrediëntenlijst al mét prijs (extra.ingredient_costs);
+       dan overschrijven we die niet met de kale tekstregels van de ontleder. */
+    if (eigenIngredienten.length > 0 && !('ingredient_costs' in extra)) {
         await supabase
             .from('gerechten')
             .update({ ingredienten: eigenIngredienten })
@@ -325,5 +416,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         ingredientregels: ingredientenWeggeschreven,
         ingredientenZonderBouwsteen: zonderBouwsteen,
         waarschuwing: koppelWaarschuwing,
+        bijgewerkt: !!bestaandGerecht,
+        vervangenStappen,
     });
 });

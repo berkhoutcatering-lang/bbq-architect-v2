@@ -131,8 +131,17 @@ export function IngredientAlternatieven({ naam, qtyPp, unit, huidige, onKies, on
                                 <button
                                     key={`${a.match.source}-${a.match.ref_id}-${i}`}
                                     type="button"
-                                    /* De AI stelde voor, de kok zegt ja: dan is de koppeling zeker. */
-                                    onClick={() => onKies({ ...a.match, confidence: 'hoog' })}
+                                    /* De AI stelde voor, de kok zegt ja: dan is de koppeling zeker —
+                                       en wordt onthouden (golf 4), zodat dit ingrediënt de volgende
+                                       keer direct goed is. */
+                                    onClick={() => {
+                                        const gekozen = { ...a.match, confidence: 'hoog' as const };
+                                        fetch('/api/recipe/aliases', {
+                                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ aliases: [{ naam, match: { source: gekozen.source, ref_id: gekozen.ref_id, name: gekozen.name, supplier: gekozen.supplier ?? null } }] }),
+                                        }).catch(() => { /* volgende keer opnieuw */ });
+                                        onKies(gekozen);
+                                    }}
                                     style={{
                                         textAlign: 'left', padding: '8px 10px', borderRadius: 8, cursor: 'pointer',
                                         background: 'var(--bg-subtle)', border: '1px solid var(--border)', color: 'var(--text)',
