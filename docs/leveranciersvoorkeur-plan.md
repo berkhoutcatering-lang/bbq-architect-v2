@@ -144,6 +144,26 @@ Gevonden en gefixt: Smokey's Chicken Sandwich stond met de ranchsaus **vier keer
 - afrondende stappen (proeven, portioneren, garneren) hangen aan de stap ervoor;
 - een keuze-antwoord landt nu ook op de stap als het geen temperatuur is: "elke 5 minuten roeren" → herhaling + toezicht, "25 minuten" → wachttijd, "doorlopend bij de pan" → toezicht. Eerder stond dat wél bij het gerecht maar niet waar de planner kijkt.
 
+### A–Z-test van de hele keten (15 sep, middag, op verzoek van Mathijs)
+
+Eén gerecht helemaal doorlopen: Bedenk met AI → chips koppelen (Bidfood, slager, eigen product, AI-alternatief, vervanging) → ontleder → keuzes → opslaan → allergenen → gerechtpagina → planner-proefrun → database nakijken. Testgerecht "Piri Piri Pulled Pork op Brioche", drie keer gegenereerd (twee keer verloren aan hot-reload door eigen codewijzigingen tijdens de doorloop — les uit `feedback_eerst_testen_dan_plan_dan_code` opnieuw geleerd).
+
+Wat werkte zonder ingrijpen: alias procureur → Echt Held (€ 8,50/kg eigen prijs); "zelf invullen" (Van Beekum, € 24,50/kg) → meteen in de zoekbalk en als AI-voorstel; AI-alternatieven met eerlijke redenen (dure uitschieters benoemd); koppeling vs. vervanging (kandijsuiker voor basterdsuiker: regel hernoemd, bereidingstekst mee, prijs herteld); stukprijs uit de catalogus (brioche 92 g × € 7,10/kg = € 0,65); ontleder 4 delen / 21 stappen, vacumeren uit "afdekken met folie", kern beslist; allergeenmodal; aliassen geleerd; planner 21 taken uit de stappen, 0 terugval, gemeten wachttijden gebruikt.
+
+Gevonden en gefixt (branch `fix/a-z-test`):
+- **"0,3 stuks knoflook" kostte € 17,85**: het stukgewicht werd ook gebruikt bij "Knoflook, zak 5 kg" (inhoud-per-item = de hele zak). Nu alleen als `pack_count > 1`.
+- **Afgeleid product als 'hoog'** ("boter" → Boter béarnaise saus, "honing" → Honing-mosterdsaus, "bruine suiker" → Siroop bruine suiker): één-woord-ingrediënt met extra woorden, twee of meer extra woorden, of een product dat met zijn eigen hoofdwoord begint → hooguit 'middel', zodat de AI ernaar kijkt.
+- **Hoofdwoord was het langste woord**: "gedroogd" won van "oregano", waardoor "Oregano, stuk 80 gr" nul scoorde en buiten de AI-lijst viel. Bewerkingswoorden (gedroogd, gemalen, gerookt, …) zijn nooit het hoofdwoord.
+- **AI bevestigt maar chip hield "?"**: bevestigd = 'hoog'. En de AI koos "Boter 82% doos 100 stuks" voor 5 g boter — eenheid past niet, chip zei "niet gevonden" terwijl de AI "precies het ingrediënt" zei. Kandidaten die niet op de eenheid passen zakken in de lijst met label; een niet-prijsbare AI-keuze wordt een voorstel met uitleg, geen stille lege koppeling.
+- **Gerechtpagina toonde € 0,00** bij een gerecht met € 4,25 en 25 geprijsde regels: de kop las alleen de bouwstenen-kolom en de ingrediëntenlijst alleen `gerecht_components`. Nu kostprijs_pp als terugval en de regels uit `ingredient_costs` mét product, leverancier, prijs per kg en twijfel-label.
+- Kleiner: "€ 0.20" naast "10 porties" in de ontleder-kop was de AI-leeskosten (nu benoemd, komma); "vloeibare rook" triggerde "leest als rookwerk"; "alle stap wordt gemeten"; "1.5 g" in de kiezer; vervangen naam midden in de zin volgt de schrijfwijze van de zin.
+
+Open (bewust niet vandaag):
+- **Bestellijst kent de gekozen leverancier niet.** De bestellijst rekent van ingrediëntnaam → voorraad → (winkel)catalogus en leest `ingredient_costs[].match` niet. "Vlees bij Echt Held, rub bij Van Beekum" komt dus nog niet als aparte afhaallijst terug. Dat is een eigen golf: groeperen op de leverancier uit de koppeling, eigen producten zonder prijslijst als "zelf halen".
+- Planner: stappen zonder tijd landen allemaal op het eventmoment, en een bouwsteen zonder hoeveelheid (rub) heeft geen volgorde-relatie met de stap die hem gebruikt (rub gepland ná het marineren). Bekend uit golf 2 van de keukenplanner.
+- Allergenen: worcestershiresaus (ansjovis → vis) niet door de AI genoemd; de modal is een AI-schatting, geen bron.
+- De AI-alternatieven zijn per aanroep ~1–2 cent en 3–8 s; met de 'middel'-verbreding gaan er per gerecht een paar regels méér langs de AI (max 6 per aanroep blijft).
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.

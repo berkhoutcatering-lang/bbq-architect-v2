@@ -54,6 +54,8 @@ export type GematchteRegel = {
     ai_voorstel?: { name: string; reden: string } | null;
     /** Water: geen product, geen kostprijs, en ook geen "niet gevonden". */
     gratis?: boolean;
+    /** De AI-stap voor deze regel is mislukt (time-out, rate limit); niet "niets gevonden". */
+    ai_fout?: boolean;
 };
 
 /** De koppeling zoals de UI hem kent: bron + prijs + hoe zeker we zijn. */
@@ -127,7 +129,7 @@ export async function kandidaatVanAlias(
                 return data ? fromSupplierPrice(data) : null;
             }
             case 'supplier_product': {
-                const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit,pack_count,content_per_item_quantity,content_per_item_unit')
                     .eq('organization_id', orgId).eq('active', true).eq('id', alias.ref_id).maybeSingle();
                 return data ? fromSupplierProduct(data, levById.get(data.supplier_id) ?? null) : null;
             }
@@ -138,7 +140,7 @@ export async function kandidaatVanAlias(
     /* Rij weg of inactief (nieuwe prijslijst): zelfde productnaam in dezelfde bron. */
     const naam = alias.product_name;
     if (alias.source === 'supplier_product') {
-        const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+        const { data } = await sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit,pack_count,content_per_item_quantity,content_per_item_unit')
             .eq('organization_id', orgId).eq('active', true).ilike('name', naam).limit(1).maybeSingle();
         return data ? fromSupplierProduct(data, levById.get(data.supplier_id) ?? null) : null;
     }
@@ -232,10 +234,21 @@ function fromSupplierProduct(r: any, levNaam: string | null): CostCandidate | nu
     const conv = toBaseUnit(base.base_unit);
     if (!conv || base.base_quantity <= 0) return null;
     const perBase = base.base_cost_cents / base.base_quantity / conv.factor;
+    /* "85 gr per stuk, doos 60 stuks": het stukgewicht, zodat een recept in
+       stuks te prijzen is. Alleen als de verpakking écht uit meerdere stuks
+       bestaat (pack_count > 1): bij "Knoflook, zak 5 kg" is de inhoud-per-item
+       de hele zak, en dan zou "0,3 stuks knoflook" 1,5 kilo kosten. */
+    const stukConv = r.content_per_item_unit ? toBaseUnit(String(r.content_per_item_unit)) : null;
+    const stukQty = Number(r.content_per_item_quantity) || 0;
+    const meerdereStuks = (Number(r.pack_count) || 0) > 1;
+    const perStuk = meerdereStuks && stukConv && stukQty > 0 && stukConv.base === conv.base
+        ? { hoeveelheid: stukQty * stukConv.factor, base: conv.base }
+        : null;
     return {
         source: 'supplier_product', ref_id: r.id, name: r.name,
         centsPerBaseUnit: perBase, baseUnit: conv.base,
         supplier: levNaam, supplierProductId: r.id,
+        perStuk,
     };
 }
 
@@ -336,7 +349,7 @@ export async function zoekKandidaten(
                 return q.limit(150);
             })(),
             (() => {
-                let q = sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit')
+                let q = sb.from('supplier_products').select('id,name,supplier_id,price_cents,unit,package_size,package_unit,total_base_quantity,base_unit,pack_count,content_per_item_quantity,content_per_item_unit')
                     .eq('organization_id', orgId).eq('active', true).ilike('name', pat);
                 if (lev) q = q.eq('supplier_id', lev.id);
                 /* Bidfood heeft 58 mayonaises en 108 pepers; een greep van 25

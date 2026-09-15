@@ -57,6 +57,18 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
     }
 
     if (!gc || gc.length === 0) {
+        /* Geen bouwstenen, maar wél een receptuur uit Bedenk met AI / het
+           formulier: dan staan de regels mét gekoppelde prijs in
+           gerechten.ingredient_costs. Die tonen, anders zegt de pagina
+           "nog geen componenten" boven een gerecht dat wél een kostprijs heeft. */
+        const { data: g } = await sb
+            .from('gerechten')
+            .select('ingredient_costs')
+            .eq('id', gerechtId)
+            .eq('organization_id', organizationId)
+            .maybeSingle();
+        const regels = Array.isArray((g as any)?.ingredient_costs) ? ((g as any).ingredient_costs as ReceptRegel[]) : [];
+        if (regels.length > 0) return <ReceptRegels regels={regels} />;
         return (
             <div
                 style={{
@@ -217,6 +229,103 @@ export default async function IngredientCostBreakdown({ gerechtId, organizationI
                         </div>
                     </li>
                 ))}
+            </ul>
+        </div>
+    );
+}
+
+/* Eén regel uit gerechten.ingredient_costs, zoals Bedenk met AI en het
+   gerechtformulier hem wegschrijven (IngredientRegels). */
+interface ReceptRegel {
+    naam?: string;
+    qty_pp?: number;
+    unit?: string;
+    match?: {
+        name?: string;
+        supplier?: string | null;
+        confidence?: 'hoog' | 'middel' | 'laag';
+        line_cost_cents?: number | null;
+        cents_per_base_unit?: number;
+        base_unit?: 'g' | 'ml' | 'stuk';
+        unit_approx?: boolean;
+    } | null;
+}
+
+function ReceptRegels({ regels }: { regels: ReceptRegel[] }) {
+    const metPrijs = regels.filter((r) => r.match && r.match.line_cost_cents != null).length;
+    const totaal = regels.reduce((s, r) => s + (r.match?.line_cost_cents ?? 0), 0);
+    return (
+        <div
+            style={{
+                background: 'var(--color-bg-secondary, #1f2937)',
+                border: '1px solid var(--color-border, #374151)',
+                borderRadius: 12,
+                overflow: 'hidden',
+            }}
+        >
+            <div
+                style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid var(--color-border, #374151)',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                }}
+            >
+                <span>Ingrediënten ({regels.length})</span>
+                <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: 'var(--color-text-muted)' }}>
+                    {metPrijs} van {regels.length} met catalogusprijs · {formatEur(totaal / 100)} per portie
+                </span>
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {regels.map((r, i) => {
+                    const m = r.match;
+                    const geprijsd = m && m.line_cost_cents != null;
+                    const perBasis = m && m.cents_per_base_unit != null && m.base_unit
+                        ? (m.base_unit === 'stuk'
+                            ? `${formatEur(m.cents_per_base_unit / 100)} / stuk`
+                            : `${formatEur(m.cents_per_base_unit * 10)} / ${m.base_unit === 'g' ? 'kg' : 'liter'}`)
+                        : '—';
+                    return (
+                        <li
+                            key={`${i}-${r.naam ?? ''}`}
+                            style={{
+                                padding: '12px 16px',
+                                borderBottom: '1px solid var(--color-border-soft, rgba(255,255,255,0.04))',
+                                display: 'grid',
+                                gridTemplateColumns: '1fr 80px 110px 80px',
+                                gap: 12,
+                                alignItems: 'center',
+                            }}
+                        >
+                            <div>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{r.naam ?? 'Onbekend'}</div>
+                                {m ? (
+                                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+                                        {m.name}{m.supplier ? ` · ${m.supplier}` : ''}
+                                        {m.confidence === 'middel' ? ' · twijfel' : m.confidence === 'laag' ? ' · onzeker' : ''}
+                                        {m.unit_approx ? ' · gram en milliliter 1:1' : ''}
+                                        {!geprijsd ? ' · eenheid past niet, geen prijs' : ''}
+                                    </div>
+                                ) : (
+                                    <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                                        Geen product gekoppeld — telt niet mee
+                                    </div>
+                                )}
+                            </div>
+                            <div style={{ fontSize: 13, textAlign: 'right' }}>
+                                {formatNumber(Number(r.qty_pp ?? 0), 2)} {r.unit ?? ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', textAlign: 'right' }}>{perBasis}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, textAlign: 'right' }}>
+                                {geprijsd ? formatEur((m!.line_cost_cents as number) / 100) : '—'}
+                            </div>
+                        </li>
+                    );
+                })}
             </ul>
         </div>
     );

@@ -139,7 +139,9 @@ export function kiesApparaat(
  * hele tijdlijn zonder dat iemand het merkt.
  */
 export function leesBereidingswijze(tekst: string): Bereidingswijze | null {
-    const t = tekst.toLowerCase();
+    /* "Vloeibare rook", "rookaroma" en "rooksmaak" zijn ingrediënten, geen
+       bereidingswijze: een saus met vloeibare rook staat gewoon op de inductie. */
+    const t = tekst.toLowerCase().replace(/vloeibare\s+rook|rook(aroma|smaak|zout|poeder)/g, ' ');
 
     if (/\b(rook|roken|smoke|smoker|low.and.slow)\b/.test(t)) return 'roken';
     if (/indirect/.test(t)) return 'indirect';

@@ -247,6 +247,8 @@ function chipUitRegel(regel: any): { matched: boolean; supplier: string | null; 
         approx: !!m?.unit_approx,
         confidence: m?.confidence ?? null,
         toelichting: regel?.gratis ? 'Kost niets (kraanwater)'
+            : regel?.ai_fout ? 'AI-stap mislukt — klik om het zelf te proberen'
+            : m?.via_alias && m.line_cost_cents == null ? `Eerder door jou bevestigd, maar de eenheid past niet: recept zegt ${regel?.eenheid || '?'}, product is per ${m.base_unit === 'stuk' ? 'stuk' : m.base_unit === 'g' ? 'kg' : 'liter'}`
             : m?.via_alias ? 'Eerder door jou bevestigd'
             : m?.via_ai ? `AI: ${m.ai_reden ?? 'zelfde product, andere naam'}`
             : m?.ai_reden ? `AI: ${m.ai_reden}`
@@ -288,10 +290,15 @@ function pasRegelsToe(r: BedenkerResult, regels: any[]): BedenkerResult {
    portie landt meteen in de preview. */
 export async function verrijkMetAi(start: BedenkerResult, update: (r: BedenkerResult) => void): Promise<BedenkerResult> {
     let r = start;
-    for (let ronde = 0; ronde < 5; ronde++) {
-        const open = r.ingredients.filter((i) => !i.gratis && !i.viaAlias && (!i.matched || i.confidence !== 'hoog') && !i.toelichting?.startsWith('AI'));
+    /* Een mislukte AI-stap (time-out, rate limit) krijgt één nieuwe poging;
+       daarna blijft "AI-stap mislukt" staan en kan de kok zelf klikken. */
+    const pogingen = new Map<string, number>();
+    for (let ronde = 0; ronde < 6; ronde++) {
+        const open = r.ingredients.filter((i) => !i.gratis && !i.viaAlias && (!i.matched || i.confidence !== 'hoog')
+            && (!i.toelichting?.startsWith('AI') || (i.toelichting.startsWith('AI-stap mislukt') && (pogingen.get(i.naam) ?? 0) < 2)));
         if (open.length === 0) break;
         const portie = open.slice(0, 6);
+        portie.forEach((i) => pogingen.set(i.naam, (pogingen.get(i.naam) ?? 0) + 1));
         try {
             const mr = await fetch('/api/recipe/match-ingredients', {
                 method: 'POST',
@@ -305,8 +312,10 @@ export async function verrijkMetAi(start: BedenkerResult, update: (r: BedenkerRe
                toelichting kreeg (niets gevonden, of de AI keurde goed zonder
                reden) krijgt er een, anders komt de regel elke ronde terug. */
             const bekeken = new Set(portie.map((i) => i.naam));
-            r = { ...r, ingredients: r.ingredients.map((i) => bekeken.has(i.naam) && !i.toelichting?.startsWith('AI')
-                ? { ...i, toelichting: i.matched ? 'AI: gecontroleerd' : 'AI: niets gelijkwaardigs gevonden' }
+            r = { ...r, ingredients: r.ingredients.map((i) => bekeken.has(i.naam) && (!i.toelichting?.startsWith('AI') || i.toelichting.startsWith('AI-stap mislukt'))
+                ? (i.toelichting?.startsWith('AI-stap mislukt') && (pogingen.get(i.naam) ?? 0) >= 2
+                    ? i
+                    : { ...i, toelichting: i.toelichting?.startsWith('AI-stap mislukt') ? i.toelichting : (i.matched ? 'AI: gecontroleerd' : 'AI: niets gelijkwaardigs gevonden') })
                 : i) };
             update(r);
         } catch (e) {

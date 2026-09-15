@@ -51,6 +51,10 @@ describe('kiesApparaat — een boekrecept landt op jouw spullen', () => {
 describe('leesBereidingswijze — uit de recepttekst', () => {
     it('herkent roken', () => {
         expect(leesBereidingswijze('rook de rundernek 3 uur op 120 °C')).toBe('roken');
+        /* Een ingrediënt is geen bereidingswijze (A–Z-test 15 sep: saus met
+           vloeibare rook op de inductie kreeg "leest als rookwerk"). */
+        expect(leesBereidingswijze('Ketchup, bourbon, vloeibare rook en dijonmosterd toevoegen en in de steelpan inkoken.')).toBe('fornuis');
+        expect(leesBereidingswijze('rookaroma erdoor roeren')).toBeNull();
     });
 
     it('herkent indirect', () => {

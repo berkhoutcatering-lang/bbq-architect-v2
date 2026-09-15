@@ -227,7 +227,8 @@ function maakDeel(
         onderschrift: [`${rijen.length} ${rijen.length === 1 ? 'stap' : 'stappen'}`, ...apparaten].join(' · '),
         bekendeTijd: tijdStukken.length > 0
             ? tijdStukken.join(' · ') + (zonder > 0 ? ` · ${zonder} nog te meten` : '')
-            : `${zonder === rijen.length ? 'alle' : zonder} ${rijen.length === 1 ? 'stap wordt' : 'stappen worden'} gemeten`,
+            : rijen.length === 1 ? 'wordt gemeten'
+                : `${zonder === rijen.length ? 'alle' : zonder} stappen worden gemeten`,
         stappen: rijen.map((r) => maakStap(r, apparaatNaam, nummerVan)),
     };
 }
