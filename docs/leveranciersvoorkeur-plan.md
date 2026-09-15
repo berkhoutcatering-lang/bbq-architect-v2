@@ -123,6 +123,17 @@ Eerst controleren, niet aannemen (uit een eerdere sessie): vult de ontleder al e
 
 Volgorde: golf 4 → golf 5, na merge van #226 en #227.
 
+### Golf 5 — gebouwd en gemeten (15 sep)
+
+Eerst gecontroleerd, niet aangenomen: de ontleder laat tijden **bewust** leeg bij een bedacht recept ("het gerecht mag je bedenken, de tijden niet") — die worden per bewerking gemeten en geleerd (schatter). Dat is de regel "verzin geen getallen" en blijft zo; het bord toont "nog te meten". De keuze-antwoorden van de kok worden sinds migratie 20260909 bewaard. Beide punten waren dus geen werk.
+
+- **Bedenk met AI → ontleder.** "Maak gerecht met werkwijze" zet het bedachte recept (ingrediënten voor het hele recept + bereiding + planning) als tekst klaar en opent /gerechten/ontleden, die meteen ontleedt met de opdracht "verander de ingrediënten niet". Wat Bedenk al wist (pitch, ingrediënten mét Bidfood-prijs, battle plan, tijd, wijn, tags, gang) gaat als `extra` mee naar de opslagroute. "Alleen formulier" blijft als tweede knop.
+- **Opslagroute** (`/api/recipe/ontleed/opslaan`): `extra` (alleen bekende kolommen) op het gerecht; `gang_naam` wordt server-side een gang van de organisatie, nooit leeg; `gerechtId` = bestaand gerecht bijwerken (porties, keuzes, extra) en zijn stappen vervangen i.p.v. een tweede gerecht ernaast. Bij een bestaand gerecht wordt nooit iets verwijderd bij een fout.
+- **Bestaande gerechten**: op de gerecht-pagina een blok "Nog geen werkwijze → Zet op onze werkwijze" (alleen als er 0 stappen zijn); dat opent ontleden met de tekst-bereiding van dat gerecht.
+- **Na opslaan**: allergeencheck met bevestig-modal (zelfde als het formulier, één taal) en aliassen leren van de zekere koppelingen.
+- Gemeten — BBQ-saus (bestaand): 11 stappen, apparaat per stap (inductieplaat, koelwerkbank), 3 min werk + 25 min wachten, 8 nog te meten, "saus op de barbecue" vervallen met reden ("de pelletgrill blijft vrij voor vlees"); gerecht bijgewerkt, prijzen intact. Coleslaw (nieuw via Bedenk): 2 delen, 15 stappen, bouwsteen "Gerookte paprika-dressing" aangemaakt, gang bijgerecht, concept, € 1,06 met 12 van 13 geprijsd, allergenen ei/mosterd, aliassen geleerd. Doorlooptijd ~1,5 min (Bedenk ~40 s + ontleder ~50 s).
+- Wat het formulier nog heeft: `bereidingswijze` als tekst blijft meegaan (kitchen mode, PDF); de stappen zijn de bron voor bord en planner.
+
 ## Wat we bewust níet doen
 
 - Geen "goedkoopste wint": levert het verkeerde merk en een kostprijs die je niet haalt.

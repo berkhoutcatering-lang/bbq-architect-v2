@@ -18,8 +18,13 @@
  * vergeten. Alleen jouw eigen vertaalde receptuur blijft achter.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ReceptuurLijst, { type DeelRegel, type StapChip, type StapRegel } from '../../_components/ReceptuurLijst';
+import { AllergenConfirmModal, type AllergenRow } from '@/components/menu/AllergenConfirmModal';
+import { ALLERGENEN } from '@/lib/constants';
+import { allergeenCodesNaarWoorden } from '@/lib/allergenCodes';
+import { supabase } from '@/lib/supabase';
 import {
     openstaandeVragen,
     metKeuzesVerwerkt,
@@ -30,6 +35,30 @@ import {
 } from '@/lib/keukenplanner/ontleder';
 
 type Fase = 'kiezen' | 'bezig' | 'nakijken';
+
+/* Golf 5 — één receptuur-pijplijn. Bedenk met AI levert zijn recept hier af
+   (sessionStorage), en een bestaand gerecht komt via ?gerecht=<id>. In beide
+   gevallen slaan we de foto-stap over: het recept is er al, alleen de
+   werkwijze (micro-stappen op onze apparatuur) ontbreekt nog. */
+export const ONTLEDEN_OVERDRACHT = 'ontleden:van-bedenk';
+export interface Overdracht {
+    naam: string;
+    /** Het recept als tekst: ingrediënten + bereiding, zoals de ontleder een boekpagina leest. */
+    tekst: string;
+    /** Velden die op het gerecht komen (ingredient_costs mét prijs, pitch, battle plan …). */
+    extra: Record<string, unknown>;
+    /** Voor de allergeencheck na opslaan. */
+    ingredientNamen: string[];
+}
+
+interface Herkomst {
+    soort: 'bedenk' | 'bestaand';
+    naam: string;
+    gerechtId?: string;
+    bestaandeStappen?: number;
+    extra: Record<string, unknown>;
+    ingredientNamen: string[];
+}
 
 /** Eenheden die de rest van de app kent — dezelfde lijst als de opslagroute. */
 const EENHEDEN = ['g', 'kg', 'ml', 'l', 'stuk'] as const;
@@ -72,6 +101,65 @@ export default function OntledenClient() {
     const [invulling, setInvulling] = useState<Invulling>(LEEG);
     const [bezigMetOpslaan, setBezigMetOpslaan] = useState(false);
     const [resultaat, setResultaat] = useState<{ gerechtId: string; waarschuwing: string | null } | null>(null);
+    const [herkomst, setHerkomst] = useState<Herkomst | null>(null);
+    const [allergeenRijen, setAllergeenRijen] = useState<AllergenRow[]>([]);
+    const searchParams = useSearchParams();
+    const gerechtParam = searchParams.get('gerecht');
+
+    /* Overdracht uit Bedenk met AI of een bestaand gerecht: meteen ontleden. */
+    useEffect(() => {
+        let gestart = false;
+        const vanBedenk = (() => {
+            try {
+                const raw = sessionStorage.getItem(ONTLEDEN_OVERDRACHT);
+                if (!raw) return null;
+                sessionStorage.removeItem(ONTLEDEN_OVERDRACHT);
+                return JSON.parse(raw) as Overdracht;
+            } catch { return null; }
+        })();
+        if (vanBedenk && vanBedenk.tekst) {
+            gestart = true;
+            setHerkomst({ soort: 'bedenk', naam: vanBedenk.naam, extra: vanBedenk.extra ?? {}, ingredientNamen: vanBedenk.ingredientNamen ?? [] });
+            setIdee(vanBedenk.tekst);
+            void ontleed(undefined, {
+                beschrijving: vanBedenk.tekst,
+                opmerking: 'Dit recept is al bedacht en goedgekeurd. Schrijf het op onze werkwijze; verander de ingrediënten en hoeveelheden niet en verzin er geen bij.',
+            });
+        }
+        if (!gestart && gerechtParam) {
+            void (async () => {
+                const { data: g } = await supabase
+                    .from('gerechten')
+                    .select('id, naam, beschrijving, bereidingswijze, ingredienten, ingredient_costs, porties')
+                    .eq('id', gerechtParam)
+                    .maybeSingle();
+                if (!g) { setFout('Gerecht niet gevonden'); return; }
+                const { count } = await supabase
+                    .from('recipe_steps').select('id', { count: 'exact', head: true }).eq('gerecht_id', g.id);
+                const costs: Array<{ naam?: string; qty_pp?: number; unit?: string }> = Array.isArray(g.ingredient_costs) ? g.ingredient_costs : [];
+                const ingr = costs.length > 0
+                    ? costs.map((c) => [c.qty_pp && c.unit ? `${c.qty_pp} ${c.unit} p.p.` : '', c.naam].filter(Boolean).join(' '))
+                    : (Array.isArray(g.ingredienten) ? g.ingredienten : []);
+                const tekst = [
+                    `Recept: ${g.naam}`,
+                    g.beschrijving ? `${g.beschrijving}` : '',
+                    g.porties ? `Voor ${g.porties} porties.` : '',
+                    ingr.length ? `\nIngrediënten:\n${ingr.map((i: string) => `- ${i}`).join('\n')}` : '',
+                    g.bereidingswijze ? `\nBereiding:\n${g.bereidingswijze}` : '',
+                ].filter(Boolean).join('\n');
+                setHerkomst({
+                    soort: 'bestaand', naam: g.naam, gerechtId: String(g.id), bestaandeStappen: count ?? 0,
+                    extra: {}, ingredientNamen: costs.map((c) => c.naam ?? '').filter(Boolean),
+                });
+                setIdee(tekst);
+                void ontleed(undefined, {
+                    beschrijving: tekst,
+                    opmerking: 'Dit gerecht bestaat al. Schrijf de bereiding op onze werkwijze; verander de ingrediënten en hoeveelheden niet.',
+                });
+            })();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [gerechtParam]);
     const invoer = useRef<HTMLInputElement>(null);
 
     const kiesBestanden = useCallback(async (lijst: FileList | null) => {
@@ -90,14 +178,18 @@ export default function OntledenClient() {
 
     /* `welkRecept` is gevuld als de kok het tweede recept van dezelfde pagina
        laat lezen. Dezelfde foto's, andere opdracht — geen nieuwe foto nodig. */
-    async function ontleed(welkRecept?: string) {
+    async function ontleed(welkRecept?: string, overdracht?: { beschrijving: string; opmerking: string }) {
         setFase('bezig');
         setFout(null);
         try {
             const res = await fetch('/api/recipe/ontleed', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+                body: JSON.stringify(overdracht ? {
+                    fotos: [],
+                    beschrijving: overdracht.beschrijving,
+                    opmerking: overdracht.opmerking,
+                } : {
                     fotos,
                     beschrijving: idee,
                     opmerking: welkRecept
@@ -135,6 +227,9 @@ export default function OntledenClient() {
                     antwoorden: invulling.antwoorden,
                     nieuweComponenten: (invulling.antwoorden.componenten ?? [])
                         .map((naam) => ({ naam, eenheid: invulling.eenheden[naam] ?? 'g' })),
+                    /* Golf 5: bestaand gerecht bijwerken, en wat Bedenk al wist meegeven. */
+                    gerechtId: herkomst?.gerechtId,
+                    extra: herkomst?.extra,
                 }),
             });
             const json = await res.json();
@@ -143,6 +238,41 @@ export default function OntledenClient() {
                 return;
             }
             setResultaat({ gerechtId: json.gerechtId, waarschuwing: json.waarschuwing ?? null });
+            /* Golf 4: wat met een zekere koppeling is opgeslagen onthoudt de app
+               als alias — dezelfde regel als in het gerecht-formulier. */
+            const costs = Array.isArray(herkomst?.extra?.ingredient_costs) ? (herkomst!.extra.ingredient_costs as Array<Record<string, any>>) : [];
+            const aliases = costs
+                .filter((r) => r?.naam && r?.match && r.match.confidence === 'hoog' && r.match.line_cost_cents != null)
+                .map((r) => ({ naam: r.naam, match: { source: r.match.source, ref_id: r.match.ref_id, name: r.match.name, supplier: r.match.supplier ?? null } }));
+            if (aliases.length > 0) {
+                fetch('/api/recipe/aliases', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ aliases }),
+                }).catch(() => { /* volgende keer opnieuw zoeken */ });
+            }
+            /* Allergeencheck, zoals bij het gerecht-formulier: de AI stelt voor,
+               de kok bevestigt, en dan pas komt het op het gerecht. Alleen bij
+               een nieuw gerecht uit Bedenk — een bestaand gerecht heeft zijn
+               allergenen al, en die raken we hier niet aan. */
+            if (herkomst?.soort === 'bedenk' && herkomst.ingredientNamen.length > 0) {
+                try {
+                    const r = await fetch('/api/detect-allergens', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ingredients: herkomst.ingredientNamen, dish_name: controle.gerechtNaam }),
+                    });
+                    const b = await r.json().catch(() => ({}));
+                    const woorden = allergeenCodesNaarWoorden(b.allergens);
+                    if (woorden.length > 0) {
+                        setAllergeenRijen(woorden.map((a, i) => ({
+                            id: `save-${i}-${a}`,
+                            allergen: a,
+                            label: ALLERGENEN.find((x) => x.code === a)?.label ?? a,
+                            source: `AI-detectie via ${herkomst.ingredientNamen.length} ingrediënten`,
+                            confidence: 90,
+                        })));
+                    }
+                } catch { /* geen check → kok doet het zelf via Hercheck */ }
+            }
         } catch (e) {
             setFout(e instanceof Error ? e.message : 'Geen verbinding');
         } finally {
@@ -156,6 +286,32 @@ export default function OntledenClient() {
     return (
         <div style={{ maxWidth: 940, margin: '0 auto', padding: '32px 20px 96px' }}>
             {fout && <Melding soort="fout">{fout}</Melding>}
+
+            {herkomst && fase !== 'kiezen' && (
+                <div style={{
+                    padding: '10px 14px', borderRadius: 10, marginBottom: 16, fontSize: 13,
+                    background: KLEUR.amberZacht, border: `1px solid ${KLEUR.goudlijn}`,
+                }}>
+                    {herkomst.soort === 'bedenk'
+                        ? <>Uit <strong>Bedenk met AI</strong>: “{herkomst.naam}”. De ingrediënten en prijzen zijn al gekoppeld; hier komt de werkwijze bij.</>
+                        : <>Werkwijze voor bestaand gerecht <strong>{herkomst.naam}</strong>.{(herkomst.bestaandeStappen ?? 0) > 0 ? ` Het had al ${herkomst.bestaandeStappen} stappen — die worden vervangen bij opslaan.` : ''}</>}
+                </div>
+            )}
+
+            <AllergenConfirmModal
+                open={allergeenRijen.length > 0}
+                rows={allergeenRijen}
+                onClose={() => setAllergeenRijen([])}
+                onSubmit={async ({ confirmed }) => {
+                    const gekozen = confirmed
+                        .map((id) => allergeenRijen.find((r) => r.id === id)?.allergen)
+                        .filter((a): a is string => Boolean(a));
+                    setAllergeenRijen([]);
+                    if (resultaat && gekozen.length > 0) {
+                        await supabase.from('gerechten').update({ allergenen: gekozen }).eq('id', resultaat.gerechtId);
+                    }
+                }}
+            />
 
             {fase === 'kiezen' && (
                 <Kiezen

@@ -19,6 +19,7 @@ import { type FollowUpAction } from '@/components/FollowUpPrompt';
 import { effectieveKostprijsPP } from '@/lib/gerecht-kosten';
 import { formatEur } from '@/lib/format';
 import { ALLERGENEN } from '@/lib/constants';
+import { allergeenCodesNaarWoorden } from '@/lib/allergenCodes';
 import { IngredientRegels, kostprijsUitRegels } from '@/components/menu/IngredientRegels';
 import RecipeAiButton, { type AiFillResult, type AiFillMeta } from '@/components/RecipeAiButton';
 import { type BedenkerResult, BEDENKER_HANDOFF_KEY, BEDENKER_HANDOFF_EVENT } from '@/components/menu/BedenkerModal';
@@ -303,14 +304,6 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
        hoeft niets te doen — als hij geen allergenen had ingevuld, vullen we 'm
        automatisch aan met door AI gedetecteerde codes. Bestaande user-codes
        blijven behouden (we mergen, geen overschrijving). */
-    /* De detectie-route antwoordt in lettercodes (E, M, G …); het gerecht en de
-       rest van de app werken met woorden (ei, mosterd, gluten). Vertalen op de
-       grens, anders staan er twee talen door elkaar in gerechten.allergenen —
-       en dan herkent een filter "E" niet als ei. V/VE zijn dieetwensen, geen
-       allergenen: die horen hier niet thuis. */
-    const ALLERGEEN_CODE_NAAR_WOORD: Record<string, string> = {
-        G: 'gluten', L: 'lactose', N: 'noten', E: 'ei', S: 'soja', F: 'vis', M: 'mosterd',
-    };
     function allergenenVoorDetectie(saveData: Record<string, any>): string[] {
         const fromCosts = Array.isArray(saveData.ingredient_costs)
             ? saveData.ingredient_costs.map((c: any) => c?.naam).filter(Boolean)
@@ -334,8 +327,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             if (Array.isArray(body.allergens) && body.allergens.length > 0) {
                 track('ai_allergen_detect', { dish: saveData.naam, count: body.allergens.length });
             }
-            const codes: string[] = Array.isArray(body.allergens) ? body.allergens : [];
-            return [...new Set(codes.map((c) => ALLERGEEN_CODE_NAAR_WOORD[String(c).toUpperCase()]).filter(Boolean))];
+            return allergeenCodesNaarWoorden(body.allergens);
         } catch (e) {
             console.warn('[gerecht] allergen detection failed:', e);
             return [];

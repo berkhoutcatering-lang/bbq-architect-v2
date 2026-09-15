@@ -16,6 +16,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil, Package, Users, Sparkles, X, Plus, RefreshCw } from 'lucide-react';
 import { MRButton, MREyebrow, MRTag } from './atoms';
 import { fmtEuro } from './helpers';
@@ -280,7 +281,59 @@ function summaryLines(r: BedenkerResult): Array<{ ok: boolean; text: string }> {
     ];
 }
 
+/* Golf 5: het bedachte recept als tekst, zoals de ontleder een boekpagina
+   leest. Hoeveelheden voor het hele recept (per portie × porties), want zo
+   staat het ook in een boek. */
+export function receptAlsTekst(r: BedenkerResult): string {
+    const porties = r.fill.porties || 10;
+    const ingr = r.fill.ingredient_costs.map((i) => {
+        const totaal = i.qty_pp > 0 ? Math.round(i.qty_pp * porties * 100) / 100 : null;
+        return `- ${totaal != null ? `${String(totaal).replace('.', ',')} ${i.unit} ` : ''}${i.naam}`;
+    });
+    return [
+        `Recept: ${r.name}`,
+        r.desc,
+        `Voor ${porties} porties.`,
+        ingr.length ? `\nIngrediënten:\n${ingr.join('\n')}` : '',
+        r.fill.bereidingswijze ? `\nBereiding:\n${r.fill.bereidingswijze}` : '',
+        r.battlePlan.length ? `\nPlanning vooraf:\n${r.battlePlan.map((s) => `- ${s}`).join('\n')}` : '',
+    ].filter(Boolean).join('\n');
+}
+
+/* Wat er naast de werkwijze op het gerecht komt: alles wat Bedenk al wist. */
+export function receptExtra(r: BedenkerResult): Record<string, unknown> {
+    return {
+        beschrijving: r.desc,
+        gang_naam: r.gang,
+        ingredient_costs: r.fill.ingredient_costs,
+        ingredienten: r.fill.ingredient_costs.map((i) => i.naam),
+        kostprijs_pp: r.cost > 0 ? r.cost : null,
+        bereidingswijze: r.fill.bereidingswijze,
+        battle_plan_steps: r.battlePlan,
+        target_prep_time: r.prepTimeSeconds || 0,
+        wijn_suggestie: r.fill.wijn_suggestie,
+        service_tip: r.fill.service_tip,
+        tags: r.fill.tags,
+    };
+}
+
 export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
+    const router = useRouter();
+    /* Golf 5: naar de ontleder voor de werkwijze (micro-stappen op onze
+       apparatuur) — één pijplijn. Het formulier zonder stappen blijft als
+       tweede knop bestaan. */
+    function naarWerkwijze(r: BedenkerResult) {
+        try {
+            sessionStorage.setItem('ontleden:van-bedenk', JSON.stringify({
+                naam: r.name,
+                tekst: receptAlsTekst(r),
+                extra: receptExtra(r),
+                ingredientNamen: r.fill.ingredient_costs.map((i) => i.naam),
+            }));
+        } catch { /* privémodus → val terug op het formulier */ onAccept?.(r); return; }
+        onClose();
+        router.push('/gerechten/ontleden');
+    }
     const [mode, setMode] = useState<BedenkerMode>('vrij');
     const [prompt, setPrompt] = useState('');
     const [thinking, setThinking] = useState(false);
@@ -573,9 +626,14 @@ export function BedenkerModal({ open, onClose, onGenerate, onAccept }: Props) {
                                 ) : null}
 
                                 <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-                                    <MRButton variant="primary" icon={<Plus size={13} />} sm onClick={() => onAccept?.(result)}>
-                                        Maak gerecht
+                                    <MRButton variant="primary" icon={<Plus size={13} />} sm onClick={() => naarWerkwijze(result)}>
+                                        Maak gerecht met werkwijze
                                     </MRButton>
+                                    {onAccept && (
+                                        <MRButton variant="ghost" sm onClick={() => onAccept(result)} >
+                                            Alleen formulier
+                                        </MRButton>
+                                    )}
                                     <MRButton variant="ghost" icon={<RefreshCw size={13} />} sm onClick={handleGenerate}>Opnieuw</MRButton>
                                 </div>
                             </div>

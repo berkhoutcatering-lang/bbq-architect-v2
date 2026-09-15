@@ -50,12 +50,20 @@ export default async function GerechtDetailPage({ params }: PageProps) {
     /* Gerecht ophalen (RLS doet tenant-check, .single() faalt als niet gevonden) */
     const { data: gerecht, error } = await sb
         .from('gerechten')
-        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug, keuzes')
+        .select('id, naam, beschrijving, foto_url, kostprijs_pp, total_cost_cents, verkoopprijs, porties, marge_pct, allergenen, tags, gang_slug, keuzes, bereidingswijze')
         .eq('id', id)
         .eq('organization_id', orgId)
         .maybeSingle();
 
     if (error || !gerecht) notFound();
+
+    /* Heeft het gerecht al een werkwijze (recipe_steps)? Bepaalt of de
+       "Zet op onze werkwijze"-knop verschijnt. */
+    const { count: stappenCount } = await sb
+        .from('recipe_steps')
+        .select('id', { count: 'exact', head: true })
+        .eq('gerecht_id', gerecht.id)
+        .eq('organization_id', orgId);
 
     return (
         <main style={{ padding: 24, maxWidth: 1100, margin: '0 auto' }}>
@@ -106,6 +114,36 @@ export default async function GerechtDetailPage({ params }: PageProps) {
             />
 
             <GerechtComponentenEditor gerechtId={String(gerecht.id)} />
+
+            {/* Golf 5: geen werkwijze maar wel een bereiding als tekst → één knop
+                naar de ontleder, die er micro-stappen op onze apparatuur van
+                maakt. Pas dan staat het gerecht op het kookbord en kan het
+                gebatcht worden. */}
+            {(stappenCount ?? 0) === 0 && (
+                <section style={{
+                    marginTop: 24, padding: '14px 18px', borderRadius: 12,
+                    background: 'rgba(255,191,0,.06)', border: '1px solid rgba(255,191,0,.22)',
+                    display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+                }}>
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 2 }}>Nog geen werkwijze</div>
+                        <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+                            {gerecht.bereidingswijze
+                                ? 'De bereiding staat als tekst. Zet hem om naar micro-stappen op onze apparatuur — dan staat dit gerecht op het kookbord en kan ui snipperen gebatcht worden met andere gerechten.'
+                                : 'Dit gerecht heeft nog geen bereiding. Laat de AI er een bedenken op onze werkwijze.'}
+                        </div>
+                    </div>
+                    <Link
+                        href={`/gerechten/ontleden?gerecht=${gerecht.id}`}
+                        style={{
+                            padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, textDecoration: 'none',
+                            background: 'var(--brand, #FFBF00)', color: '#1a1a1a',
+                        }}
+                    >
+                        Zet op onze werkwijze
+                    </Link>
+                </section>
+            )}
 
             {/* De werkwijze zelf. Verschijnt alleen als er stappen zijn — de
                 meeste gerechten hebben er nog geen. */}
