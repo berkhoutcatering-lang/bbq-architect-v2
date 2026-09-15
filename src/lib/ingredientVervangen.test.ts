@@ -34,3 +34,15 @@ describe('vervangInTekst — de bereiding gaat mee', () => {
         expect(vervangInTekst('Zout erover.', 'procureur', 'spiering')).toBe('Zout erover.');
     });
 });
+
+describe('vervangInTekst — schrijfwijze volgt de zin', () => {
+    it('kleine letter midden in de zin, ook al heet het product "Rode pepersaus"', () => {
+        expect(vervangInTekst('voeg ketchup en tabasco toe.', 'tabasco', 'Rode pepersaus')).toBe('voeg ketchup en rode pepersaus toe.');
+    });
+    it('hoofdletter aan het begin van de zin blijft', () => {
+        expect(vervangInTekst('Tabasco erbij.', 'tabasco', 'Rode pepersaus')).toBe('Rode pepersaus erbij.');
+    });
+    it('een afkorting blijft in kapitalen', () => {
+        expect(vervangInTekst('met de saus erop', 'saus', 'BBQ saus')).toBe('met de BBQ saus erop');
+    });
+});

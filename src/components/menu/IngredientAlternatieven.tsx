@@ -45,7 +45,7 @@ function prijsRegel(m: MatchRegel, qtyPp: number, unit: string): string {
     const perBasis = m.base_unit === 'stuk'
         ? `${fmtEuro(m.cents_per_base_unit / 100)} per stuk`
         : `${fmtEuro(m.cents_per_base_unit * 10)} per ${m.base_unit === 'g' ? 'kg' : 'liter'}`;
-    return `${perPortie} voor ${qtyPp} ${unit}${m.unit_approx ? ' ≈' : ''} · ${perBasis}`;
+    return `${perPortie} voor ${String(qtyPp).replace('.', ',')} ${unit}${m.unit_approx ? ' ≈' : ''} · ${perBasis}`;
 }
 
 interface ZoekHit {
@@ -255,11 +255,15 @@ export function IngredientAlternatieven({ naam, qtyPp, unit, huidige, onKies, on
                                        keer direct goed is. */
                                     onClick={() => {
                                         const gekozen = { ...a.match, confidence: 'hoog' as const };
-                                        fetch('/api/recipe/aliases', {
+                                        /* Een vervanging is geen synoniem en wordt geen alias. */
+                                        if (!isVervanging(naam, gekozen.name)) fetch('/api/recipe/aliases', {
                                             method: 'POST', headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ alleen_als_nieuw: true, aliases: [{ naam, match: { source: gekozen.source, ref_id: gekozen.ref_id, name: gekozen.name, supplier: gekozen.supplier ?? null } }] }),
                                         }).catch(() => { /* volgende keer opnieuw */ });
-                                        onKies(gekozen, { vervanging: false, nieuweNaam: korteProductnaam(gekozen.name) });
+                                        /* Zelfde regel als bij zelf zoeken: deelt de productnaam geen woord
+                                           met het ingrediënt ("Rode pepersaus" voor "tabasco"), dan is het
+                                           een vervanging en gaat de regel zo heten. */
+                                        onKies(gekozen, { vervanging: isVervanging(naam, gekozen.name), nieuweNaam: korteProductnaam(gekozen.name) });
                                     }}
                                     style={{
                                         textAlign: 'left', padding: '8px 10px', borderRadius: 8, cursor: 'pointer',

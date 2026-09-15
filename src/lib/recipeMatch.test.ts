@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    extraWoorden,
     normalizeIngredientName,
     nameScore,
     pickBestMatch,
@@ -285,5 +286,57 @@ describe('nameScore — hoofdwoord en haakjes (golf 4)', () => {
         expect(isGratis('koud water')).toBe(true);
         expect(isGratis('water (voor broth)')).toBe(true);
         expect(isGratis('Coconut water')).toBe(false);
+    });
+});
+
+describe('lineCostCents — recept in stuks, product per gram met stukgewicht', () => {
+    it('1 stuks briochebun van 85 g tegen € 4,89/kg = 42 ct', () => {
+        expect(lineCostCents(1, 'stuks', { centsPerBaseUnit: 0.489, baseUnit: 'g', perStuk: { hoeveelheid: 85, base: 'g' } })).toBe(42);
+    });
+    it('zonder stukgewicht blijft stuks vs gram onvergelijkbaar', () => {
+        expect(lineCostCents(1, 'stuks', { centsPerBaseUnit: 0.489, baseUnit: 'g' })).toBeNull();
+    });
+});
+
+describe('pickBestMatch — afgeleid product is hooguit "middel" (A–Z-test 15 sep)', () => {
+    const sp = (id: number, name: string): CostCandidate =>
+        ({ source: 'supplier_product', ref_id: id, name, centsPerBaseUnit: 1, baseUnit: 'g' });
+
+    it('"boter" ↔ "Boter béarnaise saus, zak 1 kg" dekt het woord maar is een saus → middel', () => {
+        const r = pickBestMatch('boter (voor roosteren broodjes)', [sp(1, 'Boter béarnaise saus, zak 1 kg')]);
+        expect(r?.candidate.ref_id).toBe(1);
+        expect(r?.confidence).toBe('middel');
+    });
+    it('"honing" ↔ "Honing-mosterdsaus, emmer 2,7 ltr" → middel', () => {
+        const r = pickBestMatch('honing', [sp(1, 'Honing-mosterdsaus, emmer 2,7 ltr')]);
+        expect(r?.confidence).toBe('middel');
+    });
+    it('een gewoon product met verpakkingswoorden blijft hoog ("Zout, pak 1 kg")', () => {
+        const r = pickBestMatch('zout', [sp(1, 'Zout, pak 1 kg')]);
+        expect(r?.confidence).toBe('hoog');
+    });
+    it('twee-woord-ingrediënt met één extra woord blijft hoog ("Zwarte peper gemalen, bus 460 gr")', () => {
+        const r = pickBestMatch('zwarte peper', [sp(1, 'Zwarte peper gemalen, bus 460 gr')]);
+        expect(r?.confidence).toBe('hoog');
+    });
+    it('"bruine suiker" ↔ "Siroop bruine suiker, fles 2,35 kg": eigen hoofdwoord vooraan → middel', () => {
+        const r = pickBestMatch('bruine suiker', [sp(1, 'Siroop bruine suiker, fles 2,35 kg')]);
+        expect(r?.confidence).toBe('middel');
+    });
+    it('extraWoorden telt alleen betekenisvolle woorden', () => {
+        expect(extraWoorden('boter', 'Boter béarnaise saus, zak 1 kg')).toBe(2);
+        expect(extraWoorden('zout', 'Zout, pak 1 kg')).toBe(0);
+    });
+});
+
+describe('nameScore — hoofdwoord is nooit een bewerkingswoord', () => {
+    it('"oregano gedroogd" ↔ "Oregano, stuk 80 gr" is een treffer (gedroogd is langer dan oregano)', () => {
+        expect(nameScore('oregano gedroogd', 'Oregano, stuk 80 gr')).toBeGreaterThan(0.5);
+    });
+    it('"gerookt paprikapoeder" ↔ "Paprikapoeder" blijft een deel-treffer, geen nul', () => {
+        expect(nameScore('gerookt paprikapoeder', 'Paprikapoeder, bus 500 gr')).toBeGreaterThan(0.5);
+    });
+    it('het echte hoofdwoord blijft verplicht: "bruine basterdsuiker" ↔ "Bruine bonen" = 0', () => {
+        expect(nameScore('bruine basterdsuiker', 'Bruine bonen, blik 800 gr')).toBe(0);
     });
 });

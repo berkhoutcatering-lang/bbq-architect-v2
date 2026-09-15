@@ -103,7 +103,12 @@ export default async function GerechtDetailPage({ params }: PageProps) {
             <LiveCostHeader
                 gerechtId={String(gerecht.id)}
                 organizationId={orgId}
-                fallbackKostprijsCents={Number(gerecht.total_cost_cents ?? 0)}
+                /* total_cost_cents komt uit de bouwstenen-trigger; een gerecht uit
+                   Bedenk met AI heeft zijn kostprijs in kostprijs_pp (uit de
+                   gekoppelde catalogusregels). Nooit € 0,00 tonen als die er is. */
+                fallbackKostprijsCents={Number(gerecht.total_cost_cents ?? 0) > 0
+                    ? Number(gerecht.total_cost_cents)
+                    : Math.round((Number(gerecht.kostprijs_pp) || 0) * 100)}
                 porties={Number(gerecht.porties ?? 10)}
                 verkoopprijs={Number(gerecht.verkoopprijs ?? 0)}
             />

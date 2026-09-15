@@ -563,7 +563,7 @@ function Lade(props: {
                 <p style={{ color: KLEUR.gedempt, margin: 0 }}>
                     Omgezet naar onze werkwijze · {controle.porties ?? antwoorden.porties ?? '?'} porties ·{' '}
                     {delen.length} {delen.length === 1 ? 'deel' : 'delen'} · {stappen.length} stappen
-                    {kosten && ` · € ${(kosten.centen / 100).toFixed(2)}`}
+                    {kosten && ` · AI-kosten van het lezen € ${(kosten.centen / 100).toFixed(2).replace('.', ',')}`}
                 </p>
                 {controle.anderRecept && (
                     <p style={{ color: KLEUR.gedempt, fontSize: 13, marginTop: 6, marginBottom: 0 }}>

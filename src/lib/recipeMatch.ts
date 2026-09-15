@@ -32,6 +32,10 @@ export interface CostCandidate {
     masterProductId?: number | null;
     /** Alleen voor source==='supplier_product': de koppeling naar Catalogus B. */
     supplierProductId?: number | null;
+    /** Wat één stuk weegt/meet als het product per stuk verkocht wordt maar
+        per gram/ml geprijsd is ("85 gr per stuk, doos 60 stuks"). Daarmee is
+        "1 stuks" in een recept alsnog te prijzen — uit de catalogus, geen gok. */
+    perStuk?: { hoeveelheid: number; base: BaseUnit } | null;
 }
 
 export interface MatchResult {
@@ -104,6 +108,27 @@ function zonderHaakjes(s: string): string {
     return s.replace(/\([^)]*\)/g, ' ');
 }
 
+/* Bewerkings- en toestandswoorden: ze tellen mee in de score (gerookte
+   paprika is geen paprika), maar zijn nooit het hoofdwoord. Anders werd
+   "gedroogd" (8 letters) het hoofdwoord van "oregano gedroogd" en scoorde
+   "Oregano, stuk 80 gr" nul. */
+const BEWERKING_WOORDEN = new Set([
+    'gedroogd', 'gedroogde', 'gemalen', 'gerookt', 'gerookte', 'gezouten', 'ongezouten',
+    'geroosterd', 'geroosterde', 'gepeld', 'gepelde', 'ontpit', 'ontpitte', 'gekookt', 'gekookte',
+    'gegaard', 'gegaarde', 'diepvries', 'bevroren', 'vloeibaar', 'vloeibare', 'heel', 'hele',
+    'fijngehakt', 'fijngemalen', 'versgemalen', 'geperst', 'geperste', 'gepureerd', 'geconcentreerd',
+    'geconcentreerde', 'donker', 'donkere', 'licht', 'lichte', 'zoet', 'zoete', 'zout', 'zure',
+    'droog', 'droge', 'rauw', 'rauwe', 'puur', 'pure', 'extra', 'groot', 'grote', 'klein', 'kleine',
+]);
+
+/** Het hoofdwoord van een ingrediënt: het langste woord dat geen bewerking is. */
+function hoofdwoord(a: string[]): string | null {
+    const kern = a.filter((t) => !BEWERKING_WOORDEN.has(t));
+    const bron = kern.length > 0 ? kern : a;
+    if (bron.length === 0) return null;
+    return bron.reduce((x, y) => (y.length > x.length ? y : x));
+}
+
 function tokens(s: string): string[] {
     return normalizeIngredientName(zonderHaakjes(s)).split(' ')
         .filter((t) => t && !STOPWORDS.has(t) && !/^\d+$/.test(t));
@@ -135,12 +160,19 @@ export function nameScore(ingredient: string, candidate: string): number {
        alleen "bruine"; "Worcestershire sauce" ↔ "Hemp sauce" alleen "sauce".
        Dat zijn geen treffers, hoe lang het gedeelde woord ook is. */
     if (coverage < 1) {
-        const langste = Math.max(...a.map((t) => t.length));
-        if (!a.some((t) => t.length === langste && setB.has(t))) return 0;
+        const hoofd = hoofdwoord(a);
+        if (hoofd && !setB.has(hoofd)) return 0;
     }
     // Coverage weegt het zwaarst; precision voorkomt dat een 10-woord-kandidaat
     // met 1 toevallig woord wint van een strakke match.
     return Math.min(1, coverage * 0.75 + precision * 0.25);
+}
+
+/** Aantal betekenisvolle woorden in de kandidaat die niet in het ingrediënt
+ *  zitten: "Boter béarnaise saus" ↔ "boter" → 2 ("bearnaise", "saus"). */
+export function extraWoorden(ingredient: string, candidate: string): number {
+    const setA = new Set(tokens(ingredient));
+    return tokens(candidate).filter((t) => !setA.has(t)).length;
 }
 
 /** Deel van de ingrediënt-woorden dat in de kandidaat terugkomt (0..1). */
@@ -238,11 +270,12 @@ export function pickBestMatch(
     /* g en ml gelden als passend bij elkaar (zie isGramMlPaar): anders kreeg
        "Olijfolie met witte truffel, fles 250 gr" de bonus boven alle gewone
        olijfolies in ml, alleen omdat het recept "10 g" zei. */
-    const pastBij = (u: BaseUnit) => gewenst != null && (u === gewenst || isGramMlPaar(u, gewenst));
+    const pastBij = (c: CostCandidate) => gewenst != null
+        && (c.baseUnit === gewenst || isGramMlPaar(c.baseUnit, gewenst) || (gewenst === 'stuk' && !!c.perStuk));
     const scored = candidates
         .map((c) => {
             const score = nameScore(ingredientName, c.name);
-            return { candidate: c, score, gewogen: score + (pastBij(c.baseUnit) ? EENHEID_BONUS : 0) };
+            return { candidate: c, score, gewogen: score + (pastBij(c) ? EENHEID_BONUS : 0) };
         })
         .filter((r) => r.score >= floor);
     if (scored.length === 0) return null;
@@ -255,7 +288,7 @@ export function pickBestMatch(
     const EENHEID_NAAM_GRENS = 0.2;
     const topAlles = Math.max(...scored.map((r) => r.gewogen));
     const bruikbaar = gewenst != null
-        ? scored.filter((r) => pastBij(r.candidate.baseUnit) && r.gewogen >= topAlles - EENHEID_NAAM_GRENS)
+        ? scored.filter((r) => pastBij(r.candidate) && r.gewogen >= topAlles - EENHEID_NAAM_GRENS)
         : [];
     const kandidaten = bruikbaar.length > 0 ? bruikbaar : scored;
 
@@ -317,9 +350,21 @@ export function pickBestMatch(
 
     /* Staart-match → altijd 'laag', ook bij een hoge score. Anders
        presenteert een knäckebröd-met-zeezout zich als zekere zout-match. */
-    const confidence = isTailOnlyMatch(ingredientName, gekozen.candidate.name)
+    let confidence = isTailOnlyMatch(ingredientName, gekozen.candidate.name)
         ? 'laag'
         : confidenceFromScore(gekozen.score);
+    /* Afgeleid product → hooguit 'middel', zodat de AI er nog naar kijkt.
+       "boter" ↔ "Boter béarnaise saus" en "honing" ↔ "Honing-mosterdsaus"
+       dekken het ingrediënt volledig en scoren daardoor 'hoog', maar het
+       zijn andere producten. Een één-woord-ingrediënt met extra woorden in
+       de productnaam, twee of meer extra woorden, of een product dat met zijn
+       éigen hoofdwoord begint ("Siroop bruine suiker" voor "bruine suiker"),
+       is nooit zeker. */
+    if (confidence === 'hoog') {
+        const extra = extraWoorden(ingredientName, gekozen.candidate.name);
+        const eigenHoofdwoordVooraan = extra >= 1 && firstHitIndex(ingredientName, gekozen.candidate.name) > 0;
+        if (extra >= 2 || (extra >= 1 && tokens(ingredientName).length === 1) || eigenHoofdwoordVooraan) confidence = 'middel';
+    }
     return { candidate: gekozen.candidate, score: gekozen.score, confidence };
 }
 
@@ -345,11 +390,16 @@ export function toBaseUnit(unit: string): { base: BaseUnit; factor: number } | n
 export function lineCostCents(
     qty: number,
     ingredientUnit: string,
-    cand: Pick<CostCandidate, 'centsPerBaseUnit' | 'baseUnit'>,
+    cand: Pick<CostCandidate, 'centsPerBaseUnit' | 'baseUnit'> & { perStuk?: CostCandidate['perStuk'] },
 ): number | null {
     if (!Number.isFinite(qty) || qty <= 0) return 0;
     const conv = toBaseUnit(ingredientUnit);
     if (!conv) return null;
+    /* Recept in stuks, product per gram/ml maar met een bekend stukgewicht
+       ("Briochebun 85 gr per stuk"): 1 stuks = 85 g. Uit de catalogus. */
+    if (conv.base === 'stuk' && cand.baseUnit !== 'stuk' && cand.perStuk && cand.perStuk.base === cand.baseUnit && cand.perStuk.hoeveelheid > 0) {
+        return Math.round(qty * conv.factor * cand.perStuk.hoeveelheid * cand.centsPerBaseUnit);
+    }
     if (conv.base !== cand.baseUnit && !isGramMlPaar(conv.base, cand.baseUnit)) return null; // g vs stuk → onvergelijkbaar
     const qtyInBase = qty * conv.factor;
     const cents = qtyInBase * cand.centsPerBaseUnit;

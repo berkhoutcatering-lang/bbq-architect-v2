@@ -44,7 +44,17 @@ export function vervangInTekst(tekst: string, oudeNaam: string, nieuweNaam: stri
     let uit = tekst;
     for (const k of kandidaten) {
         const re = new RegExp(`(^|[^\\p{L}\\p{N}])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=$|[^\\p{L}\\p{N}])`, 'giu');
-        uit = uit.replace(re, (m, voor: string) => `${voor}${nieuweNaam}`);
+        uit = uit.replace(re, (m: string, voor: string) => {
+            /* Midden in een zin volgt de nieuwe naam de schrijfwijze van de oude:
+               "en tabasco toe" wordt "en rode pepersaus toe", niet "en Rode
+               pepersaus toe". Afkortingen (BBQ) en een hoofdletter aan het begin
+               van de zin blijven staan. */
+            const oud = m.slice(voor.length);
+            const oudKlein = oud[0] === oud[0].toLowerCase();
+            const afkorting = nieuweNaam.length > 1 && nieuweNaam[1] === nieuweNaam[1].toUpperCase() && /\p{L}/u.test(nieuweNaam[1]);
+            const nieuw = oudKlein && !afkorting ? nieuweNaam[0].toLowerCase() + nieuweNaam.slice(1) : nieuweNaam;
+            return `${voor}${nieuw}`;
+        });
     }
     return uit;
 }

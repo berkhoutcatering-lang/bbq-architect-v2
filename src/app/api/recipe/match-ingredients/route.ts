@@ -102,11 +102,21 @@ export async function POST(req: NextRequest) {
                                 const eerste = uit.alternatieven[0];
                                 /* Huidige koppeling goedgekeurd → laten staan, met de reden erbij. */
                                 if (r.match && uit.huidige_klopt === true) {
-                                    results[i] = { ...r, match: { ...r.match, ai_reden: uit.huidige_reden || 'AI: klopt' } };
+                                    /* Door de AI bevestigd → geen vraagteken meer op de chip. */
+                                    results[i] = { ...r, match: { ...r.match, confidence: 'hoog', ai_reden: uit.huidige_reden || 'AI: klopt' } };
                                     return;
                                 }
-                                if (eerste && uit.zelfde_product === true) {
-                                    results[i] = { ...r, match: { ...eerste.match, via_ai: true, ai_reden: eerste.reden } };
+                                if (eerste && uit.zelfde_product === true && eerste.match.line_cost_cents != null) {
+                                    results[i] = { ...r, match: { ...eerste.match, confidence: 'hoog', via_ai: true, ai_reden: eerste.reden } };
+                                } else if (eerste && uit.zelfde_product === true) {
+                                    /* Zelfde product, maar niet te prijzen: "Boter 82% … doos 100
+                                       stuks" voor 5 g boter. Geen stille koppeling zonder prijs;
+                                       de kok ziet het voorstel en kiest zelf. */
+                                    results[i] = {
+                                        ...r,
+                                        match: null,
+                                        ai_voorstel: { name: eerste.match.name, reden: `${eerste.reden} Let op: per ${eerste.match.base_unit === 'stuk' ? 'stuk' : eerste.match.base_unit}, het recept rekent in ${r.eenheid} — niet automatisch te prijzen.` },
+                                    };
                                 } else {
                                     /* Afgekeurd of niets gelijkwaardigs: liever leeg dan fout. */
                                     results[i] = {
@@ -121,6 +131,7 @@ export async function POST(req: NextRequest) {
                                 /* AI-stap mag de matcher niet breken; regel blijft open. Wel tellen
                                    en loggen — stil slikken verbergt een rate-limit. */
                                 aiFouten++;
+                                results[i] = { ...r, ai_fout: true };
                                 console.warn('[match-ingredients] AI-stap mislukt voor', r.naam, e instanceof Error ? e.message : e);
                             }
                         }));
