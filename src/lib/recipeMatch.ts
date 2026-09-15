@@ -64,7 +64,8 @@ const EENHEID_WOORDEN = new Set(['g', 'gr', 'gram', 'kg', 'kilo', 'ml', 'l', 'lt
 const GRATIS = new Set(['water', 'kraanwater', 'leidingwater', 'ijswater', 'ijs', 'ijsblokjes']);
 const WATER_BIJVOEGLIJK = new Set(['koud', 'warm', 'heet', 'lauw', 'kokend', 'lauwwarm', 'ijskoud']);
 export function isGratis(naam: string): boolean {
-    const t = aliasSleutel(naam).split(' ').filter((w) => w && !WATER_BIJVOEGLIJK.has(w));
+    /* "water (voor broth)": wat tussen haakjes staat is toelichting. */
+    const t = aliasSleutel(zonderHaakjes(naam)).split(' ').filter((w) => w && !WATER_BIJVOEGLIJK.has(w));
     return t.length > 0 && t.every((w) => GRATIS.has(w));
 }
 

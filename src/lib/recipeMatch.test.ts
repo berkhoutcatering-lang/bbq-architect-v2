@@ -280,6 +280,7 @@ describe('nameScore — hoofdwoord en haakjes (golf 4)', () => {
     it('water is gratis, in elke vorm', () => {
         expect(isGratis('water')).toBe(true);
         expect(isGratis('koud water')).toBe(true);
+        expect(isGratis('water (voor broth)')).toBe(true);
         expect(isGratis('Coconut water')).toBe(false);
     });
 });

@@ -75,14 +75,15 @@ export default function KoppelrondeClient() {
     const teDoen = useMemo(() => (regels ?? []).filter((r) => staat[r.naam] === 'wacht'), [regels, staat]);
     const beoordeeld = useMemo(() => (regels ?? []).filter((r) => ['bekend', 'goed', 'leeg'].includes(staat[r.naam])).length, [regels, staat]);
 
-    /* Per acht door de matcher; de AI-stap zit daarin (ai: true). */
+    /* Per zes door de matcher; de AI-stap zit daarin (ai: true) en doet er
+       maximaal zes per aanroep — meer liep op Vercel tegen de 30 s aan. */
     async function start() {
         if (!regels || bezig) return;
         setBezig(true);
         try {
             const wacht = regels.filter((r) => staat[r.naam] === 'wacht');
-            for (let i = 0; i < wacht.length; i += 8) {
-                const portie = wacht.slice(i, i + 8);
+            for (let i = 0; i < wacht.length; i += 6) {
+                const portie = wacht.slice(i, i + 6);
                 setStaat((s) => { const n = { ...s }; portie.forEach((r) => { n[r.naam] = 'zoekt'; }); return n; });
                 const res = await fetch('/api/recipe/match-ingredients', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -6,7 +6,12 @@ import { zoekAlternatieven } from '@/lib/ingredientAlternatieven';
 import { enforceAiCap } from '@/lib/aiCostCap';
 
 export const runtime = 'nodejs';
-export const maxDuration = 30;
+/* 60 is het maximum op Vercel Hobby. De AI-stap hieronder is daarom
+   begrensd tot zes regels per aanroep, allemaal tegelijk (~10 s); de client
+   roept vaker aan tot alles open is behandeld. Bij 18 regels in porties van
+   vier na elkaar liep dit op productie tegen de 30 s aan (504) en toonde de
+   popup "0 van 18 gekoppeld". */
+export const maxDuration = 60;
 
 /**
  * POST /api/recipe/match-ingredients
@@ -70,6 +75,7 @@ export async function POST(req: NextRequest) {
            (1–2 ct en ~5 s per regel), vier tegelijk. */
         let aiCostCents = 0;
         let aiFouten = 0;
+        let aiNogOpen: string[] = [];
         if (body?.ai === true) {
             /* Ook de twijfelgevallen ("?") gaan langs de AI: een verkeerd product
                mét prijs ("bruine basterdsuiker" → "Bruine bonen") is erger dan
@@ -77,14 +83,15 @@ export async function POST(req: NextRequest) {
                en zekere naam-treffers niet: die kosten geen geld. */
             const open = results
                 .map((r, i) => ({ r, i }))
-                .filter(({ r }) => r.naam && !r.gratis && !r.match?.via_alias && (!r.match || r.match.confidence !== 'hoog'))
-                .slice(0, 12);
+                .filter(({ r }) => r.naam && !r.gratis && !r.match?.via_alias && (!r.match || r.match.confidence !== 'hoog'));
+            aiNogOpen = open.slice(6).map(({ r }) => r.naam);
+            open.splice(6);
             if (open.length > 0) {
                 const cap = await enforceAiCap(orgId, 0.03 * open.length);
                 if (!cap) {
                     const levById = await leveranciersOpId(sb, orgId);
                     const ctx = { sb, orgId, userId: user.id, lev, levById };
-                    const batch = 4;
+                    const batch = 6;
                     for (let s = 0; s < open.length; s += batch) {
                         await Promise.all(open.slice(s, s + batch).map(async ({ r, i }) => {
                             try {
@@ -135,6 +142,9 @@ export async function POST(req: NextRequest) {
                 kostprijs_leverancier: lev?.naam ?? null,
                 ai_cost_cents: aiCostCents,
                 ai_fouten: aiFouten,
+                /* Nog niet door de AI bekeken (max 6 per aanroep): de client
+                   roept opnieuw aan met alleen die regels. */
+                ai_nog_open: aiNogOpen,
             },
         });
     } catch (e: any) {
