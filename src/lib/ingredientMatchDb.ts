@@ -278,7 +278,10 @@ export async function matchIngredientenTegenCatalogus(
         if (alias) {
             const cand = await kandidaatVanAlias(sb, orgId, alias, levById);
             if (cand) {
-                return { naam, qty_pp: qty, eenheid, match: { ...maakMatchRegel(cand, 'hoog', qty, eenheid), via_alias: true } };
+                /* Een eigen bouwsteen ("Procureur slager") heeft zelf geen
+                   leverancier; de alias weet bij wie hij gekocht is. */
+                const metLev = { ...cand, supplier: cand.supplier ?? alias.supplier_name ?? null };
+                return { naam, qty_pp: qty, eenheid, match: { ...maakMatchRegel(metLev, 'hoog', qty, eenheid), via_alias: true } };
             }
             /* Alias wijst naar iets dat niet meer bestaat → gewoon zoeken. */
         }

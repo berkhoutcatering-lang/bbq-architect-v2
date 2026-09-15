@@ -70,7 +70,10 @@ export function isGratis(naam: string): boolean {
 }
 
 export function aliasSleutel(naam: string): string {
-    return normalizeIngredientName(naam)
+    /* Haakjes zijn toelichting: "procureur (varkensnek, am been)" is procureur,
+       en de slager-procureur die de kok daarvoor koos moet ook opgaan voor
+       het volgende recept dat gewoon "procureur" zegt. */
+    return normalizeIngredientName(zonderHaakjes(naam))
         .split(' ')
         .filter((t) => t && !/^\d+$/.test(t) && !EENHEID_WOORDEN.has(t))
         .join(' ');
