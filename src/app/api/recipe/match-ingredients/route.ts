@@ -71,10 +71,14 @@ export async function POST(req: NextRequest) {
         let aiCostCents = 0;
         let aiFouten = 0;
         if (body?.ai === true) {
+            /* Ook de twijfelgevallen ("?") gaan langs de AI: een verkeerd product
+               mét prijs ("bruine basterdsuiker" → "Bruine bonen") is erger dan
+               geen product, en juist dáár keek de AI eerst niet naar. Aliassen
+               en zekere naam-treffers niet: die kosten geen geld. */
             const open = results
                 .map((r, i) => ({ r, i }))
-                .filter(({ r }) => r.naam && (!r.match || r.match.confidence === 'laag'))
-                .slice(0, 8);
+                .filter(({ r }) => r.naam && !r.gratis && !r.match?.via_alias && (!r.match || r.match.confidence !== 'hoog'))
+                .slice(0, 12);
             if (open.length > 0) {
                 const cap = await enforceAiCap(orgId, 0.03 * open.length);
                 if (!cap) {
@@ -89,11 +93,22 @@ export async function POST(req: NextRequest) {
                                 });
                                 aiCostCents += uit.ai_cost_cents;
                                 const eerste = uit.alternatieven[0];
-                                if (!eerste) return;
-                                if (uit.zelfde_product === true) {
+                                /* Huidige koppeling goedgekeurd → laten staan, met de reden erbij. */
+                                if (r.match && uit.huidige_klopt === true) {
+                                    results[i] = { ...r, match: { ...r.match, ai_reden: uit.huidige_reden || 'AI: klopt' } };
+                                    return;
+                                }
+                                if (eerste && uit.zelfde_product === true) {
                                     results[i] = { ...r, match: { ...eerste.match, via_ai: true, ai_reden: eerste.reden } };
                                 } else {
-                                    results[i] = { ...r, ai_voorstel: { name: eerste.match.name, reden: eerste.reden } };
+                                    /* Afgekeurd of niets gelijkwaardigs: liever leeg dan fout. */
+                                    results[i] = {
+                                        ...r,
+                                        match: null,
+                                        ai_voorstel: eerste
+                                            ? { name: eerste.match.name, reden: eerste.reden }
+                                            : (r.match && uit.huidige_klopt === false ? { name: r.match.name, reden: `afgekeurd: ${uit.huidige_reden}` } : null),
+                                    };
                                 }
                             } catch (e) {
                                 /* AI-stap mag de matcher niet breken; regel blijft open. Wel tellen

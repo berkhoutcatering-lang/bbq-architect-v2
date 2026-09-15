@@ -600,8 +600,14 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
         const gangMatch = gangen.find((x) =>
             (x.slug ?? '').toLowerCase() === aiGang || (x.naam ?? '').toLowerCase() === aiGang);
         setForm((f: any) => Object.assign({}, f, {
-            gang_slug: gangMatch?.slug ?? f.gang_slug,
+            /* De AI zegt bv. "Saus"; bestaat die gang niet, dan de actieve gang,
+               en anders de eerste — nooit leeg, want dan toont het formulier
+               de eerste optie terwijl de database niets krijgt. */
+            gang_slug: gangMatch?.slug ?? f.gang_slug ?? gangen[0]?.slug ?? null,
             bron: 'ai',
+            /* Een bedacht gerecht komt als concept binnen: zonder verkoopprijs
+               hoort het nog niet in de offerte-wizard. */
+            status: 'concept',
             battle_plan_steps: result.battlePlan,
             target_prep_time: result.prepTimeSeconds || 0,
         }));

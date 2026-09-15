@@ -97,6 +97,15 @@ Niet: alle 10.125 Bidfood-producten door de AI benoemen (benoemt 9.900 producten
 - Gemeten: 51 ingrediënten in 70 s voor € 0,17 — 17 exact, 4 via AI ("appelciderazijn = appelazijn", "frietsaus = fritessaus 25%"), 7 AI-voorstellen met eerlijke reden ("ananas op sap in blik is geen verse ananas", "piripirisaus is een saus, geen marinade"), 1 niets, 22 ter beoordeling. Leer-lus bewezen: na één "goed" komt "knoflook" terug als via_alias.
 - Bekend gat dat blijft: een woord-treffer met zekerheid hoog op een ánder product ("roomboter" → "Roomboter apfelstrudel") gaat niet langs de AI; de koppelronde is precies de plek waar dat één keer rechtgezet wordt.
 
+**Eindtest "American Barbecue Saus" (15 sep, op verzoek van Mathijs)** — één gerecht van idee tot database. Eerste ronde: 7 van 16 goed, en vijf fout mét prijs ("bruine basterdsuiker" → *Bruine bonen*, "Worcestershire sauce" → *Hemp sauce*, "water" → *Coconut Water*, "melasse" → *Granaatappelmelasse*, "droge mosterd" → natte mosterd). Oorzaken en fixes:
+- een gedeeltelijke naam-treffer moet het **hoofdwoord** (langste woord, haakjes tellen niet) bevatten — "bruine" of "sauce" alleen is niets;
+- de AI controleert nu **ook de twijfelgevallen** ("?"), niet alleen de lege: klopt het niet → hetzelfde product onder een andere naam, of leeg met een voorstel ("vloeibare rook" → *Softijsmix* werd afgekeurd);
+- **water is gratis**;
+- de synoniemenstap draait ook als er wél kandidaten zijn maar niets écht lijkt, en zoekt **per woord apart** (één OR-greep met gedeelde limiet liet "Worcestersaus" weer buiten de 150 vallen); via synoniemen gevonden producten gaan vooraan, gewogen naar hoe specifiek het synoniem is ("worcestersaus" wint van "saus");
+- **dieetclaims** (vegan, glutenvrij, …) uit de AI-tags gehaald — hij zette "vegan" op een saus met Worcestersaus (ansjovis);
+- gang nooit leeg (viel op null terwijl het formulier "Bites" toonde), en een bedacht gerecht komt als **concept** binnen.
+Tweede ronde: 13 van 15 met prijs en reden, 2 eerlijk leeg (basterdsuiker, melasse — Bidfood heeft ze niet), allergenen *mosterd, gluten* in één taal, 9 aliassen geleerd bij opslaan. ~15 ct AI per gerecht, ~30 s. Micro-stappen: 0 — dat is golf 5.
+
 ## Golf 5 — Eén receptuur-pijplijn (gepland 15 sep)
 
 Mathijs, 15 sep: *"Ik wil alles met AI gaan bedenken, en die AI moet dan uit zichzelf die micro-stappen erin zetten."*

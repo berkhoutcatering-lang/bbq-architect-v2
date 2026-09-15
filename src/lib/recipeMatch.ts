@@ -59,6 +59,15 @@ export function normalizeIngredientName(s: string): string {
    "kaneelstokje". Beschrijvende woorden blijven staan: "fijn zeezout" en
    "grof zeezout" zijn twee aliassen. */
 const EENHEID_WOORDEN = new Set(['g', 'gr', 'gram', 'kg', 'kilo', 'ml', 'l', 'ltr', 'liter', 'stuk', 'stuks', 'st', 'el', 'tl', 'snuf', 'snufje', 'pp', 'p']);
+/* Ingrediënten die je niet koopt: water uit de kraan. Zonder deze lijst
+   koppelde "water" aan "Coconut Water, pak 1 ltr" — mét prijs. */
+const GRATIS = new Set(['water', 'kraanwater', 'leidingwater', 'ijswater', 'ijs', 'ijsblokjes']);
+const WATER_BIJVOEGLIJK = new Set(['koud', 'warm', 'heet', 'lauw', 'kokend', 'lauwwarm', 'ijskoud']);
+export function isGratis(naam: string): boolean {
+    const t = aliasSleutel(naam).split(' ').filter((w) => w && !WATER_BIJVOEGLIJK.has(w));
+    return t.length > 0 && t.every((w) => GRATIS.has(w));
+}
+
 export function aliasSleutel(naam: string): string {
     return normalizeIngredientName(naam)
         .split(' ')
@@ -84,8 +93,15 @@ const STOPWORDS = new Set([
    niet in de naam-score. Een percentage ("80%") verliest hierdoor ook zijn
    getal — "Mayonaise 80%" en "Mayonaise" gelden dan als dezelfde naam, en
    dat is precies de groep waaruit de middelste prijs mag kiezen. */
+/* Wat tussen haakjes staat is in een recept toelichting, geen naam:
+   "zwarte peper (versgemalen)", "ketchup (Heinz of gelijkwaardig)". Het telt
+   niet mee in de naam-score — anders werd "versgemalen" het hoofdwoord. */
+function zonderHaakjes(s: string): string {
+    return s.replace(/\([^)]*\)/g, ' ');
+}
+
 function tokens(s: string): string[] {
-    return normalizeIngredientName(s).split(' ')
+    return normalizeIngredientName(zonderHaakjes(s)).split(' ')
         .filter((t) => t && !STOPWORDS.has(t) && !/^\d+$/.test(t));
 }
 
@@ -109,9 +125,15 @@ export function nameScore(ingredient: string, candidate: string): number {
     }
     const coverage = overlap / a.length;          // hoeveel van het ingrediënt gedekt is
     const precision = overlap / b.length;         // hoe gericht de kandidaat is
-    /* Een gedeeltelijke dekking moet op een echt woord rusten. "Basterdsuiker
-       (wit)" ↔ "Molenaarsbrood wit" deelt alleen "wit" — dat is geen suiker. */
-    if (coverage < 1 && !a.some((t) => t.length >= 5 && setB.has(t))) return 0;
+    /* Een gedeeltelijke dekking moet het hoofdwoord bevatten — het langste
+       woord van het ingrediënt, in het Nederlands vrijwel altijd het
+       zelfstandig naamwoord. "bruine basterdsuiker" ↔ "Bruine bonen" deelt
+       alleen "bruine"; "Worcestershire sauce" ↔ "Hemp sauce" alleen "sauce".
+       Dat zijn geen treffers, hoe lang het gedeelde woord ook is. */
+    if (coverage < 1) {
+        const langste = Math.max(...a.map((t) => t.length));
+        if (!a.some((t) => t.length === langste && setB.has(t))) return 0;
+    }
     // Coverage weegt het zwaarst; precision voorkomt dat een 10-woord-kandidaat
     // met 1 toevallig woord wint van een strakke match.
     return Math.min(1, coverage * 0.75 + precision * 0.25);

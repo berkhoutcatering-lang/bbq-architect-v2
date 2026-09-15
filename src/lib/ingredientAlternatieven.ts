@@ -81,6 +81,8 @@ export interface AlternatievenUitkomst {
     zelfde_product: boolean | null;
     alternatieven: Alternatief[];
     ai_cost_cents: number;
+    /** Wat er onderweg gebeurde — voor het meten, niet voor de UI. */
+    spoor: { termen: string[]; zoekwoorden: string[]; kandidaten: number; top: string[] };
 }
 
 export class AiFout extends Error {
@@ -136,8 +138,17 @@ export async function zoekAlternatieven(
         const termen = alleZoektermen(naam);
         let kandidaten = await zoekKandidaten(sb, orgId, termen, lev, levById);
 
-        /* 2. Te weinig gevonden → de AI kent de groothandelsnaam misschien wel. */
-        if (kandidaten.length < 5) {
+        /* 2. Te weinig gevonden, óf niets dat echt lijkt → de AI kent de
+           groothandelsnaam misschien wel. "Worcestershire sauce" haalde op
+           "sauce" zestig sauzen binnen zonder één Worcestersaus; op aantal
+           alleen leek dat genoeg en bleef de synoniemenstap uit. */
+        const besteScore = kandidaten.reduce((m, c) => Math.max(m, nameScore(naam, c.name)), 0);
+        /* Wat via de synoniemen gevonden is, gaat straks vooraan in de lijst
+           voor het model: op naam-gelijkenis met het origineel scoort
+           "Worcestersaus" nul en viel hij buiten de zestig. */
+        const viaSynoniem = new Set<string>();
+        let zoekwoorden: string[] = [];
+        if (kandidaten.length < 5 || besteScore < 0.75) {
             const b = await anthropic.messages.create({
                 model: ALTERNATIEVEN_MODEL,
                 max_tokens: 1000,
@@ -153,17 +164,21 @@ export async function zoekAlternatieven(
                     const woorden = Array.isArray(extra)
                         ? extra.flatMap((w) => alleZoektermen(String(w))).filter((w) => !termen.includes(w))
                         : [];
+                    zoekwoorden = woorden.slice(0, 6);
                     if (woorden.length > 0) {
                         const meer = await zoekKandidaten(sb, orgId, woorden.slice(0, 6), lev, levById);
                         const gezien = new Set(kandidaten.map((c) => `${c.source}:${c.ref_id}`));
-                        for (const c of meer) if (!gezien.has(`${c.source}:${c.ref_id}`)) kandidaten.push(c);
+                        for (const c of meer) {
+                            viaSynoniem.add(`${c.source}:${c.ref_id}`);
+                            if (!gezien.has(`${c.source}:${c.ref_id}`)) kandidaten.push(c);
+                        }
                     }
                 } catch { /* geen zoekwoorden → verder met wat er is */ }
             }
         }
 
         if (kandidaten.length === 0) {
-            return { huidige_klopt: null, huidige_reden: '', zelfde_product: null, alternatieven: [], ai_cost_cents: kostenCent };
+            return { huidige_klopt: null, huidige_reden: '', zelfde_product: null, alternatieven: [], ai_cost_cents: kostenCent, spoor: { termen, zoekwoorden, kandidaten: 0, top: [] } };
         }
 
         /* 3. Niet meer dan 60 regels aan het model, de meest gelijkende eerst.
@@ -172,8 +187,17 @@ export async function zoekAlternatieven(
            naam. Het model ziet de prijs om uitschieters te herkennen, niet om te
            rekenen. */
         const bronRang = { component: 0, inventory: 1, supplier: 2, supplier_product: 3 } as const;
+        /* Via synoniemen gevonden → vooraan, maar gewogen naar hoe goed de
+           naam bij het synoniem past en hoe specifiek dat synoniem is:
+           "worcestersaus" ↔ "Worcestersaus, fles 568 ml" wint van "saus" ↔
+           "Cheddar cheese saus", anders verdringen honderden sauzen de ene
+           die telt. */
+        const synoniemScore = (c: CostCandidate): number => {
+            if (!viaSynoniem.has(`${c.source}:${c.ref_id}`)) return 0;
+            return 1 + zoekwoorden.reduce((m, w) => Math.max(m, nameScore(w, c.name) * (w.length >= 6 ? 1 : 0.5)), 0);
+        };
         kandidaten = kandidaten
-            .map((c) => ({ c, score: nameScore(naam, c.name) }))
+            .map((c) => ({ c, score: Math.max(nameScore(naam, c.name), synoniemScore(c)) }))
             .sort((x, y) => y.score - x.score || bronRang[x.c.source] - bronRang[y.c.source] || x.c.name.localeCompare(y.c.name))
             .slice(0, 60)
             .map((x) => x.c);
@@ -232,6 +256,7 @@ export async function zoekAlternatieven(
             zelfde_product: alternatieven.length > 0 ? (uit.zelfde_product ?? null) : null,
             alternatieven,
             ai_cost_cents: kostenCent,
+            spoor: { termen, zoekwoorden, kandidaten: kandidaten.length, top: kandidaten.slice(0, 8).map((c) => c.name) },
         };
     } catch (e) {
         if (e instanceof AiFout) throw e;

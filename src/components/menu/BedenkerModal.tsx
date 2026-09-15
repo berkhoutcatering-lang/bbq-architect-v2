@@ -172,8 +172,13 @@ async function defaultGenerate({ mode, prompt }: { mode: BedenkerMode; prompt: s
     const allergenen: string[] = Array.isArray(data.allergenen)
         ? data.allergenen.map((s: unknown) => String(s).trim()).filter(Boolean)
         : [];
+    /* Stijl-tags (BBQ, rook, zomer) mogen van de AI komen; dieetclaims niet.
+       Hij plakte "vegan" en "glutenvrij" op een saus met Worcestersaus
+       (ansjovis) waar de allergeencheck gluten op zette. Zo'n claim doet de
+       kok, na de allergeencheck — niet het model. */
+    const DIEETCLAIMS = new Set(['vegan', 'veganistisch', 'vega', 'vegetarisch', 'glutenvrij', 'lactosevrij', 'notenvrij', 'halal', 'kosher', 'koosjer', 'suikervrij']);
     const tags: string[] = Array.isArray(data.tags)
-        ? data.tags.map((s: unknown) => String(s).trim()).filter(Boolean)
+        ? data.tags.map((s: unknown) => String(s).trim()).filter((t: string) => t && !DIEETCLAIMS.has(t.toLowerCase()))
         : [];
 
     const fill: AiFillResult = {
