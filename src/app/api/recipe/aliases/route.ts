@@ -4,9 +4,14 @@
  * ingrediëntnaam → product (bron + id + productnaam). De matcher kijkt hier
  * eerst; een bekend ingrediënt is daarna direct goed, zonder AI.
  *
- * POST   { aliases: [{ naam, match: { source, ref_id, name, supplier } }] }
+ * POST   { aliases: [{ naam, match: { source, ref_id, name, supplier } }], alleen_als_nieuw? }
  *        Upsert op (organisatie, genormaliseerde naam). Alleen regels met een
  *        échte koppeling; een lege regel is geen alias.
+ *        alleen_als_nieuw: true → een bestaande alias blijft staan. Dat is de
+ *        regel voor een keuze in één gerecht (Mathijs, 15 sep: "dat verschilt
+ *        per gerecht — saus bij Bidfood, rub bij Van Beekum"): de eerste keuze
+ *        wordt de standaard, latere keuzes gelden voor dat gerecht. Alleen de
+ *        koppelronde overschrijft, want daar beheer je de standaard bewust.
  * DELETE { naam }  — vergeet een koppeling.
  * GET    → alle aliassen van de organisatie (voor de koppelronde).
  */
@@ -25,7 +30,7 @@ interface AliasIn {
 }
 
 export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, userId }: TenantAuthCtx) => {
-    let body: { aliases?: unknown };
+    let body: { aliases?: unknown; alleen_als_nieuw?: unknown };
     try {
         body = await req.json();
     } catch {
@@ -59,7 +64,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
 
     const { error } = await supabase
         .from('ingredient_aliases')
-        .upsert(uniek, { onConflict: 'organization_id,alias_normalized' });
+        .upsert(uniek, { onConflict: 'organization_id,alias_normalized', ignoreDuplicates: body.alleen_als_nieuw === true });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true, opgeslagen: uniek.length });
 });

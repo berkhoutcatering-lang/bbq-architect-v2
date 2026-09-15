@@ -392,9 +392,11 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
             .filter((r: any) => r?.naam && r?.match && r.match.confidence === 'hoog' && r.match.line_cost_cents != null)
             .map((r: any) => ({ naam: r.naam, match: { source: r.match.source, ref_id: r.match.ref_id, name: r.match.name, supplier: r.match.supplier ?? null } }));
         if (aliases.length === 0) return;
+        /* Alleen als nieuw: een keuze in dit gerecht mag de standaard niet
+           omgooien (rub bij Van Beekum, saus bij Bidfood). */
         fetch('/api/recipe/aliases', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aliases }),
+            body: JSON.stringify({ alleen_als_nieuw: true, aliases }),
         }).catch(() => { /* volgende keer opnieuw zoeken */ });
     }
 

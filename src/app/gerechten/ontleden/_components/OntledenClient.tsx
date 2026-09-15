@@ -247,7 +247,7 @@ export default function OntledenClient() {
             if (aliases.length > 0) {
                 fetch('/api/recipe/aliases', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ aliases }),
+                    body: JSON.stringify({ alleen_als_nieuw: true, aliases }),
                 }).catch(() => { /* volgende keer opnieuw zoeken */ });
             }
             /* Allergeencheck, zoals bij het gerecht-formulier: de AI stelt voor,

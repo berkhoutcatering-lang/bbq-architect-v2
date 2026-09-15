@@ -112,7 +112,7 @@ export async function kandidaatVanAlias(
     const opId = async (): Promise<CostCandidate | null> => {
         switch (alias.source) {
             case 'component': {
-                const { data } = await sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
+                const { data } = await sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents,leverancier_naam')
                     .eq('organization_id', orgId).eq('id', alias.ref_id).maybeSingle();
                 return data ? fromComponent(data) : null;
             }
@@ -178,7 +178,7 @@ function fromComponent(r: any): CostCandidate | null {
     if (!conv || qty <= 0 || cents <= 0) return null;
     // base_cost_cents geldt voor base_quantity van base_unit → per 1 base-eenheid
     const perBase = cents / qty / conv.factor;
-    return { source: 'component', ref_id: r.id, name: r.name, centsPerBaseUnit: perBase, baseUnit: conv.base };
+    return { source: 'component', ref_id: r.id, name: r.name, centsPerBaseUnit: perBase, baseUnit: conv.base, supplier: r.leverancier_naam ?? null };
 }
 
 /** inventory-rij → CostCandidate. purchase_price/last_price_eur is euro per `unit`. */
@@ -323,7 +323,7 @@ export async function zoekKandidaten(
     const perTerm = await Promise.all(terms.map(async (term) => {
         const pat = `%${term.replace(/[%,()]/g, '')}%`;
         const [comp, inv, sup, sprod] = await Promise.all([
-            sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents')
+            sb.from('components').select('id,name,base_quantity,base_unit,base_cost_cents,leverancier_naam')
                 .eq('organization_id', orgId).ilike('name', pat).limit(30),
             sb.from('inventory').select('id,naam,unit,purchase_price,last_price_eur,supplier')
                 .eq('organization_id', orgId).ilike('naam', pat).limit(30),
