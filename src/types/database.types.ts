@@ -363,7 +363,13 @@ export type KdsAuditAction =
   | 'device_token_created'
   | 'device_token_revoked'
   | 'bulk_scheduled'
-  | 'bulk_rescaled';
+  | 'bulk_rescaled'
+  /* Productiepartijen en labels (2026-09-16) */
+  | 'partij_aangemaakt'
+  | 'labels_geprint'
+  | 'label_herprint'
+  | 'eenheid_verbruikt'
+  | 'eenheid_afgeschreven';
 
 export interface KdsAuditLog {
   id: string;
@@ -508,7 +514,7 @@ export interface StockMovement {
   id: number;
   organization_id: string;
   inventory_id: number;
-  type: 'count' | 'usage' | 'receive' | 'adjust' | 'waste';
+  type: 'count' | 'usage' | 'receive' | 'adjust' | 'waste' | 'productie';
   qty: number;                    // signed (- voor verbruik, + voor ontvangst)
   resulting_stock?: number | null;
   /* Inkoopprijs-snapshot per unit op moment van movement (migratie 010);

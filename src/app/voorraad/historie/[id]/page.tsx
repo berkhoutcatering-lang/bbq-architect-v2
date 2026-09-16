@@ -79,6 +79,7 @@ const TYPE_META: Record<string, { icon: any; label: string; tone: string }> = {
   waste: { icon: ArrowUp, label: 'Waste', tone: 'bad' },
   count: { icon: Package, label: 'Telling', tone: 'neutral' },
   adjust: { icon: Package, label: 'Correctie', tone: 'neutral' },
+  productie: { icon: ArrowDown, label: 'Productie', tone: 'ok' },
 };
 
 export default function InventoryHistoriePage() {
@@ -141,7 +142,7 @@ export default function InventoryHistoriePage() {
               {movements.map(function (m) {
                 const meta = TYPE_META[m.type] || TYPE_META.count;
                 const Icon = meta.icon;
-                const isPositive = m.type === 'receive';
+                const isPositive = m.type === 'receive' || m.type === 'productie';
                 return (
                   <li key={m.id} style={{ padding: '8px 10px', background: 'var(--card-solid)', border: '1px solid var(--border, rgba(255,255,255,.06))', borderRadius: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, fontSize: 12 }}>

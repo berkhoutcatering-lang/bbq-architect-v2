@@ -253,6 +253,27 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         updateData.supplier_product_id = b.supplier_product_id;
     }
 
+    /* Productie & bewaren (2026-09-16): de bron voor "12 kg → 12 zakken".
+       Per veld, null = wissen. Eenheid beperkt tot wat de partij-rekenregel kent. */
+    if (b.verpakking_grootte === null || (typeof b.verpakking_grootte === 'number' && b.verpakking_grootte > 0)) {
+        updateData.verpakking_grootte = b.verpakking_grootte;
+    }
+    if (b.verpakking_eenheid === null || (typeof b.verpakking_eenheid === 'string' && ['g', 'kg', 'ml', 'l', 'stuk', 'portie'].includes(b.verpakking_eenheid))) {
+        updateData.verpakking_eenheid = b.verpakking_eenheid;
+    }
+    if (b.bewaarmethode === null || (typeof b.bewaarmethode === 'string' && ['vers', 'vries', 'houdbaar'].includes(b.bewaarmethode))) {
+        updateData.bewaarmethode = b.bewaarmethode;
+    }
+    if (b.bewaaradvies === null || typeof b.bewaaradvies === 'string') {
+        updateData.bewaaradvies = typeof b.bewaaradvies === 'string' ? (b.bewaaradvies.trim().slice(0, 60) || null) : null;
+    }
+    if (b.partij_prefix === null || (typeof b.partij_prefix === 'string' && /^[A-Z0-9]{1,4}$/.test(b.partij_prefix.trim().toUpperCase()))) {
+        updateData.partij_prefix = typeof b.partij_prefix === 'string' ? b.partij_prefix.trim().toUpperCase() : null;
+    }
+    if (b.houdbaarheid_na_bewerking_dagen === null || (typeof b.houdbaarheid_na_bewerking_dagen === 'number' && Number.isInteger(b.houdbaarheid_na_bewerking_dagen) && b.houdbaarheid_na_bewerking_dagen >= 0)) {
+        updateData.houdbaarheid_na_bewerking_dagen = b.houdbaarheid_na_bewerking_dagen;
+    }
+
     // Optionele nested replace-arrays
     const replaceAllergens = Array.isArray(b.allergens) ? b.allergens : null;
     const replaceHaccp = Array.isArray(b.haccp_points) ? b.haccp_points : null;

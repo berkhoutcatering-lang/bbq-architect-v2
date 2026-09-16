@@ -21,7 +21,7 @@ import {
   type MatchContext,
 } from './inventoryMatch';
 
-export type StockMovementType = 'count' | 'usage' | 'receive' | 'adjust' | 'waste';
+export type StockMovementType = 'count' | 'usage' | 'receive' | 'adjust' | 'waste' | 'productie';
 
 export interface StockDeltaArgs {
   inventoryId: number;
@@ -33,6 +33,8 @@ export interface StockDeltaArgs {
   /** bonnen.id is BIGINT (migratie 010) → number, geen uuid. */
   bonId?: number | null;
   note?: string | null;
+  /** Productiepartij waar deze mutatie bij hoort (verbruik van een eenheid). */
+  partijId?: string | null;
 }
 
 /**
@@ -57,6 +59,7 @@ export async function applyStockDelta(
       p_order_line_id: args.orderLineId ?? null,
       p_note: args.note ?? null,
       p_bon_id: args.bonId ?? null,
+      p_partij_id: args.partijId ?? null,
     });
     if (error) return null;
     return typeof data === 'number' ? data : Number(data);
