@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Calendar, Receipt, CreditCard, Webhook, ExternalLink, CheckCircle2,
-  XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap,
+  XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap, Printer,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { Settings as SettingsIcon } from 'lucide-react';
@@ -272,6 +272,33 @@ export default function IntegratiesPage() {
           </div>
         </div>
       </MetallicCard>
+
+      {/* Labelprinter — eigen pagina, want koppelen gebeurt op de tablet zelf */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[var(--muted)]"><Printer size={16} /></span>
+          <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)]">Keuken & labels</h3>
+        </div>
+        <Link href="/instellingen/printers" className="block">
+          <MetallicCard className="overflow-hidden" hover={true} accent="var(--brand)">
+            <div className="flex items-center gap-4 p-4">
+              <div
+                className="p-2.5 rounded-xl shrink-0"
+                style={{ background: 'linear-gradient(135deg, var(--brand)15, var(--brand)08)', border: '1px solid var(--brand)20' }}
+              >
+                <span className="text-[var(--brand)]"><Printer size={20} /></span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[14px] font-medium text-[var(--text)] mb-1">Labelprinter (Zebra ZQ630 Plus)</h4>
+                <p className="text-[12px] text-[var(--muted)] line-clamp-1">
+                  Koppel de Bluetooth-labelprinter aan de keukentablet, kies de labelmaat en print een testlabel.
+                </p>
+              </div>
+              <ChevronRight size={16} className="text-[var(--muted)] shrink-0" />
+            </div>
+          </MetallicCard>
+        </Link>
+      </div>
 
       {/* Integraties per categorie */}
       {categorien.map(function (cat) {

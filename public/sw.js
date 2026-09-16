@@ -1,7 +1,7 @@
 // ─── BBQ Architect Service Worker ─────────────────────────────────────────────
 // Offline support, background sync for HACCP records, push notifications
 
-const CACHE_VERSION = '1ef8966f449a';
+const CACHE_VERSION = '105d1865c265';
 const STATIC_CACHE = 'bbq-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'bbq-dynamic-' + CACHE_VERSION;
 const HACCP_STORE = 'haccp-offline-queue';
@@ -176,6 +176,14 @@ self.addEventListener('fetch', function (event) {
 
   // Skip non-GET requests (POST, PUT, DELETE handled by background sync)
   if (request.method !== 'GET') {
+    return;
+  }
+
+  // Zebra Browser Print draait lokaal op 127.0.0.1:9100 (labelprinter).
+  // Dat verkeer mag nooit uit de cache komen of als "offline" beantwoord
+  // worden: de printer is er wel of niet, en dat moet de app zelf zien.
+  var reqUrl = new URL(request.url);
+  if (reqUrl.hostname === '127.0.0.1' || reqUrl.hostname === 'localhost') {
     return;
   }
 
