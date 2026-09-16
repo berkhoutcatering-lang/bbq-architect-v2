@@ -36,6 +36,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { FolderTree, parseDropId } from '@/components/menu/FolderTree';
 /* Inkoop-helderheid (2026-06-12): terugreken-canon grootverpakking → eenheidsprijs. */
 import { packToBase, unitPriceLabel, unitPriceCents, costForBasisCents, exampleUseCost, PACK_UNITS, type PackUnit, type BaseFields, normalizeYield, effectiveBaseCostCents, yieldRestatement } from '@/lib/unitPrice';
+import ProductieBewarenVeld, { LEGE_PRODUCTIE, productieNaarPayload, productieUitRij, type ProductieBewaren } from '@/components/menu/ProductieBewarenVeld';
 import SupplierProductAutocomplete, { type CatalogSearchHit } from '@/components/SupplierProductAutocomplete';
 import { formatEur } from '@/lib/format';
 
@@ -1412,6 +1413,8 @@ function ComponentEditDrawer({
     /* Snijverlies (0<y<=1). 1 = geen verlies, dus bestaande componenten
        gedragen zich exact als voorheen tot Sam het zelf aanzet. */
     const [yieldFactor, setYieldFactor] = useState<number>(1);
+    /* Productie & bewaren (2026-09-16): verpakking, THT-dagen, bewaaradvies, batch-letters. */
+    const [productie, setProductie] = useState<ProductieBewaren>(LEGE_PRODUCTIE);
     const [ingredients, setIngredients] = useState<IngredientFormRow[]>([]);
     const [steps, setSteps] = useState<string[]>([]);
     const [allergenCodes, setAllergenCodes] = useState<Set<string>>(new Set());
@@ -1569,6 +1572,7 @@ function ComponentEditDrawer({
             setPackQty(c.pack_quantity != null ? String(c.pack_quantity) : '');
             setPackUnit(PACK_UNITS.includes(c.pack_unit as PackUnit) ? (c.pack_unit as PackUnit) : 'kg');
             setYieldFactor(normalizeYield(c.yield_factor));
+            setProductie(productieUitRij(c as unknown as Record<string, unknown>));
             setMasterProductId(typeof c.master_product_id === 'number' ? c.master_product_id : null);
             setSupplierPriceId(typeof c.supplier_price_id === 'number' ? c.supplier_price_id : null);
             setSupplierProductId(typeof c.supplier_product_id === 'number' ? c.supplier_product_id : null);
@@ -1726,6 +1730,7 @@ function ComponentEditDrawer({
                 ...(comp?.type === 'prepared' ? {
                     ingredients: rowsToIngredientsJson(ingredients),
                     preparation_steps: steps.map(s => s.trim()).filter(s => s.length > 0),
+                    ...productieNaarPayload(productie),
                 } : {}),
                 allergens: Array.from(allergenCodes).map(code => ({ allergen_code: code, ai_suggested: false })),
                 haccp_points: haccpRows.filter(r => r.type),
@@ -1969,6 +1974,7 @@ function ComponentEditDrawer({
                                         baseUnit={baseUnit}
                                     />
                                     <StepsEditor steps={steps} onChange={setSteps} />
+                                    <ProductieBewarenVeld value={productie} onChange={setProductie} naam={name} />
                                 </>
                             )}
 

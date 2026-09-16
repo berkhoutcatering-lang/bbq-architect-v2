@@ -1544,7 +1544,7 @@ function ItemDetailDrawer({ item, supplierPrices, recepten, movements, bonPriceH
                             ) : (
                                 <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
                                     {movements.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 50).map(m => {
-                                        const tone = m.type === 'usage' ? 'var(--red)' : m.type === 'receive' ? 'var(--green)' : m.type === 'count' ? GOLD : 'var(--muted)';
+                                        const tone = m.type === 'usage' ? 'var(--red)' : (m.type === 'receive' || m.type === 'productie') ? 'var(--green)' : m.type === 'count' ? GOLD : 'var(--muted)';
                                         return (
                                             <div key={m.id} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 10, alignItems: 'center', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8 }}>
                                                 <div style={{ width: 6, height: 6, borderRadius: 1, background: tone }} />
