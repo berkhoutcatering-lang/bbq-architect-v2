@@ -12,12 +12,13 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { rondPartijAf } from './afronden';
 
 interface Call { table: string; op: string; payload?: unknown; filters: [string, unknown][] }
-const state: { component: Record<string, unknown> | null; rpcAntwoord: unknown; calls: Call[] } = { component: null, rpcAntwoord: null, calls: [] };
+const state: { component: Record<string, unknown> | null; rpcAntwoord: unknown; calls: Call[]; punten: Record<string, unknown>[]; records: Record<string, unknown>[] } = { component: null, rpcAntwoord: null, calls: [], punten: [], records: [] };
 
 function nep(): SupabaseClient {
     return {
         rpc(naam: string, args: unknown) {
             state.calls.push({ table: `rpc:${naam}`, op: 'rpc', payload: args, filters: [] });
+            if (naam === 'detect_haccp_anomaly') return Promise.resolve({ data: [], error: null });
             return Promise.resolve({ data: state.rpcAntwoord, error: null });
         },
         from(table: string) {
@@ -25,6 +26,10 @@ function nep(): SupabaseClient {
             const klaar = () => {
                 state.calls.push(call);
                 if (table === 'components' && call.op === 'select') return Promise.resolve({ data: state.component, error: null });
+                if (table === 'component_haccp_points') return Promise.resolve({ data: state.punten, error: null });
+                if (table === 'haccp_records' && call.op === 'select') return Promise.resolve({ data: state.records, error: null });
+                if (table === 'haccp_records' && call.op === 'insert') return Promise.resolve({ data: { id: 99 }, error: null });
+                if (table === 'personeel') return Promise.resolve({ data: { naam: 'Sam' }, error: null });
                 return Promise.resolve({ data: null, error: null });
             };
             const b: Record<string, unknown> = {
@@ -32,6 +37,7 @@ function nep(): SupabaseClient {
                 insert: (rows: unknown) => { call.op = 'insert'; call.payload = rows; return b; },
                 update: (obj: unknown) => { call.op = 'update'; call.payload = obj; return b; },
                 eq: (k: string, v: unknown) => { call.filters.push([k, v]); return b; },
+                order: () => b,
                 maybeSingle: () => klaar(),
                 single: () => klaar(),
                 then: (ok: (a: unknown) => unknown, fout?: (e: unknown) => unknown) => klaar().then(ok, fout),
@@ -47,6 +53,8 @@ const PARTIJ = { id: 'p-1', partijnummer: 'PP-20260916-01', component_id: 7, aan
 
 beforeEach(() => {
     state.calls = [];
+    state.punten = [];
+    state.records = [];
     state.component = { id: 7, name: 'Pulled pork', verpakking_grootte: 1, verpakking_eenheid: 'kg', bewaarmethode: 'vries', bewaaradvies: 'max. -18 °C', houdbaarheid_na_bewerking_dagen: 90 };
     state.rpcAntwoord = { bestond: false, partij: PARTIJ, eenheden: Array.from({ length: 12 }, (_, i) => ({ id: `e${i + 1}`, volgnummer: i + 1 })) };
 });
@@ -111,3 +119,47 @@ describe('rondPartijAf', () => {
     });
 });
 
+
+describe('rondPartijAf — HACCP-vrijgave', () => {
+    const KERN = { id: 1, type: 'kerntemp', threshold_value: 74, threshold_unit: 'celsius', note: null, verplicht_voor_vrijgave: true };
+
+    it('verplicht punt zonder meting → 409 haccp_ontbreekt, géén partij', async () => {
+        state.punten = [KERN];
+        const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg', prepTaskId: 42 });
+        expect(r.ok).toBe(false);
+        if (r.ok === false) { expect(r.status).toBe(409); expect(r.code).toBe('haccp_ontbreekt'); expect(r.error).toContain('Kerntemperatuur'); }
+        expect(state.calls.some((c) => c.table === 'rpc:productie_partij_afronden')).toBe(false);
+    });
+
+    it('meting onder de drempel van de bouwsteen → geblokkeerd (component-drempel wint van de preset)', async () => {
+        state.punten = [KERN];
+        const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg', metingen: [{ type: 'kerntemp', temp: 70 }] });
+        expect(r.ok).toBe(false);
+        expect(state.calls.some((c) => c.op === 'rpc')).toBe(false);
+    });
+
+    it('meting akkoord → partij, snapshot op de partij, meting als HACCP-record met partij_id', async () => {
+        state.punten = [KERN];
+        const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg', prepTaskId: 42, metingen: [{ type: 'kerntemp', temp: 76.5 }] });
+        expect(r.ok).toBe(true);
+        const rpc = state.calls.find((c) => c.table === 'rpc:productie_partij_afronden')!.payload as Record<string, unknown>;
+        const snap = rpc.p_haccp_snapshot as { vrij: boolean; punten: Array<{ type: string; beoordeling: string }> };
+        expect(snap.vrij).toBe(true);
+        expect(snap.punten[0]).toMatchObject({ type: 'kerntemp', beoordeling: 'ok' });
+        const rec = state.calls.find((c) => c.table === 'haccp_records' && c.op === 'insert')!.payload as Record<string, unknown>;
+        expect(rec).toMatchObject({ partij_id: 'p-1', prep_task_id: 42, component_id: 7, check_type: 'kerntemp', temp: 76.5, status: 'ok', auto_logged: false, confirmed_by_user_id: 'user-1' });
+    });
+
+    it('eerdere meting op de taak telt mee: eerst 61,8 (afwijking), later 74,1 → vrij zonder nieuwe invoer', async () => {
+        state.punten = [KERN];
+        state.records = [{ check_type: 'kerntemp', temp: 61.8, status: 'afwijking' }, { check_type: 'kerntemp', temp: 74.1, status: 'ok' }];
+        const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg', prepTaskId: 42 });
+        expect(r.ok).toBe(true);
+    });
+
+    it('geen verplichte punten → geen poort, geen snapshot-eis', async () => {
+        state.punten = [{ ...KERN, verplicht_voor_vrijgave: false }];
+        const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg' });
+        expect(r.ok).toBe(true);
+    });
+});

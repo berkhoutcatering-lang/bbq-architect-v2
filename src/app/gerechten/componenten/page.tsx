@@ -78,6 +78,8 @@ interface HaccpRow {
     threshold_unit: string | null;
     note: string | null;
     ai_suggested: boolean;
+    /** Moet gemeten zijn vóór een partij vrijgegeven wordt (2026-09-16). */
+    verplicht_voor_vrijgave?: boolean;
 }
 
 /* De 14 wettelijke allergenen, met EXACT de codes uit de allergens-tabel.
@@ -2633,6 +2635,10 @@ function HaccpEditor({ rows, onChange }: { rows: HaccpRow[]; onChange: (rows: Ha
                                         <input type="text" placeholder="eenheid (celsius/minutes)" value={h.threshold_unit ?? ''} onChange={(e) => updateRow(idx, { threshold_unit: e.target.value || null })} className="kf-input" />
                                     </div>
                                     <input type="text" placeholder="notitie (optioneel)" value={h.note ?? ''} onChange={(e) => updateRow(idx, { note: e.target.value || null })} className="kf-input" />
+                                    <label className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--muted)' }}>
+                                        <input type="checkbox" checked={h.verplicht_voor_vrijgave === true} onChange={(e) => updateRow(idx, { verplicht_voor_vrijgave: e.target.checked })} />
+                                        Verplicht vóór vrijgave van een partij (moet gemeten en akkoord zijn bij "Afmaken met sticker")
+                                    </label>
                                 </div>
                                 <button type="button" onClick={() => removeRow(idx)} aria-label="Verwijder HACCP-rij" className="kf-trash"><Trash2 size={13} /></button>
                             </div>

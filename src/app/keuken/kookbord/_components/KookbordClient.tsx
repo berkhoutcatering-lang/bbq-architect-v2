@@ -23,7 +23,7 @@ export interface MepComponentItem {
   base_unit: string;
   preparation_steps: string[] | null;
   allergens: { allergen_code: string }[] | null;
-  haccp_points: { type: string; threshold_value?: number; threshold_unit?: string; note?: string }[] | null;
+  haccp_points: { type: string; threshold_value?: number; threshold_unit?: string; note?: string; verplicht_voor_vrijgave?: boolean }[] | null;
   flavor_tags: string[] | null;
   status: MepStatus;
   started_at: string | null;
@@ -468,6 +468,7 @@ export default function KookbordClient() {
             bewaarmethode: afmakenItem.bewaarmethode ?? null,
             bewaaradvies: afmakenItem.bewaaradvies ?? null,
             houdbaarheidDagen: afmakenItem.houdbaarheid_na_bewerking_dagen ?? null,
+            haccpPunten: (afmakenItem.haccp_points ?? []).map((h) => ({ type: h.type, threshold_value: h.threshold_value ?? null, threshold_unit: h.threshold_unit ?? null, note: h.note ?? null, verplicht_voor_vrijgave: h.verplicht_voor_vrijgave === true })),
           }}
           bestaand={afmakenItem.partij ? { id: afmakenItem.partij.id, partijnummer: afmakenItem.partij.partijnummer, aantalEenheden: afmakenItem.partij.aantal_eenheden, labelsGeprint: afmakenItem.partij.labels_geprint } : null}
           afronden={rondAf}

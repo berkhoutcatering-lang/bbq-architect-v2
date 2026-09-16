@@ -177,11 +177,12 @@ function normaliseerAllergenen(input: unknown[]): AllergeenPayload[] {
    Twee punten zijn "hetzelfde" als soort, grenswaarde, eenheid en notitie
    gelijk zijn. Zo houden we bestaande rijen (met hun herkomst) in leven en
    raken we nooit alle punten kwijt door één mislukte invoeging. */
-function haccpSleutel(r: { type: unknown; threshold_value: unknown; threshold_unit: unknown; note: unknown }): string {
+function haccpSleutel(r: { type: unknown; threshold_value: unknown; threshold_unit: unknown; note: unknown; verplicht_voor_vrijgave?: unknown }): string {
     const waarde = r.threshold_value == null || r.threshold_value === '' ? '' : String(Number(r.threshold_value));
     const eenheid = typeof r.threshold_unit === 'string' ? r.threshold_unit.trim() : '';
     const notitie = typeof r.note === 'string' ? r.note.trim() : '';
-    return [String(r.type ?? ''), waarde, eenheid, notitie].join('|');
+    const verplicht = r.verplicht_voor_vrijgave === true ? '1' : '0';
+    return [String(r.type ?? ''), waarde, eenheid, notitie, verplicht].join('|');
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -410,7 +411,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         const bestaandRes = await supabase
             .from('component_haccp_points')
-            .select('id, type, threshold_value, threshold_unit, note')
+            .select('id, type, threshold_value, threshold_unit, note, verplicht_voor_vrijgave')
             .eq('component_id', componentId)
             .eq('organization_id', auth.orgId!);
         if (bestaandRes.error) {
@@ -424,7 +425,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
            al staat, verbruikt er één. Wat overblijft moet weg. */
         const pool = new Map<string, number[]>();
         for (const r of (bestaandRes.data ?? []) as Record<string, unknown>[]) {
-            const key = haccpSleutel({ type: r.type, threshold_value: r.threshold_value, threshold_unit: r.threshold_unit, note: r.note });
+            const key = haccpSleutel({ type: r.type, threshold_value: r.threshold_value, threshold_unit: r.threshold_unit, note: r.note, verplicht_voor_vrijgave: r.verplicht_voor_vrijgave });
             const lijst = pool.get(key) ?? [];
             lijst.push(Number(r.id));
             pool.set(key, lijst);
@@ -432,7 +433,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 
         const nieuweRijen: Record<string, unknown>[] = [];
         for (const h of gewenst) {
-            const key = haccpSleutel({ type: h.type, threshold_value: h.threshold_value, threshold_unit: h.threshold_unit, note: h.note });
+            const key = haccpSleutel({ type: h.type, threshold_value: h.threshold_value, threshold_unit: h.threshold_unit, note: h.note, verplicht_voor_vrijgave: h.verplicht_voor_vrijgave });
             const lijst = pool.get(key);
             if (lijst && lijst.length > 0) { lijst.shift(); continue; }
             const aiVoorstel = Boolean(h.ai_suggested);
@@ -442,6 +443,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
                 threshold_value: typeof h.threshold_value === 'number' ? h.threshold_value : null,
                 threshold_unit: typeof h.threshold_unit === 'string' ? h.threshold_unit : null,
                 note: typeof h.note === 'string' ? h.note : null,
+                verplicht_voor_vrijgave: h.verplicht_voor_vrijgave === true,
                 ai_suggested: aiVoorstel,
                 /* Zelfde regel als bij allergenen: een AI-voorstel is geen
                    menselijke bevestiging, anders liegt de rij over zichzelf. */

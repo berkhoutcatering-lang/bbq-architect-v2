@@ -15,6 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Taak } from '../keukenplanner/types';
 import { eindstapIds } from './eindstap';
 import { normaliseerEenheid, type Eenheid } from './eenheden';
+import type { HaccpPunt } from './vrijgave';
 
 export interface PartijVoorstel {
     mogelijk: boolean;
@@ -31,6 +32,7 @@ export interface PartijVoorstel {
     bewaaradvies: string | null;
     houdbaarheidDagen: number | null;
     stapHoudbaarheidDagen: number | null;
+    haccpPunten: HaccpPunt[];
     /** Al een partij? Dan is dit hem. */
     partij: { id: string; partijnummer: string; aantalEenheden: number; labelsGeprint: number } | null;
 }
@@ -51,6 +53,7 @@ export interface AfTeMakenRegel {
     bewaaradvies: string | null;
     houdbaarheidDagen: number | null;
     stapHoudbaarheidDagen: number | null;
+    haccpPunten: HaccpPunt[];
 }
 
 export interface PartijStand {
@@ -81,7 +84,7 @@ export async function laadPartijStand(
     const taakIds = relevant.map((t) => t.id);
     const componentIds = [...new Set(relevant.map((t) => t.componentId as number))];
 
-    const [partijRes, compRes] = await Promise.all([
+    const [partijRes, compRes, puntRes] = await Promise.all([
         supabase
             .from('productie_partijen')
             .select('id, partijnummer, prep_task_id, aantal_eenheden')
@@ -92,7 +95,19 @@ export async function laadPartijStand(
             .select('id, name, verpakking_grootte, verpakking_eenheid, bewaarmethode, bewaaradvies, houdbaarheid_na_bewerking_dagen')
             .eq('organization_id', orgId)
             .in('id', componentIds),
+        supabase
+            .from('component_haccp_points')
+            .select('id, component_id, type, threshold_value, threshold_unit, note, verplicht_voor_vrijgave')
+            .eq('organization_id', orgId)
+            .in('component_id', componentIds),
     ]);
+    const puntenPerComponent = new Map<number, HaccpPunt[]>();
+    for (const r of (puntRes.data ?? []) as Array<Record<string, unknown>>) {
+        const cid = Number(r.component_id);
+        const lijst = puntenPerComponent.get(cid) ?? [];
+        lijst.push({ id: Number(r.id), type: String(r.type), threshold_value: r.threshold_value == null ? null : Number(r.threshold_value), threshold_unit: (r.threshold_unit as string | null) ?? null, note: (r.note as string | null) ?? null, verplicht_voor_vrijgave: r.verplicht_voor_vrijgave === true });
+        puntenPerComponent.set(cid, lijst);
+    }
 
     const partijPerTaak = new Map<number, { id: string; partijnummer: string; aantal_eenheden: number }>();
     for (const p of (partijRes.data ?? []) as Array<{ id: string; partijnummer: string; prep_task_id: number; aantal_eenheden: number }>) {
@@ -114,7 +129,7 @@ export async function laadPartijStand(
         labelsGeprint = count ?? 0;
     }
 
-    const nuPartij: PartijVoorstel | null = nuTaak ? maakVoorstel(nuTaak, compPerId.get(nuTaak.componentId as number) ?? null, nuPartijRij, labelsGeprint) : null;
+    const nuPartij: PartijVoorstel | null = nuTaak ? maakVoorstel(nuTaak, compPerId.get(nuTaak.componentId as number) ?? null, nuPartijRij, labelsGeprint, puntenPerComponent.get(nuTaak.componentId as number) ?? []) : null;
 
     const afTeMaken: AfTeMakenRegel[] = relevant
         .filter((t) => t.status === 'done' && !partijPerTaak.has(t.id))
@@ -133,6 +148,7 @@ export async function laadPartijStand(
             bewaaradvies: compPerId.get(t.componentId as number)?.bewaaradvies ?? null,
             houdbaarheidDagen: compPerId.get(t.componentId as number)?.houdbaarheid_na_bewerking_dagen ?? null,
             stapHoudbaarheidDagen: t.houdbaarheidNaDagen ?? null,
+            haccpPunten: puntenPerComponent.get(t.componentId as number) ?? [],
         }));
 
     return { nuPartij, afTeMaken };
@@ -143,6 +159,7 @@ function maakVoorstel(
     c: ComponentRij | null,
     partij: { id: string; partijnummer: string; aantal_eenheden: number } | null,
     labelsGeprint: number,
+    haccpPunten: HaccpPunt[],
 ): PartijVoorstel {
     return {
         mogelijk: true,
@@ -159,6 +176,7 @@ function maakVoorstel(
         bewaaradvies: c?.bewaaradvies ?? null,
         houdbaarheidDagen: c?.houdbaarheid_na_bewerking_dagen ?? null,
         stapHoudbaarheidDagen: t.houdbaarheidNaDagen ?? null,
+        haccpPunten,
         partij: partij ? { id: partij.id, partijnummer: partij.partijnummer, aantalEenheden: partij.aantal_eenheden, labelsGeprint } : null,
     };
 }

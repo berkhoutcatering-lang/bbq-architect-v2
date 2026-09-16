@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 type MepStatus = 'todo' | 'bezig' | 'klaar';
 type AllergeneItem = { allergen_code: string };
-type HaccpPoint = { type: string; threshold_value?: number; threshold_unit?: string; note?: string };
+type HaccpPoint = { type: string; threshold_value?: number; threshold_unit?: string; note?: string; verplicht_voor_vrijgave?: boolean };
 
 type NormalizedComponent = {
   id: number;
@@ -329,7 +329,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
     // Allergenen + HACCP komen uit aparte tabellen (niet uit components zelf)
     const [{ data: allergRows }, { data: haccpRows }] = await Promise.all([
       supabase.from('component_allergens').select('component_id,allergen_code').eq('organization_id', orgId).in('component_id', componentIds),
-      supabase.from('component_haccp_points').select('component_id,type,threshold_value,threshold_unit,note').eq('organization_id', orgId).in('component_id', componentIds),
+      supabase.from('component_haccp_points').select('component_id,type,threshold_value,threshold_unit,note,verplicht_voor_vrijgave').eq('organization_id', orgId).in('component_id', componentIds),
     ]);
 
     const allergPerComponent = new Map<number, AllergeneItem[]>();
@@ -352,6 +352,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       if (Number.isFinite(tv)) p.threshold_value = tv;
       if (typeof row.threshold_unit === 'string' && row.threshold_unit.trim()) p.threshold_unit = row.threshold_unit.trim();
       if (typeof row.note === 'string' && row.note.trim()) p.note = row.note.trim();
+      p.verplicht_voor_vrijgave = row.verplicht_voor_vrijgave === true;
       const list = haccpPerComponent.get(cid) ?? [];
       list.push(p);
       haccpPerComponent.set(cid, list);

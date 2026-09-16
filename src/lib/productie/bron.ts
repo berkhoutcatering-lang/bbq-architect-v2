@@ -124,6 +124,7 @@ export function naarAfrondenInput(input: PartijAfrondenInput, ctx: BronContext):
         bewaaradvies: input.bewaaradvies,
         opslagLocatieId: input.opslagLocatieId,
         personeelId: ctx.personeelId,
+        metingen: input.metingen,
         notitie: input.notitie,
     };
 }

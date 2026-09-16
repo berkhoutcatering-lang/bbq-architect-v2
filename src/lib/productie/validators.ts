@@ -31,8 +31,12 @@ export interface PartijBlok {
     bewaaradvies: string | null;
     opslagLocatieId: string | null;
     kernTempC: number | null;
+    /** HACCP-metingen uit de afrond-sheet: punt-type + waarde (null = alleen "gedaan"). */
+    metingen: Array<{ type: string; temp: number | null }>;
     notitie: string | null;
 }
+
+const PUNT_TYPES = ['kerntemp', 'koeltemp', 'tijd_uit_koeling', 'handhygiene', 'kruisbesmetting', 'oppervlakte_reiniging', 'overig'];
 
 /**
  * Het partij-blok zoals de afrond-sheet het stuurt — los bruikbaar
@@ -83,7 +87,25 @@ export function validatePartijBlok(b: unknown): ValidatorResult<PartijBlok> {
     }
     const notitie = typeof p.notitie === 'string' && p.notitie.trim() ? p.notitie.trim().slice(0, 300) : null;
 
-    return { ok: true, data: { idempotencyKey: p.idempotencyKey, actualQty: p.actualQty, eenheid: p.eenheid as Eenheid, verpakkingGrootte, verpakkingEenheid, aantalEenheden, tht, bewaarmethode, bewaaradvies, opslagLocatieId, kernTempC, notitie } };
+    const metingen: PartijBlok['metingen'] = [];
+    if (p.metingen != null) {
+        if (!Array.isArray(p.metingen) || p.metingen.length > 20) return { ok: false, error: 'metingen ongeldig' };
+        for (const m of p.metingen as unknown[]) {
+            if (typeof m !== 'object' || m === null) return { ok: false, error: 'meting ongeldig' };
+            const mm = m as Record<string, unknown>;
+            if (typeof mm.type !== 'string' || !PUNT_TYPES.includes(mm.type)) return { ok: false, error: `Onbekend HACCP-punt: ${String(mm.type)}` };
+            let temp: number | null = null;
+            if (mm.temp != null) {
+                if (typeof mm.temp !== 'number' || !Number.isFinite(mm.temp) || mm.temp < -50 || mm.temp > 300) return { ok: false, error: 'Meetwaarde ongeldig' };
+                temp = Math.round(mm.temp * 10) / 10;
+            }
+            metingen.push({ type: mm.type, temp });
+        }
+    }
+    /* Oude vorm: kernTempC alleen. */
+    if (kernTempC != null && !metingen.some((m) => m.type === 'kerntemp')) metingen.push({ type: 'kerntemp', temp: kernTempC });
+
+    return { ok: true, data: { idempotencyKey: p.idempotencyKey, actualQty: p.actualQty, eenheid: p.eenheid as Eenheid, verpakkingGrootte, verpakkingEenheid, aantalEenheden, tht, bewaarmethode, bewaaradvies, opslagLocatieId, kernTempC, metingen, notitie } };
 }
 
 export type PartijAfrondenInput =

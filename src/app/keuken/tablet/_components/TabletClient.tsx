@@ -61,6 +61,7 @@ export default function TabletClient() {
                 verpakkingGrootte: regel.verpakkingGrootte, verpakkingEenheid: regel.verpakkingEenheid,
                 bewaarmethode: regel.bewaarmethode, bewaaradvies: regel.bewaaradvies,
                 houdbaarheidDagen: regel.houdbaarheidDagen, stapHoudbaarheidDagen: regel.stapHoudbaarheidDagen,
+                haccpPunten: regel.haccpPunten,
             },
             afronden: async (blok) => {
                 const json = await post('/api/productie/partij-afronden', { prepTaskId: regel.taakId, ...blok });
@@ -159,6 +160,7 @@ export default function TabletClient() {
                                 verpakkingGrootte: p.verpakkingGrootte, verpakkingEenheid: p.verpakkingEenheid,
                                 bewaarmethode: p.bewaarmethode, bewaaradvies: p.bewaaradvies,
                                 houdbaarheidDagen: p.houdbaarheidDagen, stapHoudbaarheidDagen: p.stapHoudbaarheidDagen,
+                                haccpPunten: p.haccpPunten,
                             },
                             afronden: async (blok) => {
                                 const json = await post('/api/prep/complete-task', { taskId: taakId, actualQty: blok.actualQty, onderbroken, partij: blok });

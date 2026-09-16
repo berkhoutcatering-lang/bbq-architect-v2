@@ -25,6 +25,7 @@ import { berekenEenheden, formatInhoud, normaliseerEenheid, verdeelOverAantal, E
 import { bepaalTht, vandaagIso } from '@/lib/productie/tht';
 import { printLabels, usePrinters, werkstationPrinter, type PrintResultaat } from '@/lib/labelprinter/client';
 import type { PartijBlok } from '@/lib/productie/validators';
+import { PUNT_LABEL, beoordeel, puntVraagtWaarde, type HaccpPunt } from '@/lib/productie/vrijgave';
 
 export interface AfrondenProduct {
     naam: string;
@@ -36,6 +37,8 @@ export interface AfrondenProduct {
     bewaaradvies: string | null;
     houdbaarheidDagen: number | null;
     stapHoudbaarheidDagen?: number | null;
+    /** HACCP-punten van de bouwsteen; verplichte punten blokkeren zonder meting. */
+    haccpPunten?: HaccpPunt[] | null;
 }
 
 export interface PartijAntwoord {
@@ -98,6 +101,8 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
     const [bewaaradvies, setBewaaradvies] = useState<string>(product.bewaaradvies ?? '');
     const [bewaarmethode, setBewaarmethode] = useState<string>(product.bewaarmethode ?? '');
     const [fout, setFout] = useState<string | null>(null);
+    /* HACCP: per punt de ingevoerde waarde ('' = niets) of 'ja' bij een vinkje. */
+    const [metingen, setMetingen] = useState<Record<string, string>>({});
     const [partij, setPartij] = useState<PartijAntwoord | null>(null);
     const [print, setPrint] = useState<PrintResultaat | null>(null);
     const [printBezig, setPrintBezig] = useState(false);
@@ -111,6 +116,7 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
         setFout(null);
         setPrint(null);
         setAantalOverride(null);
+        setMetingen({});
         setHoeveelheid(product.hoeveelheid ?? 0);
         setEenheid(normaliseerEenheid(product.eenheid) ?? 'kg');
         setVerpakking(product.verpakkingGrootte);
@@ -137,7 +143,32 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
     }, [hoeveelheid, eenheid, verpakking, verpakkingEenheid, aantalOverride]);
     const aantal = uitkomst?.eenheden.length ?? 0;
     const perEenheid = uitkomst?.eenheden[0]?.inhoud ?? verpakking ?? 0;
-    const kan = stand === 'invoer' && !!uitkomst && !uitkomst.fout && aantal > 0;
+
+    /* HACCP: verplichte punten moeten hier ingevuld zijn (en akkoord) vóór de
+       knop vrijkomt. De server controleert het nog een keer. */
+    const punten = product.haccpPunten ?? [];
+    const verplicht = punten.filter((p) => p.verplicht_voor_vrijgave);
+    const haccpStand = verplicht.map((p) => {
+        const v = metingen[p.type] ?? '';
+        if (!puntVraagtWaarde(p.type)) return { punt: p, ingevuld: v === 'ja', beoordeling: v === 'ja' ? 'geregistreerd' as const : null };
+        const n = parseFloat(v.replace(',', '.'));
+        if (!Number.isFinite(n)) return { punt: p, ingevuld: false, beoordeling: null };
+        return { punt: p, ingevuld: true, beoordeling: beoordeel(p, n) };
+    });
+    const haccpOk = haccpStand.every((h) => h.ingevuld && h.beoordeling !== 'afwijking');
+    const kan = stand === 'invoer' && !!uitkomst && !uitkomst.fout && aantal > 0 && haccpOk;
+
+    function metingenVoorBlok(): PartijBlok['metingen'] {
+        const uit: PartijBlok['metingen'] = [];
+        for (const p of punten) {
+            const v = metingen[p.type] ?? '';
+            if (!v) continue;
+            if (!puntVraagtWaarde(p.type)) { if (v === 'ja') uit.push({ type: p.type, temp: null }); continue; }
+            const n = parseFloat(v.replace(',', '.'));
+            if (Number.isFinite(n)) uit.push({ type: p.type, temp: Math.round(n * 10) / 10 });
+        }
+        return uit;
+    }
 
     async function doeAfronden() {
         if (!kan) return;
@@ -151,7 +182,7 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
             tht: tht || null,
             bewaarmethode: (bewaarmethode || null) as PartijBlok['bewaarmethode'],
             bewaaradvies: bewaaradvies.trim() || null,
-            opslagLocatieId: null, kernTempC: null, notitie: null,
+            opslagLocatieId: null, kernTempC: null, metingen: metingenVoorBlok(), notitie: null,
         };
         try {
             const r = await afronden(blok);
@@ -252,6 +283,44 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
                                 </div>
                             )}
                         </Blok>
+
+                        {/* HACCP — alleen wat de bouwsteen zelf verplicht stelt */}
+                        {punten.length > 0 && (
+                            <Blok kop="HACCP">
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {punten.map((p) => {
+                                        const v = metingen[p.type] ?? '';
+                                        const st = haccpStand.find((h) => h.punt.type === p.type);
+                                        const b = st?.beoordeling ?? (v && puntVraagtWaarde(p.type) && Number.isFinite(parseFloat(v.replace(',', '.'))) ? beoordeel(p, parseFloat(v.replace(',', '.'))) : null);
+                                        const kleur = b === 'afwijking' ? D.rood : b ? D.groen : p.verplicht_voor_vrijgave ? D.goud : D.stof;
+                                        return (
+                                            <div key={p.type} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <span style={{ width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.05)', color: kleur }}>
+                                                    {b && b !== 'afwijking' ? <Check size={16} /> : <AlertTriangle size={14} />}
+                                                </span>
+                                                <span style={{ flex: 1, fontSize: 16 }}>
+                                                    {PUNT_LABEL[p.type] ?? p.type}
+                                                    {p.threshold_value != null && <span style={{ color: D.stof }}> · eis {p.type === 'koeltemp' || p.type === 'tijd_uit_koeling' ? '≤' : '≥'} {p.threshold_value} {p.threshold_unit === 'celsius' ? '°C' : p.threshold_unit ?? ''}</span>}
+                                                    {p.verplicht_voor_vrijgave && <span style={{ color: D.goud, fontSize: 12, marginLeft: 8 }}>verplicht</span>}
+                                                </span>
+                                                {puntVraagtWaarde(p.type) ? (
+                                                    <input
+                                                        type="number" inputMode="decimal" step="0.1" placeholder={p.threshold_unit === 'celsius' ? '°C' : 'min'}
+                                                        value={v} onChange={(e) => setMetingen((m) => ({ ...m, [p.type]: e.target.value }))}
+                                                        style={{ width: 120, height: 56, fontSize: 24, textAlign: 'center', background: D.vlak, border: `1px solid ${b === 'afwijking' ? D.rood : D.lijn}`, borderRadius: 12, color: D.tekst }}
+                                                    />
+                                                ) : (
+                                                    <button type="button" onClick={() => setMetingen((m) => ({ ...m, [p.type]: m[p.type] === 'ja' ? '' : 'ja' }))} style={{ height: 56, padding: '0 18px', borderRadius: 12, border: `1px solid ${v === 'ja' ? D.groen : D.lijn}`, background: v === 'ja' ? 'rgba(116,226,154,.12)' : D.vlak, color: D.tekst, fontSize: 16, cursor: 'pointer' }}>
+                                                        {v === 'ja' ? 'Gedaan ✓' : 'Gedaan?'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {!haccpOk && <p style={{ margin: 0, fontSize: 13, color: D.goud }}>Verplichte HACCP-punten moeten gemeten en akkoord zijn voordat de partij vrijgegeven wordt. De meting wordt als HACCP-registratie bewaard.</p>}
+                                </div>
+                            </Blok>
+                        )}
 
                         {/* THT & bewaren */}
                         <Blok kop="Op het label">
