@@ -77,6 +77,8 @@ const pages: SearchResult[] = [
     /* Instellingen & Hulp */
     { id: 'p_instellingen', type: 'pagina', title: 'Instellingen', subtitle: 'Instellingen & Hulp', href: '/instellingen', icon: Settings, accent: HUB_ACCENT.systeem },
     { id: 'p_integraties', type: 'pagina', title: 'Integraties', subtitle: 'Instellingen & Hulp', href: '/instellingen/integraties', icon: Settings, accent: HUB_ACCENT.systeem },
+    { id: 'p_printers', type: 'pagina', title: 'Labelprinters (Zebra)', subtitle: 'Instellingen & Hulp', href: '/instellingen/printers', icon: Settings, accent: HUB_ACCENT.systeem },
+    { id: 'p_los_label', type: 'pagina', title: 'Los label printen', subtitle: 'Keuken · sticker op een doos of bak', href: '/labels/los', icon: Settings, accent: HUB_ACCENT.keuken },
     { id: 'p_export', type: 'pagina', title: 'Data export', subtitle: 'Instellingen & Hulp', href: '/instellingen/data-export', icon: Settings, accent: HUB_ACCENT.systeem },
     { id: 'p_referral', type: 'pagina', title: 'Referral', subtitle: 'Instellingen & Hulp', href: '/instellingen/referral', icon: Settings, accent: HUB_ACCENT.systeem },
     { id: 'p_gebruikers', type: 'pagina', title: 'Gebruikers', subtitle: 'Instellingen & Hulp', href: '/gebruikers', icon: Users, accent: HUB_ACCENT.systeem },
