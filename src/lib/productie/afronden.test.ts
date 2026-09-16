@@ -75,7 +75,7 @@ describe('rondPartijAf', () => {
         state.component = { ...state.component!, verpakking_grootte: null, verpakking_eenheid: null };
         const r = await rondPartijAf(nep(), CTX, { componentId: 7, idempotencyKey: KEY, actualQty: 12, eenheid: 'kg' });
         expect(r.ok).toBe(false);
-        if (!r.ok) { expect(r.status).toBe(409); expect(r.code).toBe('verpakking_ontbreekt'); }
+        if (r.ok === false) { expect(r.status).toBe(409); expect(r.code).toBe('verpakking_ontbreekt'); }
         expect(state.calls.some((c) => c.op === 'rpc')).toBe(false);
     });
 
