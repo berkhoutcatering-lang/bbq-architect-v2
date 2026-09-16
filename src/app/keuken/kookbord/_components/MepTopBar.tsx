@@ -12,11 +12,13 @@ interface MepTopBarProps {
   selectedEventId: number | null;
   onEventChange: (eventId: number) => void;
   progress: Progress;
+  /** Bereid maar nog zonder sticker/partij. */
+  afTeMaken?: number;
   onReset: () => void | Promise<void>;
   resetting?: boolean;
 }
 
-export default function MepTopBar({ events, selectedEventId, onEventChange, progress, onReset, resetting = false }: MepTopBarProps) {
+export default function MepTopBar({ events, selectedEventId, onEventChange, progress, afTeMaken = 0, onReset, resetting = false }: MepTopBarProps) {
   const [bevestig, setBevestig] = useState(false);
   const fmt = useMemo(() => new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'short' }), []);
 
@@ -111,6 +113,11 @@ export default function MepTopBar({ events, selectedEventId, onEventChange, prog
             <span style={{ fontFamily: "var(--font-outfit), sans-serif", fontSize: 15, fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: '#f3f3f3' }}>{done}/{total} klaar</span>
           </div>
         </div>
+        {afTeMaken > 0 ? (
+          <span title="Bereid, nog geen sticker" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 30, padding: '0 11px', borderRadius: 999, background: 'rgba(224,180,90,.14)', border: '1px solid rgba(224,180,90,.45)', color: '#e0b45a', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            {afTeMaken} af te maken
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={handleReset}

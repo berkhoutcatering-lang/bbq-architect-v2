@@ -89,7 +89,7 @@ export function werkstationPrinter(printers: PrinterConfig[]): PrinterConfig | n
 export type PrintVerzoek =
     | { soort: 'testlabel'; printerId: string }
     | { soort: 'los_label'; printerId: string; naam: string; datum?: string; tht?: string | null; notitie?: string | null; aantal: number }
-    | { soort: 'partij_labels'; printerId: string; partijId: string }
+    | { soort: 'partij_labels'; printerId: string; partijId: string; eenheidIds?: string[] | null }
     | { soort: 'herprint'; printerId: string; eenheidIds: string[] };
 
 export interface PrintJobRij {

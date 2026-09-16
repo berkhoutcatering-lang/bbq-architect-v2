@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Flame, Check, RotateCcw, Circle, AlertTriangle, Package, Utensils } from 'lucide-react';
-import type { MepComponentItem, MepStatus } from './KookbordClient';
+import { Flame, Check, RotateCcw, Circle, AlertTriangle, Package, Utensils, Tag } from 'lucide-react';
+import { vraagtOmSticker, type MepComponentItem, type MepStatus } from './KookbordClient';
 import { pal, formatQty, nextStatus, btnSpec, ACCENT_DARK } from './mep-ui';
 
 interface MepItemCardProps {
@@ -10,13 +10,14 @@ interface MepItemCardProps {
   guests: number;
   onTap: () => void;
   onStatusToggle: (itemId: number, newStatus: MepStatus) => void | Promise<void>;
+  onAfmaken: () => void;
 }
 
 function asStatus(v: string): MepStatus {
   return v === 'bezig' || v === 'klaar' ? v : 'todo';
 }
 
-export default function MepItemCard({ item, guests, onTap, onStatusToggle }: MepItemCardProps) {
+export default function MepItemCard({ item, guests, onTap, onStatusToggle, onAfmaken }: MepItemCardProps) {
   const [flash, setFlash] = useState(false);
 
   const status = asStatus(item.status);
@@ -27,6 +28,11 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
   const bs = btnSpec(status);
   const next = nextStatus(status);
 
+  /* Bereid maar nog geen sticker: de kaart wordt goud en de knop wordt
+     "Afmaken met sticker". Met partij: de knop toont de batch. "Zet terug"
+     zit dan in de sheet, niet op de kaart. */
+  const stickerNodig = vraagtOmSticker(item);
+  const heeftPartij = !!item.partij;
   const TypeIcon = isIngekocht ? Package : Utensils;
   const PillIcon = status === 'bezig' ? Flame : status === 'klaar' ? Check : Circle;
   const BtnIcon = status === 'todo' ? Flame : status === 'bezig' ? Check : RotateCcw;
@@ -37,8 +43,8 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
       onClick={onTap}
       style={{
         display: 'flex', flexDirection: 'row', alignItems: 'stretch',
-        background: `linear-gradient(180deg,${p.tintTop},rgba(26,26,30,.72))`,
-        border: `1px solid ${p.border}`, borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
+        background: `linear-gradient(180deg,${stickerNodig ? 'rgba(224,180,90,.13)' : p.tintTop},rgba(26,26,30,.72))`,
+        border: `1px solid ${stickerNodig ? 'rgba(224,180,90,.5)' : p.border}`, borderRadius: 14, overflow: 'hidden', cursor: 'pointer',
         boxShadow: flash
           ? '0 0 0 1px rgba(34,197,94,.6),0 12px 38px rgba(34,197,94,.28)'
           : p.glow
@@ -83,6 +89,17 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
           </div>
         )}
 
+        {stickerNodig || heeftPartij ? (
+          <button
+            type="button"
+            className="mep-cta"
+            onClick={(e) => { e.stopPropagation(); onAfmaken(); }}
+            style={{ height: 56, marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, border: heeftPartij ? '1px solid rgba(34,197,94,.4)' : 'none', background: heeftPartij ? 'rgba(34,197,94,.12)' : 'linear-gradient(180deg,#e9c46a,#d9a83f)', color: heeftPartij ? '#74e29a' : '#1a1508', boxShadow: heeftPartij ? 'none' : '0 5px 16px rgba(224,180,90,.3)', cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 14.5, fontWeight: 700, letterSpacing: '.01em', width: '100%' }}
+          >
+            {heeftPartij ? <Check size={18} strokeWidth={2.4} /> : <Tag size={18} strokeWidth={2.2} />}
+            <span>{heeftPartij ? `Batch ${item.partij!.partijnummer} · ${item.partij!.labels_geprint}/${item.partij!.aantal_eenheden} labels` : 'Afmaken met sticker'}</span>
+          </button>
+        ) : (
         <button
           type="button"
           className="mep-cta"
@@ -96,6 +113,7 @@ export default function MepItemCard({ item, guests, onTap, onStatusToggle }: Mep
           <BtnIcon size={status === 'bezig' ? 20 : status === 'todo' ? 19 : 18} color={bs.fg} strokeWidth={status === 'bezig' ? 2.6 : status === 'todo' ? 2.2 : 2.1} {...(status === 'todo' ? { fill: ACCENT_DARK } : {})} />
           <span>{bs.label}</span>
         </button>
+        )}
       </div>
     </article>
   );

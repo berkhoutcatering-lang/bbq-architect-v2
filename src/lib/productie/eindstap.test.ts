@@ -37,3 +37,26 @@ describe('eindstap', () => {
         expect(bepaalEindstap(meer, STAPPEN).map((t) => t.id)).toEqual([4, 5, 20]);
     });
 });
+
+import { eindstapIds } from './eindstap';
+
+describe('eindstapIds (op taak-afhankelijkheden)', () => {
+    it('keten pekel → rub → smoke → pull: alleen pull', () => {
+        const ids = eindstapIds([
+            { id: 1, componentId: 7, eventId: 1, hangtAfVan: [] },
+            { id: 2, componentId: 7, eventId: 1, hangtAfVan: [1] },
+            { id: 3, componentId: 7, eventId: 1, hangtAfVan: [2] },
+            { id: 4, componentId: 7, eventId: 1, hangtAfVan: [3] },
+            { id: 5, componentId: 8, eventId: 1, hangtAfVan: [] },
+            { id: 6, componentId: null, eventId: 1, hangtAfVan: [] },
+        ]);
+        expect([...ids].sort()).toEqual([4, 5]);
+    });
+    it('geen afhankelijkheden: de laatst geplande', () => {
+        const ids = eindstapIds([
+            { id: 1, componentId: 7, eventId: 1, hangtAfVan: [], geplandOp: '2026-09-16T08:00' },
+            { id: 2, componentId: 7, eventId: 1, hangtAfVan: [], geplandOp: '2026-09-16T12:00' },
+        ]);
+        expect([...ids]).toEqual([2]);
+    });
+});

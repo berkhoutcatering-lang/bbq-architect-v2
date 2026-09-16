@@ -96,7 +96,7 @@ export function validatePrinter(body: unknown, partieel = false): ValidatorResul
 export type PrintJobVerzoek =
     | { soort: 'testlabel'; printerId: string }
     | { soort: 'los_label'; printerId: string; naam: string; datum: string; tht: string | null; notitie: string | null; aantal: number }
-    | { soort: 'partij_labels'; printerId: string; partijId: string }
+    | { soort: 'partij_labels'; printerId: string; partijId: string; eenheidIds: string[] | null }
     | { soort: 'herprint'; printerId: string; eenheidIds: string[] };
 
 export function validatePrintJob(body: unknown): ValidatorResult<PrintJobVerzoek> {
@@ -128,9 +128,16 @@ export function validatePrintJob(body: unknown): ValidatorResult<PrintJobVerzoek
             };
         }
 
-        case 'partij_labels':
+        case 'partij_labels': {
             if (!isUuid(b.partijId)) return { ok: false, error: 'partijId (uuid) is verplicht' };
-            return { ok: true, data: { soort: 'partij_labels', printerId, partijId: b.partijId } };
+            /* Optioneel: alleen deze eenheden ("print ontbrekende N"). */
+            let eenheidIds: string[] | null = null;
+            if (Array.isArray(b.eenheidIds) && b.eenheidIds.length > 0) {
+                if (b.eenheidIds.length > 500 || !b.eenheidIds.every(isUuid)) return { ok: false, error: 'eenheidIds moeten uuid’s zijn' };
+                eenheidIds = b.eenheidIds as string[];
+            }
+            return { ok: true, data: { soort: 'partij_labels', printerId, partijId: b.partijId, eenheidIds } };
+        }
 
         case 'herprint': {
             const ids = Array.isArray(b.eenheidIds) ? b.eenheidIds : [];

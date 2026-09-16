@@ -174,7 +174,21 @@ export function Wandscherm({
                         display: 'flex', flexDirection: 'column', gap: 24, minHeight: 280,
                     }}>
                         <div style={{ ...mono, fontSize: 22, letterSpacing: '.16em', color: K.stof }}>MELDINGEN</div>
-                        {data.meldingen.length === 0
+                        {/* Bereid maar nog geen sticker: groot in beeld. De knop zelf
+                            staat op het kookbord en de tablet — dit scherm heeft er
+                            geen (read-only, bouwregel). */}
+                        {(data.afTeMaken ?? []).length > 0 && (
+                            <div style={{ display: 'flex', gap: 18 }}>
+                                <div style={{ width: 6, alignSelf: 'stretch', background: '#e0b45a', flex: 'none' }} />
+                                <div>
+                                    <div style={{ fontSize: 28, lineHeight: 1.35, color: K.wit }}>
+                                        Af te maken met sticker: {data.afTeMaken!.map((r) => `${r.componentNaam}${r.hoeveelheid != null ? ` ${r.hoeveelheid} ${r.eenheid ?? ''}` : ''}`.trim()).join(' · ')}
+                                    </div>
+                                    <div style={{ fontSize: 24, color: '#e0b45a', marginTop: 6, fontStyle: 'italic' }}>Op de tablet of het kookbord: Afmaken met sticker →</div>
+                                </div>
+                            </div>
+                        )}
+                        {data.meldingen.length === 0 && (data.afTeMaken ?? []).length === 0
                             ? <div style={{ fontSize: 28, color: K.stof }}>Geen. Alles loopt op tijd.</div>
                             : data.meldingen.map((m) => <MeldingRegel key={m.id} melding={m} />)}
                     </div>

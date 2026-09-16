@@ -14,6 +14,9 @@ import { validateCompleteTask } from '@/lib/prep/validators';
 import { appendKdsAudit } from '@/lib/prep/auditLog';
 import { schrijfMeting } from '@/lib/keukenplanner/meting';
 import { stelBij } from '@/lib/keukenplanner/bijstellen';
+import { validatePartijBlok, type PartijBlok } from '@/lib/productie/validators';
+import { bepaalBron, naarAfrondenInput } from '@/lib/productie/bron';
+import { rondPartijAf, type AfrondenUitkomst } from '@/lib/productie/afronden';
 
 export const runtime = 'nodejs';
 
@@ -31,6 +34,17 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
     if (!v.ok) return NextResponse.json({ error: (v as { ok: false; error: string }).error }, { status: 400 });
     const { taskId, actualQty, notes, onderbroken } = v.data;
 
+    /* Optioneel partij-blok: "Afmaken met sticker" in dezelfde klik als Klaar.
+       Gevalideerd vóór de status-update, zodat een fout in het blok de taak
+       niet half klaar zet. */
+    let partijBlok: PartijBlok | null = null;
+    const rawPartij = (body as Record<string, unknown>).partij;
+    if (rawPartij != null) {
+        const pv = validatePartijBlok(rawPartij);
+        if (pv.ok === false) return NextResponse.json({ error: `Partij: ${pv.error}` }, { status: 400 });
+        partijBlok = pv.data;
+    }
+
     // Re-fetch + org-check
     const { data: task, error: fetchErr } = await supabase
         .from('prep_tasks')
@@ -44,7 +58,12 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         return NextResponse.json({ error: 'Geen toegang' }, { status: 403 });
     }
     if (task.status === 'done') {
-        return NextResponse.json({ ok: true, alreadyDone: true });
+        /* Al klaar, maar misschien nog geen partij (bv. de partij-stap faalde
+           bij de vorige poging, of de kok maakt hem nu pas af). De RPC is
+           idempotent, dus dit is veilig om te herhalen. */
+        const partij = partijBlok ? await maakPartij(supabase, orgId, userId, taskId, partijBlok) : null;
+        if (partij && partij.ok === false) return NextResponse.json({ error: partij.error, code: partij.code, alreadyDone: true }, { status: partij.status });
+        return NextResponse.json({ ok: true, alreadyDone: true, partij: partij && partij.ok ? { bestond: partij.bestond, ...partij.partij, eenheden: partij.eenheden } : null });
     }
     if (task.status === 'skipped') {
         return NextResponse.json({ error: 'Taak is geskipt' }, { status: 409 });
@@ -81,6 +100,14 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
     if (!updated) {
         return NextResponse.json({ ok: true, raceLost: true });
+    }
+
+    /* De partij vóór de meting: de partij is hard (voorraad), de meting is
+       best-effort. Mislukt de partij, dan is de taak wél klaar en meldt de
+       tablet dat de sticker nog gemaakt moet worden. */
+    let partij: AfrondenUitkomst | null = null;
+    if (partijBlok) {
+        partij = await maakPartij(supabase, orgId, userId, taskId, partijBlok);
     }
 
     await appendKdsAudit(supabase, {
@@ -128,6 +155,7 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         inventoryDeducted,
         meting,
         bijstelling,
+        partij: partijAntwoord(partij),
         bericht: onderbroken
             ? 'Klaar. Omdat je onderbroken was telt deze tijd niet mee in de schatting.'
             : meting.gemeten
@@ -135,3 +163,17 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
                 : 'Klaar.',
     });
 });
+
+async function maakPartij(
+    supabase: TenantAuthCtx['supabase'], orgId: string, userId: string, taskId: number, blok: PartijBlok,
+): Promise<AfrondenUitkomst> {
+    const bron = await bepaalBron(supabase, orgId, userId, { bron: 'prep_task', prepTaskId: taskId, ...blok });
+    if (bron.ok === false) return { ok: false, status: bron.status, code: 'ongeldig', error: bron.error };
+    return rondPartijAf(supabase, { orgId, userId }, naarAfrondenInput({ bron: 'prep_task', prepTaskId: taskId, ...blok }, bron.ctx));
+}
+
+function partijAntwoord(p: AfrondenUitkomst | null): Record<string, unknown> | null {
+    if (!p) return null;
+    if (p.ok === false) return { ok: false, error: p.error, code: p.code };
+    return { ok: true, bestond: p.bestond, ...p.partij, eenheden: p.eenheden };
+}

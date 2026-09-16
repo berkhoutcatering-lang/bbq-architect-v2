@@ -13,6 +13,7 @@ import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 import { laadDag } from '@/lib/keukenplanner/laden';
 import { bouwScherm } from '@/lib/keukenplanner/plan';
 import { batch } from '@/lib/keukenplanner/batchen';
+import { laadPartijStand } from '@/lib/productie/keukenscherm';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,18 @@ export const GET = withTenantAuth(async (_req: NextRequest, { supabase, orgId }:
         capaciteitsProblemen: problemen,
         afstandenBekend: dag.afstandenBekend,
     });
+
+    /* Partijen: wat de taak van nu oplevert en wat er nog af te maken is.
+       Los van de planner, en best-effort: valt dit weg, dan staat de rest. */
+    try {
+        const stand = await laadPartijStand(supabase, orgId, dag.taken, scherm.nu.taakId);
+        scherm.nu.partij = stand.nuPartij;
+        scherm.afTeMaken = stand.afTeMaken;
+    } catch (e) {
+        console.error('[keukenscherm] partijstand mislukt:', e);
+        scherm.nu.partij = null;
+        scherm.afTeMaken = [];
+    }
 
     return NextResponse.json(scherm, {
         headers: {

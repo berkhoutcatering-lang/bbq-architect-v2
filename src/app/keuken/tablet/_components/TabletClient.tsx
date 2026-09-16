@@ -16,8 +16,23 @@
 import { useState } from 'react';
 import { useKeukenscherm } from '../../scherm/_lib/useKeukenscherm';
 import { K, LETTER, BRON_LABEL, bronKleur, bronRand } from '../../scherm/_components/tokens';
+import ProductieAfrondenSheet, { type AfrondenProduct, type PartijAntwoord } from '@/components/productie/ProductieAfrondenSheet';
+import type { PartijBlok } from '@/lib/productie/validators';
+import type { AfTeMakenRegel } from '@/lib/productie/keukenscherm';
 
 type Fase = 'taak' | 'klaar-bevestigen' | 'loopt-uit';
+
+/**
+ * "Afmaken met sticker" op de tablet. Twee ingangen:
+ *   - direct na Klaar melden op een eindstap (partij in dezelfde
+ *     complete-task-aanroep, dus één klik voor taak + partij + labels);
+ *   - later, uit de lijst "af te maken" (partij-afronden op een taak die
+ *     al klaar is).
+ */
+interface Sticker {
+    product: AfrondenProduct;
+    afronden: (blok: PartijBlok) => Promise<PartijAntwoord>;
+}
 
 export default function TabletClient() {
     const { data, verbindingKwijt } = useKeukenscherm();
@@ -25,9 +40,43 @@ export default function TabletClient() {
     const [hoeveelheid, setHoeveelheid] = useState<number | null>(null);
     const [bezig, setBezig] = useState(false);
     const [bericht, setBericht] = useState<string | null>(null);
+    const [sticker, setSticker] = useState<Sticker | null>(null);
 
     const nu = data?.nu ?? null;
     const taakId = nu?.taakId ?? null;
+    const afTeMaken = data?.afTeMaken ?? [];
+
+    async function post(pad: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const res = await fetch(pad, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json.error ?? `Mislukt (${res.status})`);
+        return json;
+    }
+
+    /* Uit de lijst: taak is al klaar, alleen de partij nog. */
+    function openStickerVoor(regel: AfTeMakenRegel) {
+        setSticker({
+            product: {
+                naam: regel.componentNaam, hoeveelheid: regel.hoeveelheid, eenheid: regel.eenheid,
+                verpakkingGrootte: regel.verpakkingGrootte, verpakkingEenheid: regel.verpakkingEenheid,
+                bewaarmethode: regel.bewaarmethode, bewaaradvies: regel.bewaaradvies,
+                houdbaarheidDagen: regel.houdbaarheidDagen, stapHoudbaarheidDagen: regel.stapHoudbaarheidDagen,
+            },
+            afronden: async (blok) => {
+                const json = await post('/api/productie/partij-afronden', { prepTaskId: regel.taakId, ...blok });
+                return { ok: true, bestond: !!json.bestond, ...(json.partij as object), eenheden: json.eenheden as PartijAntwoord['eenheden'] };
+            },
+        });
+    }
+
+    const stickerSheet = sticker ? (
+        <ProductieAfrondenSheet
+            open={true}
+            onClose={() => { setSticker(null); setFase('taak'); }}
+            product={sticker.product}
+            afronden={sticker.afronden}
+        />
+    ) : null;
 
     async function stuur(pad: string, body: Record<string, unknown>) {
         setBezig(true);
@@ -56,6 +105,7 @@ export default function TabletClient() {
     if (!data || taakId == null) {
         return (
             <Doek>
+                {stickerSheet}
                 <div style={{ ...midden, flexDirection: 'column', gap: 20 }}>
                     <div style={{ fontFamily: LETTER.display, fontWeight: 200, fontSize: 64, textAlign: 'center' }}>
                         {data ? 'Niets te doen' : 'Verbinden…'}
@@ -64,6 +114,7 @@ export default function TabletClient() {
                         <div style={{ fontSize: 28, color: K.alarm }}>Geen verbinding met de planning.</div>
                     )}
                 </div>
+                <AfTeMakenLijst regels={afTeMaken} onKies={openStickerVoor} />
             </Doek>
         );
     }
@@ -98,6 +149,27 @@ export default function TabletClient() {
                 bericht={bericht}
                 terug={() => setFase('taak')}
                 bevestig={async (onderbroken) => {
+                    /* Eindstap met een bouwsteen: de partij en de labels horen bij
+                       dezelfde klik. De sheet stuurt complete-task mét partij-blok. */
+                    const p = nu!.partij;
+                    if (p?.mogelijk && !p.partij) {
+                        setSticker({
+                            product: {
+                                naam: p.componentNaam, hoeveelheid: hoeveelheid ?? p.hoeveelheid, eenheid: p.eenheid,
+                                verpakkingGrootte: p.verpakkingGrootte, verpakkingEenheid: p.verpakkingEenheid,
+                                bewaarmethode: p.bewaarmethode, bewaaradvies: p.bewaaradvies,
+                                houdbaarheidDagen: p.houdbaarheidDagen, stapHoudbaarheidDagen: p.stapHoudbaarheidDagen,
+                            },
+                            afronden: async (blok) => {
+                                const json = await post('/api/prep/complete-task', { taskId: taakId, actualQty: blok.actualQty, onderbroken, partij: blok });
+                                const partij = json.partij as Record<string, unknown> | null;
+                                if (!partij) return { ok: false, error: 'Taak is klaar gemeld, maar de partij is niet gemaakt' };
+                                if (partij.ok === false) return { ok: false, error: String(partij.error ?? 'Partij mislukt'), code: partij.code as string | undefined };
+                                return { ok: true, bestond: !!partij.bestond, ...partij, eenheden: partij.eenheden as PartijAntwoord['eenheden'] };
+                            },
+                        });
+                        return;
+                    }
                     const gelukt = await stuur('/api/prep/complete-task', {
                         taskId: taakId,
                         actualQty: hoeveelheid,
@@ -111,6 +183,7 @@ export default function TabletClient() {
 
     return (
         <Doek>
+            {stickerSheet}
             <div style={{ padding: '36px 36px 0', flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline' }}>
                     <div style={{ ...mono, fontSize: 24, letterSpacing: '.16em', color: K.stof }}>
@@ -146,6 +219,8 @@ export default function TabletClient() {
                 )}
 
                 {bericht && <div style={{ fontSize: 26, color: K.waarschuwing, marginTop: 24 }}>{bericht}</div>}
+
+                <AfTeMakenLijst regels={afTeMaken} onKies={openStickerVoor} />
             </div>
 
             {/* Klaar is negen van de tien keer de handeling, dus die krijgt de
@@ -167,6 +242,38 @@ export default function TabletClient() {
                 </div>
             </div>
         </Doek>
+    );
+}
+
+/**
+ * Bereid, nog geen sticker. Blijft staan tot de partij er is — ook na
+ * herladen, want de lijst komt van de server.
+ */
+function AfTeMakenLijst({ regels, onKies }: { regels: AfTeMakenRegel[]; onKies: (r: AfTeMakenRegel) => void }) {
+    if (regels.length === 0) return null;
+    return (
+        <div style={{ marginTop: 'auto', paddingTop: 28 }}>
+            <div style={{ ...mono, fontSize: 22, letterSpacing: '.16em', color: '#e0b45a' }}>
+                AF TE MAKEN MET STICKER
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+                {regels.map((r) => (
+                    <button
+                        key={r.taakId}
+                        type="button"
+                        onClick={() => onKies(r)}
+                        style={{
+                            height: 96, display: 'flex', alignItems: 'center', gap: 18, padding: '0 24px',
+                            background: 'rgba(224,180,90,.12)', border: '2px solid rgba(224,180,90,.55)', color: K.wit,
+                            fontFamily: LETTER.tekst, fontSize: 28, textAlign: 'left', cursor: 'pointer',
+                        }}
+                    >
+                        <span style={{ flex: 1 }}>{r.componentNaam}{r.hoeveelheid != null ? ` · ${r.hoeveelheid} ${r.eenheid ?? ''}` : ''}</span>
+                        <span style={{ fontSize: 22, color: '#e0b45a', fontWeight: 600 }}>Sticker →</span>
+                    </button>
+                ))}
+            </div>
+        </div>
     );
 }
 

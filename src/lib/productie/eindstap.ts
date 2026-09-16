@@ -56,3 +56,39 @@ function vergelijk(a: number | string | null, b: number | string | null): number
     if (typeof a === 'number' && typeof b === 'number') return a - b;
     return String(a).localeCompare(String(b));
 }
+
+/* ── Variant op taak-afhankelijkheden ───────────────────────────────────────
+   De keukenplanner heeft per taak al `hangtAfVan: number[]` (taak-ids)
+   uitgerekend, inclusief wat uit de receptstappen komt. Daar kan de eindstap
+   direct uit: de taak met een component waar geen andere taak in dezelfde
+   groep (event + component) van afhangt. Zonder afhankelijkheden wint de
+   laatst geplande. */
+
+export interface TaakMetDeps {
+    id: number;
+    componentId: number | null | undefined;
+    eventId: number | null | undefined;
+    hangtAfVan: number[];
+    geplandOp?: string | null;
+}
+
+export function eindstapIds(taken: TaakMetDeps[]): Set<number> {
+    const uit = new Set<number>();
+    const groepen = new Map<string, TaakMetDeps[]>();
+    for (const t of taken) {
+        if (t.componentId == null) continue;
+        const k = `${t.eventId ?? 'x'}:${t.componentId}`;
+        const g = groepen.get(k) ?? [];
+        g.push(t);
+        groepen.set(k, g);
+    }
+    for (const g of groepen.values()) {
+        const kandidaten = g.filter((t) => !g.some((ander) => ander.id !== t.id && ander.hangtAfVan.includes(t.id)));
+        if (kandidaten.length === 1) { uit.add(kandidaten[0].id); continue; }
+        const heeftDeps = g.some((t) => t.hangtAfVan.some((d) => g.some((x) => x.id === d)));
+        if (heeftDeps) { for (const k of kandidaten) uit.add(k.id); continue; }
+        const laatste = g.reduce((a, b) => (vergelijk(a.geplandOp ?? null, b.geplandOp ?? null) >= 0 ? a : b));
+        uit.add(laatste.id);
+    }
+    return uit;
+}

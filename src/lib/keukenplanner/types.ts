@@ -179,6 +179,8 @@ export interface Melding {
     verwacht?: string | null;
 }
 
+import type { AfTeMakenRegel, PartijVoorstel } from '../productie/keukenscherm';
+
 /** Wat het wandscherm krijgt. Eén object, geen rekenwerk aan de andere kant. */
 export interface Keukenscherm {
     /** Waar het scherm op staat. Bepaalt welke van de zes beelden je ziet. */
@@ -199,7 +201,12 @@ export interface Keukenscherm {
         /** Bij vrij: waar je op wacht, klein ernaast. */
         wachtOp: string | null;
         wachtNog: string | null;
+        /** Productiepartij bij deze taak (eindstap met component). Gevuld
+            door src/lib/productie/keukenscherm.ts, niet door de planner. */
+        partij?: PartijVoorstel | null;
     };
+    /** Klaar gemeld, nog geen partij: "Bereid — afmaken met sticker". */
+    afTeMaken?: AfTeMakenRegel[];
     straks: TijdlijnRegel[];
     meldingen: Melding[];
     status: {
