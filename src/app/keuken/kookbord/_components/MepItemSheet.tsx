@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties } from 'react';
-import { X, Flame, Check, RotateCcw, Circle, Thermometer, AlertTriangle, ListChecks, Package, Utensils, SquarePen, Save } from 'lucide-react';
-import type { MepComponentItem, MepStatus } from './KookbordClient';
+import { X, Flame, Check, RotateCcw, Circle, Thermometer, AlertTriangle, ListChecks, Package, Utensils, SquarePen, Save, Tag } from 'lucide-react';
+import { vraagtOmSticker, type MepComponentItem, type MepStatus } from './KookbordClient';
 import { pal, formatQty, nextStatus, btnSpec, ACCENT_DARK } from './mep-ui';
 
 interface MepItemSheetProps {
@@ -14,6 +14,7 @@ interface MepItemSheetProps {
   onStatusChange: (itemId: number, status: MepStatus) => void | Promise<void>;
   onSaveNotes?: (itemId: number, notes: string) => void | Promise<void>;
   savingNotes?: boolean;
+  onAfmaken?: (item: MepComponentItem) => void;
 }
 
 function asStatus(v: string): MepStatus {
@@ -26,7 +27,7 @@ function footLabel(s: MepStatus): string {
 
 const hdr: CSSProperties = { fontFamily: "var(--font-outfit), sans-serif", fontWeight: 500, fontSize: 16, letterSpacing: '.01em', color: '#f0f0f0', margin: '0 0 12px', display: 'flex', alignItems: 'center', gap: 8 };
 
-export default function MepItemSheet({ open, item, guests, gerecht, onClose, onStatusChange, onSaveNotes, savingNotes = false }: MepItemSheetProps) {
+export default function MepItemSheet({ open, item, guests, gerecht, onClose, onStatusChange, onSaveNotes, savingNotes = false, onAfmaken }: MepItemSheetProps) {
   const [note, setNote] = useState('');
   const [justSaved, setJustSaved] = useState(false);
 
@@ -179,11 +180,22 @@ export default function MepItemSheet({ open, item, guests, gerecht, onClose, onS
         </div>
 
         <div style={{ flex: '0 0 auto', padding: '15px 30px', borderTop: '1px solid rgba(130,130,130,.1)', display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(10,10,12,.7)' }}>
+          {(vraagtOmSticker(item) || item.partij) && onAfmaken ? (
+            <button
+              type="button"
+              onClick={() => onAfmaken(item)}
+              className="mep-cta"
+              style={{ flex: 1, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, border: item.partij ? '1px solid rgba(34,197,94,.4)' : 'none', background: item.partij ? 'rgba(34,197,94,.12)' : 'linear-gradient(180deg,#e9c46a,#d9a83f)', color: item.partij ? '#74e29a' : '#1a1508', cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 15.5, fontWeight: 700 }}
+            >
+              {item.partij ? <Check size={19} strokeWidth={2.4} /> : <Tag size={19} strokeWidth={2.2} />}
+              <span>{item.partij ? `Batch ${item.partij.partijnummer} · ${item.partij.labels_geprint}/${item.partij.aantal_eenheden} labels` : 'Afmaken met sticker'}</span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void onStatusChange(itemId, next)}
             className="mep-cta"
-            style={{ flex: 1, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 15.5, fontWeight: 700, letterSpacing: '.01em' }}
+            style={{ flex: (vraagtOmSticker(item) || item.partij) ? '0 0 auto' : 1, padding: '0 20px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, borderRadius: 13, border: bs.border, background: bs.bg, color: bs.fg, boxShadow: bs.shadow, cursor: 'pointer', fontFamily: "var(--font-dm-sans), sans-serif", fontSize: 15.5, fontWeight: 700, letterSpacing: '.01em' }}
           >
             <FootIcon size={status === 'bezig' ? 21 : status === 'todo' ? 20 : 19} color={bs.fg} strokeWidth={status === 'bezig' ? 2.6 : status === 'todo' ? 2.2 : 2.1} {...(status === 'todo' ? { fill: ACCENT_DARK } : {})} />
             <span>{footLabel(status)}</span>

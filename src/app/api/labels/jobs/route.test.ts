@@ -53,6 +53,23 @@ function nepClient() {
 vi.mock('@/lib/supabase-server', () => ({
     createServerSupabase: async () => nepClient(),
 }));
+/* De labeldata van een partij komt uit de database-laag; hier gaat het om wat
+   de route NIET doet (voorraad aanraken), dus die laag is nagebouwd. */
+vi.mock('@/lib/productie/labels', () => ({
+    scanBasisUrl: () => 'https://app.test',
+    laadPartijLabels: async (_sb: unknown, _org: string, keuze: { soort: string; eenheidIds?: string[] | null }) => ({
+        ok: true,
+        partijId: '33333333-3333-4333-8333-333333333333',
+        eenheidIds: keuze.eenheidIds ?? ['44444444-4444-4444-8444-444444444444'],
+        verzoek: {
+            soort: keuze.soort,
+            labels: (keuze.eenheidIds ?? ['44444444-4444-4444-8444-444444444444']).map((id, i) => ({
+                eenheidId: id,
+                data: { naam: 'Pulled pork', inhoud: '1,00 kg', productiedatum: '2026-09-16', tht: null, partijnummer: 'PP-20260916-01', unitNr: i + 1, unitTotaal: 12, bewaaradvies: null, allergenen: [], qrUrl: `https://app.test/scan/${id}`, eenheidCode: `PP-${i + 1}` },
+            })),
+        },
+    }),
+}));
 
 import { POST } from './route';
 
@@ -141,9 +158,26 @@ describe('POST /api/labels/jobs', () => {
         expect(state.calls.some((c) => c.table === 'print_jobs')).toBe(false);
     });
 
-    it('partij-labels zijn in fase 0 nog niet beschikbaar (501), zonder job aan te maken', async () => {
-        const res = await POST(req({ soort: 'partij_labels', printerId: PRINTER.id, partijId: '33333333-3333-4333-8333-333333333333' }));
-        expect(res.status).toBe(501);
-        expect(state.calls.some((c) => c.table === 'print_jobs')).toBe(false);
+    it('herprint van eenheid 007: nieuwe job met soort=herprint, géén voorraadmutatie', async () => {
+        const id = '77777777-7777-4777-8777-777777777777';
+        const res = await POST(req({ soort: 'herprint', printerId: PRINTER.id, eenheidIds: [id] }));
+        expect(res.status).toBe(201);
+        const json = await res.json();
+        expect(json.job.soort).toBe('herprint');
+        expect(json.job.partij_id).toBe('33333333-3333-4333-8333-333333333333');
+        expect(json.labels).toHaveLength(1);
+        expect(json.labels[0].eenheidId).toBe(id);
+        expect(json.labels[0].zpl).toContain(`https://app.test/scan/${id}`);
+
+        expect(state.calls.some((c) => c.op === 'rpc')).toBe(false);
+        expect(state.calls.some((c) => c.table === 'inventory' || c.table === 'stock_movements' || c.table === 'productie_partijen')).toBe(false);
+    });
+
+    it('partij-labels: aantal labels = aantal eenheden uit de partij, nooit uit de body', async () => {
+        const res = await POST(req({ soort: 'partij_labels', printerId: PRINTER.id, partijId: '33333333-3333-4333-8333-333333333333', aantal: 99 }));
+        expect(res.status).toBe(201);
+        const json = await res.json();
+        expect(json.job.aantal_labels).toBe(1);
+        expect(json.job.soort).toBe('partij_labels');
     });
 });

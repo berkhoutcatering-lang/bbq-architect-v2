@@ -19,8 +19,10 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { appendKdsAudit } from '../prep/auditLog';
+import { logHaccpCheck } from '../dal/haccp';
 import { berekenEenheden, normaliseerEenheid, verdeelOverAantal, type Eenheid, type EenheidRegel } from './eenheden';
 import { bepaalTht, vandaagIso } from './tht';
+import { beoordeel, bepaalVrijgave, vrijgaveTekst, type HaccpMeting, type HaccpPunt } from './vrijgave';
 
 export interface AfrondenInput {
     componentId: number;
@@ -43,6 +45,8 @@ export interface AfrondenInput {
     bewaaradvies?: string | null;
     opslagLocatieId?: string | null;
     personeelId?: string | null;
+    /** HACCP-metingen uit de sheet; worden na de partij als records gelogd. */
+    metingen?: Array<{ type: string; temp: number | null }> | null;
     notitie?: string | null;
 }
 
@@ -129,7 +133,44 @@ export async function rondPartijAf(
     const bewaarmethode = input.bewaarmethode ?? (c.bewaarmethode as AfrondenInput['bewaarmethode']) ?? null;
     const bewaaradvies = (input.bewaaradvies ?? c.bewaaradvies ?? null)?.trim() || null;
 
-    /* 4. HACCP-vrijgave: fase 3 koppelt hier component_haccp_points aan. */
+    /* 4. HACCP-vrijgave: de verplichte punten van de bouwsteen, tegen wat er
+       al gemeten is op de taak plus wat de sheet nu meestuurt. Niet vrij →
+       geen partij, geen voorraad; de sheet toont wat ontbreekt. */
+    const { data: puntRijen } = await supabase
+        .from('component_haccp_points')
+        .select('id, type, threshold_value, threshold_unit, note, verplicht_voor_vrijgave')
+        .eq('component_id', c.id)
+        .eq('organization_id', ctx.orgId);
+    const punten = ((puntRijen ?? []) as Array<Record<string, unknown>>).map((r): HaccpPunt => ({
+        id: Number(r.id), type: String(r.type),
+        threshold_value: r.threshold_value == null ? null : Number(r.threshold_value),
+        threshold_unit: (r.threshold_unit as string | null) ?? null,
+        note: (r.note as string | null) ?? null,
+        verplicht_voor_vrijgave: r.verplicht_voor_vrijgave === true,
+    }));
+    const eerdereMetingen: HaccpMeting[] = [];
+    if (input.prepTaskId != null && punten.some((p) => p.verplicht_voor_vrijgave)) {
+        const { data: recs } = await supabase
+            .from('haccp_records')
+            .select('check_type, type, temp, status, created_at')
+            .eq('organization_id', ctx.orgId)
+            .eq('prep_task_id', input.prepTaskId)
+            .order('created_at', { ascending: true });
+        for (const r of (recs ?? []) as Array<Record<string, unknown>>) {
+            eerdereMetingen.push({ type: String(r.check_type ?? r.type ?? ''), temp: r.temp == null ? null : Number(r.temp), status: (r.status as string | null) ?? null });
+        }
+    }
+    const nieuweMetingen: HaccpMeting[] = (input.metingen ?? []).map((m) => ({ type: m.type, temp: m.temp }));
+    const vrijgave = bepaalVrijgave(punten, [...eerdereMetingen, ...nieuweMetingen]);
+    if (!vrijgave.vrij) {
+        return {
+            ok: false, status: 409, code: 'haccp_ontbreekt', error: vrijgaveTekst(vrijgave),
+            details: { ontbrekend: vrijgave.ontbrekend, afwijkend: vrijgave.afwijkend },
+        };
+    }
+    const haccpSnapshot = punten.length > 0 || nieuweMetingen.length > 0
+        ? { beoordeeldOp: new Date().toISOString(), vrij: true, punten: vrijgave.beoordeeld, nieuweMetingen }
+        : null;
 
     /* 5. De transactie. */
     const { data, error } = await supabase.rpc('productie_partij_afronden', {
@@ -152,7 +193,7 @@ export async function rondPartijAf(
         p_gerecht_id: input.gerechtId ?? null,
         p_event_id: input.eventId ?? null,
         p_geplande_hoeveelheid: input.geplandeHoeveelheid ?? null,
-        p_haccp_snapshot: null,
+        p_haccp_snapshot: haccpSnapshot,
         p_notitie: input.notitie ?? null,
     });
     if (error) return { ok: false, status: 500, code: 'db', error: error.message };
@@ -168,6 +209,23 @@ export async function rondPartijAf(
         if (input.bewaarmethode && !c.bewaarmethode) update.bewaarmethode = bewaarmethode;
         if (Object.keys(update).length > 0) {
             await supabase.from('components').update(update).eq('id', c.id).eq('organization_id', ctx.orgId);
+        }
+    }
+
+    /* 5b. De metingen uit de sheet als échte HACCP-records (append-only),
+       gekoppeld aan taak, partij en bouwsteen. Status volgens de drempel van
+       het punt (die wint van de preset). Best-effort: de partij staat al. */
+    if (!r.bestond && nieuweMetingen.length > 0) {
+        const chef = await chefNaam(supabase, ctx.orgId, input.personeelId ?? null);
+        for (const m of nieuweMetingen) {
+            const punt = punten.find((p) => p.type === m.type) ?? null;
+            const b = punt ? beoordeel(punt, m.temp) : null;
+            await logHaccpCheck(supabase, ctx.orgId, ctx.userId, {
+                planItemId: null, eventId: input.eventId ?? null, gerechtId: input.gerechtId ?? null,
+                dishLabel: c.name, checkType: m.type, temp: m.temp, notitie: `Partij ${r.partij.partijnummer}`,
+                chef, prepTaskId: input.prepTaskId ?? null, partijId: r.partij.id, componentId: c.id,
+                statusOverride: b === 'ok' ? 'ok' : b === 'afwijking' ? 'afwijking' : null,
+            });
         }
     }
 
@@ -187,6 +245,12 @@ export async function rondPartijAf(
     }
 
     return { ok: true, bestond: r.bestond, partij: r.partij, eenheden: r.eenheden ?? [] };
+}
+
+async function chefNaam(supabase: SupabaseClient, orgId: string, personeelId: string | null): Promise<string> {
+    if (!personeelId) return 'keuken';
+    const { data } = await supabase.from('personeel').select('naam').eq('id', personeelId).eq('organization_id', orgId).maybeSingle();
+    return (data as { naam: string } | null)?.naam ?? 'keuken';
 }
 
 function alsJson(e: EenheidRegel): { volgnummer: number; inhoud: number; eenheid: Eenheid } {

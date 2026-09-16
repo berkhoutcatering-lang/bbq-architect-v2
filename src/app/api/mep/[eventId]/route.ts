@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 type MepStatus = 'todo' | 'bezig' | 'klaar';
 type AllergeneItem = { allergen_code: string };
-type HaccpPoint = { type: string; threshold_value?: number; threshold_unit?: string; note?: string };
+type HaccpPoint = { type: string; threshold_value?: number; threshold_unit?: string; note?: string; verplicht_voor_vrijgave?: boolean };
 
 type NormalizedComponent = {
   id: number;
@@ -18,7 +18,16 @@ type NormalizedComponent = {
   allergens: AllergeneItem[] | null;
   haccp_points: HaccpPoint[] | null;
   flavor_tags: string[] | null;
+  /* Productie & bewaren (2026-09-16): voor de afrond-sheet. */
+  verpakking_grootte: number | null;
+  verpakking_eenheid: string | null;
+  bewaarmethode: string | null;
+  bewaaradvies: string | null;
+  houdbaarheid_na_bewerking_dagen: number | null;
 };
+
+/* De partij die bij een MEP-item hoort, als hij er al is. */
+type PartijKort = { id: string; partijnummer: string; aantal_eenheden: number; labels_geprint: number; status: string };
 
 type NormalizedMepItem = {
   id: number;
@@ -31,7 +40,7 @@ type NormalizedMepItem = {
   notes: string | null;
 };
 
-type ComponentOutput = NormalizedComponent & NormalizedMepItem & { mep_item_id: number };
+type ComponentOutput = NormalizedComponent & NormalizedMepItem & { mep_item_id: number; partij: PartijKort | null };
 
 type GerechtOutput = {
   id: string; // UUID
@@ -311,7 +320,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const { data: componentData, error: componentError } = await supabase
       .from('components')
-      .select('id,name,description,type,base_quantity,base_unit,preparation_steps,flavor_tags')
+      .select('id,name,description,type,base_quantity,base_unit,preparation_steps,flavor_tags,verpakking_grootte,verpakking_eenheid,bewaarmethode,bewaaradvies,houdbaarheid_na_bewerking_dagen')
       .eq('organization_id', orgId)
       .in('id', componentIds);
 
@@ -320,7 +329,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
     // Allergenen + HACCP komen uit aparte tabellen (niet uit components zelf)
     const [{ data: allergRows }, { data: haccpRows }] = await Promise.all([
       supabase.from('component_allergens').select('component_id,allergen_code').eq('organization_id', orgId).in('component_id', componentIds),
-      supabase.from('component_haccp_points').select('component_id,type,threshold_value,threshold_unit,note').eq('organization_id', orgId).in('component_id', componentIds),
+      supabase.from('component_haccp_points').select('component_id,type,threshold_value,threshold_unit,note,verplicht_voor_vrijgave').eq('organization_id', orgId).in('component_id', componentIds),
     ]);
 
     const allergPerComponent = new Map<number, AllergeneItem[]>();
@@ -343,6 +352,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       if (Number.isFinite(tv)) p.threshold_value = tv;
       if (typeof row.threshold_unit === 'string' && row.threshold_unit.trim()) p.threshold_unit = row.threshold_unit.trim();
       if (typeof row.note === 'string' && row.note.trim()) p.note = row.note.trim();
+      p.verplicht_voor_vrijgave = row.verplicht_voor_vrijgave === true;
       const list = haccpPerComponent.get(cid) ?? [];
       list.push(p);
       haccpPerComponent.set(cid, list);
@@ -363,6 +373,11 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
         allergens: allergPerComponent.get(id) ?? null,
         haccp_points: haccpPerComponent.get(id) ?? null,
         flavor_tags: normalizeStringArray(row.flavor_tags),
+        verpakking_grootte: row.verpakking_grootte == null ? null : toNumber(row.verpakking_grootte, 0) || null,
+        verpakking_eenheid: typeof row.verpakking_eenheid === 'string' ? row.verpakking_eenheid : null,
+        bewaarmethode: typeof row.bewaarmethode === 'string' ? row.bewaarmethode : null,
+        bewaaradvies: typeof row.bewaaradvies === 'string' ? row.bewaaradvies : null,
+        houdbaarheid_na_bewerking_dagen: row.houdbaarheid_na_bewerking_dagen == null ? null : toNumber(row.houdbaarheid_na_bewerking_dagen, 0),
       });
     }
 
@@ -382,6 +397,26 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
     }
 
     const mepMap = new Map(mepItems.map(m => [mepKey(m.gerecht_id, m.component_id), m]));
+
+    /* Partijen bij deze MEP-items: de kaart-staat "Bereid — afmaken met
+       sticker" komt hiervandaan, niet uit lokale state. */
+    const partijPerItem = new Map<number, PartijKort>();
+    if (mepItems.length > 0) {
+      const { data: partijRows } = await supabase
+        .from('productie_partijen')
+        .select('id, partijnummer, aantal_eenheden, status, mep_item_id, voorraad_eenheden(label_geprint_at)')
+        .eq('organization_id', orgId)
+        .in('mep_item_id', mepItems.map(m => m.id));
+      for (const row of (partijRows ?? []) as Array<Record<string, unknown>>) {
+        const itemId = toInteger(row.mep_item_id);
+        if (!itemId) continue;
+        const eenheden = (row.voorraad_eenheden ?? []) as Array<{ label_geprint_at: string | null }>;
+        partijPerItem.set(itemId, {
+          id: String(row.id), partijnummer: String(row.partijnummer), aantal_eenheden: toNumber(row.aantal_eenheden, 0),
+          labels_geprint: eenheden.filter(e => e.label_geprint_at != null).length, status: String(row.status ?? 'vrijgegeven'),
+        });
+      }
+    }
     const gerechtMap = new Map(gerechten.map(g => [g.id, g]));
     const gcPerGerecht = new Map<string, GcPair[]>();
     for (const r of gerechtComponents) {
@@ -402,7 +437,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
           // Te maken = quantity_used (per portie) × gasten — niet de component-basisbatch.
           const base_quantity = Number.isFinite(pair.quantity_used) ? pair.quantity_used : comp.base_quantity;
           const base_unit = pair.unit || comp.base_unit;
-          return { ...comp, base_quantity, base_unit, ...mep, mep_item_id: mep.id };
+          return { ...comp, base_quantity, base_unit, ...mep, mep_item_id: mep.id, partij: partijPerItem.get(mep.id) ?? null };
         }).filter((c): c is ComponentOutput => c !== null);
         return { ...gerecht, components };
       })

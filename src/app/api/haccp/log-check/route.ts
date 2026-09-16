@@ -12,7 +12,10 @@ import { logHaccpCheck } from '@/lib/dal/haccp';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const ALLOWED_TYPES = ['ontvangst', 'bewaring', 'kern', 'uitgifte', 'regenereren', 'bereiding', 'koeling', 'opslag'];
+/* Twee talen: de plan-types en (sinds 2026-09-16) de punt-types van een
+   bouwsteen, zodat een meting vanaf de afrond-sheet dezelfde route neemt. */
+const ALLOWED_TYPES = ['ontvangst', 'bewaring', 'kern', 'uitgifte', 'regenereren', 'bereiding', 'koeling', 'opslag',
+    'kerntemp', 'koeltemp', 'tijd_uit_koeling', 'handhygiene', 'kruisbesmetting', 'oppervlakte_reiniging', 'overig'];
 
 export async function POST(req: NextRequest) {
     const sb = await createServerSupabase();
@@ -61,6 +64,10 @@ export async function POST(req: NextRequest) {
         return new Response(JSON.stringify({ error: 'temp must be number between -30 and 200' }), { status: 400 });
     }
 
+    const prepTaskId = typeof body.prepTaskId === 'number' && Number.isInteger(body.prepTaskId) && body.prepTaskId > 0 ? body.prepTaskId : null;
+    const partijId = typeof body.partijId === 'string' && /^[0-9a-f-]{36}$/i.test(body.partijId) ? body.partijId : null;
+    const componentId = typeof body.componentId === 'number' && Number.isInteger(body.componentId) && body.componentId > 0 ? body.componentId : null;
+
     const result = await logHaccpCheck(sb, orgId, user.id, {
         planItemId,
         eventId,
@@ -71,6 +78,9 @@ export async function POST(req: NextRequest) {
         notitie,
         chef,
         photoUrl,
+        prepTaskId,
+        partijId,
+        componentId,
     });
     if (!result) {
         return new Response(JSON.stringify({ error: 'insert failed' }), { status: 500 });

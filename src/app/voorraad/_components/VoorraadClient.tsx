@@ -374,6 +374,9 @@ export default function VoorraadClient({ initial }: { initial?: VoorraadInitial 
 
     function handleBarcodeScan(barcode: string) {
         setScannerOpen(false);
+        /* Een QR van een partij-label (…/scan/<token>) opent de eenheid zelf. */
+        const scan = /\/scan\/([0-9a-f-]{36})/i.exec(barcode) ?? (/^[0-9a-f-]{36}$/i.test(barcode.trim()) ? [barcode, barcode.trim()] : null);
+        if (scan) { window.location.href = `/scan/${scan[1]}`; return; }
         const match = inventory.find(i => (i.naam || '').toLowerCase().includes(barcode.toLowerCase()));
         if (match) {
             setSelectedId(match.id);

@@ -89,8 +89,9 @@ export function werkstationPrinter(printers: PrinterConfig[]): PrinterConfig | n
 export type PrintVerzoek =
     | { soort: 'testlabel'; printerId: string }
     | { soort: 'los_label'; printerId: string; naam: string; datum?: string; tht?: string | null; notitie?: string | null; aantal: number }
-    | { soort: 'partij_labels'; printerId: string; partijId: string }
-    | { soort: 'herprint'; printerId: string; eenheidIds: string[] };
+    | { soort: 'partij_labels'; printerId: string; partijId: string; eenheidIds?: string[] | null }
+    | { soort: 'herprint'; printerId: string; eenheidIds: string[] }
+    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null };
 
 export interface PrintJobRij {
     id: string;
@@ -196,4 +197,20 @@ export async function vraagStatus(printer: PrinterConfig): Promise<PrinterStatus
     } finally {
         await transport.sluit().catch(() => undefined);
     }
+}
+
+/**
+ * Een getekend canvas naar de Zebra: doossticker, HACCP-sticker. Rendert het
+ * canvas passend op het label van de printer en verstuurt het als één
+ * afbeelding per exemplaar. Hangt aan niets in de voorraad.
+ */
+export async function printCanvas(
+    soort: 'doos_sticker' | 'haccp_sticker',
+    canvas: HTMLCanvasElement,
+    printer: PrinterConfig,
+    opties: { aantal?: number; referentie?: Record<string, unknown> | null } = {},
+): Promise<PrintResultaat> {
+    const { canvasNaarLabelZpl } = await import('./afbeelding');
+    const zpl = canvasNaarLabelZpl(canvas, { breedte_mm: Number(printer.label_breedte_mm), hoogte_mm: Number(printer.label_hoogte_mm), dpi: Number(printer.dpi) });
+    return printLabels({ soort, printerId: printer.id, zpl, aantal: opties.aantal ?? 1, referentie: opties.referentie ?? null });
 }

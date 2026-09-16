@@ -9,9 +9,10 @@ interface MepGerechtGroepProps {
   guests: number;
   onItemTap: (item: MepComponentItem, gerechtNaam: string) => void;
   onStatusToggle: (itemId: number, newStatus: MepStatus) => void | Promise<void>;
+  onAfmaken: (item: MepComponentItem) => void;
 }
 
-export default function MepGerechtGroep({ gerecht, guests, onItemTap, onStatusToggle }: MepGerechtGroepProps) {
+export default function MepGerechtGroep({ gerecht, guests, onItemTap, onStatusToggle, onAfmaken }: MepGerechtGroepProps) {
   if (!gerecht.components || gerecht.components.length === 0) return null;
 
   const totaal = gerecht.components.length;
@@ -39,6 +40,7 @@ export default function MepGerechtGroep({ gerecht, guests, onItemTap, onStatusTo
             guests={guests}
             onTap={() => onItemTap(item, gerecht.naam)}
             onStatusToggle={onStatusToggle}
+            onAfmaken={() => onAfmaken(item)}
           />
         ))}
       </div>

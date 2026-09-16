@@ -198,10 +198,17 @@ export interface LogHaccpCheckInput {
     gerechtId: string | null;
     dishLabel: string;
     checkType: string;
-    temp: number;
+    /** null bij een controle zonder meetwaarde (handhygiëne, kruisbesmetting). */
+    temp: number | null;
     notitie: string | null;
     chef: string;
     photoUrl?: string | null;                                                    // v3: bewijsfoto pad in haccp-evidence bucket
+    /* Koppeling aan productie (2026-09-16): taak op de tablet en/of partij. */
+    prepTaskId?: number | null;
+    partijId?: string | null;
+    componentId?: number | null;
+    /** Beoordeling tegen de drempel van de bouwsteen (wint van de preset). */
+    statusOverride?: 'ok' | 'warn' | 'danger' | 'afwijking' | null;
 }
 
 export interface CorrectiveAction {
@@ -291,7 +298,7 @@ export async function logHaccpCheck(
     input: LogHaccpCheckInput,
 ): Promise<LogHaccpCheckResult | null> {
     const now = new Date();
-    const status = computeStatus(input.checkType, input.temp);
+    const status = input.statusOverride ?? (input.temp == null ? 'ok' : computeStatus(input.checkType, input.temp));
 
     const { data: rec, error } = await sb
         .from('haccp_records')
@@ -312,6 +319,9 @@ export async function logHaccpCheck(
             confirmed_by_user_id: userId,
             auto_logged: false, // Pillar #3: mens-bevestigd
             photo_url: input.photoUrl ?? null,                                    // v3: SOTA-feature foto-evidence
+            prep_task_id: input.prepTaskId ?? null,
+            partij_id: input.partijId ?? null,
+            component_id: input.componentId ?? null,
         })
         .select('id')
         .single();

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
 import { isUuid, validatePrintJobUpdate } from '@/lib/labelprinter/validators';
 import { JOB_KOLOMMEN } from '@/lib/labelprinter/db';
+import { appendKdsAudit } from '@/lib/prep/auditLog';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,8 +36,9 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
  * eerste waarheid niet veranderen. Wil je opnieuw printen, dan is dat een
  * nieuwe job.
  *
- * Het bijwerken van voorraad_eenheden (label_geprint_at) komt in fase 2; hier
- * alleen de job zelf.
+ * Geprinte eenheden krijgen label_geprint_at en een hogere print-teller;
+ * onzekere eenheden niet — die worden straks als "ontbrekend" aangeboden.
+ * Voorraad verandert hier nooit.
  */
 export const PATCH = withTenantAuth(async (req: NextRequest, { supabase, orgId }: TenantAuthCtx) => {
     const id = idUitUrl(req);
@@ -70,6 +72,20 @@ export const PATCH = withTenantAuth(async (req: NextRequest, { supabase, orgId }
         .select(JOB_KOLOMMEN)
         .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    if (data && u.geprintEenheidIds.length > 0) {
+        await markeerGeprint(supabase, orgId, id, u.geprintEenheidIds);
+        const job = data as { soort: string; partij_id: string | null };
+        await appendKdsAudit(supabase, {
+            orgId,
+            action: job.soort === 'herprint' ? 'label_herprint' : 'labels_geprint',
+            metadata: {
+                print_job_id: id, partij_id: job.partij_id, soort: job.soort,
+                geprint: u.geprintEenheidIds.length, onzeker: u.onzekerEenheidIds.length,
+                status: u.status, foutmelding: u.foutmelding,
+            },
+        });
+    }
     if (!data) {
         /* Bestaat wel maar was al afgerond → geef de bestaande waarheid terug. */
         const { data: bestaand } = await supabase
@@ -79,3 +95,22 @@ export const PATCH = withTenantAuth(async (req: NextRequest, { supabase, orgId }
     }
     return NextResponse.json({ job: data });
 });
+
+/**
+ * label_geprint_at zetten en de teller ophogen — per eenheid, want de teller
+ * verschilt per rij. Best-effort: de job is al bijgewerkt.
+ */
+async function markeerGeprint(supabase: TenantAuthCtx['supabase'], orgId: string, jobId: string, eenheidIds: string[]): Promise<void> {
+    const nu = new Date().toISOString();
+    const { data } = await supabase
+        .from('voorraad_eenheden')
+        .select('id, label_print_count')
+        .eq('organization_id', orgId)
+        .in('id', eenheidIds);
+    await Promise.all(((data ?? []) as Array<{ id: string; label_print_count: number }>).map((e) =>
+        supabase.from('voorraad_eenheden')
+            .update({ label_geprint_at: nu, label_print_count: (e.label_print_count ?? 0) + 1, laatste_print_job_id: jobId })
+            .eq('id', e.id)
+            .eq('organization_id', orgId),
+    ));
+}

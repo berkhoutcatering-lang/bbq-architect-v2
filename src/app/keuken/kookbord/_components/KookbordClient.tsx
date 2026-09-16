@@ -8,6 +8,8 @@ import MepGerechtGroep from './MepGerechtGroep';
 import MepItemSheet from './MepItemSheet';
 import MepTopBar from './MepTopBar';
 import { MEP_CSS } from './mep-ui';
+import ProductieAfrondenSheet, { type PartijAntwoord } from '@/components/productie/ProductieAfrondenSheet';
+import type { PartijBlok } from '@/lib/productie/validators';
 
 export type MepStatus = 'todo' | 'bezig' | 'klaar';
 
@@ -21,13 +23,26 @@ export interface MepComponentItem {
   base_unit: string;
   preparation_steps: string[] | null;
   allergens: { allergen_code: string }[] | null;
-  haccp_points: { type: string; threshold_value?: number; threshold_unit?: string; note?: string }[] | null;
+  haccp_points: { type: string; threshold_value?: number; threshold_unit?: string; note?: string; verplicht_voor_vrijgave?: boolean }[] | null;
   flavor_tags: string[] | null;
   status: MepStatus;
   started_at: string | null;
   completed_at: string | null;
   completed_by: string | null;
   notes: string | null;
+  /* Productie & bewaren + de partij die er al is (2026-09-16). De kaart-staat
+     "Bereid — afmaken met sticker" komt uit de server, niet uit lokale state. */
+  verpakking_grootte?: number | null;
+  verpakking_eenheid?: string | null;
+  bewaarmethode?: string | null;
+  bewaaradvies?: string | null;
+  houdbaarheid_na_bewerking_dagen?: number | null;
+  partij?: { id: string; partijnummer: string; aantal_eenheden: number; labels_geprint: number; status: string } | null;
+}
+
+/** Bereid, zelf gemaakt, nog geen partij: dit is de kaart die om een sticker vraagt. */
+export function vraagtOmSticker(item: MepComponentItem): boolean {
+  return item.status === 'klaar' && item.type === 'prepared' && !item.partij;
 }
 
 export interface MepGerecht {
@@ -108,6 +123,8 @@ export default function KookbordClient() {
   const [melding, setMelding] = useState('');
   const [resetting, setResetting] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
+  /* "Afmaken met sticker": welk item staat in de afrond-sheet. */
+  const [afmakenItem, setAfmakenItem] = useState<MepComponentItem | null>(null);
 
   useEffect(() => {
     if (!melding) return;
@@ -287,6 +304,24 @@ export default function KookbordClient() {
     done: alleItems.filter(i => i.status === 'klaar').length,
     total: alleItems.length,
   }), [alleItems]);
+  const afTeMaken = useMemo(() => alleItems.filter(vraagtOmSticker).length, [alleItems]);
+
+  const openAfmaken = useCallback((item: MepComponentItem) => {
+    setAfmakenItem(item);
+  }, []);
+
+  /* De partij maken vanaf het kookbord. De MEP-status blijft los: "Zet terug"
+     raakt een bestaande partij nooit. */
+  const rondAf = useCallback(async (blok: PartijBlok): Promise<PartijAntwoord> => {
+    if (!afmakenItem) return { ok: false, error: 'Geen item' };
+    const res = await fetch('/api/productie/partij-afronden', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mepItemId: afmakenItem.mep_item_id, ...blok }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: json.error ?? `Afronden mislukt (${res.status})`, code: json.code };
+    return { ok: true, bestond: !!json.bestond, ...json.partij, eenheden: json.eenheden };
+  }, [afmakenItem]);
 
   const zichtbareGerechten = useMemo(
     () => (mepData?.gerechten ?? []).filter(g => g.components.length > 0),
@@ -321,6 +356,7 @@ export default function KookbordClient() {
         selectedEventId={selectedEventId}
         onEventChange={setSelectedEventId}
         progress={progress}
+        afTeMaken={afTeMaken}
         onReset={handleReset}
         resetting={resetting}
       />
@@ -399,6 +435,7 @@ export default function KookbordClient() {
                   guests={guests}
                   onItemTap={openItem}
                   onStatusToggle={handleStatusToggle}
+                  onAfmaken={openAfmaken}
                 />
               ))}
             </div>
@@ -415,7 +452,29 @@ export default function KookbordClient() {
         onStatusChange={handleStatusToggle}
         onSaveNotes={handleSaveNotes}
         savingNotes={savingNotes}
+        onAfmaken={(item) => { setSheetOpen(false); openAfmaken(item); }}
       />
+
+      {afmakenItem ? (
+        <ProductieAfrondenSheet
+          open={true}
+          onClose={() => { setAfmakenItem(null); if (selectedEventId !== null) void laadMepData(selectedEventId); }}
+          product={{
+            naam: afmakenItem.name,
+            hoeveelheid: afmakenItem.base_quantity > 0 ? Math.round(afmakenItem.base_quantity * guests * 1000) / 1000 : null,
+            eenheid: afmakenItem.base_unit,
+            verpakkingGrootte: afmakenItem.verpakking_grootte ?? null,
+            verpakkingEenheid: afmakenItem.verpakking_eenheid ?? null,
+            bewaarmethode: afmakenItem.bewaarmethode ?? null,
+            bewaaradvies: afmakenItem.bewaaradvies ?? null,
+            houdbaarheidDagen: afmakenItem.houdbaarheid_na_bewerking_dagen ?? null,
+            haccpPunten: (afmakenItem.haccp_points ?? []).map((h) => ({ type: h.type, threshold_value: h.threshold_value ?? null, threshold_unit: h.threshold_unit ?? null, note: h.note ?? null, verplicht_voor_vrijgave: h.verplicht_voor_vrijgave === true })),
+          }}
+          bestaand={afmakenItem.partij ? { id: afmakenItem.partij.id, partijnummer: afmakenItem.partij.partijnummer, aantalEenheden: afmakenItem.partij.aantal_eenheden, labelsGeprint: afmakenItem.partij.labels_geprint } : null}
+          afronden={rondAf}
+          onPartij={() => { if (selectedEventId !== null) void laadMepData(selectedEventId); }}
+        />
+      ) : null}
     </div>
   );
 }
