@@ -32,6 +32,7 @@ import { formatteerAfhaalmoment, kortTijd } from '@/lib/bestelstroom';
 import { magMailVerstuurd } from '@/lib/mailPoort';
 import type { DoosSnapshot } from '@/lib/boxLabel';
 import { markeerAllergieGelezen, zetBestellingStatus, zetVoornaam, noteerStickerGeprint } from './actions';
+import { printCanvas, usePrinters, werkstationPrinter } from '@/lib/labelprinter/client';
 import Afhaalmomenten, { type MomentRij } from './_components/Afhaalmomenten';
 import './bestellingen.css';
 
@@ -91,6 +92,7 @@ function fmtTijdstip(iso: string | null): string {
 export default function BestellingenPagina() {
   const { organization } = useOrg();
   const toast = useToast();
+  const { printers } = usePrinters();
   const confirm = useConfirm();
 
   const [rijen, setRijen] = useState<Bestelling[]>([]);
@@ -172,6 +174,10 @@ export default function BestellingenPagina() {
      op 22 december mag een haperende andere app niet betekenen dat er geen
      stickers uit de printer komen. Ook een herdruk leest deze snapshot, zodat
      de sticker van januari klopt met wat er in díe doos zat. */
+  /* Zebra voor dit apparaat? Dan gaat de sticker daarheen (op de labelmaat van
+     die printer); anders delen/downloaden zoals altijd. */
+  const zebra = werkstationPrinter(printers);
+
   async function printSticker(b: Bestelling) {
     if (!b.afhaalmomenten) { toast('Deze bestelling heeft geen afhaalmoment.', 'error'); return; }
     setBezig(true);
@@ -184,8 +190,15 @@ export default function BestellingenPagina() {
         afhaaldatum: b.afhaalmomenten.datum,
         startTijd: b.afhaalmomenten.start_tijd,
         snapshot: b.doos_snapshot,
+        ...(zebra ? { formaat: { breedte_mm: Number(zebra.label_breedte_mm), hoogte_mm: Number(zebra.label_hoogte_mm), dpi: Number(zebra.dpi) } } : {}),
       });
-      deelOfDownload(canvas, `doos-${b.id}-${b.naam.replace(/[^\w-]+/g, '_')}.png`);
+      if (zebra) {
+        const r = await printCanvas('doos_sticker', canvas, zebra, { aantal: Math.max(1, b.dozen || 1), referentie: { bestelling_id: b.id, naam: b.naam } });
+        if (r.uitkomst.status !== 'success') { toast(r.tekst ?? 'Printen mislukt', 'error'); return; }
+        toast(`${r.uitkomst.geprintAantal} sticker${r.uitkomst.geprintAantal === 1 ? '' : 's'} geprint op ${zebra.naam}`, 'success');
+      } else {
+        deelOfDownload(canvas, `doos-${b.id}-${b.naam.replace(/[^\w-]+/g, '_')}.png`);
+      }
       for (const w of waarschuwingen) toast(w, 'warning');
       await noteerStickerGeprint({ id: b.id });
       await laad();

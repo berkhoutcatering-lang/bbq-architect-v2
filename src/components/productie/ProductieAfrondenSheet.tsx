@@ -275,7 +275,7 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
                                         <div style={{ fontSize: 40, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{aantal} <span style={{ fontSize: 22, fontWeight: 500, color: D.stof }}>× {formatInhoud(perEenheid, verpakkingEenheid)}</span></div>
                                         <div style={{ fontSize: 14, color: D.stof, marginTop: 4 }}>
                                             {uitkomst?.fout ? <span style={{ color: D.rood }}>{uitkomst.fout}</span>
-                                                : uitkomst?.rest ? `${uitkomst.volle} volle + 1 rest van ${formatInhoud(uitkomst.rest, verpakkingEenheid)}`
+                                                : uitkomst?.rest ? (uitkomst.volle === 0 ? `minder dan één verpakking: 1 eenheid van ${formatInhoud(uitkomst.rest, verpakkingEenheid)}` : `${uitkomst.volle} volle + 1 rest van ${formatInhoud(uitkomst.rest, verpakkingEenheid)}`)
                                                     : aantalOverride != null ? 'aantal gecorrigeerd — inhoud gelijk verdeeld' : `${aantal} eenheden = ${aantal} labels`}
                                         </div>
                                     </div>
@@ -348,7 +348,7 @@ export default function ProductieAfrondenSheet({ open, onClose, product, bestaan
                 {stand === 'resultaat' && partij && (
                     <Blok kop="Resultaat">
                         <Regel ok tekst={`Batch ${partij.partijnummer} ${partij.bestond ? 'bestond al' : 'aangemaakt'}`} />
-                        <Regel ok tekst={`${totaal} eenheden in voorraad`} />
+                        <Regel ok tekst={`${totaal} ${totaal === 1 ? 'eenheid' : 'eenheden'} in voorraad`} />
                         <Regel
                             ok={geprint >= totaal}
                             tekst={printBezig ? 'Labels printen…' : `${geprint}/${totaal} labels geprint${print?.tekst ? ` — ${print.tekst}` : ''}`}

@@ -114,7 +114,12 @@ export function printHaccpLabel(data: LabelData): void {
  * NVWA-compliant: bevat datum/tijd, wat, kerntemp, chef, check-type,
  * status (ok of afwijking met visuele rode strook).
  */
-export function printTempRecordLabel(data: TempRecordLabelData): void {
+/**
+ * Sinds 2026-09-16 kan deze sticker ook naar de Zebra: `uitvoer: 'canvas'`
+ * geeft het getekende canvas terug in plaats van delen/downloaden, zodat
+ * src/lib/labelprinter/client.ts (printCanvas) hem als ^GFA kan sturen.
+ */
+export function printTempRecordLabel(data: TempRecordLabelData, uitvoer: 'delen' | 'canvas' = 'delen'): HTMLCanvasElement | void {
     const canvas = document.createElement('canvas');
     canvas.width = 400;
     canvas.height = 300;
@@ -203,6 +208,7 @@ export function printTempRecordLabel(data: TempRecordLabelData): void {
         ctx.fillStyle = '#000000';
     }
 
+    if (uitvoer === 'canvas') return canvas;
     shareOrDownload(
         canvas,
         `HACCP-Temp-${data.wat.replace(/[^a-zA-Z0-9]/g, '_')}-${data.datum}.png`,

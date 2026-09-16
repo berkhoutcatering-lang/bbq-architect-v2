@@ -43,9 +43,13 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
     const config = printer as unknown as PrinterConfig;
     if (!config.actief) return NextResponse.json({ error: 'Deze printer staat op inactief' }, { status: 409 });
 
-    let labelVerzoek: LabelVerzoek;
+    let labelVerzoek: LabelVerzoek = { soort: 'testlabel', data: { printerNaam: config.naam, moment: momentNu() } };
     let partijId: string | null = null;
     switch (verzoek.soort) {
+        case 'doos_sticker':
+        case 'haccp_sticker':
+            /* Op de client getekend; hieronder direct als labels gebruikt. */
+            break;
         case 'testlabel':
             labelVerzoek = { soort: 'testlabel', data: { printerNaam: config.naam, moment: momentNu() } };
             break;
@@ -73,7 +77,13 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
         }
     }
 
-    const gerenderd = renderVerzoek(labelVerzoek, formaatVan(config));
+    const gerenderd = verzoek.soort === 'doos_sticker' || verzoek.soort === 'haccp_sticker'
+        ? {
+            templateCode: verzoek.soort === 'doos_sticker' ? 'doos_canvas' : 'haccp_canvas', templateVersie: 1,
+            labels: Array.from({ length: verzoek.aantal }, () => ({ eenheidId: null, zpl: verzoek.zpl })),
+            waarschuwingen: [] as string[], labelData: { ...(verzoek.referentie ?? {}), aantal: verzoek.aantal },
+        }
+        : renderVerzoek(labelVerzoek, formaatVan(config));
 
     const { data: job, error: jErr } = await supabase
         .from('print_jobs')

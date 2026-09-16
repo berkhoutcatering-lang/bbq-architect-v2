@@ -8,6 +8,7 @@ import { useOrg } from '@/lib/OrgContext';
 import { MobileSafeBottom } from '@/components/mobile';
 import { useToast } from '@/components/Toast';
 import { printTempRecordLabel } from '@/lib/printLabel';
+import { printCanvas, usePrinters, werkstationPrinter } from '@/lib/labelprinter/client';
 import { parseVoiceHaccp } from '@/lib/voiceHaccpParser';
 
 /**
@@ -98,8 +99,13 @@ export default function HaccpFieldPage() {
     const datum = now.toISOString().slice(0, 10);
     const tijd = now.toTimeString().slice(0, 5);
     const statusVal: 'ok' | 'afwijking' = inRange ? 'ok' : 'afwijking';
+    /* De constraint ck_human_confirmed eist een mens achter een handmatige
+       meting (auto_logged=false → confirmed_by_user_id). Zonder dit veld
+       weigerde de database elke veldmeting sinds 2026-05-18. */
+    const { data: { user } } = await supabase.auth.getUser();
     const { data: inserted, error } = await supabase.from('haccp_records').insert({
       organization_id: orgId,
+      confirmed_by_user_id: user?.id ?? null,
       datum,
       tijd,
       wat: watFinal,
@@ -131,13 +137,23 @@ export default function HaccpFieldPage() {
     setNotitie('');
   }
 
-  function handlePrintSticker() {
+  /* Is er een Zebra voor dit apparaat, dan gaat de sticker daarheen; anders
+     zoals altijd delen/downloaden als PNG. */
+  const { printers } = usePrinters();
+  const zebra = werkstationPrinter(printers);
+
+  async function handlePrintSticker() {
     if (!lastSaved) return;
-    printTempRecordLabel({
-      ...lastSaved,
-      org_naam: organization?.name || null,
-      record_id: lastSaved.id ?? null,
-    });
+    const data = { ...lastSaved, org_naam: organization?.name || null, record_id: lastSaved.id ?? null };
+    if (!zebra) { printTempRecordLabel(data); return; }
+    const canvas = printTempRecordLabel(data, 'canvas');
+    if (!canvas) return;
+    try {
+      const r = await printCanvas('haccp_sticker', canvas, zebra, { referentie: { haccp_record_id: lastSaved.id ?? null, wat: lastSaved.wat } });
+      showToast(r.uitkomst.status === 'success' ? 'Sticker geprint op de Zebra' : (r.tekst ?? 'Printen mislukt'), r.uitkomst.status === 'success' ? 'success' : 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Printen mislukt', 'error');
+    }
   }
 
   /* Voice-HACCP — Pillar #4 / Lars-persona. Web Speech API → parse → autofill.
@@ -414,7 +430,7 @@ export default function HaccpFieldPage() {
               {lastSaved && (
                 <button
                   type="button"
-                  onClick={handlePrintSticker}
+                  onClick={() => void handlePrintSticker()}
                   className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-[13px] font-bold bg-[var(--card-solid)] hover:bg-[var(--card-solid)]/80 text-[var(--text)] border border-[var(--card-solid)] touch-manipulation"
                   style={{ minHeight: 56 }}
                 >

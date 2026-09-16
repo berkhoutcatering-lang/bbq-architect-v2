@@ -97,7 +97,12 @@ export type PrintJobVerzoek =
     | { soort: 'testlabel'; printerId: string }
     | { soort: 'los_label'; printerId: string; naam: string; datum: string; tht: string | null; notitie: string | null; aantal: number }
     | { soort: 'partij_labels'; printerId: string; partijId: string; eenheidIds: string[] | null }
-    | { soort: 'herprint'; printerId: string; eenheidIds: string[] };
+    | { soort: 'herprint'; printerId: string; eenheidIds: string[] }
+    /* Een op de client getekende sticker (canvas → ^GFA). Hangt aan niets in
+       de voorraad; de referentie (bestelling, HACCP-record) gaat mee als label_data. */
+    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null };
+
+export const MAX_AFBEELDING_ZPL = 1_900_000; // Browser Print: 2 MB per job
 
 export function validatePrintJob(body: unknown): ValidatorResult<PrintJobVerzoek> {
     if (typeof body !== 'object' || body === null) return { ok: false, error: 'Body verplicht' };
@@ -145,6 +150,17 @@ export function validatePrintJob(body: unknown): ValidatorResult<PrintJobVerzoek
                 return { ok: false, error: 'eenheidIds: 1–200 uuid’s verplicht' };
             }
             return { ok: true, data: { soort: 'herprint', printerId, eenheidIds: ids as string[] } };
+        }
+
+        case 'doos_sticker':
+        case 'haccp_sticker': {
+            const zpl = typeof b.zpl === 'string' ? b.zpl : '';
+            if (!zpl.startsWith('^XA') || !zpl.trimEnd().endsWith('^XZ')) return { ok: false, error: 'zpl moet één ^XA…^XZ-blok zijn' };
+            if (zpl.length > MAX_AFBEELDING_ZPL) return { ok: false, error: 'Sticker is te groot voor de printer (max 2 MB)' };
+            const aantalRuw = b.aantal ?? 1;
+            if (typeof aantalRuw !== 'number' || !Number.isInteger(aantalRuw) || aantalRuw < 1 || aantalRuw > 20) return { ok: false, error: 'Aantal moet tussen 1 en 20 liggen' };
+            const referentie = typeof b.referentie === 'object' && b.referentie !== null ? (b.referentie as Record<string, unknown>) : null;
+            return { ok: true, data: { soort: b.soort, printerId, zpl, aantal: aantalRuw, referentie } };
         }
 
         default:
