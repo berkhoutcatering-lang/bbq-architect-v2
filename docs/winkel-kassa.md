@@ -74,10 +74,13 @@ Wat myPOS ons leerde tijdens het bouwen:
 - `kerst-box-vegetarisch`: zelfde prijs, `publiek = false`, deelt de dagen én de
   capaciteit van de Kerst-Box (`moment_groep = 'kerst-box'`).
 
-## Instellen (nog zonder scherm)
+## Instellen — via /verkoop/webshop
 
-De tabellen `winkel_instellingen`, `winkel_artikelen` en `winkel_momenten` hebben nog
-geen beheerscherm. Wat Mathijs nu zet, gaat via de Supabase-tabel-editor:
+Sinds 25 september 2026 heeft de kassa een beheerscherm: `/verkoop/webshop` met vier
+panelen (Vakjes · Artikelen · Momenten · Instellingen). Zie `docs/webshop-beheer-bouwplan.md`.
+Een betaalde order landt daar in het vakje van de dag waarop hij klaar moet zijn
+(`src/lib/winkel/plaatsing.ts`, aangeroepen uit `verwerkBetaling`). De tabel hieronder
+zegt wat waar staat; de Supabase-tabel-editor is niet meer nodig.
 
 | Wat | Waar |
 | --- | --- |

@@ -16,7 +16,8 @@
 .ws-tab { font-variant-numeric: tabular-nums; }
 
 /* Segment-knop: Vakjes · Artikelen · Momenten · Instellingen */
-.ws-segment { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 12px; max-width: 100%; overflow-x: auto; }
+.ws-segment { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 12px; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.ws-segment::-webkit-scrollbar { display: none; }
 .ws-segment button { height: 34px; padding: 0 16px; border-radius: 9px; border: none; background: transparent; color: var(--muted); font: 600 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .ws-segment button[aria-selected="true"] { background: var(--card-solid); color: var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
 

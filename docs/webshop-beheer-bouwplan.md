@@ -269,6 +269,12 @@ opmerking ernaast. Tests met een nep-client: "waarvan 1 vega" → 1; "geen noten
 
 ## 6 · Volgorde — vier golven, elk apart te mergen
 
+**Stand 25 september 2026:** golf 1 en 2 gebouwd op branch `feat/webshop-vakjes` (migraties
+`winkel_vakjes` + `winkel_regels_klaar_op_trigger` live; scherm naar het Claude Design-ontwerp
+in `.design-import/webshop`; koppelronde live getest: 2 voorstellen, 10× eerlijk "geen").
+Golf 3 (inkoop per vakje, de twee bestelknoppen) en golf 4 (opmerking-lezer) staan open —
+*Bestel alleen dit* staat al in het menu maar is tot golf 3 uitgeschakeld met uitleg.
+
 **Golf 1 — scherm en koppelingen.** Migratie (§2), `/verkoop/webshop` met vier panelen naar het
 Claude Design-ontwerp, server actions, koppel-voorsteller + koppelronde, redirect, tab. Na golf 1
 hoeft de Supabase-editor nooit meer open en heeft elk artikel een gerecht of voorraad-item.
