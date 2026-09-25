@@ -283,7 +283,7 @@ en waar het afwijkt van §4.4/§4.5 hierboven:
   een pseudo-event (`dagPseudoEventId`, negatief) zodat "Webshop · vr 25 sep" apart telt.
 - *Bestel alleen dit* verstuurt elke leverancier-bestelling van het vakje achter elkaar met de
   bestaande verstuur-actie; leveranciers zonder e-mailadres blijven handmatig (PDF).
-Golf 4 (opmerking-lezer) staat open.
+Golf 3 gemerged als PR #239 (2026-09-25). Golf 4 (opmerking-lezer) staat open.
 
 **Golf 1 — scherm en koppelingen.** Migratie (§2), `/verkoop/webshop` met vier panelen naar het
 Claude Design-ontwerp, server actions, koppel-voorsteller + koppelronde, redirect, tab. Na golf 1
