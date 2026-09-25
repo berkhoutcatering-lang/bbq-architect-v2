@@ -1,0 +1,159 @@
+/* ── /verkoop/webshop — de vakjes ──────────────────────────────────────────
+   Ontwerp: .design-import/webshop (Claude Design, 25 sep 2026).
+   Tokens (--bg, --card-solid, --border, --brand-gold, …) bestaan in
+   globals.css; hier alleen wat dit scherm toevoegt, geprefixt ws-*.
+
+   Twee signaalkleuren, elk voor precies één ding:
+     vuur  #E86A2C — een betaald bonnetje dat nergens ligt
+     amber #f59e0b — opmerking niet gelezen, allergie, nog niet gekoppeld */
+
+.ws-root { --ws-vuur: #E86A2C; --ws-warn: #f59e0b; }
+
+.ws-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--brand-gold); }
+.ws-kop { font-family: var(--font-display); font-weight: 200; font-size: 28px; letter-spacing: -.01em; margin: 0; }
+.ws-onderschrift { font-size: 13px; color: var(--muted); }
+.ws-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ws-tab { font-variant-numeric: tabular-nums; }
+
+/* Segment-knop: Vakjes · Artikelen · Momenten · Instellingen */
+.ws-segment { display: inline-flex; gap: 2px; padding: 3px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 12px; max-width: 100%; overflow-x: auto; }
+.ws-segment button { height: 34px; padding: 0 16px; border-radius: 9px; border: none; background: transparent; color: var(--muted); font: 600 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.ws-segment button[aria-selected="true"] { background: var(--card-solid); color: var(--text); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+
+/* Tellers bovenaan: geen sier-stat maar een filter; alleen zichtbaar boven nul. */
+.ws-teller { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--text); font: 600 13px var(--font-sans); cursor: pointer; }
+.ws-teller b { font-family: var(--font-mono); font-weight: 600; }
+.ws-teller[aria-pressed="true"] { background: rgba(255,255,255,.05); }
+.ws-teller-warn { color: var(--ws-warn); border-color: rgba(245,158,11,.3); }
+.ws-teller-vuur { color: var(--ws-vuur); border-color: rgba(232,106,44,.4); background: rgba(232,106,44,.08); }
+
+/* Merkteken: klein, met getal of reden, alleen als het voorkomt. */
+.ws-merk { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ws-merk-warn { background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.30); color: var(--ws-warn); }
+.ws-merk-vuur { background: rgba(232,106,44,.12); border-color: rgba(232,106,44,.4); color: var(--ws-vuur); }
+
+/* Banner: ligt in geen vakje */
+.ws-banner { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 14px; align-items: center; padding: 14px 18px; border-radius: 14px; border: 1px solid rgba(232,106,44,.35); background: rgba(232,106,44,.06); }
+.ws-banner-titel { font-size: 14px; font-weight: 600; color: var(--ws-vuur); }
+
+/* Vakje-kaart */
+.ws-vakje { display: grid; grid-template-columns: 260px minmax(0,1fr) auto; gap: 24px; align-items: start; padding: 20px 22px; cursor: pointer; }
+.ws-vakje-vuur { border-color: rgba(232,106,44,.35); }
+.ws-vakje-datum { font-family: var(--font-display); font-weight: 300; font-size: 24px; line-height: 1.15; margin-top: 6px; }
+.ws-vakje-sub { font-size: 13px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+.ws-vakje-tel { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ws-vakje-wat { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ws-vakje-wat b { color: var(--text); font-weight: 600; }
+.ws-vakje-acties { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.ws-leeg { font-size: 13px; color: var(--muted); padding-top: 2px; }
+
+/* Voortgangsbalk (bezetting) */
+.ws-balk { display: flex; align-items: center; gap: 10px; max-width: 320px; }
+.ws-balk-spoor { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.06); overflow: hidden; }
+.ws-balk-vul { height: 100%; background: var(--brand-gold); }
+.ws-balk-vol .ws-balk-vul { background: var(--ws-warn); }
+.ws-balk-tekst { font-size: 12px; color: var(--muted); font-family: var(--font-mono); white-space: nowrap; }
+.ws-balk-vol .ws-balk-tekst { color: var(--ws-warn); }
+
+/* Bestel-menu */
+.ws-menu-anker { position: relative; }
+.ws-menu { position: absolute; top: 44px; right: 0; z-index: 30; width: 300px; padding: 6px; background: var(--card-solid); border: 1px solid var(--border-strong); border-radius: 12px; box-shadow: 0 16px 40px -8px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.06); display: flex; flex-direction: column; gap: 2px; }
+.ws-menu-item { display: flex; gap: 10px; padding: 10px 12px; border-radius: 8px; background: transparent; border: none; text-align: left; color: var(--text); cursor: pointer; font-family: var(--font-sans); text-decoration: none; }
+.ws-menu-item:hover { background: rgba(255,255,255,.04); }
+.ws-menu-item[aria-disabled="true"] { opacity: .55; cursor: not-allowed; }
+.ws-menu-item b { display: block; font-size: 13px; font-weight: 600; }
+.ws-menu-item span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; text-wrap: pretty; }
+.ws-menu-voet { padding: 8px 11px; border-top: 1px solid var(--border); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+
+/* Drawer-inhoud */
+.ws-tegels { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; }
+.ws-tegel { padding: 12px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 10px; }
+.ws-tegel b { display: block; font-family: var(--font-mono); font-size: 18px; font-weight: 500; }
+.ws-tegel span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ws-order { padding: 14px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.ws-order:last-child { border-bottom: 0; }
+.ws-order-kop { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.ws-order-naam { font-size: 14px; font-weight: 600; }
+.ws-order-nummer { font-family: var(--font-mono); font-size: 12px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.ws-order-wat { font-size: 13px; color: var(--muted); }
+.ws-wensen { margin-top: 4px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.ws-wensen-kop { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: color-mix(in srgb, var(--brand) 5%, transparent); font-size: 13px; }
+.ws-wensen-warn { border-color: rgba(245,158,11,.3); }
+.ws-wensen-warn .ws-wensen-kop { background: rgba(245,158,11,.07); }
+.ws-wensen-origineel { padding: 10px 12px 10px 34px; background: var(--bg-subtle); font-size: 13px; color: var(--muted-light); font-style: italic; }
+.ws-wensen-form { padding: 12px; background: var(--bg-subtle); display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; border-top: 1px solid var(--border); }
+.ws-wensen-form .full { grid-column: 1 / -1; }
+
+/* Klaarzetten (vaste bak) */
+.ws-klaar { display: grid; grid-template-columns: 44px minmax(0,1fr) auto; gap: 10px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.ws-klaar:last-child { border-bottom: 0; }
+.ws-vink { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; padding: 0; }
+.ws-vink span { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; color: #0a0a0c; }
+.ws-vink[aria-checked="true"] span { background: var(--green); border-color: var(--green); }
+.ws-klaar-af { color: var(--muted-weak); }
+.ws-klaar-af .ws-klaar-titel { text-decoration: line-through; }
+.ws-klaar-titel { font-size: 14px; font-weight: 600; }
+.ws-adres { display: flex; gap: 10px; padding: 10px 12px; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; line-height: 1.5; }
+
+/* Tabellen (artikelen, momenten) */
+.ws-tabel-kop, .ws-tabel-rij { display: grid; gap: 14px; padding: 12px 20px; align-items: center; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.ws-tabel-kop { padding: 10px 20px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-weak); }
+.ws-tabel-rij { min-height: 52px; cursor: pointer; }
+.ws-tabel-rij:hover { background: rgba(255,255,255,.025); }
+.ws-tabel-rij:last-child { border-bottom: 0; }
+.ws-artikelen-grid { grid-template-columns: minmax(0,1.6fr) 150px 56px 60px 90px minmax(0,2.6fr); }
+.ws-momenten-grid { grid-template-columns: minmax(0,1.6fr) minmax(0,1.3fr) 130px 170px 44px; }
+.ws-koppeling { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; min-width: 0; }
+.ws-koppeling-voorstel { color: var(--ws-warn); flex-wrap: wrap; gap: 8px; }
+.ws-koppeling-leeg { font-size: 13px; color: var(--muted-weak); }
+
+/* Schakelaar */
+.ws-schakel { width: 34px; height: 20px; border-radius: 999px; background: rgba(255,255,255,.12); position: relative; display: inline-block; border: none; cursor: pointer; padding: 0; flex-shrink: 0; transition: background .15s; }
+.ws-schakel::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: left .15s, background .15s; }
+.ws-schakel[aria-checked="true"] { background: var(--green); }
+.ws-schakel[aria-checked="true"]::after { left: 16px; background: #fff; }
+.ws-schakel-groot { width: 56px; height: 32px; }
+.ws-schakel-groot::after { width: 26px; height: 26px; top: 3px; left: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+.ws-schakel-groot[aria-checked="true"]::after { left: 27px; }
+
+/* Keuzerij in formulieren (telt, btw, afhalen) */
+.ws-keuze { display: flex; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+.ws-keuze button { flex: 1; text-align: center; padding: 8px 0; font: 500 13px var(--font-sans); color: var(--muted); background: transparent; border: none; border-radius: 7px; cursor: pointer; }
+.ws-keuze button[aria-pressed="true"] { background: var(--card-solid); color: var(--text); font-weight: 600; }
+.ws-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ws-chip { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 500 13px var(--font-sans); cursor: pointer; }
+.ws-chip[aria-pressed="true"] { border-color: var(--border-strong); background: rgba(255,255,255,.04); color: var(--text); }
+.ws-chip[aria-pressed="true"] svg { color: var(--green); }
+.ws-pil { padding: 6px 12px; border-radius: 999px; font: 500 12px var(--font-sans); color: var(--muted); border: 1px solid var(--border); background: transparent; cursor: pointer; }
+.ws-pil[aria-pressed="true"] { background: rgba(255,255,255,.08); border-color: var(--border-strong); color: var(--text); font-weight: 600; }
+
+/* Koppeling-kiezer */
+.ws-kies { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; }
+.ws-kies[aria-checked="true"] { border-color: color-mix(in srgb, var(--brand-gold) 50%, transparent); background: color-mix(in srgb, var(--brand) 5%, transparent); }
+.ws-radio { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border-strong); flex-shrink: 0; margin-top: 1px; }
+.ws-kies[aria-checked="true"] .ws-radio { border-width: 6px; border-color: var(--text); }
+.ws-zoek { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 42px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: 10px; }
+.ws-zoek input { flex: 1; background: transparent; border: none; color: var(--text); font: 400 14px var(--font-sans); outline: none; min-width: 0; }
+.ws-zoek-lijst { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--card-solid); }
+.ws-zoek-lijst button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 12px; background: none; border: none; border-bottom: 1px solid var(--border); color: var(--text); font: 400 13px var(--font-sans); text-align: left; cursor: pointer; }
+.ws-zoek-lijst button:hover { background: rgba(255,255,255,.04); }
+.ws-zoek-lijst button:last-child { border-bottom: 0; }
+
+.ws-sectie-kop { font-family: var(--font-display); font-weight: 300; font-size: 19px; }
+.ws-lijn { height: 1px; background: var(--border); }
+.ws-tip { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+
+/* Telefoon */
+@media (max-width: 760px) {
+  .ws-vakje { grid-template-columns: 1fr; gap: 12px; padding: 16px; }
+  .ws-vakje-acties { justify-content: stretch; display: grid; grid-template-columns: 1fr 1fr; }
+  .ws-vakje-acties .ws-primair { grid-column: 1 / -1; }
+  .ws-vakje-acties .btn { justify-content: center; min-height: 44px; }
+  .ws-tegels { grid-template-columns: 1fr 1fr; }
+  .ws-tabel-kop { display: none; }
+  .ws-artikelen-grid, .ws-momenten-grid { grid-template-columns: 1fr; gap: 6px; }
+  .ws-wensen-form { grid-template-columns: 1fr; }
+  .ws-root .mr-drawer { width: 100vw !important; min-width: 0; max-width: 100vw; }
+  .ws-banner { grid-template-columns: auto minmax(0,1fr); }
+  .ws-banner > :last-child { grid-column: 1 / -1; }
+}
