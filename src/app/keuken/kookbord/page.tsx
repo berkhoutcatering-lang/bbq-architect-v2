@@ -7,10 +7,12 @@
  * Tegenhanger: /events/[id]/service voor wat tijdens een event gebeurt.
  */
 
+import { Suspense } from 'react';
 import KookbordClient from './_components/KookbordClient';
 
 export const dynamic = 'force-dynamic';
 
+/* Suspense: KookbordClient leest ?event= via useSearchParams (webshop-vakje → kookbord). */
 export default function KookbordPage() {
-    return <KookbordClient />;
+    return <Suspense fallback={null}><KookbordClient /></Suspense>;
 }

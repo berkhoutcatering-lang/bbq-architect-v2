@@ -29,6 +29,7 @@
  * Naam-matching + derving-constante komen uit de gedeelde inventoryMatch-module.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { gastenVoorGerecht } from '@/lib/menuGasten';
 import {
   DEFAULT_DERVING_PCT,
   norm,
@@ -192,7 +193,7 @@ export async function getInventoryWithDemand(
   // 2. Events in window met demand-status.
   const { data: eventsRaw } = await supabase
     .from('events')
-    .select('id, name, date, guests, status, menu, organization_id')
+    .select('id, name, date, guests, status, menu, organization_id, menu_gasten')
     .eq('organization_id', orgId);
   const events = (eventsRaw || []).filter(function (e: any) {
     if (!DEMAND_STATUSES.includes(String(e.status || '').toLowerCase())) return false;
@@ -349,12 +350,15 @@ export async function getInventoryWithDemand(
 
   events.forEach(function (event: any) {
     const dishNames = extractDishNames(event.menu, gerechtenById);
-    const guests = Number(event.guests) || 0;
-    if (guests <= 0 || dishNames.length === 0) return;
+    if ((Number(event.guests) || 0) <= 0 || dishNames.length === 0) return;
 
     dishNames.forEach(function (dishName) {
       const g = gerechtenByNorm.get(norm(dishName));
       if (!g) return;
+
+      /* Webshop-vakje: per gerecht een eigen aantal (menu_gasten); anders de gasten van het event. */
+      const guests = gastenVoorGerecht(event, String(g.id));
+      if (guests <= 0) return;
 
       const costs = Array.isArray(g.ingredient_costs) ? g.ingredient_costs : [];
 
