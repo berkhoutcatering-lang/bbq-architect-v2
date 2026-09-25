@@ -68,14 +68,15 @@ STRIKTE REGELS:
 4. Verzin geen prijzen, hoeveelheden of ingrediënten. Alleen de koppeling.
 5. Output: één JSON-array, per artikel {"artikel_id","soort","id","zekerheid","reden"}. Geen markdown, geen uitleg buiten de array. 'reden' is één korte Nederlandse zin.`;
 
+/* Per artikel gekeurd, niet de hele lijst tegelijk: één rare regel mag de
+   andere elf niet meenemen. Een te lange reden wordt ingekort, niet afgekeurd. */
 const voorstelSchema = z.object({
     artikel_id: z.string().min(1),
     soort: z.enum(['gerecht', 'voorraad', 'geen']),
     id: z.union([z.string(), z.number()]).nullable().optional(),
     zekerheid: z.enum(['hoog', 'laag']).optional().default('laag'),
-    reden: z.string().max(240).optional().default(''),
+    reden: z.string().optional().default('').transform((s) => s.trim().slice(0, 240)),
 });
-const uitvoerSchema = z.array(voorstelSchema).max(MAX_ARTIKELEN_PER_AANROEP);
 
 async function metHerhaling<T>(fn: () => Promise<T>, pogingen = 3): Promise<T> {
     let laatste: unknown;
@@ -164,18 +165,27 @@ export async function stelKoppelingenVoor(
     const voorstellen = new Map<string, KoppelVoorstel>();
     let parsed: unknown;
     try {
-        parsed = JSON.parse(tekst.replace(/^[\s\S]*?(\[)/, '[').replace(/](?![\s\S]*])/, ']').trim());
+        const begin = tekst.indexOf('[');
+        const einde = tekst.lastIndexOf(']');
+        parsed = JSON.parse(begin >= 0 && einde > begin ? tekst.slice(begin, einde + 1) : tekst);
     } catch {
+        console.warn('[winkelKoppelVoorsteller] onleesbaar antwoord:', tekst.slice(0, 400));
         return { voorstellen, costCents, fout: 'Het antwoord van de koppel-voorsteller was niet leesbaar. Koppel zelf.' };
     }
-    const r = uitvoerSchema.safeParse(parsed);
-    if (!r.success) return { voorstellen, costCents, fout: 'Het antwoord van de koppel-voorsteller had niet de verwachte vorm. Koppel zelf.' };
+    if (!Array.isArray(parsed)) {
+        console.warn('[winkelKoppelVoorsteller] geen lijst:', tekst.slice(0, 400));
+        return { voorstellen, costCents, fout: 'Het antwoord van de koppel-voorsteller had niet de verwachte vorm. Koppel zelf.' };
+    }
 
     const gerechtOpId = new Map(gerechten.map((g) => [g.id, g]));
     const voorraadOpId = new Map(voorraad.map((v) => [String(v.id), v]));
     const artikelIds = new Set(artikelen.map((a) => a.id));
-    for (const v of r.data) {
-        if (!artikelIds.has(v.artikel_id)) continue;
+    let afgekeurd = 0;
+    for (const ruw of parsed) {
+        const k = voorstelSchema.safeParse(ruw);
+        if (!k.success) { afgekeurd += 1; console.warn('[winkelKoppelVoorsteller] regel afgekeurd:', JSON.stringify(ruw).slice(0, 200), k.error.issues[0]?.message); continue; }
+        const v = k.data;
+        if (!artikelIds.has(v.artikel_id)) { afgekeurd += 1; continue; }
         const reden = v.reden.trim();
         if (v.soort === 'gerecht') {
             const g = v.id != null ? gerechtOpId.get(String(v.id)) : undefined;
@@ -191,7 +201,8 @@ export async function stelKoppelingenVoor(
             voorstellen.set(v.artikel_id, { soort: 'geen', id: null, naam: null, zekerheid: 'laag', reden: reden || 'Nog niets passends; maak eerst een gerecht of voorraad-item aan.' });
         }
     }
-    return { voorstellen, costCents };
+    const fout = voorstellen.size === 0 && afgekeurd > 0 ? 'De koppel-voorsteller gaf geen bruikbaar antwoord. Koppel zelf.' : undefined;
+    return { voorstellen, costCents, fout };
 }
 
 export const KOPPEL_MODEL = MODEL_HAIKU;
