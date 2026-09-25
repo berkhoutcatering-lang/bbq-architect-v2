@@ -16,6 +16,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { betaalFormulierHtml, getTxnStatus, leesBetaalbericht, purchaseVelden, refund, type MyposConfig } from '@/lib/mypos/ipc';
 import { berekenOfferte, maskeerEmail, momentOpen, naarMoment, vandaagISO, type MomentRij, type OfferteInternUitkomst } from './rekenen';
+import { plaatsBestelling } from './plaatsing';
 import type { OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
 import type { Mand, Moment, Offerte, Offerteregel, OfferteUitkomst, OrderUitkomst, Orderstatus } from './types';
 
@@ -353,6 +354,9 @@ async function verwerkBetaling(ctx: KassaContext, tenant: Tenant, order: OrderRi
         } catch (e) {
             await ctx.store.noteerMail(order.id, 'mislukt', e instanceof Error ? e.message : 'onbekend');
         }
+        /* Dan het vakje (plan §4). Gooit nooit; een fout staat in de order
+           met de knop "Plaats opnieuw" in het scherm. */
+        await plaatsBestelling(ctx.store, tenant, bijgewerkt, ctx.nu?.());
         return bijgewerkt;
     }
 

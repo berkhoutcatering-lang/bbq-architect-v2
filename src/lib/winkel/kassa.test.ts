@@ -293,6 +293,21 @@ describe('webhook', () => {
         expect(mails).toHaveLength(1);
     });
 
+    it('een betaalde order ligt daarna in het vakje van zijn moment (plan §4)', async () => {
+        const { order } = await orderMetPoging();
+        await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(order.mypos_order_id!));
+        expect(store.events).toHaveLength(1);
+        expect(store.events[0]).toMatchObject({ name: 'Borrel Journey · afhalen', date: '2026-10-03', start_time: '16:00:00', winkel_moment_id: 'm-1', guests: 8, status: 'confirmed', type: 'Webshop' });
+        expect(store.orders[0]).toMatchObject({ plaatsing_status: 'geplaatst', plaatsing_fout: null });
+        expect(store.orders[0]?.regels[0]).toMatchObject({ klaar_op: '2026-10-03', event_id: store.events[0].id });
+
+        /* Tweede plank op hetzelfde moment: zelfde event, telt op. */
+        const { order: o2 } = await orderMetPoging('sleutel-s-2');
+        await verwerkBetaalbericht(ctx, 'hop-en-bites', notify(o2.mypos_order_id!, { IPC_Trnref: 'TRN-9' }));
+        expect(store.events).toHaveLength(1);
+        expect(store.events[0]?.guests).toBe(16);
+    });
+
     it('een bericht voor een eerdere poging hoort bij dezelfde order', async () => {
         const { token, order } = await orderMetPoging();
         await terugVanMypos(ctx, 'hop-en-bites', token, 'afgebroken');

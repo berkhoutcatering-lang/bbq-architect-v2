@@ -39,6 +39,12 @@ export interface Artikel {
     voorraad_bezet?: number;
     actief: boolean;
     publiek: boolean;
+    /* Koppeling voor de vakjes (plan §2.1). De kassa rekent er niet mee; de
+       plaatsing wel. Hooguit één van gerecht_id / inventory_id is gevuld. */
+    gerecht_id?: string | null;
+    inventory_id?: number | null;
+    inkoop_per_stuk?: number | null;
+    dieet?: 'vegetarisch' | 'veganistisch' | null;
 }
 
 export interface MomentRij {
