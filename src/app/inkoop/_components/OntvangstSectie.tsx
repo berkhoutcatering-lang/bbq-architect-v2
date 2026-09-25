@@ -34,6 +34,8 @@ export interface SentOrder {
     sent_at: string | null;
     window_end: string | null;
     total_eur: number | null;
+    /** Alleen bij "Bestel alleen dit" vanuit een webshop-vakje. */
+    vakje_label?: string | null;
     lines: SentOrderLine[];
 }
 
@@ -85,6 +87,7 @@ export default function OntvangstSectie({ orders }: { orders: SentOrder[] }) {
                             <div style={{ minWidth: 0 }}>
                                 <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     {o.leverancier_naam}
+                                    {o.vakje_label && <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--brand-gold)' }}>· alleen voor {o.vakje_label}</span>}
                                     {late && (
                                         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, background: 'rgba(239,68,68,.12)', color: 'var(--red, #ef4444)', border: '1px solid rgba(239,68,68,.3)' }}>
                                             te laat

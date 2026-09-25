@@ -269,11 +269,21 @@ opmerking ernaast. Tests met een nep-client: "waarvan 1 vega" → 1; "geen noten
 
 ## 6 · Volgorde — vier golven, elk apart te mergen
 
-**Stand 25 september 2026:** golf 1 en 2 gebouwd op branch `feat/webshop-vakjes` (migraties
-`winkel_vakjes` + `winkel_regels_klaar_op_trigger` live; scherm naar het Claude Design-ontwerp
-in `.design-import/webshop`; koppelronde live getest: 2 voorstellen, 10× eerlijk "geen").
-Golf 3 (inkoop per vakje, de twee bestelknoppen) en golf 4 (opmerking-lezer) staan open —
-*Bestel alleen dit* staat al in het menu maar is tot golf 3 uitgeschakeld met uitleg.
+**Stand 25 september 2026:** golf 1 en 2 live op main (PR #238); golf 3 gebouwd op
+`feat/webshop-inkoop-vakje` (migratie `concept_inkoop_orders_vakje` live). Wat golf 3 precies doet,
+en waar het afwijkt van §4.4/§4.5 hierboven:
+- `/inkoop?vakje=<sleutel>` = alleen de vraag van dat vakje, **zonder par** (dat is wat je altijd in
+  huis wilt, niet wat dit vakje nodig heeft) en **zonder de handmatige overrides** van de gewone
+  lijst; voorraad en wat onderweg is gaan er wel vanaf. Eigen concept-bestellingen per leverancier
+  (`concept_inkoop_orders.vakje` + `vakje_label`, één kolom met de sleutel i.p.v. twee).
+- `/inkoop?let=<sleutel>` = de gewone lijst met de regels van dat vakje gemarkeerd ("Mee met de
+  volgende bestelling"). Buiten de 14 dagen zegt de strook dat eerlijk.
+- Losse webshop-producten (artikel → voorraad-item) tellen als vraag op de dag van hun vakje,
+  **zonder derving** (`berekenTekort.reservedExact`): 6 flessen verkocht = 6 flessen. Een dag met
+  een pseudo-event (`dagPseudoEventId`, negatief) zodat "Webshop · vr 25 sep" apart telt.
+- *Bestel alleen dit* verstuurt elke leverancier-bestelling van het vakje achter elkaar met de
+  bestaande verstuur-actie; leveranciers zonder e-mailadres blijven handmatig (PDF).
+Golf 4 (opmerking-lezer) staat open.
 
 **Golf 1 — scherm en koppelingen.** Migratie (§2), `/verkoop/webshop` met vier panelen naar het
 Claude Design-ontwerp, server actions, koppel-voorsteller + koppelronde, redirect, tab. Na golf 1

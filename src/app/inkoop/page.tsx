@@ -13,7 +13,9 @@
  */
 import { redirect } from 'next/navigation';
 import { createServerSupabase } from '@/lib/supabase-server';
+import Link from 'next/link';
 import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
+import { dagPseudoEventId, resolveVakje } from '@/lib/dal/vakje';
 import PageHeader from '@/components/PageHeader';
 import PageGuideNote from '@/components/PageGuideNote';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -23,10 +25,12 @@ import FactuurNaarVoorraadButton from './_components/FactuurNaarVoorraadButton';
 
 export const dynamic = 'force-dynamic';
 
-export default async function InkoopPage({ searchParams }: { searchParams: Promise<{ winkel?: string }> }) {
+export default async function InkoopPage({ searchParams }: { searchParams: Promise<{ winkel?: string; vakje?: string; let?: string }> }) {
     /* ?winkel=<leverancier-id> = "vandaag naar de …": elke regel naar die winkel.
        Zonder param: elk item bij zijn vaste leverancier. In de URL, zodat een
-       herlaad of een gedeelde link dezelfde lijst geeft. */
+       herlaad of een gedeelde link dezelfde lijst geeft.
+       ?vakje=<sleutel> = alleen wat dit webshop-vakje nodig heeft (plan §4.5).
+       ?let=<sleutel>   = de gewone lijst, met de regels van dat vakje gemarkeerd. */
     const sp = await searchParams;
     const winkelParam = Number(sp?.winkel);
     const winkel = Number.isInteger(winkelParam) && winkelParam > 0 ? winkelParam : null;
@@ -51,8 +55,15 @@ export default async function InkoopPage({ searchParams }: { searchParams: Promi
        Die draaide dus twee keer naast elkaar, elk goed voor acht queries op een
        rij. De twee getallen die de empty-state nodig had komen nu mee in
        summary.demand_meta. */
+    const vakje = sp?.vakje ? await resolveVakje(sb, orgId, sp.vakje) : null;
+    const vakjeOnbekend = Boolean(sp?.vakje) && !vakje;
+    const letOpVakje = !vakje && sp?.let ? await resolveVakje(sb, orgId, sp.let) : null;
+    const letOp = letOpVakje
+        ? { label: letOpVakje.label, datum: letOpVakje.datum, eventIds: [letOpVakje.eventId ?? dagPseudoEventId(letOpVakje.datum)] }
+        : null;
+
     const [summary, leveranciersRes, sentOrdersRes] = await Promise.all([
-        buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true, winkel }).catch((e) => {
+        buildBestelvoorstel(sb, orgId, 14, { persistConcepts: true, winkel, vakje }).catch((e) => {
             console.error('[/inkoop] buildBestelvoorstel failed', e);
             return null;
         }),
@@ -62,7 +73,7 @@ export default async function InkoopPage({ searchParams }: { searchParams: Promi
             .order('naam', { ascending: true }),
         // Verzonden orders + hun regels voor de "Onderweg"-sectie (ontvangst-loop).
         sb.from('concept_inkoop_orders')
-            .select('id, leverancier_id, sent_at, window_end, total_eur, inkoop_order_lines(id, inventory_id, naam, qty_ordered, qty_received, unit, unit_price_eur)')
+            .select('id, leverancier_id, sent_at, window_end, total_eur, vakje_label, inkoop_order_lines(id, inventory_id, naam, qty_ordered, qty_received, unit, unit_price_eur)')
             .eq('organization_id', orgId)
             .eq('status', 'sent')
             .order('sent_at', { ascending: false }),
@@ -88,6 +99,7 @@ export default async function InkoopPage({ searchParams }: { searchParams: Promi
             sent_at: o.sent_at ?? null,
             window_end: o.window_end ?? null,
             total_eur: o.total_eur == null ? null : Number(o.total_eur),
+            vakje_label: (o.vakje_label as string | null) ?? null,
             lines: ((o.inkoop_order_lines as any[]) || []).map((l) => ({
                 id: l.id as string,
                 inventory_id: l.inventory_id == null ? null : Number(l.inventory_id),
@@ -125,13 +137,23 @@ export default async function InkoopPage({ searchParams }: { searchParams: Promi
         <RequireTier feature="inkoop">
             <div className="artisan-page inkoop-page">
                 <PageHeader
-                    title="Inkoop"
-                    description={`Minimale voorraad aanvullen + bestellen voor de events komende ${summary.totals.window_days} dagen`}
+                    title={summary.vakje ? 'Wat je hiervoor bestelt' : 'Inkoop'}
+                    description={summary.vakje
+                        ? 'Alleen wat dit vakje nodig heeft, per leverancier, afgerond op wat je kúnt bestellen.'
+                        : `Minimale voorraad aanvullen + bestellen voor de events komende ${summary.totals.window_days} dagen`}
                 />
 
-                <div style={{ margin: '4px 0 14px' }}>
-                    <FactuurNaarVoorraadButton />
-                </div>
+                {vakjeOnbekend && (
+                    <div style={{ margin: '4px 0 14px', padding: '12px 16px', borderRadius: 12, border: '1px solid rgba(245,158,11,.3)', background: 'rgba(245,158,11,.06)', fontSize: 13 }}>
+                        Dit vakje heeft nog geen event — de orders zijn nog niet geplaatst. Ga terug naar <Link href="/verkoop/webshop" style={{ color: 'var(--brand-gold)' }}>Webshop</Link> en klik <em>Plaats opnieuw</em>. Hieronder staat de gewone lijst.
+                    </div>
+                )}
+
+                {!summary.vakje && (
+                    <div style={{ margin: '4px 0 14px' }}>
+                        <FactuurNaarVoorraadButton />
+                    </div>
+                )}
 
                 {/* icon-prop bewust niet gezet — Lucide-components mogen niet
                     van een Server Component naar een Client Component (React 19);
@@ -152,9 +174,10 @@ export default async function InkoopPage({ searchParams }: { searchParams: Promi
                     leveranciers={leveranciers}
                     events_count={events_count}
                     has_menu_items={has_menu_items}
+                    letOp={letOp}
                 />
 
-                <OntvangstSectie orders={sentOrders} />
+                {!summary.vakje && <OntvangstSectie orders={sentOrders} />}
             </div>
         </RequireTier>
     );

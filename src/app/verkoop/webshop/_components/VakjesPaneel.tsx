@@ -204,14 +204,14 @@ function BestelMenu({ v, vandaag, vol = false }: { v: Vakje; vandaag: string; vo
             </button>
             {open && (
                 <div className="ws-menu">
-                    <Link className="ws-menu-item" href={`/inkoop?vakje=${encodeURIComponent(v.sleutel)}`}>
+                    <Link className="ws-menu-item" href={`/inkoop?let=${encodeURIComponent(v.sleutel)}`}>
                         <span style={{ color: 'var(--brand-gold)', display: 'flex', paddingTop: 2 }}><CalendarDays size={15} /></span>
-                        <div><b>Mee met de volgende bestelling</b><span>{inVenster ? 'Staat op de lijst van vandaag, bij de vaste leveranciers.' : `Staat vanaf ${vanaf} vanzelf op de lijst.`}</span></div>
+                        <div><b>Mee met de volgende bestelling</b><span>{inVenster ? 'Staat op de lijst van vandaag, bij de vaste leveranciers — de regels zijn gemarkeerd.' : `Staat vanaf ${vanaf} vanzelf op de lijst.`}</span></div>
                     </Link>
-                    <div className="ws-menu-item" aria-disabled="true" title="Komt met de inkoop-golf">
+                    <Link className="ws-menu-item" href={`/inkoop?vakje=${encodeURIComponent(v.sleutel)}`}>
                         <span style={{ color: 'var(--brand-gold)', display: 'flex', paddingTop: 2 }}><Send size={15} /></span>
-                        <div><b>Bestel alleen dit</b><span>Een losse bestelling voor alleen dit vakje — komt met de inkoop-golf. Tot dan: via Inkoop.</span></div>
-                    </div>
+                        <div><b>Bestel alleen dit</b><span>Een losse bestelling voor alleen dit vakje, per leverancier. De vaste ronde blijft zoals hij is.</span></div>
+                    </Link>
                     {v.nietGeplaatst > 0 && <div className="ws-menu-voet" style={{ color: 'var(--ws-vuur)' }}><CircleAlert size={12} />{v.nietGeplaatst} niet geplaatste {v.nietGeplaatst === 1 ? 'order zit' : 'orders zitten'} hier niet in</div>}
                     {vol && <div className="ws-menu-voet" style={{ color: 'var(--ws-warn)' }}><TriangleAlert size={12} />dit vak is vol</div>}
                 </div>

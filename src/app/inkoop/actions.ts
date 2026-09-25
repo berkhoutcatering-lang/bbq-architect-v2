@@ -26,6 +26,7 @@ import {
     type OrderItemSnapshot,
 } from '@/lib/dal/inkoopOrders';
 import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
+import { resolveVakje } from '@/lib/dal/vakje';
 import { InkoopOrderPdf, determineBtwPct } from '@/lib/pdf/InkoopOrderPdf';
 
 import { formatEur } from '@/lib/format';
@@ -168,8 +169,13 @@ export async function sendOrderToSupplierAction(input: unknown) {
 
         // 2. Recompute de bestelvoorstel-snapshot zodat we de meest actuele
         //    qty's verzenden (overrides toegepast). We filteren op deze ene
-        //    leverancier-bucket.
-        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, winkel: parsed.winkel_id ?? null });
+        //    leverancier-bucket. Een vakje-bestelling rekent alleen dat vakje.
+        let vakje = null;
+        if (order.vakje) {
+            vakje = await resolveVakje(sb, orgId, order.vakje);
+            if (!vakje) throw new Error('Het vakje van deze bestelling bestaat niet meer — plaats de orders opnieuw in Webshop');
+        }
+        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, winkel: parsed.winkel_id ?? null, vakje });
         const bucket = summary.per_leverancier.find(function (b) {
             return b.leverancier_id === order.leverancier_id
                 || (b.leverancier_id == null && order.leverancier_id == null);

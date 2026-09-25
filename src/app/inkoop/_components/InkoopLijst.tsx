@@ -43,10 +43,13 @@ import {
     ChevronRight,
     ExternalLink,
     Link2,
+    Filter,
+    CalendarDays,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/Toast';
+import { useConfirm } from '@/components/ConfirmDialog';
 import InkoopEmpty from './InkoopEmpty';
 import MissingSupplierBanner from './MissingSupplierBanner';
 import { formatEur } from '@/lib/format';
@@ -67,6 +70,8 @@ interface InkoopLijstProps {
     leveranciers: Array<{ id: number; naam: string; type: string; email: string | null; tel: string | null }>;
     events_count: number;
     has_menu_items: boolean;
+    /** "Mee met de volgende bestelling" vanuit een webshop-vakje: markeer de regels van dat vakje. */
+    letOp?: { label: string; datum: string; eventIds: number[] } | null;
 }
 
 export default function InkoopLijst(props: InkoopLijstProps) {
@@ -146,11 +151,30 @@ export default function InkoopLijst(props: InkoopLijstProps) {
 
     const knownBuckets = optimisticSummary.per_leverancier.filter(function (l) { return l.leverancier_id != null; });
 
+    const vakje = optimisticSummary.vakje;
+    const letOpIds = useMemo(function () { return new Set(props.letOp?.eventIds ?? []); }, [props.letOp]);
+    const letOpTreffers = useMemo(function () {
+        if (letOpIds.size === 0) return 0;
+        return optimisticSummary.per_leverancier.reduce(function (s, l) {
+            return s + l.items.filter(function (it) { return it.events.some(function (e) { return letOpIds.has(e.event_id); }); }).length;
+        }, 0);
+    }, [optimisticSummary, letOpIds]);
+
     // Lege-state pad.
     if (
         optimisticSummary.per_leverancier.length === 0
         && optimisticSummary.unmatched_ingredients.length === 0
     ) {
+        if (vakje) {
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <VakjeStrook vakje={vakje} />
+                    <div style={{ padding: 24, borderRadius: 14, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', fontSize: 14 }}>
+                        Niets te bestellen — alles voor dit vakje is op voorraad, of de artikelen zijn nog niet aan een gerecht of voorraad-item gekoppeld (zie <Link href="/verkoop/webshop#artikelen" style={{ color: 'var(--brand-gold)' }}>Webshop · Artikelen</Link>).
+                    </div>
+                </div>
+            );
+        }
         return (
             <InkoopEmpty
                 eventsInWindow={props.events_count}
@@ -161,7 +185,20 @@ export default function InkoopLijst(props: InkoopLijstProps) {
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <WinkelKeuzeBalk summary={optimisticSummary} />
+            {vakje && <VakjeStrook vakje={vakje} />}
+            {props.letOp && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, border: '1px solid rgba(196,163,90,.4)', background: 'rgba(196,163,90,.08)', fontSize: 13 }}>
+                    <Filter size={15} style={{ color: 'var(--brand-gold)', flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                        <b>{props.letOp.label}</b>{' '}
+                        {letOpTreffers > 0
+                            ? (letOpTreffers === 1 ? '— 1 regel van dit vakje staat op de lijst en is gemarkeerd.' : `— ${letOpTreffers} regels van dit vakje staan op de lijst en zijn gemarkeerd.`)
+                            : `— staat nog niet op deze lijst: de dag valt buiten de ${optimisticSummary.totals.window_days} dagen, of alles is al op voorraad.`}
+                    </span>
+                    <Link href="/verkoop/webshop" className="btn btn-ghost btn-sm">Terug naar het vakje</Link>
+                </div>
+            )}
+            {!vakje && <WinkelKeuzeBalk summary={optimisticSummary} />}
             <Header summary={optimisticSummary} />
 
             <MissingSupplierBanner
@@ -189,12 +226,22 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                         applyPatch={applyPatch}
                         onPDF={() => setPdfPreviewFor(bucket)}
                         onAfterSend={() => router.refresh()}
+                        letOpIds={letOpIds}
                     />
                 );
             })}
 
             {optimisticSummary.winkel && optimisticSummary.niet_bij_winkel.length > 0 && (
                 <NietBijWinkel summary={optimisticSummary} />
+            )}
+
+            {vakje && (
+                <VakjeKeuze
+                    vakje={vakje}
+                    buckets={knownBuckets}
+                    onVerstuurd={() => router.refresh()}
+                    showToast={showToast}
+                />
             )}
 
             {pdfPreviewFor && (
@@ -209,6 +256,102 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                     showToast={showToast}
                 />
             )}
+        </div>
+    );
+}
+
+/* ── Webshop-vakje (docs/webshop-beheer-bouwplan.md §4.5) ─────────────────── */
+
+function VakjeStrook({ vakje }: { vakje: NonNullable<BestelvoorstelSummary['vakje']> }) {
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderRadius: 12,
+            border: '1px solid rgba(196,163,90,.4)', background: 'rgba(196,163,90,.08)',
+        }}>
+            <Filter size={16} style={{ color: 'var(--brand-gold)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0, fontSize: 14 }}>
+                <span style={{ fontWeight: 600 }}>Inkoop voor {vakje.label}</span>
+                <span style={{ color: 'var(--muted)' }}> · alleen wat dit vakje nodig heeft, zonder je minimale voorraad</span>
+            </div>
+            <Link href="/verkoop/webshop" className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }}>Terug naar het vakje</Link>
+        </div>
+    );
+}
+
+/* De twee keuzes onderaan een vakje-lijst. "Mee met de volgende bestelling" is
+   een link: het vakje telt al mee op de gewone lijst zodra het in het venster
+   valt. "Bestel alleen dit" verstuurt élke leverancier-bestelling van dit vakje
+   achter elkaar, met dezelfde actie als de losse Verstuur-knop. */
+function VakjeKeuze({ vakje, buckets, onVerstuurd, showToast }: {
+    vakje: NonNullable<BestelvoorstelSummary['vakje']>;
+    buckets: BestelvoorstelLeverancier[];
+    onVerstuurd: () => void;
+    showToast: (msg: any, type?: any) => void;
+}) {
+    const confirm = useConfirm();
+    const [isPending, startTransition] = useTransition();
+    const verstuurbaar = buckets.filter(function (b) { return b.concept_order_id && b.leverancier_email && b.items.length > 0; });
+    const handmatig = buckets.filter(function (b) { return b.items.length > 0 && !b.leverancier_email; });
+    const zonderPrijs = buckets.reduce(function (s, b) { return s + b.items.filter(function (it) { return it.price_unknown; }).length; }, 0);
+    const vanaf = (function () {
+        const d = new Date(vakje.datum + 'T00:00:00');
+        d.setDate(d.getDate() - 14);
+        return d.toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' });
+    })();
+
+    async function bestelAlleenDit() {
+        const ok = await confirm({
+            title: `${verstuurbaar.length} ${verstuurbaar.length === 1 ? 'bestelling' : 'bestellingen'} versturen voor ${vakje.label}?`,
+            description: `${verstuurbaar.map(function (b) { return `${b.leverancier_naam} (${formatEur(b.subtotal_eur)})`; }).join(', ')}. Elke leverancier krijgt een e-mail met PDF. De vaste ronde blijft zoals hij is.${handmatig.length ? ` ${handmatig.map(function (b) { return b.leverancier_naam; }).join(', ')} heeft geen e-mailadres: die haal je zelf via de PDF.` : ''}`,
+            confirmText: 'Bestel alleen dit',
+        });
+        if (!ok) return;
+        startTransition(async function () {
+            const gelukt: string[] = [];
+            const mislukt: string[] = [];
+            for (const b of verstuurbaar) {
+                const res = await sendOrderToSupplierAction({ concept_order_id: b.concept_order_id!, winkel_id: null });
+                if (res.ok) gelukt.push(`${b.leverancier_naam} (${res.ordernummer}${res.email_delivered ? '' : ', mail niet verstuurd'})`);
+                else mislukt.push(`${b.leverancier_naam}: ${res.error || 'onbekend'}`);
+            }
+            if (gelukt.length) showToast(`Verstuurd: ${gelukt.join(' · ')}`, mislukt.length ? 'warning' : 'success');
+            if (mislukt.length) showToast(`Niet verstuurd — ${mislukt.join(' · ')}`, 'error');
+            onVerstuurd();
+        });
+    }
+
+    const kaart: React.CSSProperties = { padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12, borderRadius: 14, background: 'var(--card)', border: '1px solid var(--border)' };
+    return (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+            <div style={kaart}>
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Mee met de volgende bestelling</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, textWrap: 'pretty' }}>
+                        {vakje.buiten_venster ? `Staat vanaf ${vanaf} vanzelf op de lijst. Je hoeft nu niets te doen.` : 'Staat al op de gewone lijst, bij je vaste leveranciers. Je hoeft nu niets te doen.'}
+                    </div>
+                </div>
+                <Link href={`/inkoop?let=${encodeURIComponent(vakje.sleutel)}`} className="btn btn-ghost" style={{ alignSelf: 'flex-start' }}>
+                    <CalendarDays size={14} /> Bekijk de gewone lijst
+                </Link>
+            </div>
+            <div style={kaart}>
+                <div>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Bestel alleen dit</div>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, textWrap: 'pretty' }}>
+                        {verstuurbaar.length === 0
+                            ? (handmatig.length ? 'Geen leverancier met e-mailadres — haal het zelf via de PDF per leverancier.' : 'Niets te versturen.')
+                            : `${verstuurbaar.length} losse ${verstuurbaar.length === 1 ? 'bestelling' : 'bestellingen'}, nu verstuurd. De vaste ronde blijft zoals hij is.`}
+                    </div>
+                </div>
+                <button type="button" className="btn btn-brand" style={{ alignSelf: 'flex-start' }} disabled={isPending || verstuurbaar.length === 0} onClick={bestelAlleenDit}>
+                    <Send size={14} /> {isPending ? 'Versturen…' : 'Bestel alleen dit'}
+                </button>
+                {zonderPrijs > 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--amber, #f59e0b)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <AlertTriangle size={12} /> {zonderPrijs} {zonderPrijs === 1 ? 'regel' : 'regels'} zonder prijs — telt niet mee in het totaal
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -317,7 +460,7 @@ function Header({ summary }: { summary: BestelvoorstelSummary }) {
             <KpiTile
                 icon={<span style={{ fontSize: 16, fontWeight: 700 }}>€</span>}
                 value={summary.totals.estimated_total_eur.toLocaleString('nl-NL', { style: 'currency', currency: 'EUR' })}
-                sub={`geschat · volgende ${summary.totals.window_days}d`}
+                sub={summary.vakje ? 'geschat · dit vakje' : `geschat · volgende ${summary.totals.window_days}d`}
             />
         </div>
     );
@@ -368,9 +511,11 @@ interface SupplierCardProps {
     applyPatch: (patch: any) => void;
     onPDF: () => void;
     onAfterSend: () => void;
+    /** Event-id's (of pseudo-id's van een webshop-dag) waarvan de regels gemarkeerd worden. */
+    letOpIds?: Set<number>;
 }
 
-function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: SupplierCardProps) {
+function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, letOpIds }: SupplierCardProps) {
     const isManual = !bucket.leverancier_email;
     const earliestEventDate = useMemo(function () {
         const dates = bucket.items.flatMap(function (it) { return it.events.map(function (e) { return e.event_date; }); });
@@ -510,6 +655,7 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend }: 
                             otherSuppliers={leveranciers.filter(function (l) { return l.id !== bucket.leverancier_id; })}
                             isLast={idx === bucket.items.length - 1}
                             applyPatch={applyPatch}
+                            letOp={!!letOpIds && letOpIds.size > 0 && item.events.some(function (e) { return letOpIds.has(e.event_id); })}
                         />
                     );
                 })}
@@ -576,9 +722,11 @@ interface ItemRowProps {
     otherSuppliers: Array<{ id: number; naam: string }>;
     isLast: boolean;
     applyPatch: (patch: any) => void;
+    /** Gemarkeerd: deze regel hoort bij het vakje waar je vandaan kwam. */
+    letOp?: boolean;
 }
 
-function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowProps) {
+function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch, letOp }: ItemRowProps) {
     const showToast = useToast();
     const [editing, setEditing] = useState(false);
     const [qtyDraft, setQtyDraft] = useState(item.qty);
@@ -704,6 +852,8 @@ function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch }: ItemRowPr
                 gap: 14,
                 opacity: isPending ? 0.7 : 1,
                 transition: 'opacity .15s',
+                boxShadow: letOp ? 'inset 3px 0 0 var(--brand-gold, #c4a35a)' : undefined,
+                background: letOp ? 'rgba(196,163,90,.05)' : undefined,
             }}
         >
             <div style={{ flex: 1, minWidth: 0 }}>
