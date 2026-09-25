@@ -60,9 +60,28 @@ export interface OrderRij {
     mail_status: 'niet_verstuurd' | 'verstuurd' | 'mislukt';
     mail_fout: string | null;
     created_at: string;
+    /* Vakjes (plan §2.3): wat er uit de opmerking gelezen is en hoe het plaatsen ging. */
+    wensen: Wensen | null;
+    wensen_bron: WensenBron | null;
+    plaatsing_status: PlaatsingStatus | null;
+    plaatsing_fout: string | null;
+    plaatsing_at: string | null;
 }
 
+/** Wat uit de opmerking van de klant gelezen is. Staat altijd naast het origineel. */
+export interface Wensen {
+    vegetarisch: number;
+    veganistisch: number;
+    glutenvrij: number;
+    allergenen: string[];
+    overig: string[];
+}
+export type WensenBron = 'geen' | 'ai' | 'handmatig' | 'mislukt';
+export type PlaatsingStatus = 'geplaatst' | 'vaste_bak' | 'mislukt';
+
 export interface OrderRegelRij {
+    id: number;
+    artikel_id: string;
     slug: string;
     naam: string;
     aantal: number;
@@ -74,6 +93,45 @@ export interface OrderRegelRij {
     eenheden: number;
     voorraad_eenheden: number;
     afhaalmoment_tekst: string | null;
+    /** De dag van het vakje (plan §2.2). Altijd gevuld. */
+    klaar_op: string;
+    /** Het event waarin deze regel is geplaatst; leeg = vaste bak of nog niet geplaatst. */
+    event_id: number | null;
+    klaargezet_at: string | null;
+}
+
+/* ── Vakjes (plan §4) ─────────────────────────────────────────────────────── */
+
+export interface EventVakje {
+    id: number;
+    winkel_moment_id: string;
+    name: string;
+}
+
+export interface NieuwEvent {
+    orgId: string;
+    momentId: string;
+    naam: string;
+    datum: string;
+    van: string | null;
+    tot: string | null;
+}
+
+export interface EventTotalen {
+    guests: number;
+    veg_guests: number;
+    vegan_guests: number;
+    gluten_free_guests: number;
+    /** De gekoppelde gerecht-uuid's — de vorm die de MEP en bulkSchedule lezen. */
+    menu: string[];
+    /** Per gerecht-uuid het aantal. */
+    menu_gasten: Record<string, number>;
+    notitie: string;
+}
+
+export interface RegelOpEvent {
+    regel: OrderRegelRij;
+    order: Pick<OrderRij, 'id' | 'nummer' | 'contact_naam' | 'opmerking' | 'wensen'>;
 }
 
 export interface NieuweOrder {
@@ -123,4 +181,15 @@ export interface WinkelStore {
     noteerBetaalberichtUitkomst(orgId: string, referentie: string, uitkomst: string): Promise<void>;
     noteerRefund(orderId: number, status: 'gelukt' | 'mislukt', fout?: string | null): Promise<void>;
     noteerMail(orderId: number, status: 'verstuurd' | 'mislukt', fout?: string | null): Promise<void>;
+
+    /* ── Vakjes (plan §4) ── */
+    /** Alle artikelen van de organisatie, met hun koppeling (gerecht / voorraad-item / dieet). */
+    laadArtikelen(orgId: string): Promise<Artikel[]>;
+    /** Het event van dit afhaalmoment, of een nieuw. Bij een botsing wint de eerste; de tweede leest die. */
+    vindOfMaakEvent(e: NieuwEvent): Promise<EventVakje>;
+    werkRegelsBij(orderId: number, wijzigingen: { id: number; klaar_op: string; event_id: number | null }[]): Promise<void>;
+    /** Alle regels van betaalde orders op dit event, met wat de hertelling van de order nodig heeft. */
+    laadBetaaldeRegelsOpEvent(eventId: number): Promise<RegelOpEvent[]>;
+    werkEventTotalenBij(eventId: number, t: EventTotalen): Promise<void>;
+    noteerPlaatsing(orderId: number, status: PlaatsingStatus, fout?: string | null): Promise<void>;
 }

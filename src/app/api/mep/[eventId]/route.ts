@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
+import { menuGastenVan } from '@/lib/menuGasten';
 
 export const dynamic = 'force-dynamic';
 
@@ -248,7 +249,7 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
 
     const { data: eventRow, error: eventError } = await supabase
       .from('events')
-      .select('id,name,date,guests,menu,offerte_id')
+      .select('id,name,date,guests,menu,offerte_id,menu_gasten')
       .eq('id', eventId)
       .eq('organization_id', orgId)
       .maybeSingle();
@@ -262,6 +263,8 @@ export const GET = withTenantAuth(async (req: NextRequest, { supabase, orgId }: 
       name: String(r.name ?? `Event ${eventId}`),
       date: String(r.date ?? ''),
       guests: toNumber(r.guests, 0),
+      /* Webshop-vakje: per gerecht een eigen aantal (17 Kerst-Box, 3 vega). Leeg bij een gewoon event. */
+      gasten_per_gerecht: menuGastenVan({ guests: toNumber(r.guests, 0), menu_gasten: r.menu_gasten }),
     };
 
     // Resolve gerechten via offerte.menu_selectie (namen) of events.menu (legacy)

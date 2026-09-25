@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Flame, Calendar, Check, ChefHat } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import MepGerechtGroep from './MepGerechtGroep';
@@ -53,7 +54,11 @@ export interface MepGerecht {
 }
 
 export interface MepResponse {
-  event: { id: number; name: string; date: string; guests: number };
+  event: {
+    id: number; name: string; date: string; guests: number;
+    /** Webshop-vakje: per gerecht een eigen aantal (17 Kerst-Box, 3 vega). Leeg bij een gewoon event. */
+    gasten_per_gerecht?: Record<string, number> | null;
+  };
   gerechten: MepGerecht[];
 }
 
@@ -111,6 +116,11 @@ function fmtDate(d: string): string {
 }
 
 export default function KookbordClient() {
+  const zoekParams = useSearchParams();
+  const gevraagdEventId = useMemo(() => {
+    const n = Number(zoekParams?.get('event'));
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }, [zoekParams]);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [events, setEvents] = useState<UpcomingEvent[]>([]);
   const [mepData, setMepData] = useState<MepResponse | null>(null);
@@ -152,13 +162,22 @@ export default function KookbordClient() {
         .order('date', { ascending: true })
         .limit(10);
       if (error) throw new Error(error.message);
-      const normalized = (data ?? []).map((row: Record<string, unknown>) => {
+      const naarEvent = (row: Record<string, unknown>): UpcomingEvent | null => {
         const id = Number(row.id);
         if (!Number.isInteger(id)) return null;
         return { id, name: String(row.name ?? `Event ${id}`), date: String(row.date ?? ''), guests: Number(row.guests ?? 0), status: String(row.status ?? '') };
-      }).filter((r): r is UpcomingEvent => r !== null);
+      };
+      const normalized = (data ?? []).map(naarEvent).filter((r): r is UpcomingEvent => r !== null);
+      /* ?event=<id> (vanuit een webshop-vakje): dat event voorop, ook als het
+         verder weg ligt dan veertien dagen — Kerst staat er in september al. */
+      if (gevraagdEventId !== null && !normalized.some(e => e.id === gevraagdEventId)) {
+        const { data: los } = await supabase.from('events').select('id,name,date,guests,status').eq('id', gevraagdEventId).maybeSingle();
+        const ev = los ? naarEvent(los as Record<string, unknown>) : null;
+        if (ev) normalized.unshift(ev);
+      }
       setEvents(normalized);
       setSelectedEventId(prev => {
+        if (gevraagdEventId !== null && normalized.some(e => e.id === gevraagdEventId)) return gevraagdEventId;
         if (prev !== null && normalized.some(e => e.id === prev)) return prev;
         return normalized[0]?.id ?? null;
       });
@@ -169,7 +188,7 @@ export default function KookbordClient() {
     } finally {
       setLoadingEvents(false);
     }
-  }, []);
+  }, [gevraagdEventId]);
 
   useEffect(() => { void laadEvents(); }, [laadEvents]);
 
@@ -329,6 +348,8 @@ export default function KookbordClient() {
   );
 
   const guests = mepData?.event.guests ?? 0;
+  /* Per gerecht zijn eigen aantal als het event dat heeft (webshop-vakje), anders het event-totaal. */
+  const gastenVoor = (gerechtId: string | null) => (gerechtId && mepData?.event.gasten_per_gerecht?.[gerechtId] != null ? mepData.event.gasten_per_gerecht[gerechtId] : guests);
   const showSkeleton = loadingEvents || loading;
   const showEmptyEvents = !loadingEvents && !loading && events.length === 0;
   const showEmptyMenu = !loadingEvents && !loading && events.length > 0 && !!mepData && zichtbareGerechten.length === 0;
@@ -432,7 +453,7 @@ export default function KookbordClient() {
                 <MepGerechtGroep
                   key={gerecht.id}
                   gerecht={gerecht}
-                  guests={guests}
+                  guests={gastenVoor(gerecht.id)}
                   onItemTap={openItem}
                   onStatusToggle={handleStatusToggle}
                   onAfmaken={openAfmaken}
@@ -446,7 +467,7 @@ export default function KookbordClient() {
       <MepItemSheet
         open={sheetOpen}
         item={selectedItem}
-        guests={guests}
+        guests={gastenVoor(mepData?.gerechten.find(g => g.components.some(c => c.mep_item_id === selectedItem?.mep_item_id))?.id ?? null)}
         gerecht={selectedGerechtNaam}
         onClose={() => setSheetOpen(false)}
         onStatusChange={handleStatusToggle}

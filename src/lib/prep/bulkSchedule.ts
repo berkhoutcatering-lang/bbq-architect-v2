@@ -21,6 +21,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { calculateProductionPlan } from './productionQty';
 import { componentHoeveelheidVoorGasten } from '@/lib/gerecht-kosten';
+import { gastenVoorGerecht } from '@/lib/menuGasten';
 import { takenUitReceptuur, type ReceptStap } from './uitReceptuur';
 
 /** Alles wat de planner van een receptstap moet weten om er een taak van te maken. */
@@ -146,7 +147,7 @@ export async function bulkScheduleEventPrep(
     // 1. Event check
     const { data: event, error: eventErr } = await supabase
         .from('events')
-        .select('id, organization_id, name, date, start_time, guests, offerte_id, menu')
+        .select('id, organization_id, name, date, start_time, guests, offerte_id, menu, menu_gasten')
         .eq('id', eventId)
         .maybeSingle();
     if (eventErr) {
@@ -448,9 +449,11 @@ export async function bulkScheduleEventPrep(
            Dat laatste stond hier en leverde bij een gerecht op de standaard 10 porties
            precies 10x te weinig op: 750 g inkopen en prepen voor 50 man waar 7,5 kg
            nodig was. `porties` beschrijft de vrije recepttekst, niet de componenten. */
+        /* Webshop-vakje: dit gerecht kan zijn eigen aantal hebben (menu_gasten). */
+        const gastenVoorDitGerecht = gastenVoorGerecht(event as { guests: number; menu_gasten?: unknown }, dish.id);
         for (const row of comps) {
             const comp = row.components!;
-            const qty = componentHoeveelheidVoorGasten(row.quantity_used ?? 0, event.guests);
+            const qty = componentHoeveelheidVoorGasten(row.quantity_used ?? 0, gastenVoorDitGerecht);
             const existing = compGroups.get(comp.id);
             if (existing) {
                 existing.totalQty += qty;

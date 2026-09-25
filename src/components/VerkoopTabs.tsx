@@ -6,7 +6,7 @@ import HubTabs, { type HubTab } from './HubTabs';
 const TABS: HubTab[] = [
   { href: '/verkoop/leads', label: 'Aanvragen', icon: Inbox },
   { href: '/verkoop/bestellingen', label: 'Bestellingen', icon: Package },
-  { href: '/verkoop/winkelorders', label: 'Webshop', icon: ShoppingBag },
+  { href: '/verkoop/webshop', label: 'Webshop', icon: ShoppingBag },
   { href: '/verkoop/arrangementen', label: 'Arrangementen', icon: Layers },
   { href: '/verkoop/website', label: 'Website', icon: Globe },
   { href: '/offertes', label: 'Offertes', icon: FileText },

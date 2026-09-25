@@ -11,9 +11,11 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import type { Artikel, MomentRij } from './rekenen';
 import { vandaagISO } from './rekenen';
-import type { Bronnen, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+import type { Bronnen, EventVakje, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, RegelOpEvent, Tenant, WinkelStore } from './store';
 
-const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, btw_cents, reservering_tot, terug_url, betaalpoging, mypos_order_id, mypos_trnref, betaald_cents, betaald_at, betaalmethode, refund_status, refund_fout, mail_status, mail_fout, created_at';
+const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, btw_cents, reservering_tot, terug_url, betaalpoging, mypos_order_id, mypos_trnref, betaald_cents, betaald_at, betaalmethode, refund_status, refund_fout, mail_status, mail_fout, created_at, wensen, wensen_bron, plaatsing_status, plaatsing_fout, plaatsing_at';
+const ARTIKEL_KOLOMMEN = 'id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek, gerecht_id, inventory_id, inkoop_per_stuk, dieet';
+const REGEL_KOLOMMEN = 'id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, btw_pct, moment_id, eenheden, voorraad_eenheden, afhaalmoment_tekst, klaar_op, event_id, klaargezet_at';
 
 function code(e: { code?: string | null; message?: string } | null): OpslagCode {
     const c = e?.code ?? '';
@@ -58,7 +60,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
 
             const { data: artikelen } = await sb
                 .from('winkel_artikelen')
-                .select('id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek')
+                .select(ARTIKEL_KOLOMMEN)
                 .eq('organization_id', orgId);
 
             /* Momenten vanaf vandaag, met de bezetting erbij geteld: betaald plus
@@ -137,10 +139,67 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
         async laadRegels(orderId) {
             const { data } = await sb
                 .from('winkel_order_regels')
-                .select('slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, btw_pct, moment_id, eenheden, voorraad_eenheden, afhaalmoment_tekst')
+                .select(REGEL_KOLOMMEN)
                 .eq('order_id', orderId)
                 .order('id', { ascending: true });
             return (data ?? []) as OrderRegelRij[];
+        },
+
+        /* ── Vakjes (plan §4) ── */
+        async laadArtikelen(orgId) {
+            const { data } = await sb.from('winkel_artikelen').select(ARTIKEL_KOLOMMEN).eq('organization_id', orgId);
+            return (data ?? []) as Artikel[];
+        },
+        async vindOfMaakEvent(e): Promise<EventVakje> {
+            const zoek = async () => {
+                const { data } = await sb.from('events').select('id, winkel_moment_id, name').eq('winkel_moment_id', e.momentId).maybeSingle();
+                return (data as EventVakje | null) ?? null;
+            };
+            const bestaand = await zoek();
+            if (bestaand) return bestaand;
+            /* organization_id altijd expliciet; de service-role client heeft geen default. */
+            const { data, error } = await sb
+                .from('events')
+                .insert({
+                    organization_id: e.orgId, winkel_moment_id: e.momentId, name: e.naam,
+                    date: e.datum, start_time: e.van, end_time: e.tot,
+                    status: 'confirmed', type: 'Webshop', guests: 0, menu: [], menu_gasten: {},
+                })
+                .select('id, winkel_moment_id, name')
+                .single();
+            if (!error && data) return data as EventVakje;
+            /* Unieke index: een andere webhook was ons net voor. Dan lezen we die. */
+            if (error?.code === '23505') {
+                const alsnog = await zoek();
+                if (alsnog) return alsnog;
+            }
+            throw new Error(`Event aanmaken mislukt: ${error?.message ?? 'onbekend'}`);
+        },
+        async werkRegelsBij(orderId, wijzigingen) {
+            for (const w of wijzigingen) {
+                const { error } = await sb.from('winkel_order_regels').update({ klaar_op: w.klaar_op, event_id: w.event_id }).eq('id', w.id).eq('order_id', orderId);
+                if (error) throw new Error(`Regel bijwerken mislukt: ${error.message}`);
+            }
+        },
+        async laadBetaaldeRegelsOpEvent(eventId) {
+            const { data, error } = await sb
+                .from('winkel_order_regels')
+                .select(`${REGEL_KOLOMMEN}, winkel_orders!inner(id, nummer, contact_naam, opmerking, wensen, status)`)
+                .eq('event_id', eventId)
+                .eq('winkel_orders.status', 'betaald')
+                .order('id', { ascending: true });
+            if (error) throw new Error(`Regels op event laden mislukt: ${error.message}`);
+            return ((data ?? []) as unknown as (OrderRegelRij & { winkel_orders: RegelOpEvent['order'] })[]).map(({ winkel_orders, ...regel }) => ({ regel, order: winkel_orders }));
+        },
+        async werkEventTotalenBij(eventId, t) {
+            const { error } = await sb.from('events').update({
+                guests: t.guests, veg_guests: t.veg_guests, vegan_guests: t.vegan_guests, gluten_free_guests: t.gluten_free_guests,
+                menu: t.menu, menu_gasten: t.menu_gasten, notitie: t.notitie,
+            }).eq('id', eventId);
+            if (error) throw new Error(`Event bijtellen mislukt: ${error.message}`);
+        },
+        async noteerPlaatsing(orderId, status, fout = null) {
+            await sb.from('winkel_orders').update({ plaatsing_status: status, plaatsing_fout: fout, plaatsing_at: new Date().toISOString() }).eq('id', orderId);
         },
 
         async plaatsOrder(o): Promise<OpslagUitkomst<OrderRij>> {

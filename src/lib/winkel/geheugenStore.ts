@@ -7,7 +7,21 @@
  * in de end-to-end-doorloop.
  */
 import type { Artikel, Instellingen, MomentRij } from './rekenen';
-import type { Bronnen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+import { vandaagISO } from './rekenen';
+import type { Bronnen, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+
+/** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
+export interface EventGeheugen extends EventTotalen {
+    id: number;
+    organization_id: string;
+    winkel_moment_id: string;
+    name: string;
+    date: string;
+    start_time: string | null;
+    end_time: string | null;
+    status: string;
+    type: string;
+}
 
 interface Geheugen {
     tenant: Tenant;
@@ -20,6 +34,8 @@ interface Geheugen {
 export interface GeheugenStore extends WinkelStore {
     orders: (OrderRij & { regels: OrderRegelRij[] })[];
     berichten: { referentie: string; uitkomst: string | null }[];
+    /** De events die de plaatsing heeft aangemaakt. */
+    events: EventGeheugen[];
     /** Verzet de klok (voor 'verlopen'). */
     zetNu(d: Date): void;
 }
@@ -28,7 +44,10 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
     let nu = g.nu ?? new Date();
     const orders: GeheugenStore['orders'] = [];
     const berichten: GeheugenStore['berichten'] = [];
+    const events: EventGeheugen[] = [];
     let teller = 0;
+    let regelTeller = 0;
+    let eventTeller = 0;
 
     const telt = (o: OrderRij) => o.status === 'betaald' || (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime());
     const bezetMoment = (id: string, zonder: number | null) =>
@@ -65,6 +84,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
     return {
         orders,
         berichten,
+        events,
         zetNu(d) { nu = d; },
 
         async laadTenant(slug) { return slug === g.tenant.slug ? g.tenant : null; },
@@ -99,9 +119,14 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                databasefunctie onder vergrendeling, één ondeelbare stap. */
             const bestaand = orders.find((x) => x.organization_id === n.orgId && x.sleutel === n.sleutel && x.status !== 'verlopen');
             if (bestaand) return { ok: true, waarde: zonderRegels(bestaand) };
+            /* klaar_op zoals de databasetrigger: het moment op de regel, anders
+               het moment van de order, anders vandaag. */
+            const datumVan = (id: string | null) => (id ? g.momenten.find((m) => m.id === id)?.datum ?? null : null);
             const regels: OrderRegelRij[] = n.regels.map((r) => ({
+                id: ++regelTeller, artikel_id: r.artikel_id,
                 slug: r.slug, naam: r.naam, aantal: r.aantal, eenheid: r.eenheid, stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten,
                 btw_pct: r.btw_pct, moment_id: r.moment_id, eenheden: r.eenheden, voorraad_eenheden: r.voorraad_eenheden, afhaalmoment_tekst: r.afhaalmoment,
+                klaar_op: datumVan(r.moment_id) ?? datumVan(n.momentId) ?? vandaagISO(nu), event_id: null, klaargezet_at: null,
             }));
             const c = controleer(regels, null);
             if (c.ok === false) return { ok: false, code: c.code };
@@ -138,6 +163,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 mail_status: 'niet_verstuurd',
                 mail_fout: null,
                 created_at: nu.toISOString(),
+                wensen: null, wensen_bron: null, plaatsing_status: null, plaatsing_fout: null, plaatsing_at: null,
                 regels,
             };
             orders.push(o);
@@ -195,6 +221,43 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         async noteerMail(orderId, status, fout = null) {
             const o = orders.find((x) => x.id === orderId);
             if (o) { o.mail_status = status; o.mail_fout = fout; }
+        },
+
+        /* ── Vakjes ── */
+        async laadArtikelen(orgId) { return orgId === g.tenant.orgId ? g.artikelen : []; },
+        async vindOfMaakEvent(e) {
+            const bestaand = events.find((x) => x.winkel_moment_id === e.momentId);
+            if (bestaand) return { id: bestaand.id, winkel_moment_id: bestaand.winkel_moment_id, name: bestaand.name };
+            const ev: EventGeheugen = {
+                id: ++eventTeller, organization_id: e.orgId, winkel_moment_id: e.momentId, name: e.naam,
+                date: e.datum, start_time: e.van, end_time: e.tot, status: 'confirmed', type: 'Webshop',
+                guests: 0, veg_guests: 0, vegan_guests: 0, gluten_free_guests: 0, menu: [], menu_gasten: {}, notitie: '',
+            };
+            events.push(ev);
+            return { id: ev.id, winkel_moment_id: ev.winkel_moment_id, name: ev.name };
+        },
+        async werkRegelsBij(orderId, wijzigingen) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return;
+            for (const w of wijzigingen) {
+                const r = o.regels.find((x) => x.id === w.id);
+                if (r) { r.klaar_op = w.klaar_op; r.event_id = w.event_id; }
+            }
+        },
+        async laadBetaaldeRegelsOpEvent(eventId) {
+            return orders
+                .filter((o) => o.status === 'betaald')
+                .flatMap((o) => o.regels.filter((r) => r.event_id === eventId).map((regel) => ({
+                    regel, order: { id: o.id, nummer: o.nummer, contact_naam: o.contact_naam, opmerking: o.opmerking, wensen: o.wensen },
+                })));
+        },
+        async werkEventTotalenBij(eventId, t) {
+            const ev = events.find((x) => x.id === eventId);
+            if (ev) Object.assign(ev, t);
+        },
+        async noteerPlaatsing(orderId, status, fout = null) {
+            const o = orders.find((x) => x.id === orderId);
+            if (o) { o.plaatsing_status = status; o.plaatsing_fout = fout; o.plaatsing_at = nu.toISOString(); }
         },
     };
 }
