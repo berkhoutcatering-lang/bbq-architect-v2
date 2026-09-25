@@ -32,6 +32,9 @@ export interface ConceptInkoopOrder {
     total_eur: number | null;
     created_at: string;
     updated_at: string;
+    /** Webshop-vakje waar deze bestelling alleen voor is (plan §4.5); null = de gewone lopende bestelling. */
+    vakje: string | null;
+    vakje_label: string | null;
 }
 
 export interface OrderItemSnapshot {
@@ -56,8 +59,10 @@ export async function ensureConceptOrder(
     leverancierId: number | null,
     windowStart: string,
     windowEnd: string,
+    vakje: { sleutel: string; label: string } | null = null,
 ): Promise<string> {
-    // 1. Probeer bestaande concept te vinden.
+    // 1. Probeer bestaande concept te vinden. Een vakje-bestelling staat los
+    //    van de gewone (zelfde leverancier, zelfde venster — ander vakje).
     let q = sb
         .from('concept_inkoop_orders')
         .select('id')
@@ -69,6 +74,7 @@ export async function ensureConceptOrder(
     } else {
         q = q.eq('leverancier_id', leverancierId);
     }
+    q = vakje ? q.eq('vakje', vakje.sleutel) : q.is('vakje', null);
     const { data: existing } = await q.maybeSingle();
     if (existing?.id) return existing.id as string;
 
@@ -81,6 +87,8 @@ export async function ensureConceptOrder(
             window_start: windowStart,
             window_end: windowEnd,
             status: 'concept',
+            vakje: vakje?.sleutel ?? null,
+            vakje_label: vakje?.label ?? null,
         })
         .select('id')
         .single();

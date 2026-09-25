@@ -54,6 +54,13 @@ describe('berekenTekort', () => {
         expect(r.shortfall).toBe(3);
     });
 
+    it('zet geen derving op verkochte webshop-stuks: 6 flessen verkocht = 6 flessen', () => {
+        /* 2 kg vraag uit een gerecht krijgt de 10%; de 6 flessen uit de webshop niet. */
+        const r = berekenTekort({ reserved: 2, reservedExact: 6, dervingPct: 10, parLevel: 0, stock: 0, inFlight: 0 });
+        expect(r.reservedBuffered).toBe(8.2);
+        expect(r.shortfall).toBe(8.2);
+    });
+
     it('gaat nooit onder nul — een overschot is geen negatieve bestelling', () => {
         const r = berekenTekort({ reserved: 1, dervingPct: 0, parLevel: 2, stock: 50, inFlight: 0 });
         expect(r.shortfall).toBe(0);

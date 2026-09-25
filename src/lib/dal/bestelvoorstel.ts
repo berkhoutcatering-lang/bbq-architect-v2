@@ -29,6 +29,16 @@ import { roundUpToPack, type RoundingReason } from './packRounding';
 import { pakVoorstel } from '../voorraadTelling';
 import { zoekKandidaten, searchTerms, leveranciersOpId } from '../ingredientMatchDb';
 import { pickBestMatch, lineCostCents, normalizeIngredientName, coverageOf, type CostCandidate } from '../recipeMatch';
+import type { VakjeFilter } from './vakje';
+
+/** Het webshop-vakje waar deze lijst voor is (plan §4.5), of null voor de gewone lijst. */
+export interface VakjeInfo {
+  sleutel: string;
+  label: string;
+  datum: string;
+  /** De dag ligt voorbij het venster: op de gewone lijst komt hij later vanzelf. */
+  buiten_venster: boolean;
+}
 
 /* Voorraad-items heten naar waar ze gekocht worden: "kippendij makro", "gerookte
    bavette beef club 29". Dat woord staat nooit in de catalogus van een andere
@@ -159,6 +169,8 @@ export interface BestelvoorstelSummary {
     events_in_window_count: number;
     has_menu_items: boolean;
   };
+  /** Gevuld als deze lijst voor één webshop-vakje is ("bestel alleen dit"). */
+  vakje: VakjeInfo | null;
 }
 
 function toIsoDate(d: Date): string {
@@ -169,9 +181,13 @@ export async function buildBestelvoorstel(
   supabase: SupabaseClient,
   orgId: string,
   windowDays: number = 14,
-  opts: { persistConcepts?: boolean; winkel?: number | null } = {},
+  opts: { persistConcepts?: boolean; winkel?: number | null; vakje?: VakjeFilter | null } = {},
 ): Promise<BestelvoorstelSummary> {
   const persistConcepts = opts.persistConcepts !== false;
+  /* Vakje (plan §4.5): alleen de vraag van dit vakje, eigen concept-bestellingen
+     per leverancier, en zonder de handmatige overrides van de gewone lijst —
+     "bestel alleen dit" is precies wat het vakje nodig heeft. */
+  const vakje = opts.vakje ?? null;
 
   /* Winkelkeuze (docs/leveranciersvoorkeur-plan.md, golf 3): leveranciers met
      een voorkeur-rang zijn de knoppen; is er één gekozen, dan gaat élke regel
@@ -188,7 +204,7 @@ export async function buildBestelvoorstel(
     : null;
 
   // 1. Demand-snapshot (bevat al derving + par + in-flight in de shortfall).
-  const demand = await getInventoryWithDemand(supabase, orgId, windowDays);
+  const demand = await getInventoryWithDemand(supabase, orgId, windowDays, { vakje });
   const shortItems = demand.rows.filter(function (r) { return r.shortfall > 0; });
   const demandMeta = {
     events_in_window_count: demand.events_in_window?.length ?? 0,
@@ -199,6 +215,9 @@ export async function buildBestelvoorstel(
   const windowEnd = new Date(now.getTime() + windowDays * 86400000);
   const windowStartIso = toIsoDate(now);
   const windowEndIso = toIsoDate(windowEnd);
+  const vakjeInfo: VakjeInfo | null = vakje
+    ? { sleutel: vakje.sleutel, label: vakje.label, datum: vakje.datum, buiten_venster: vakje.datum > windowEndIso }
+    : null;
 
   const blocking = buildBlocking(demand.unmatched);
 
@@ -214,6 +233,7 @@ export async function buildBestelvoorstel(
       blocking,
       window: { start: windowStartIso, end: windowEndIso },
       demand_meta: demandMeta,
+      vakje: vakjeInfo,
     };
   }
 
@@ -242,7 +262,7 @@ export async function buildBestelvoorstel(
   }
 
   // 3. Overrides (P0-5).
-  const overrides: OrderOverride[] = await getOverridesForOrg(supabase, orgId).catch(() => []);
+  const overrides: OrderOverride[] = vakje ? [] : await getOverridesForOrg(supabase, orgId).catch(() => []);
   const overridesByInv = new Map<number, OrderOverride>();
   overrides.forEach(function (o) { overridesByInv.set(o.inventory_id, o); });
 
@@ -500,6 +520,7 @@ export async function buildBestelvoorstel(
       try {
         bucket.concept_order_id = await ensureConceptOrder(
           supabase, orgId, bucket.leverancier_id, windowStartIso, windowEndIso,
+          vakje ? { sleutel: vakje.sleutel, label: vakje.label } : null,
         );
       } catch (e) {
         console.warn('[bestelvoorstel] ensureConceptOrder failed for', bucket.leverancier_naam, e);
@@ -526,6 +547,7 @@ export async function buildBestelvoorstel(
     blocking,
     window: { start: windowStartIso, end: windowEndIso },
     demand_meta: demandMeta,
+    vakje: vakjeInfo,
   };
 }
 

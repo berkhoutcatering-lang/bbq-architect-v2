@@ -30,6 +30,8 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { gastenVoorGerecht } from '@/lib/menuGasten';
+import { vandaagISO } from '@/lib/winkel/rekenen';
+import { webshopRegelsNaarVraag, type VakjeFilter, type WebshopRegel } from './vakje';
 import {
   DEFAULT_DERVING_PCT,
   norm,
@@ -86,14 +88,21 @@ export function berekenTekort(opts: {
   parLevel: number;
   stock: number;
   inFlight: number;
+  /**
+   * Vraag die precies is wat hij is, zónder derving: verkochte webshop-flessen
+   * (6 flessen verkocht = 6 flessen, niet 6,6). Derving is een kookverlies en
+   * hoort alleen op de gerecht-vraag.
+   */
+  reservedExact?: number;
 }): { reservedBuffered: number; target: number; shortfall: number } {
   const reserved = Math.max(0, Number(opts.reserved) || 0);
+  const exact = Math.max(0, Number(opts.reservedExact) || 0);
   const par = Math.max(0, Number(opts.parLevel) || 0);
   const stock = Math.max(0, Number(opts.stock) || 0);
   const inFlight = Math.max(0, Number(opts.inFlight) || 0);
   const dervingFactor = 1 + Math.max(0, Number(opts.dervingPct) || 0) / 100;
 
-  const reservedBuffered = reserved * dervingFactor;
+  const reservedBuffered = reserved * dervingFactor + exact;
   const target = reservedBuffered + par;
   const shortfall = Math.max(0, target - stock - inFlight);
 
@@ -175,13 +184,26 @@ function parseEventDate(d: string | null | undefined): Date | null {
 
 const DEMAND_STATUSES = ['goedgekeurd', 'in_voorbereiding', 'bevestigd', 'confirmed'];
 
+export interface DemandOpties {
+  /**
+   * Webshop-vakje (plan §4.5): alleen de vraag van dit ene vakje, ongeacht het
+   * venster — Kerst is in september al te bekijken. Bij een event alleen dat
+   * event; bij een dag alleen de losse webshop-regels van die dag. Par telt
+   * dan NIET mee: "bestel alleen dit" is wat het vakje nodig heeft, niet wat je
+   * altijd in huis wilt. Voorraad en wat onderweg is gaan er wel vanaf.
+   */
+  vakje?: VakjeFilter | null;
+}
+
 export async function getInventoryWithDemand(
   supabase: SupabaseClient,
   orgId: string,
-  windowDays: number = 14
+  windowDays: number = 14,
+  opties: DemandOpties = {},
 ): Promise<InventoryDemandSummary> {
   const now = new Date();
   const windowEnd = new Date(now.getTime() + windowDays * 86400000);
+  const vakje = opties.vakje ?? null;
 
   // 1. Inventory voor deze org.
   const { data: inventoryRaw } = await supabase
@@ -197,6 +219,8 @@ export async function getInventoryWithDemand(
     .eq('organization_id', orgId);
   const events = (eventsRaw || []).filter(function (e: any) {
     if (!DEMAND_STATUSES.includes(String(e.status || '').toLowerCase())) return false;
+    /* Vakje: alleen dát event, ook buiten het venster; een dag-vakje heeft geen event. */
+    if (vakje) return vakje.eventId != null && Number(e.id) === vakje.eventId;
     const ed = parseEventDate(e.date);
     if (!ed) return false;
     return ed >= now && ed <= windowEnd;
@@ -410,6 +434,46 @@ export async function getInventoryWithDemand(
     });
   });
 
+  // 6b. Tweede vraagbron (plan §4.4): losse webshop-producten. Bier, saus en
+  //     noten lopen niet via een gerecht; het artikel wijst rechtstreeks naar
+  //     een voorraad-item. Betaald, nog niet klaargezet, niet in een event.
+  //     Geen AI, geen gok: aantal × inkoop_per_stuk op dat item.
+  /* Verkochte stuks zijn precies wat ze zijn: geen derving erop (zie berekenTekort). */
+  const exactByInv = new Map<number, number>();
+  if (!vakje || vakje.eventId == null) {
+    try {
+      const vandaag = vandaagISO(now);
+      const vensterEind = windowEnd.toLocaleDateString('en-CA', { timeZone: 'Europe/Amsterdam' });
+      let q = supabase
+        .from('winkel_order_regels')
+        .select('aantal, klaar_op, winkel_orders!inner(status), winkel_artikelen!inner(naam, inventory_id, inkoop_per_stuk)')
+        .eq('organization_id', orgId)
+        .eq('winkel_orders.status', 'betaald')
+        .is('event_id', null)
+        .is('klaargezet_at', null)
+        .not('winkel_artikelen.inventory_id', 'is', null);
+      if (!vakje) q = q.lte('klaar_op', vensterEind);
+      const { data: regelRows } = await q;
+      const regels: WebshopRegel[] = (regelRows || []).map(function (r: any) {
+        const a = Array.isArray(r.winkel_artikelen) ? r.winkel_artikelen[0] : r.winkel_artikelen;
+        return {
+          aantal: Number(r.aantal) || 0,
+          klaar_op: String(r.klaar_op || ''),
+          inventory_id: Number(a?.inventory_id),
+          inkoop_per_stuk: a?.inkoop_per_stuk == null ? null : Number(a.inkoop_per_stuk),
+          artikel_naam: String(a?.naam || ''),
+        };
+      }).filter(function (r: WebshopRegel) { return Number.isInteger(r.inventory_id); });
+      webshopRegelsNaarVraag(regels, { vandaag, vensterEind, datum: vakje ? vakje.datum : null }).forEach(function (v) {
+        if (!demandMap.has(v.inventory_id)) return; // item van een andere organisatie of verwijderd
+        addDemand(v.inventory_id, { id: v.event.id, name: v.event.name, date: v.event.date }, v.qty, 0);
+        exactByInv.set(v.inventory_id, (exactByInv.get(v.inventory_id) || 0) + v.qty);
+      });
+    } catch (e) {
+      console.warn('[inventoryDemand] webshop-regels niet geladen:', e instanceof Error ? e.message : e);
+    }
+  }
+
   // 7. In-flight: verzonden-maar-niet-ontvangen orderregels per inventory_id.
   //    Bron = durable inkoop_order_lines (deel-ontvangst = qty_received < qty_ordered).
   //    Guard (P0-1): negeer vergeten 'sent'-orders waarvan het window ver voorbij is,
@@ -447,8 +511,9 @@ export async function getInventoryWithDemand(
     // events, niet de hoogste van de twee: de events eten je voorraad op, dus
     // wat je minimaal wilt overhouden komt er bovenop.
     //   4 kg suiker in huis willen + een catering die 6 kg vraagt = 10 kg doel.
+    const exact = exactByInv.get(inv.id) || 0;
     const { reservedBuffered, target, shortfall } = berekenTekort({
-      reserved, dervingPct, parLevel: par, stock, inFlight,
+      reserved: reserved - exact, reservedExact: exact, dervingPct, parLevel: vakje ? 0 : par, stock, inFlight,
     });
     return {
       id: inv.id,
