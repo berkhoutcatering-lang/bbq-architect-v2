@@ -10,16 +10,17 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, Flame, Loader2, MailWarning, MapPin, RotateCcw, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList, Flame, Loader2, MailWarning, MapPin, RotateCcw, Search, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail, Wallet } from 'lucide-react';
 import Button from '@/components/Button';
 import { formatEur } from '@/lib/format';
 import { wensenSamenvatting } from '@/lib/winkel/plaatsing';
 import Drawer from './Drawer';
+import ProductiePaneel, { EtiketKnop, useEtiketPrinter } from './ProductiePaneel';
 import {
     afstandLabel, bouwVakjes, dagenTot, datumKort, datumLang, opmerkingNietGelezen, tijdvak, vakjeNaam,
-    type ArtikelRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
+    type ArtikelRij, type ComponentRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
 } from '../_lib/vakjes';
-import { plaatsOpnieuw, zetKlaargezet, zetWensenHandmatig } from '../actions';
+import { boekRestBetaling, plaatsOpnieuw, zetKlaargezet, zetWensenHandmatig } from '../actions';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -27,6 +28,8 @@ interface Props {
     orders: OrderRij[];
     artikelen: ArtikelRij[];
     momenten: MomentRij[];
+    /** De inhoud van elke regel (S7), voor productie, inpakken en etiket. */
+    componenten: ComponentRij[];
     vandaag: string;
     herlaad: () => Promise<void>;
     melding: Melding;
@@ -38,10 +41,12 @@ const eur = (c: number) => formatEur(c / 100);
 const refundOpen = (o: OrderRij) => o.refund_status === 'mislukt' || o.refund_status === 'nodig';
 const mailOpen = (o: OrderRij) => o.status === 'betaald' && o.mail_status !== 'verstuurd';
 
-export default function VakjesPaneel({ orders, artikelen, momenten, vandaag, herlaad, melding }: Props) {
+export default function VakjesPaneel({ orders, artikelen, momenten, componenten, vandaag, herlaad, melding }: Props) {
     const [filter, setFilter] = useState<Filter>('alles');
     const [openSleutel, setOpenSleutel] = useState<string | null>(null);
     const [bezig, setBezig] = useState<string | null>(null);
+    const [zoek, setZoek] = useState('');
+    const [productieSleutel, setProductieSleutel] = useState<string | null>(null);
 
     const vakjes = useMemo(() => bouwVakjes(orders, artikelen, momenten, vandaag), [orders, artikelen, momenten, vandaag]);
     const betaald = useMemo(() => orders.filter((o) => o.status === 'betaald'), [orders]);
@@ -59,6 +64,15 @@ export default function VakjesPaneel({ orders, artikelen, momenten, vandaag, her
         return true;
     });
     const open = openSleutel ? vakjes.find((v) => v.sleutel === openSleutel) ?? null : null;
+    const productie = productieSleutel ? vakjes.find((v) => v.sleutel === productieSleutel) ?? null : null;
+
+    /* De balie: zoek op ordernummer of naam (S5). Toont de treffers boven de vakjes. */
+    const treffers = useMemo(() => {
+        const q = zoek.trim().toLowerCase();
+        if (q.length < 2) return [];
+        return orders.filter((o) => o.nummer.toLowerCase().includes(q) || o.contact_naam.toLowerCase().includes(q)).slice(0, 8);
+    }, [zoek, orders]);
+    const vakjeVanOrder = (o: OrderRij) => vakjes.find((v) => v.orders.some((x) => x.id === o.id)) ?? null;
 
     async function opnieuw(o: OrderRij) {
         setBezig(`plaats:${o.id}`);
@@ -73,7 +87,8 @@ export default function VakjesPaneel({ orders, artikelen, momenten, vandaag, her
 
     return (
         <>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="ws-zoek" style={{ height: 36, minWidth: 260 }}><Search size={14} style={{ color: 'var(--muted)' }} /><input placeholder="Zoek order: HB-2026-0042 of naam" value={zoek} onChange={(e) => setZoek(e.target.value)} /></div>
                 {tel.nietGeplaatst > 0 && (
                     <button type="button" className="ws-teller ws-teller-vuur" aria-pressed={filter === 'nietGeplaatst'} onClick={() => setFilter(filter === 'nietGeplaatst' ? 'alles' : 'nietGeplaatst')}>
                         <b>{tel.nietGeplaatst}</b> niet geplaatst
@@ -85,6 +100,22 @@ export default function VakjesPaneel({ orders, artikelen, momenten, vandaag, her
                     </button>
                 )}
             </div>
+
+            {zoek.trim().length >= 2 && (
+                <div className="panel" style={{ padding: 0 }}>
+                    {treffers.length === 0 && <div className="ws-leeg" style={{ padding: 16 }}>Geen order gevonden voor “{zoek.trim()}”.</div>}
+                    {treffers.map((o) => {
+                        const v = vakjeVanOrder(o);
+                        return (
+                            <div key={o.id} className="ws-tabel-rij" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,2fr) auto', cursor: v ? 'pointer' : 'default' }} onClick={() => { if (v) { setOpenSleutel(v.sleutel); setZoek(''); } }}>
+                                <div><div style={{ fontSize: 14, fontWeight: 600 }}>{o.contact_naam}</div><div className="ws-mono" style={{ fontSize: 12, color: 'var(--muted)' }}>{o.nummer} · {o.status}{v ? ` · ${datumKort(v.datum)}` : ''}</div></div>
+                                <div style={{ fontSize: 13, color: 'var(--muted)' }}>{regelsKort(o)}</div>
+                                <div onClick={(e) => e.stopPropagation()}><RestBetaling order={o} herlaad={herlaad} melding={melding} /></div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Wat buiten de vakjes aandacht vraagt: plaatsing mislukt, terugbetaling, mail. */}
             {mislukt.map((o) => (
@@ -112,11 +143,12 @@ export default function VakjesPaneel({ orders, artikelen, momenten, vandaag, her
                 ))}
             </div>
 
-            {open && (
+            {open && !productie && (
                 open.soort === 'vaste_bak'
                     ? <VandaagDrawer v={open} vandaag={vandaag} onClose={() => setOpenSleutel(null)} herlaad={herlaad} melding={melding} />
-                    : <VakjeDrawer v={open} artikelen={artikelen} vandaag={vandaag} onClose={() => setOpenSleutel(null)} herlaad={herlaad} melding={melding} onOpnieuw={opnieuw} bezig={bezig} />
+                    : <VakjeDrawer v={open} artikelen={artikelen} vandaag={vandaag} onClose={() => setOpenSleutel(null)} herlaad={herlaad} melding={melding} onOpnieuw={opnieuw} bezig={bezig} onProductie={() => setProductieSleutel(open.sleutel)} />
             )}
+            {productie && <ProductiePaneel v={productie} artikelen={artikelen} componenten={componenten} onClose={() => setProductieSleutel(null)} melding={melding} />}
         </>
     );
 }
@@ -278,9 +310,12 @@ function VakjeKaart({ v, artikelen, vandaag, bezig, onOpen, onOpnieuw }: { v: Va
 
 /* ── Vakje open (moment / dag) ─────────────────────────────────────────────── */
 
-function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnieuw, bezig }: { v: Vakje; artikelen: ArtikelRij[]; vandaag: string; onClose: () => void; herlaad: () => Promise<void>; melding: Melding; onOpnieuw: (o: OrderRij) => void; bezig: string | null }) {
+function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnieuw, bezig, onProductie }: { v: Vakje; artikelen: ArtikelRij[]; vandaag: string; onClose: () => void; herlaad: () => Promise<void>; melding: Melding; onOpnieuw: (o: OrderRij) => void; bezig: string | null; onProductie: () => void }) {
     const dagen = dagenTot(v.datum, vandaag);
     const top = v.perArtikel.slice(0, 2);
+    const { printerId } = useEtiketPrinter();
+    const artikelOpId = new Map(artikelen.map((a) => [a.id, a]));
+    const restOpen = v.orders.filter((o) => o.status === 'betaald' && o.betaalwijze === 'reservering' && o.rest_cents > 0 && !o.rest_betaald_at).length;
     return (
         <Drawer title={datumLang(v.datum)} subtitle={`${vakjeNaam(v, artikelen)} · ${soortLabel(v)}${v.moment && tijdvak(v.moment) ? ` · ${tijdvak(v.moment)}` : ''} · ${afstandLabel(dagen).toLowerCase()}`} onClose={onClose} width={600}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -290,7 +325,11 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
                     {v.capaciteit && <div className="ws-tegel"><b>{v.capaciteit.bezet} / {v.capaciteit.totaal}</b><span>{v.capaciteit.eenheid}{v.dozen ? ` · ${v.dozen.groot} groot, ${v.dozen.klein} klein` : ''}</span></div>}
                 </div>
                 <Merktekens v={v} />
-                <Acties v={v} vandaag={vandaag} bezig={bezig} onOpnieuw={onOpnieuw} primairKlas="" />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Acties v={v} vandaag={vandaag} bezig={bezig} onOpnieuw={onOpnieuw} primairKlas="" />
+                    <Button variant="ghost" icon={<ClipboardList size={14} />} onClick={onProductie}>Productie & inpakken</Button>
+                    {restOpen > 0 && <span className="ws-merk ws-merk-warn"><Wallet size={13} />{restOpen} {restOpen === 1 ? 'order' : 'orders'} met rest in de winkel</span>}
+                </div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
                     <div className="ws-eyebrow">Orders · {v.orders.length}</div>
@@ -300,10 +339,14 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
                     {v.orders.map((o) => (
                         <div key={o.id} className="ws-order">
                             <div className="ws-order-kop">
-                                <div className="ws-order-naam">{o.contact_naam}<span className="ws-order-nummer">{o.nummer}</span></div>
-                                <div className="ws-mono" style={{ fontSize: 13 }}>{eur(o.totaal_cents)}</div>
+                                <div className="ws-order-naam">{o.contact_naam}<span className="ws-order-nummer">{o.nummer}</span>{o.winkel_order_regels.some((r) => r.alcohol) && <span className="ws-merk ws-merk-warn" style={{ marginLeft: 8, height: 22 }}>18+</span>}</div>
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    {o.status === 'betaald' && <EtiketKnop orderId={o.id} printerId={printerId} aantal={o.winkel_order_regels.reduce((s, r) => s + (artikelOpId.get(r.artikel_id)?.schaal_verdeling ? Math.max(1, Math.ceil(r.aantal / 5)) : r.aantal), 0)} melding={melding} />}
+                                    <div className="ws-mono" style={{ fontSize: 13 }}>{eur(o.totaal_cents)}</div>
+                                </div>
                             </div>
                             <div className="ws-order-wat">{regelsKort(o)} · {datumKort(v.datum)}{dozenTekst(v.regels.filter((x) => x.order.id === o.id))}</div>
+                            <RestBetaling order={o} herlaad={herlaad} melding={melding} />
                             <div className="ws-order-wat"><a href={`mailto:${o.contact_email}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_email}</a>{o.contact_telefoon && <> · <a href={`tel:${o.contact_telefoon}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_telefoon}</a></>}</div>
                             {o.plaatsing_status === 'mislukt' && <span className="ws-merk ws-merk-vuur" style={{ alignSelf: 'flex-start' }}><CircleAlert size={13} />niet geplaatst — {o.plaatsing_fout}</span>}
                             <WensenBlok order={o} herlaad={herlaad} melding={melding} />
@@ -380,6 +423,33 @@ function VandaagDrawer({ v, vandaag, onClose, herlaad, melding }: { v: Vakje; va
                 </div>
             </div>
         </Drawer>
+    );
+}
+
+/* ── De balie: het restbedrag boeken (S5) ──────────────────────────────────── */
+
+function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
+    const [bezig, setBezig] = useState<'contant' | 'pin' | null>(null);
+    if (o.betaalwijze !== 'reservering' || o.status !== 'betaald') return null;
+    if (o.rest_betaald_at) {
+        return <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={13} style={{ color: 'var(--green)' }} />Reservering {eur(o.nu_te_betalen_cents)} online · rest {eur(o.rest_cents)} {o.rest_betaalmethode ?? ''} betaald {new Date(o.rest_betaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>;
+    }
+    async function boek(methode: 'contant' | 'pin') {
+        setBezig(methode);
+        try {
+            const r = await boekRestBetaling({ orderId: o.id, methode });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            melding(r.data.uitkomst === 'al_geboekt' ? 'Het rest was al geboekt' : `Rest ${eur(o.rest_cents)} geboekt (${methode})`, 'success');
+            await herlaad();
+        } finally { setBezig(null); }
+    }
+    return (
+        <div className="ws-rest">
+            <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Reeds betaald {eur(o.nu_te_betalen_cents)}</b> · te betalen in de winkel: <b>{eur(o.rest_cents)}</b></div>
+            <Button size="sm" variant="ghost" loading={bezig === 'contant'} disabled={bezig != null} onClick={() => boek('contant')}>Contant</Button>
+            <Button size="sm" loading={bezig === 'pin'} disabled={bezig != null} onClick={() => boek('pin')}>Pin</Button>
+        </div>
     );
 }
 

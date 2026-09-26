@@ -183,6 +183,17 @@ COMMENT ON COLUMN public.winkel_instellingen.qr_basis_url IS
     'Basis-URL van de Experience-app voor de QR op het etiket: {qr_basis_url}/sint?artikel=<slug>&order=<nummer>. BBQ Architect maakt geen token.';
 
 
+-- ── 8b. print_jobs — het winkel-etiket als printsoort ───────────────────────
+DO $$
+BEGIN
+    IF to_regclass('public.print_jobs') IS NOT NULL THEN
+        ALTER TABLE public.print_jobs DROP CONSTRAINT IF EXISTS print_jobs_soort_check;
+        ALTER TABLE public.print_jobs ADD CONSTRAINT print_jobs_soort_check
+            CHECK (soort IN ('partij_labels', 'herprint', 'los_label', 'testlabel', 'doos_sticker', 'haccp_sticker', 'winkel_etiket'));
+    END IF;
+END $$;
+
+
 -- ── 9. Triggers ─────────────────────────────────────────────────────────────
 DROP TRIGGER IF EXISTS trg_winkel_producten_updated_at ON public.winkel_producten;
 CREATE TRIGGER trg_winkel_producten_updated_at BEFORE UPDATE ON public.winkel_producten

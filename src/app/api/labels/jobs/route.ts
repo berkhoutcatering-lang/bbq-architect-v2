@@ -7,6 +7,7 @@ import { formaatVan, type PrinterConfig } from '@/lib/labelprinter/types';
 import { JOB_KOLOMMEN, PRINTER_KOLOMMEN } from '@/lib/labelprinter/db';
 import { stroom } from '@/lib/labelprinter/zpl';
 import { laadPartijLabels, scanBasisUrl } from '@/lib/productie/labels';
+import { laadWinkelEtiketten } from '@/lib/winkel/etiketten';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,13 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId, u
                 data: { naam: verzoek.naam, datum: verzoek.datum, tht: verzoek.tht, notitie: verzoek.notitie, wie: null },
             };
             break;
+        case 'winkel_etiket': {
+            /* Sinterklaas S7: alles uit de order en de instellingen; nooit een vrij aantal. */
+            const e = await laadWinkelEtiketten(supabase, orgId, verzoek.orderId, verzoek.regelIds);
+            if (e.ok === false) return NextResponse.json({ error: e.error }, { status: e.status });
+            labelVerzoek = e.verzoek;
+            break;
+        }
         case 'partij_labels':
         case 'herprint': {
             /* Alles uit de partij; het aantal labels = het aantal eenheden (of de

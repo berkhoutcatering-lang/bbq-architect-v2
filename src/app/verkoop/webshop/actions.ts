@@ -71,6 +71,14 @@ const ArtikelVelden = z.object({
     actief: z.boolean().default(false),
     publiek: z.boolean().default(true),
     dieet: z.enum(['vegetarisch', 'veganistisch']).nullable().default(null),
+    /* Sinterklaas (plan §1.3). */
+    segment: z.enum(['bier', 'wijn', 'combi']).nullable().default(null),
+    alcohol: z.boolean().default(false),
+    schaal_verdeling: z.boolean().default(false),
+    /* Procenten per tarief, samen 100. Leeg = naar rato van de winkelwaarde. */
+    btw_verdeling: z.record(z.string().regex(/^(0|9|21)$/), z.number().min(0).max(100)).nullable().default(null),
+    verpakking_klein_cents: z.number().int().min(0).nullable().default(null),
+    verpakking_groot_cents: z.number().int().min(0).nullable().default(null),
 });
 type ArtikelVelden = z.infer<typeof ArtikelVelden>;
 
@@ -82,6 +90,11 @@ function controleerArtikel(a: ArtikelVelden): string | null {
         if (a.doos_klein_max >= a.doos_groot) return 'De kleine doos moet kleiner zijn dan de grote.';
     }
     if (a.maximum != null && a.maximum < a.minimum) return 'Het maximum kan niet onder het minimum liggen.';
+    if (a.schaal_verdeling && a.telt !== 'personen') return 'Schalen verdelen kan alleen bij een artikel dat in personen telt.';
+    if (a.btw_verdeling) {
+        const som = Object.values(a.btw_verdeling).reduce((t, v) => t + v, 0);
+        if (Math.abs(som - 100) > 0.01) return 'De btw-verdeling moet samen 100 % zijn.';
+    }
     return null;
 }
 
@@ -94,6 +107,9 @@ function artikelRij(a: ArtikelVelden) {
         doos_klein_max: a.capaciteit_soort === 'dozen' ? a.doos_klein_max : null,
         doos_groot: a.capaciteit_soort === 'dozen' ? a.doos_groot : null,
         voorraad: a.voorraad, actief: a.actief, publiek: a.publiek, dieet: a.dieet,
+        segment: a.segment, alcohol: a.alcohol, schaal_verdeling: a.schaal_verdeling,
+        btw_verdeling: a.btw_verdeling && Object.keys(a.btw_verdeling).length ? a.btw_verdeling : null,
+        verpakking_klein_cents: a.verpakking_klein_cents, verpakking_groot_cents: a.verpakking_groot_cents,
     };
 }
 
@@ -277,8 +293,11 @@ export async function voegMomentToe(input: unknown): Promise<ActionResult<{ id: 
         datum: z.string().regex(DATUM, 'Kies een datum'),
         van: z.string().regex(TIJD).optional().or(z.literal('')),
         tot: z.string().regex(TIJD).optional().or(z.literal('')),
-        capaciteit: z.coerce.number().int().min(0).max(1000),
+        /* Leeg = onbeperkt (Sinterklaas S3: "bouw ze leeg"). */
+        capaciteit: z.union([z.coerce.number().int().min(0).max(100000), z.literal(''), z.null()]).optional().transform((v) => (v === '' || v == null ? null : v)),
         bestellen_tot: z.string().regex(DATUM).optional().or(z.literal('')),
+        /* Besteldeadline met tijd (ISO), naast bestellen_tot. */
+        sluit_op: z.string().datetime({ offset: true }).optional().or(z.literal('')),
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
     const d = parsed.data;
@@ -290,7 +309,7 @@ export async function voegMomentToe(input: unknown): Promise<ActionResult<{ id: 
 
     const { data, error } = await s.supabase
         .from('winkel_momenten')
-        .insert({ organization_id: s.orgId, groep: d.groep, datum: d.datum, van: d.van || null, tot: d.tot || null, capaciteit: d.capaciteit, bestellen_tot: d.bestellen_tot || null, actief: true })
+        .insert({ organization_id: s.orgId, groep: d.groep, datum: d.datum, van: d.van || null, tot: d.tot || null, capaciteit: d.capaciteit, bestellen_tot: d.bestellen_tot || null, sluit_op: d.sluit_op || null, actief: true })
         .select('id')
         .single();
     if (error) return { error: error.message };
@@ -299,7 +318,7 @@ export async function voegMomentToe(input: unknown): Promise<ActionResult<{ id: 
 }
 
 export async function zetMomentCapaciteit(input: unknown): Promise<ActionResult<{ ok: true }>> {
-    const parsed = z.object({ id: z.string().uuid(), capaciteit: z.coerce.number().int().min(0).max(1000) }).safeParse(input);
+    const parsed = z.object({ id: z.string().uuid(), capaciteit: z.union([z.coerce.number().int().min(0).max(100000), z.null()]) }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
@@ -315,6 +334,17 @@ export async function zetMomentActief(input: unknown): Promise<ActionResult<{ ok
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
     const { error } = await s.supabase.from('winkel_momenten').update({ actief: parsed.data.actief }).eq('id', parsed.data.id).eq('organization_id', s.orgId);
+    if (error) return { error: error.message };
+    revalidatePath(PAD);
+    return { data: { ok: true } };
+}
+
+export async function zetMomentSluitOp(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({ id: z.string().uuid(), sluit_op: z.string().datetime({ offset: true }).nullable() }).safeParse(input);
+    if (!parsed.success) return { error: 'Kies een datum en tijd voor de deadline' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { error } = await s.supabase.from('winkel_momenten').update({ sluit_op: parsed.data.sluit_op }).eq('id', parsed.data.id).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
     revalidatePath(PAD);
     return { data: { ok: true } };
@@ -346,6 +376,9 @@ export async function werkInstellingenBij(input: unknown): Promise<ActionResult<
         offerte_geldig_minuten: z.number().int().min(1).max(240),
         nummer_prefix: z.string().trim().min(1).max(8).regex(/^[A-Z0-9]+$/, 'Alleen hoofdletters en cijfers'),
         site_url: z.string().trim().url('Dat is geen geldige site-URL').nullable().or(z.literal('')),
+        /* Sinterklaas S5/S7: reserveringsbedrag per order (leeg = uit) en de QR-basis-URL. */
+        reservering_bedrag_cents: z.number().int().min(1).nullable().optional(),
+        qr_basis_url: z.string().trim().url('Dat is geen geldige QR-basis-URL').nullable().or(z.literal('')).optional(),
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
     const d = parsed.data;
@@ -355,7 +388,7 @@ export async function werkInstellingenBij(input: unknown): Promise<ActionResult<
 
     const { error } = await s.supabase
         .from('winkel_instellingen')
-        .upsert({ organization_id: s.orgId, ...d, site_url: d.site_url || null }, { onConflict: 'organization_id' });
+        .upsert({ organization_id: s.orgId, ...d, site_url: d.site_url || null, reservering_bedrag_cents: d.reservering_bedrag_cents ?? null, qr_basis_url: d.qr_basis_url || null }, { onConflict: 'organization_id' });
     if (error) return { error: error.message };
     revalidatePath(PAD);
     return { data: { ok: true } };
@@ -447,4 +480,132 @@ async function hertelEventsVanArtikel(orgId: string, artikelId: string): Promise
     for (const id of eventIds) {
         try { await hertelEvent(store, orgId, id); } catch (e) { console.error('[webshop] hertellen na koppeling mislukt:', id, e instanceof Error ? e.message : e); }
     }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   5. Producten en slots — Sinterklaas S1/S2 (plan §1.1–1.2)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const PRODUCT_TYPES = ['bier', 'wijn', 'worst', 'amandelen', 'crackers', 'marmelade', 'doos', 'vleeswaar', 'kaas', 'zuur', 'krokant', 'verpakking', 'overig'] as const;
+
+const ProductVelden = z.object({
+    naam: z.string().trim().min(1, 'Geef het product een naam').max(120),
+    type: z.enum(PRODUCT_TYPES),
+    omschrijving: z.string().trim().max(600).nullable().default(null),
+    eenheid: z.enum(['stuk', 'gram']).default('stuk'),
+    prijs_per: z.number().positive().default(1),
+    /* Leeg = onbekend. Nooit 0 als gok. */
+    winkelprijs_incl_cents: z.number().int().min(0).nullable().default(null),
+    inkoop_excl_cents: z.number().int().min(0).nullable().default(null),
+    btw_pct: z.union([z.literal(0), z.literal(9), z.literal(21)]).default(9),
+    herkomst: z.enum(['lokaal', 'groothandel', 'mr_hop', 'eigen']).nullable().default(null),
+    alcohol: z.boolean().default(false),
+    hop_and_bites_tip: z.boolean().default(false),
+    /* Leeg = niet bijgehouden: blokkeert nooit. */
+    voorraad: z.number().min(0).nullable().default(null),
+    actief: z.boolean().default(true),
+});
+
+export async function maakProduct(input: unknown): Promise<ActionResult<{ id: string }>> {
+    const parsed = ProductVelden.safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { data, error } = await s.supabase.from('winkel_producten').insert({ organization_id: s.orgId, ...parsed.data }).select('id').single();
+    if (error) return { error: error.message };
+    revalidatePath(PAD);
+    return { data: { id: data.id as string } };
+}
+
+export async function werkProductBij(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = ProductVelden.extend({ id: z.string().uuid() }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { id, ...velden } = parsed.data;
+    const { error } = await s.supabase.from('winkel_producten').update(velden).eq('id', id).eq('organization_id', s.orgId);
+    if (error) return { error: error.message };
+    revalidatePath(PAD);
+    return { data: { ok: true } };
+}
+
+export async function zetProductActief(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({ id: z.string().uuid(), actief: z.boolean() }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { error } = await s.supabase.from('winkel_producten').update({ actief: parsed.data.actief }).eq('id', parsed.data.id).eq('organization_id', s.orgId);
+    if (error) return { error: error.message };
+    revalidatePath(PAD);
+    return { data: { ok: true } };
+}
+
+const SlotVelden = z.object({
+    id: z.string().uuid().nullable().default(null),
+    slot_type: z.enum(PRODUCT_TYPES),
+    naam: z.string().trim().min(1, 'Elk slot heeft een naam (zoals op de inpaklijst)').max(120),
+    hoeveelheid: z.number().positive('Hoeveelheid moet groter dan 0 zijn'),
+    eenheid: z.enum(['stuk', 'gram']).default('stuk'),
+    per: z.enum(['stuk', 'persoon']).default('stuk'),
+    standaard_product_id: z.string().uuid().nullable().default(null),
+});
+
+/**
+ * Het hele template van een artikel in één keer: bestaande slots bijwerken,
+ * nieuwe aanmaken, weggelaten slots verwijderen. Bestaande orders raakt dit
+ * niet — hun componenten zijn bij het plaatsen vastgelegd.
+ */
+export async function zetSlots(input: unknown): Promise<ActionResult<{ aantal: number }>> {
+    const parsed = z.object({ artikelId: z.string().uuid(), slots: z.array(SlotVelden).max(40) }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { artikelId, slots } = parsed.data;
+
+    const { data: art } = await s.supabase.from('winkel_artikelen').select('id').eq('id', artikelId).eq('organization_id', s.orgId).maybeSingle();
+    if (!art) return { error: 'Artikel niet gevonden' };
+    const productIds = [...new Set(slots.map((x) => x.standaard_product_id).filter((x): x is string => !!x))];
+    if (productIds.length) {
+        const { data: prods } = await s.supabase.from('winkel_producten').select('id').eq('organization_id', s.orgId).in('id', productIds);
+        if ((prods ?? []).length !== productIds.length) return { error: 'Een gekozen product is niet gevonden.' };
+    }
+
+    const { data: bestaand } = await s.supabase.from('winkel_artikel_slots').select('id').eq('artikel_id', artikelId).eq('organization_id', s.orgId);
+    const houden = new Set(slots.map((x) => x.id).filter((x): x is string => !!x));
+    const weg = (bestaand ?? []).map((r) => r.id as string).filter((id) => !houden.has(id));
+    if (weg.length) {
+        const { error } = await s.supabase.from('winkel_artikel_slots').delete().in('id', weg).eq('organization_id', s.orgId);
+        if (error) return { error: error.message };
+    }
+    for (const [i, sl] of slots.entries()) {
+        const rij = { organization_id: s.orgId, artikel_id: artikelId, volgorde: i + 1, slot_type: sl.slot_type, naam: sl.naam, hoeveelheid: sl.hoeveelheid, eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id };
+        const { error } = sl.id
+            ? await s.supabase.from('winkel_artikel_slots').update(rij).eq('id', sl.id).eq('organization_id', s.orgId)
+            : await s.supabase.from('winkel_artikel_slots').insert(rij);
+        if (error) return { error: error.message };
+    }
+    revalidatePath(PAD);
+    return { data: { aantal: slots.length } };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   6. De balie — Sinterklaas S5: het restbedrag boeken
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export async function boekRestBetaling(input: unknown): Promise<ActionResult<{ uitkomst: string }>> {
+    const parsed = z.object({ orderId: z.coerce.number().int().positive(), methode: z.enum(['contant', 'pin']) }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { data: o } = await s.supabase.from('winkel_orders').select('id').eq('id', parsed.data.orderId).eq('organization_id', s.orgId).maybeSingle();
+    if (!o) return { error: 'Order niet gevonden' };
+    /* De databasefunctie is idempotent en vergrendelt de order. */
+    const { data, error } = await s.supabase.rpc('winkel_boek_rest', { p_order_id: parsed.data.orderId, p_methode: parsed.data.methode });
+    if (error) return { error: error.message };
+    const uitkomst = String(data);
+    if (uitkomst === 'niet_betaald') return { error: 'Deze order is nog niet (online) betaald.' };
+    if (uitkomst === 'geen_rest') return { error: 'Er staat geen restbedrag open op deze order.' };
+    revalidatePath(PAD);
+    return { data: { uitkomst } };
 }

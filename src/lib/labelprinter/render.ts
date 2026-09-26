@@ -8,12 +8,15 @@ import type { LabelBlok, LabelFormaat } from './types';
 import { loslabel, type LosLabelData } from './templates/loslabel';
 import { productielabel, type ProductielabelData } from './templates/productielabel';
 import { testlabel, type TestlabelData } from './templates/testlabel';
+import { winkeletiket } from './templates/winkeletiket';
+import type { WinkelEtiketData } from '@/lib/winkel/productie';
 import { pastOp } from './templates/index';
 
 export type LabelVerzoek =
     | { soort: 'testlabel'; data: TestlabelData }
     | { soort: 'los_label'; data: LosLabelData; aantal: number }
-    | { soort: 'partij_labels' | 'herprint'; labels: Array<{ eenheidId: string; data: ProductielabelData }> };
+    | { soort: 'partij_labels' | 'herprint'; labels: Array<{ eenheidId: string; data: ProductielabelData }> }
+    | { soort: 'winkel_etiket'; labels: WinkelEtiketData[]; referentie: Record<string, unknown> };
 
 export interface GerenderdeJob {
     templateCode: string;
@@ -49,6 +52,21 @@ export function renderVerzoek(v: LabelVerzoek, formaat: LabelFormaat): Gerenderd
             templateCode: loslabel.code, templateVersie: loslabel.versie,
             labels, waarschuwingen: [...waarschuwingen, ...r.waarschuwingen],
             labelData: { ...v.data, aantal },
+        };
+    }
+
+    if (v.soort === 'winkel_etiket') {
+        if (!pastOp(winkeletiket, formaat)) waarschuwingen.push('Label is kleiner dan het minimum voor het winkel-etiket');
+        const labels: LabelBlok[] = [];
+        for (const d of v.labels) {
+            const r = winkeletiket.render(d, formaat);
+            for (const w of r.waarschuwingen) waarschuwingen.push(`${d.ordernummer} ${d.volgnr}: ${w}`);
+            labels.push({ eenheidId: null, zpl: r.zpl });
+        }
+        return {
+            templateCode: winkeletiket.code, templateVersie: winkeletiket.versie,
+            labels, waarschuwingen,
+            labelData: { ...v.referentie, aantal: labels.length },
         };
     }
 

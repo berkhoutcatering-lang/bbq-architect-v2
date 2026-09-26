@@ -27,6 +27,51 @@ export interface RegelRij {
     event_id: number | null;
     klaargezet_at: string | null;
     afhaalmoment_tekst: string | null;
+    /** Sinterklaas: 18+ en btw per tarief (leeg bij oude regels). */
+    alcohol?: boolean;
+    btw_cents?: Record<string, number> | null;
+}
+
+/** Eén component van een regel, zoals vastgelegd bij het plaatsen (S2/S7). */
+export interface ComponentRij {
+    id: number;
+    order_regel_id: number;
+    product_id: string | null;
+    slot_type: string;
+    naam: string;
+    hoeveelheid: number;
+    eenheid: 'stuk' | 'gram';
+}
+
+export interface ProductRij {
+    id: string;
+    naam: string;
+    type: string;
+    omschrijving: string | null;
+    eenheid: 'stuk' | 'gram';
+    prijs_per: number;
+    winkelprijs_incl_cents: number | null;
+    inkoop_excl_cents: number | null;
+    btw_pct: number;
+    herkomst: 'lokaal' | 'groothandel' | 'mr_hop' | 'eigen' | null;
+    alcohol: boolean;
+    hop_and_bites_tip: boolean;
+    voorraad: number | null;
+    actief: boolean;
+}
+
+export interface SlotRij {
+    id: string;
+    artikel_id: string;
+    volgorde: number;
+    slot_type: string;
+    naam: string;
+    hoeveelheid: number;
+    eenheid: 'stuk' | 'gram';
+    per: 'stuk' | 'persoon';
+    standaard_product_id: string | null;
+    wisselbaar: boolean;
+    alternatieven: string[];
 }
 
 export interface Wensen {
@@ -64,6 +109,12 @@ export interface OrderRij {
     wensen_bron: 'geen' | 'ai' | 'handmatig' | 'mislukt' | null;
     plaatsing_status: 'geplaatst' | 'vaste_bak' | 'mislukt' | null;
     plaatsing_fout: string | null;
+    /* Sinterklaas S5. */
+    betaalwijze: 'volledig' | 'reservering';
+    nu_te_betalen_cents: number;
+    rest_cents: number;
+    rest_betaald_at: string | null;
+    rest_betaalmethode: 'contant' | 'pin' | null;
     winkel_order_regels: RegelRij[];
 }
 
@@ -93,6 +144,14 @@ export interface ArtikelRij {
     inkoop_per_stuk: number | null;
     dieet: 'vegetarisch' | 'veganistisch' | null;
     koppel_voorstel: { soort: 'gerecht' | 'voorraad' | 'geen'; id: string | number | null; naam: string | null; zekerheid: 'hoog' | 'laag'; reden: string } | null;
+    /* Sinterklaas (plan §1.3). */
+    segment: 'bier' | 'wijn' | 'combi' | null;
+    vast: boolean;
+    alcohol: boolean;
+    schaal_verdeling: boolean;
+    btw_verdeling: Record<string, number> | null;
+    verpakking_klein_cents: number | null;
+    verpakking_groot_cents: number | null;
 }
 
 export interface MomentRij {
@@ -101,8 +160,10 @@ export interface MomentRij {
     datum: string;
     van: string | null;
     tot: string | null;
-    capaciteit: number;
+    /** null = onbeperkt. */
+    capaciteit: number | null;
     bestellen_tot: string | null;
+    sluit_op: string | null;
     actief: boolean;
 }
 
@@ -328,7 +389,7 @@ export function bouwVakjes(orders: OrderRij[], artikelen: ArtikelRij[], momenten
             personen, stuks,
             perArtikel: [...perArtikelMap.values()].sort((a, b) => b.aantal - a.aantal),
             dozen: metDozen ? dozen : null,
-            capaciteit: moment && eenheid ? { bezet: bezetting.get(moment.id) ?? 0, totaal: moment.capaciteit, eenheid } : null,
+            capaciteit: moment && eenheid && moment.capaciteit != null ? { bezet: bezetting.get(moment.id) ?? 0, totaal: moment.capaciteit, eenheid } : null,
             nietGeplaatst,
             nietGelezen,
             allergenen: [...allergenenMap].map(([naam, aantal]) => ({ naam, aantal })).sort((a, b) => b.aantal - a.aantal),
