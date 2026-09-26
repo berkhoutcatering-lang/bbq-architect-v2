@@ -27,7 +27,10 @@ function momentTekst(m: { datum: string; van: string | null; tot: string | null 
     return `${dag}, ${tijd}`;
 }
 
-export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, regels, moment }) => {
+type MailArgs = Parameters<Bevestigingsmail>[0];
+
+/** De inhoud van de mail, zonder Resend — zodat de tekst te testen is. */
+export function bevestigingsmailInhoud({ tenant, order, regels, moment }: MailArgs): { subject: string; html: string; text: string } {
     const bc = tenant.brandColor || '#6B7A3F';
     const voornaam = order.contact_naam.trim().split(/\s+/)[0] || order.contact_naam;
     const afhaal = momentTekst(moment);
@@ -43,6 +46,19 @@ export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, r
         + `<td style="padding:8px 12px;text-align:right;white-space:nowrap;">${euro(r.bedrag_cents)}</td></tr>`,
     ).join('');
 
+    /* S5: bij een reservering staat wat er al betaald is en wat er in de winkel nog volgt. */
+    const reservering = order.betaalwijze === 'reservering';
+    const betaaldRegel = reservering
+        ? `<p><strong>Reeds betaald: ${euro(order.nu_te_betalen_cents)}</strong> · te betalen in de winkel bij afhalen: <strong>${euro(order.rest_cents)}</strong> (contant of pin). De reservering is geen toeslag: hij gaat van het totaal af.</p>`
+        : '';
+    const betaaldTekst = reservering
+        ? `Reeds betaald: ${euro(order.nu_te_betalen_cents)} · te betalen in de winkel bij afhalen: ${euro(order.rest_cents)} (contant of pin).\n`
+        : '';
+    /* 18+: alcohol in de bestelling — legitimatie aan de balie. */
+    const alcohol = regels.some((r) => r.alcohol);
+    const achttien = alcohol ? '<p style="font-size:13px;color:#888;">Deze bestelling bevat alcohol (18+). Neem een legitimatie mee als we daarom vragen.</p>' : '';
+    const achttienTekst = alcohol ? 'Deze bestelling bevat alcohol (18+). Neem een legitimatie mee als we daarom vragen.\n' : '';
+
     const levering = order.leverwijze === 'verzenden'
         ? `<p><strong>Verzenden</strong> naar ${escH(order.adres?.straat ?? '')}, ${escH(order.adres?.postcode ?? '')} ${escH(order.adres?.plaats ?? '')}.</p>`
         : `<p><strong>Afhalen</strong> in Schoonoord${afhaal ? ` op <strong>${escH(afhaal)}</strong>` : ''}.${escH(tijdVolgt)}${vasteAfspraken.length ? ` ${escH(vasteAfspraken.join(' · '))}.` : ''}</p>`;
@@ -54,34 +70,43 @@ export const stuurBevestigingsmail: Bevestigingsmail = async ({ tenant, order, r
         + (tenant.ondertitel ? `<p style="margin:4px 0 0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">${escH(tenant.ondertitel)}</p>` : '')
         + '</div>'
         + `<p>Beste ${escH(voornaam)},</p>`
-        + `<p>Bedankt voor je bestelling. Je betaling is ontvangen; dit is je bevestiging. Je bestelnummer is <strong>${escH(order.nummer)}</strong> — noem dat als je ons belt of mailt.</p>`
+        + `<p>Bedankt voor je bestelling. ${reservering ? 'Je reservering is ontvangen' : 'Je betaling is ontvangen'}; dit is je bevestiging. Je bestelnummer is <strong>${escH(order.nummer)}</strong> — noem dat als je ons belt of mailt.</p>`
         + '<table style="width:100%;border-collapse:collapse;margin:20px 0;">' + rijen
         + (order.leverkosten_cents > 0 ? `<tr><td style="padding:8px 12px;">Verzendkosten</td><td></td><td style="padding:8px 12px;text-align:right;">${euro(order.leverkosten_cents)}</td></tr>` : '')
         + `<tr style="border-top:2px solid ${bc};"><td style="padding:8px 12px;font-weight:700;">Totaal (incl. btw)</td><td></td><td style="padding:8px 12px;text-align:right;font-weight:700;font-size:18px;">${euro(order.totaal_cents)}</td></tr>`
         + '</table>'
+        + betaaldRegel
         + levering
+        + achttien
         + (order.opmerking ? `<p style="font-size:13px;color:#888;margin-bottom:4px;">Je opmerking:</p><p style="white-space:pre-wrap;background:#f8f8f8;padding:12px;border-radius:8px;">${escH(order.opmerking)}</p>` : '')
         + (tenant.telefoon ? `<p>Vragen, of iets doorgeven? Bel ons op <strong>${escH(tenant.telefoon)}</strong>${tenant.email ? ` of mail naar ${escH(tenant.email)}` : ''}.</p>` : '')
         + `<p style="color:#888;font-size:13px;">Met vriendelijke groet,<br><strong>${escH(tenant.bedrijfsnaam)}</strong></p>`
         + '</body></html>';
 
     const text = `Beste ${voornaam},\n\n`
-        + `Bedankt voor je bestelling. Je betaling is ontvangen. Bestelnummer: ${order.nummer}.\n\n`
+        + `Bedankt voor je bestelling. ${reservering ? 'Je reservering is ontvangen' : 'Je betaling is ontvangen'}. Bestelnummer: ${order.nummer}.\n\n`
         + regels.map((r) => `${r.naam} — ${r.aantal} × ${euro(r.stuk_cents)} = ${euro(r.bedrag_cents)}${r.afhaalmoment_tekst ? ` (${r.afhaalmoment_tekst})` : ''}`).join('\n')
         + (order.leverkosten_cents > 0 ? `\nVerzendkosten: ${euro(order.leverkosten_cents)}` : '')
-        + `\nTotaal (incl. btw): ${euro(order.totaal_cents)}\n\n`
+        + `\nTotaal (incl. btw): ${euro(order.totaal_cents)}\n`
+        + betaaldTekst + '\n'
         + (order.leverwijze === 'verzenden'
             ? `Verzenden naar ${order.adres?.straat ?? ''}, ${order.adres?.postcode ?? ''} ${order.adres?.plaats ?? ''}.\n`
             : `Afhalen in Schoonoord${afhaal ? ` op ${afhaal}` : ''}.${tijdVolgt}${vasteAfspraken.length ? ` ${vasteAfspraken.join(' · ')}.` : ''}\n`)
+        + achttienTekst
         + (order.opmerking ? `\nJe opmerking: ${order.opmerking}\n` : '')
         + (tenant.telefoon ? `\nVragen? Bel ${tenant.telefoon}${tenant.email ? ` of mail ${tenant.email}` : ''}.\n` : '')
         + `\nMet vriendelijke groet,\n${tenant.bedrijfsnaam}`;
 
+    return { subject: `Bevestiging bestelling ${order.nummer} — ${tenant.bedrijfsnaam}`, html, text };
+}
+
+export const stuurBevestigingsmail: Bevestigingsmail = async (args) => {
+    const { subject, html, text } = bevestigingsmailInhoud(args);
     return sendServerMail({
-        to: order.contact_email,
-        subject: `Bevestiging bestelling ${order.nummer} — ${tenant.bedrijfsnaam}`,
+        to: args.order.contact_email,
+        subject,
         html,
         text,
-        replyTo: tenant.email ?? undefined,
+        replyTo: args.tenant.email ?? undefined,
     });
 };

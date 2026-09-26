@@ -91,7 +91,8 @@ export type PrintVerzoek =
     | { soort: 'los_label'; printerId: string; naam: string; datum?: string; tht?: string | null; notitie?: string | null; aantal: number }
     | { soort: 'partij_labels'; printerId: string; partijId: string; eenheidIds?: string[] | null }
     | { soort: 'herprint'; printerId: string; eenheidIds: string[] }
-    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null };
+    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null }
+    | { soort: 'winkel_etiket'; printerId: string; orderId: number; regelIds?: number[] | null };
 
 export interface PrintJobRij {
     id: string;

@@ -24,7 +24,8 @@ export type PrintJobSoort =
     | 'los_label'
     | 'testlabel'
     | 'doos_sticker'
-    | 'haccp_sticker';
+    | 'haccp_sticker'
+    | 'winkel_etiket';
 
 export type PrintJobStatus =
     | 'pending'

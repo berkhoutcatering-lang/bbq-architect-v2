@@ -8,11 +8,13 @@
  * "zo doen?" en wordt pas een koppeling als jij Ja klikt.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { ChefHat, Check, Eye, Package, Plus, Search, Snowflake, Sparkles, Truck, WandSparkles } from 'lucide-react';
+import { ChefHat, Check, Eye, GripVertical, Package, Plus, Search, Snowflake, Sparkles, Trash2, Truck, WandSparkles, Wine } from 'lucide-react';
 import Button from '@/components/Button';
 import Drawer from './Drawer';
-import { leesEuro, toonEuro, type ArtikelRij } from '../_lib/vakjes';
-import { koppelArtikel, koppelronde, maakArtikel, maakVoorraadItem, vraagKoppelVoorstel, werkArtikelBij, zetArtikelActief } from '../actions';
+import { leesEuro, toonEuro, type ArtikelRij, type ProductRij, type SlotRij } from '../_lib/vakjes';
+import { koppelArtikel, koppelronde, maakArtikel, maakVoorraadItem, vraagKoppelVoorstel, werkArtikelBij, zetArtikelActief, zetSlots } from '../actions';
+import { PRODUCT_TYPES, ProductDrawer, hoeveelheidTekst, type ProductType } from './ProductenPaneel';
+import { btwVerdeling, inkoopwaardeCenten, winkelwaardeCenten, type Component, type Product } from '@/lib/winkel/rekenen';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 export interface GerechtKeuze { id: string; naam: string }
@@ -22,8 +24,19 @@ interface Props {
     artikelen: ArtikelRij[];
     gerechten: GerechtKeuze[];
     voorraad: VoorraadKeuze[];
+    /* Sinterklaas: producten en slots (templates). */
+    producten: ProductRij[];
+    slots: SlotRij[];
     herlaad: () => Promise<void>;
     melding: Melding;
+}
+
+/** Een artikel met slots is verkoopbaar als elk slot een product heeft. */
+export function slotsVanArtikel(id: string, slots: SlotRij[]): SlotRij[] {
+    return slots.filter((s) => s.artikel_id === id).sort((a, b) => a.volgorde - b.volgorde);
+}
+export function verkoopbaarMetSlots(id: string, slots: SlotRij[]): boolean {
+    return slotsVanArtikel(id, slots).every((s) => s.standaard_product_id != null);
 }
 
 type Filter = 'alles' | 'voorstellen' | 'ongekoppeld';
@@ -31,7 +44,7 @@ type Filter = 'alles' | 'voorstellen' | 'ongekoppeld';
 const gekoppeld = (a: ArtikelRij) => Boolean(a.gerecht_id || a.inventory_id);
 const heeftVoorstel = (a: ArtikelRij) => !gekoppeld(a) && a.koppel_voorstel != null && a.koppel_voorstel.soort !== 'geen';
 
-export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, herlaad, melding }: Props) {
+export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, producten, slots, herlaad, melding }: Props) {
     const [filter, setFilter] = useState<Filter>('alles');
     const [openId, setOpenId] = useState<string | 'nieuw' | null>(null);
     const [bezig, setBezig] = useState<string | null>(null);
@@ -92,7 +105,10 @@ export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, herlaa
                 {zichtbaar.map((a) => (
                     <div key={a.id} className="ws-tabel-rij ws-artikelen-grid" onClick={() => setOpenId(a.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(a.id); }}>
                         <span style={{ fontSize: 14, fontWeight: 500 }}>{a.naam}{!a.publiek && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · niet publiek</span>}</span>
-                        <span style={{ fontSize: 13 }}>{a.prijs_cents == null ? <span style={{ color: 'var(--muted-weak)' }}>prijs volgt</span> : <><span className="ws-mono">€ {toonEuro(a.prijs_cents)}</span> <span style={{ color: 'var(--muted)' }}>{a.eenheid.replace(/^per persoon$/, 'p.p.')}</span></>}</span>
+                        <span style={{ fontSize: 13 }}>
+                            {a.prijs_cents == null ? <span style={{ color: 'var(--muted-weak)' }}>prijs volgt</span> : <><span className="ws-mono">€ {toonEuro(a.prijs_cents)}</span> <span style={{ color: 'var(--muted)' }}>{a.eenheid.replace(/^per persoon$/, 'p.p.')}</span></>}
+                            {!verkoopbaarMetSlots(a.id, slots) && <div style={{ fontSize: 11, color: 'var(--ws-warn)' }}>slot leeg · niet verkoopbaar</div>}
+                        </span>
                         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{a.btw_pct}%</span>
                         <span onClick={(e) => e.stopPropagation()}>
                             <button type="button" className="ws-schakel" role="switch" aria-checked={a.actief} aria-label={a.actief ? 'Uitzetten' : 'Aanzetten'} disabled={bezig === `aan:${a.id}`} onClick={() => doe(`aan:${a.id}`, () => zetArtikelActief({ id: a.id, actief: !a.actief }), a.actief ? `${a.naam} staat uit` : `${a.naam} staat aan`)} />
@@ -106,7 +122,7 @@ export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, herlaa
             </div>
 
             {open && (
-                <ArtikelDrawer artikel={open === 'nieuw' ? null : open} gerechten={gerechten} voorraad={voorraad} onClose={() => setOpenId(null)} herlaad={herlaad} melding={melding} />
+                <ArtikelDrawer artikel={open === 'nieuw' ? null : open} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={open === 'nieuw' ? [] : slotsVanArtikel(open.id, slots)} onClose={() => setOpenId(null)} herlaad={herlaad} melding={melding} />
             )}
         </>
     );
@@ -139,6 +155,14 @@ interface Form {
     dieet: ArtikelRij['dieet']; moment_soort: ArtikelRij['moment_soort']; moment_groep: string; afhaalmoment_tekst: string;
     capaciteit_soort: ArtikelRij['capaciteit_soort']; doos_klein_max: string; doos_groot: string; voorraad: string;
     koppel: 'gerecht' | 'voorraad' | 'geen'; gerecht_id: string | null; inventory_id: number | null; inkoop_per_stuk: string;
+    /* Sinterklaas. */
+    segment: ArtikelRij['segment']; alcohol: boolean; schaal_verdeling: boolean; btw21: string; verpakking_klein: string; verpakking_groot: string;
+}
+
+/** Een slot in het formulier: alles als tekst, pas bij opslaan getallen. */
+interface SlotForm { id: string | null; slot_type: ProductType; naam: string; hoeveelheid: string; eenheid: 'stuk' | 'gram'; per: 'stuk' | 'persoon'; standaard_product_id: string | null }
+function vanSlot(s: SlotRij): SlotForm {
+    return { id: s.id, slot_type: s.slot_type as ProductType, naam: s.naam, hoeveelheid: String(s.hoeveelheid), eenheid: s.eenheid, per: s.per, standaard_product_id: s.standaard_product_id };
 }
 
 function vanArtikel(a: ArtikelRij | null): Form {
@@ -150,11 +174,18 @@ function vanArtikel(a: ArtikelRij | null): Form {
         doos_groot: a?.doos_groot == null ? '' : String(a.doos_groot), voorraad: a?.voorraad == null ? '' : String(a.voorraad),
         koppel: a?.gerecht_id ? 'gerecht' : a?.inventory_id != null ? 'voorraad' : 'geen', gerecht_id: a?.gerecht_id ?? null, inventory_id: a?.inventory_id ?? null,
         inkoop_per_stuk: a?.inkoop_per_stuk == null ? '1' : String(a.inkoop_per_stuk),
+        segment: a?.segment ?? null, alcohol: a?.alcohol ?? false, schaal_verdeling: a?.schaal_verdeling ?? false,
+        btw21: a?.btw_verdeling?.['21'] == null ? '' : String(a.btw_verdeling['21']),
+        verpakking_klein: toonEuro(a?.verpakking_klein_cents), verpakking_groot: toonEuro(a?.verpakking_groot_cents),
     };
 }
 
-function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding }: { artikel: ArtikelRij | null; gerechten: GerechtKeuze[]; voorraad: VoorraadKeuze[]; onClose: () => void; herlaad: () => Promise<void>; melding: Melding }) {
+function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose, herlaad, melding }: { artikel: ArtikelRij | null; gerechten: GerechtKeuze[]; voorraad: VoorraadKeuze[]; producten: ProductRij[]; slots: SlotRij[]; onClose: () => void; herlaad: () => Promise<void>; melding: Melding }) {
     const [f, setF] = useState<Form>(() => vanArtikel(artikel));
+    const [slotForms, setSlotForms] = useState<SlotForm[]>(() => slots.map(vanSlot));
+    const [slotsGewijzigd, setSlotsGewijzigd] = useState(false);
+    const [nieuwProductVoor, setNieuwProductVoor] = useState<number | null>(null);
+    const productOpId = useMemo(() => new Map(producten.map((p) => [p.id, p])), [producten]);
     const [bezig, setBezig] = useState(false);
     const [aiBezig, setAiBezig] = useState(false);
     const [voorstel, setVoorstel] = useState(artikel?.koppel_voorstel ?? null);
@@ -176,14 +207,24 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding
     const n = (s: string) => (s.trim() === '' ? null : Number(s));
     async function opslaan() {
         const prijs = leesEuro(f.prijs);
-        if (prijs === undefined) { melding('Dat is geen geldig bedrag.', 'error'); return; }
+        const verpKlein = leesEuro(f.verpakking_klein);
+        const verpGroot = leesEuro(f.verpakking_groot);
+        if (prijs === undefined || verpKlein === undefined || verpGroot === undefined) { melding('Dat is geen geldig bedrag.', 'error'); return; }
+        const btw21 = f.btw21.trim() === '' ? null : Number(f.btw21.replace(',', '.'));
+        if (btw21 != null && !(btw21 >= 0 && btw21 <= 100)) { melding('De btw-verdeling is een percentage tussen 0 en 100.', 'error'); return; }
         const velden = {
             naam: f.naam, eenheid: f.eenheid, telt: f.telt, prijs_cents: prijs, btw_pct: f.btw_pct,
             minimum: Number(f.minimum) || 1, maximum: n(f.maximum), verzendbaar: f.verzendbaar, gekoeld: f.gekoeld,
             moment_soort: f.moment_soort, moment_groep: f.moment_groep.trim() || null, afhaalmoment_tekst: f.afhaalmoment_tekst.trim() || null,
             capaciteit_soort: f.capaciteit_soort, doos_klein_max: n(f.doos_klein_max), doos_groot: n(f.doos_groot), voorraad: n(f.voorraad),
             actief: f.actief, publiek: f.publiek, dieet: f.dieet,
+            segment: f.segment, alcohol: f.alcohol, schaal_verdeling: f.schaal_verdeling,
+            btw_verdeling: btw21 == null ? null : { '21': btw21, '9': Math.round((100 - btw21) * 100) / 100 },
+            verpakking_klein_cents: verpKlein, verpakking_groot_cents: verpGroot,
         };
+        /* Slots: alles als getal, elke regel een naam en een hoeveelheid. */
+        const slotInvoer = slotForms.map((sl) => ({ id: sl.id, slot_type: sl.slot_type, naam: sl.naam.trim(), hoeveelheid: Number(sl.hoeveelheid.replace(',', '.')), eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id }));
+        if (slotInvoer.some((sl) => !sl.naam || !(sl.hoeveelheid > 0))) { melding('Elk slot heeft een naam en een hoeveelheid groter dan 0.', 'error'); return; }
         setBezig(true);
         try {
             let id = artikel?.id ?? null;
@@ -202,6 +243,10 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding
                     : f.koppel === 'voorraad' && f.inventory_id != null ? { id, soort: 'voorraad' as const, inventory_id: f.inventory_id, inkoop_per_stuk: n(f.inkoop_per_stuk) }
                         : { id, soort: 'geen' as const };
                 const r = await koppelArtikel(input);
+                if ('error' in r) { melding(r.error, 'error'); return; }
+            }
+            if (slotsGewijzigd || (!artikel && slotInvoer.length)) {
+                const r = await zetSlots({ artikelId: id, slots: slotInvoer });
                 if ('error' in r) { melding(r.error, 'error'); return; }
             }
             melding(artikel ? 'Artikel opgeslagen' : 'Artikel aangemaakt', 'success');
@@ -264,6 +309,14 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding
                     <div className="field"><label>Dieet</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {([['vegetarisch', 'vegetarisch'], ['veganistisch', 'veganistisch']] as const).map(([k, l]) => <button key={k} type="button" className="ws-pil" aria-pressed={f.dieet === k} onClick={() => zet('dieet', f.dieet === k ? null : k)}>{l}</button>)}
                     </div><div className="field-hint">Telt mee bij de keuken: een vegetarische box is een vegetarische gast</div></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <div className="field"><label>Segment</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {(['bier', 'wijn', 'combi'] as const).map((k) => <button key={k} type="button" className="ws-pil" aria-pressed={f.segment === k} onClick={() => zet('segment', f.segment === k ? null : k)}>{k === 'combi' ? 'bier & wijn' : k}</button>)}
+                        </div><div className="field-hint">Voor geschenkpakketten</div></div>
+                        <div className="field"><label>18+</label><div className="ws-chips">
+                            <button type="button" className="ws-chip" aria-pressed={f.alcohol} onClick={() => zet('alcohol', !f.alcohol)}><Wine size={14} />Bevat alcohol</button>
+                        </div><div className="field-hint">Op order, mail en etiket. Volgt ook uit een product in een slot.</div></div>
+                    </div>
                 </section>
 
                 <div className="ws-lijn" />
@@ -291,7 +344,29 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding
                             <div className="field"><label>Grote doos</label><input inputMode="numeric" value={f.doos_groot} onChange={(e) => zet('doos_groot', e.target.value)} placeholder="5" /><div className="field-hint">personen per grote doos</div></div>
                         </div>
                     )}
+                    {f.telt === 'personen' && (
+                        <div className="ws-chips">
+                            <button type="button" className="ws-chip" aria-pressed={f.schaal_verdeling} onClick={() => zet('schaal_verdeling', !f.schaal_verdeling)}><Package size={14} />Personen over schalen verdelen</button>
+                        </div>
+                    )}
+                    {f.schaal_verdeling && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 14 }}>
+                            <div className="field"><label>Kleine schaal t/m</label><input inputMode="numeric" value={f.doos_klein_max} onChange={(e) => zet('doos_klein_max', e.target.value)} placeholder="3" /><div className="field-hint">2–3 personen</div></div>
+                            <div className="field"><label>Grote schaal</label><input inputMode="numeric" value={f.doos_groot} onChange={(e) => zet('doos_groot', e.target.value)} placeholder="5" /><div className="field-hint">4–5, nooit 1</div></div>
+                            <div className="field"><label>Verpakking klein</label><input inputMode="decimal" value={f.verpakking_klein} onChange={(e) => zet('verpakking_klein', e.target.value)} placeholder="2,25" /><div className="field-hint">incl. btw, marge</div></div>
+                            <div className="field"><label>Verpakking groot</label><input inputMode="decimal" value={f.verpakking_groot} onChange={(e) => zet('verpakking_groot', e.target.value)} placeholder="3,00" /><div className="field-hint">incl. btw, marge</div></div>
+                        </div>
+                    )}
                 </section>
+
+                <div className="ws-lijn" />
+
+                <SlotsSectie slotForms={slotForms} producten={producten} productOpId={productOpId} telt={f.telt} prijsCents={leesEuro(f.prijs) ?? null} btwPct={f.btw_pct} btw21={f.btw21} verpakking={{ klein: leesEuro(f.verpakking_klein) ?? null, groot: leesEuro(f.verpakking_groot) ?? null }}
+                    onChange={(sl) => { setSlotForms(sl); setSlotsGewijzigd(true); }} onBtw21={(v) => zet('btw21', v)} onNieuwProduct={(i) => setNieuwProductVoor(i)} />
+                {nieuwProductVoor != null && (
+                    <ProductDrawer product={null} onClose={() => setNieuwProductVoor(null)} herlaad={herlaad} melding={melding}
+                        onAangemaakt={(id) => { setSlotForms((sl) => sl.map((x, i) => (i === nieuwProductVoor ? { ...x, standaard_product_id: id } : x))); setSlotsGewijzigd(true); }} />
+                )}
 
                 <div className="ws-lijn" />
 
@@ -376,4 +451,100 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, onClose, herlaad, melding
             </div>
         </Drawer>
     );
+}
+
+
+/* ── Het template: slots met een product ───────────────────────────────────── */
+
+const SLOT_TYPE_HINT: Partial<Record<ProductType, string>> = { bier: 'fles', wijn: 'fles', worst: 'stuk', amandelen: 'gram', crackers: 'bakje', marmelade: 'pot', doos: 'doos' };
+
+function SlotsSectie({ slotForms, producten, productOpId, telt, prijsCents, btwPct, btw21, verpakking, onChange, onBtw21, onNieuwProduct }: {
+    slotForms: SlotForm[]; producten: ProductRij[]; productOpId: Map<string, ProductRij>; telt: 'stuks' | 'personen';
+    prijsCents: number | null; btwPct: number; btw21: string; verpakking: { klein: number | null; groot: number | null };
+    onChange: (sl: SlotForm[]) => void; onBtw21: (v: string) => void; onNieuwProduct: (i: number) => void;
+}) {
+    const zet = (i: number, patch: Partial<SlotForm>) => onChange(slotForms.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+    const perPersoon = telt === 'personen';
+    const nieuwSlot = (): SlotForm => ({ id: null, slot_type: perPersoon ? 'vleeswaar' : 'bier', naam: '', hoeveelheid: '1', eenheid: perPersoon ? 'gram' : 'stuk', per: perPersoon ? 'persoon' : 'stuk', standaard_product_id: null });
+    const leeg = slotForms.filter((x) => !x.standaard_product_id).length;
+
+    /* De marge-regel uit de opdracht, alleen met ingevulde prijzen. */
+    const componenten: Component[] = slotForms.map((sl) => ({ product_id: sl.standaard_product_id, slot_type: sl.slot_type, naam: sl.naam, hoeveelheid: Number(sl.hoeveelheid.replace(',', '.')) || 0, eenheid: sl.eenheid }));
+    const prodMap = new Map<string, Product>(producten.map((p) => [p.id, { ...p, voorraad: p.voorraad, actief: p.actief }]));
+    let winkelwaarde = 0, inkoop = 0, winkelBekend = 0, inkoopBekend = 0;
+    for (const c of componenten) {
+        const p = c.product_id ? productOpId.get(c.product_id) : null;
+        if (!p) continue;
+        const w = winkelwaardeCenten(p, c.hoeveelheid);
+        const i = inkoopwaardeCenten(p, c.hoeveelheid);
+        if (w != null) { winkelwaarde += w; winkelBekend += 1; }
+        if (i != null) { inkoop += i; inkoopBekend += 1; }
+    }
+    const alleBekend = slotForms.length > 0 && slotForms.every((x) => x.standaard_product_id);
+    const verdeling = prijsCents != null && !perPersoon ? btwVerdeling({ btw_pct: btwPct, btw_verdeling: btw21.trim() === '' ? null : { '21': Number(btw21), '9': 100 - Number(btw21) } }, componenten, prodMap, prijsCents) : null;
+    const btwTotaal = verdeling ? Object.values(verdeling.btw).reduce((s, v) => s + v, 0) : null;
+    const omzetExcl = prijsCents != null && btwTotaal != null ? prijsCents - btwTotaal : null;
+    const verpak = verpakking.groot ?? verpakking.klein ?? 0;
+    const kosten = inkoop + (perPersoon ? 0 : 0) + Math.round(verpak / 1.21);
+    const kostenPct = omzetExcl ? Math.round((kosten / omzetExcl) * 1000) / 10 : null;
+
+    return (
+        <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="ws-sectie-kop">Wat zit erin?</div>
+            <div className="ws-onderschrift" style={{ marginTop: -6 }}>{perPersoon ? 'Per persoon, in grammen — de receptuur van de plank. Hieruit komt de productielijst.' : 'Per pakket. Elk slot moet een product hebben, anders is het pakket niet verkoopbaar. Vast pakket: geen wissels (fase 2).'}</div>
+            {slotForms.length > 0 && leeg > 0 && <div className="ws-tip" style={{ color: 'var(--ws-warn)' }}><Sparkles size={13} />{leeg} {leeg === 1 ? 'slot' : 'slots'} zonder product — kies er een, of maak het product aan.</div>}
+            {slotForms.length > 0 && (
+                <div className="ws-slots-grid" style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted-weak)' }}>
+                    <span>Type</span><span>Naam op de lijst</span><span>Hoeveel</span><span>Eenheid</span><span>Per</span><span>Product</span><span />
+                </div>
+            )}
+            {slotForms.map((sl, i) => {
+                const keuze = producten.filter((p) => p.actief && (p.type === sl.slot_type || sl.slot_type === 'overig'));
+                const gekozen = sl.standaard_product_id ? productOpId.get(sl.standaard_product_id) : null;
+                return (
+                    <div key={sl.id ?? `n${i}`} className="ws-slots-grid">
+                        <select value={sl.slot_type} onChange={(e) => zet(i, { slot_type: e.target.value as ProductType })}>{PRODUCT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+                        <input value={sl.naam} placeholder={SLOT_TYPE_HINT[sl.slot_type] ? `${sl.slot_type} (${SLOT_TYPE_HINT[sl.slot_type]})` : sl.slot_type} onChange={(e) => zet(i, { naam: e.target.value })} />
+                        <input inputMode="decimal" value={sl.hoeveelheid} onChange={(e) => zet(i, { hoeveelheid: e.target.value })} style={{ textAlign: 'right' }} />
+                        <select value={sl.eenheid} onChange={(e) => zet(i, { eenheid: e.target.value as 'stuk' | 'gram' })}><option value="stuk">stuk</option><option value="gram">gram</option></select>
+                        <select value={sl.per} onChange={(e) => zet(i, { per: e.target.value as 'stuk' | 'persoon' })}><option value="stuk">pakket</option><option value="persoon">persoon</option></select>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', minWidth: 0 }}>
+                            <select value={sl.standaard_product_id ?? ''} onChange={(e) => zet(i, { standaard_product_id: e.target.value || null })} style={{ flex: 1, minWidth: 0, borderColor: sl.standaard_product_id ? undefined : 'rgba(245,158,11,.5)' }}>
+                                <option value="">— nog geen product —</option>
+                                {gekozen && !keuze.some((p) => p.id === gekozen.id) && <option value={gekozen.id}>{gekozen.naam}</option>}
+                                {keuze.map((p) => <option key={p.id} value={p.id}>{p.naam}{p.winkelprijs_incl_cents != null ? ` · € ${toonEuro(p.winkelprijs_incl_cents)}` : ''}</option>)}
+                            </select>
+                            <button type="button" className="mr-icon-btn-sm" style={{ width: 32, height: 32, flexShrink: 0 }} title="Nieuw product" onClick={() => onNieuwProduct(i)}><Plus size={13} /></button>
+                        </div>
+                        <button type="button" className="mr-icon-btn-sm" style={{ width: 32, height: 32 }} title="Slot weg" onClick={() => onChange(slotForms.filter((_, j) => j !== i))}><Trash2 size={13} /></button>
+                    </div>
+                );
+            })}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Button variant="ghost" size="sm" icon={<Plus size={13} />} onClick={() => onChange([...slotForms, nieuwSlot()])}>Slot toevoegen</Button>
+                {slotForms.length > 1 && <span style={{ fontSize: 12, color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><GripVertical size={12} />volgorde = volgorde op de lijst</span>}
+            </div>
+
+            {slotForms.length > 0 && !perPersoon && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 6 }}>
+                    <div className="field"><label>Btw-verdeling: deel tegen 21 %</label><input inputMode="decimal" value={btw21} onChange={(e) => onBtw21(e.target.value)} placeholder={verdeling && btw21.trim() === '' ? `${Math.round(((verdeling.delen['21'] ?? 0) / (prijsCents || 1)) * 1000) / 10} (naar rato)` : 'naar rato'} /><div className="field-hint">Leeg = naar rato van de winkelwaarde van de producten. [BEVESTIGEN door de boekhouder]</div></div>
+                    <div className="field"><label>Rekenbasis</label>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6, paddingTop: 6 }}>
+                            {winkelBekend > 0 && <>Winkelwaarde inhoud: <b className="ws-mono" style={{ color: prijsCents != null && winkelwaarde < prijsCents ? 'var(--ws-vuur)' : 'var(--text)' }}>€ {toonEuro(winkelwaarde)}</b>{winkelBekend < slotForms.length ? ` (${slotForms.length - winkelBekend} zonder prijs)` : ''}{prijsCents != null && alleBekend && winkelbekendTekst(winkelwaarde, prijsCents)}<br /></>}
+                            {inkoopBekend > 0 && omzetExcl != null && <>Inkoop + verpakking: <b className="ws-mono" style={{ color: kostenPct != null && kostenPct > 65 ? 'var(--ws-vuur)' : 'var(--text)' }}>€ {toonEuro(kosten)}</b> = {kostenPct}% van € {toonEuro(omzetExcl)} excl. btw{inkoopBekend < slotForms.length ? ` (${slotForms.length - inkoopBekend} zonder inkoopprijs)` : ''} · richtlijn ≤ 65 %<br /></>}
+                            {verdeling && <>Btw: {Object.entries(verdeling.btw).map(([p, c]) => `${p}% € ${toonEuro(c)}`).join(' · ')}</>}
+                            {winkelBekend === 0 && inkoopBekend === 0 && 'Vul prijzen bij de producten in voor de marge.'}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {perPersoon && slotForms.length > 0 && (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>Per persoon: {hoeveelheidTekst(componenten.reduce((s, c) => s + (c.eenheid === 'gram' ? c.hoeveelheid : 0), 0), 'gram')} in totaal{inkoopBekend > 0 ? ` · inkoop € ${toonEuro(inkoop)} p.p. (${inkoopBekend} van ${slotForms.length} met prijs)` : ''}.</div>
+            )}
+        </section>
+    );
+}
+
+function winkelbekendTekst(winkelwaarde: number, prijs: number): string {
+    return winkelwaarde >= prijs ? ' · ≥ pakketprijs ✓' : ` · onder de pakketprijs € ${toonEuro(prijs)}`;
 }

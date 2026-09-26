@@ -103,7 +103,9 @@
 .ws-tabel-rij:hover { background: rgba(255,255,255,.025); }
 .ws-tabel-rij:last-child { border-bottom: 0; }
 .ws-artikelen-grid { grid-template-columns: minmax(0,1.6fr) 150px 56px 60px 90px minmax(0,2.6fr); }
-.ws-momenten-grid { grid-template-columns: minmax(0,1.6fr) minmax(0,1.3fr) 130px 170px 44px; }
+.ws-producten-grid { grid-template-columns: minmax(0,1.8fr) 140px 130px 48px minmax(0,1.6fr) 44px minmax(0,1fr); }
+.ws-slots-grid { display: grid; grid-template-columns: 110px minmax(0,1.4fr) 70px 70px 80px minmax(0,1.6fr) 32px; gap: 8px; align-items: center; }
+.ws-momenten-grid { grid-template-columns: minmax(0,1.5fr) minmax(0,1.1fr) 120px 150px 190px 44px; }
 .ws-koppeling { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; min-width: 0; }
 .ws-koppeling-voorstel { color: var(--ws-warn); flex-wrap: wrap; gap: 8px; }
 .ws-koppeling-leeg { font-size: 13px; color: var(--muted-weak); }
@@ -144,6 +146,19 @@
 .ws-lijn { height: 1px; background: var(--border); }
 .ws-tip { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
 
+/* De balie: rest in de winkel (S5) */
+.ws-rest { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; border: 1px solid rgba(245,158,11,.3); background: rgba(245,158,11,.06); border-radius: 10px; margin-top: 4px; }
+
+/* Productie & inpakken (S7): afvinkvakje en controleveld voor op papier */
+.ws-print-vink { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border-strong); border-radius: 4px; vertical-align: middle; margin-right: 6px; }
+.ws-controle { font-size: 11px; color: var(--muted-weak); font-family: var(--font-mono); }
+@media print {
+  body * { visibility: hidden; }
+  .mr-drawer, .mr-drawer * { visibility: visible; }
+  .mr-drawer { position: static !important; width: 100% !important; max-width: none !important; box-shadow: none !important; }
+  .mr-drawer-footer, .mr-drawer-close, .ws-productie .btn { display: none !important; }
+}
+
 /* Telefoon */
 @media (max-width: 760px) {
   .ws-vakje { grid-template-columns: 1fr; gap: 12px; padding: 16px; }
@@ -152,7 +167,9 @@
   .ws-vakje-acties .btn { justify-content: center; min-height: 44px; }
   .ws-tegels { grid-template-columns: 1fr 1fr; }
   .ws-tabel-kop { display: none; }
-  .ws-artikelen-grid, .ws-momenten-grid { grid-template-columns: 1fr; gap: 6px; }
+  .ws-artikelen-grid, .ws-producten-grid { grid-template-columns: minmax(0,1.8fr) 140px 130px 48px minmax(0,1.6fr) 44px minmax(0,1fr); }
+.ws-slots-grid { display: grid; grid-template-columns: 110px minmax(0,1.4fr) 70px 70px 80px minmax(0,1.6fr) 32px; gap: 8px; align-items: center; }
+.ws-momenten-grid { grid-template-columns: 1fr; gap: 6px; }
   .ws-wensen-form { grid-template-columns: 1fr; }
   .ws-root .mr-drawer { width: 100vw !important; min-width: 0; max-width: 100vw; }
   .ws-banner { grid-template-columns: auto minmax(0,1fr); }
