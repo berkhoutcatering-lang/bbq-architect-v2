@@ -36,6 +36,8 @@ export interface KassaContext {
     /** Extra query-parameters op de URL's die myPOS aanroept (Vercel-preview-bypass). */
     webhookQuery?: Record<string, string>;
     mail: Bevestigingsmail;
+    /** Na een bevestigde betaling: de voorraadmeldingen bijwerken (W4). Gooit nooit. */
+    naBetaling?: (orgId: string) => Promise<unknown>;
     nu?: () => Date;
 }
 
@@ -375,6 +377,8 @@ async function verwerkBetaling(ctx: KassaContext, tenant: Tenant, order: OrderRi
         /* Dan het vakje (plan §4). Gooit nooit; een fout staat in de order
            met de knop "Plaats opnieuw" in het scherm. */
         await plaatsBestelling(ctx.store, tenant, bijgewerkt, ctx.nu?.());
+        /* De bestelling reserveert: misschien zakt er iets onder de grens. */
+        if (ctx.naBetaling) await ctx.naBetaling(tenant.orgId).catch(() => undefined);
         return bijgewerkt;
     }
 

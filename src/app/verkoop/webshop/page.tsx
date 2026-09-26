@@ -33,7 +33,7 @@ const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
     { key: 'instellingen', label: 'Instellingen', onderschrift: 'Hoe de kassa op de website werkt.' },
 ];
 
-const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, afhaalmoment_tekst, alcohol, btw_cents)';
+const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, opgehaald_at, afhaalmoment_tekst, alcohol, btw_cents)';
 
 function paneelUitHash(): Paneel {
     if (typeof window === 'undefined') return 'vakjes';
@@ -70,7 +70,7 @@ export default function WebshopPagina() {
             supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief').order('datum'),
-            supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url').maybeSingle(),
+            supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url, melding_email').maybeSingle(),
             supabase.from('gerechten').select('id, naam').eq('actief', true).order('naam'),
             supabase.from('inventory').select('id, naam, unit, current_stock').order('naam'),
             supabase.from('winkel_producten').select('*').order('type').order('naam'),

@@ -6,7 +6,9 @@
  *
  * Per product: type, prijs (winkel incl. / inkoop excl.), btw, voorraad en wat
  * er al gereserveerd of besteld is. Voorraad leeg = niet bijgehouden: blokkeert
- * nooit. Een prijs is nooit een gok: leeg blijft leeg.
+ * nooit. Een prijs is nooit een gok: leeg blijft leeg. De voorraad zelf wordt
+ * hier niet ingevuld: die verandert alleen via het logboek in /voorraad/winkel
+ * (docs/voorraad-bouwplan.md W1).
  */
 import { useMemo, useState } from 'react';
 import { Beer, Check, Package, Plus, Wine } from 'lucide-react';
@@ -54,7 +56,8 @@ export default function ProductenPaneel({ producten, slots, artikelen, component
         const regelTelt = new Map<number, 'betaald' | 'wacht'>();
         for (const o of orders) {
             if (!telt(o, nu)) continue;
-            for (const r of o.winkel_order_regels) regelTelt.set(r.id, o.status === 'betaald' ? 'betaald' : 'wacht');
+            /* Ingepakt is al van de voorraad af (W3): telt niet meer als besteld. */
+            for (const r of o.winkel_order_regels) if (!r.klaargezet_at) regelTelt.set(r.id, o.status === 'betaald' ? 'betaald' : 'wacht');
         }
         const uit = new Map<string, { betaald: number; wacht: number }>();
         for (const c of componenten) {
@@ -150,13 +153,13 @@ export default function ProductenPaneel({ producten, slots, artikelen, component
 
 interface Form {
     naam: string; type: ProductType; omschrijving: string; eenheid: 'stuk' | 'gram'; prijs_per: string;
-    winkel: string; inkoop: string; btw_pct: 0 | 9 | 21; herkomst: ProductRij['herkomst']; alcohol: boolean; tip: boolean; voorraad: string; actief: boolean;
+    winkel: string; inkoop: string; btw_pct: 0 | 9 | 21; herkomst: ProductRij['herkomst']; alcohol: boolean; tip: boolean; actief: boolean;
 }
 function vanProduct(p: ProductRij | null): Form {
     return {
         naam: p?.naam ?? '', type: (p?.type as ProductType) ?? 'bier', omschrijving: p?.omschrijving ?? '', eenheid: p?.eenheid ?? 'stuk', prijs_per: String(p?.prijs_per ?? 1),
         winkel: toonEuro(p?.winkelprijs_incl_cents), inkoop: toonEuro(p?.inkoop_excl_cents), btw_pct: (p?.btw_pct as 0 | 9 | 21) ?? 9, herkomst: p?.herkomst ?? null,
-        alcohol: p?.alcohol ?? false, tip: p?.hop_and_bites_tip ?? false, voorraad: p?.voorraad == null ? '' : String(p.voorraad), actief: p?.actief ?? true,
+        alcohol: p?.alcohol ?? false, tip: p?.hop_and_bites_tip ?? false, actief: p?.actief ?? true,
     };
 }
 
@@ -176,11 +179,9 @@ export function ProductDrawer({ product, onClose, herlaad, melding, onAangemaakt
         if (winkel === undefined || inkoop === undefined) { melding('Dat is geen geldig bedrag.', 'error'); return; }
         const prijsPer = Number(f.prijs_per.replace(',', '.'));
         if (!(prijsPer > 0)) { melding('Prijs per: een getal groter dan 0 (1 stuk, 100 gram).', 'error'); return; }
-        const voorraad = f.voorraad.trim() === '' ? null : Number(f.voorraad.replace(',', '.'));
-        if (voorraad != null && !(voorraad >= 0)) { melding('Voorraad is een getal, of leeg = niet bijgehouden.', 'error'); return; }
         const velden = {
             naam: f.naam, type: f.type, omschrijving: f.omschrijving.trim() || null, eenheid: f.eenheid, prijs_per: prijsPer,
-            winkelprijs_incl_cents: winkel, inkoop_excl_cents: inkoop, btw_pct: f.btw_pct, herkomst: f.herkomst, alcohol: f.alcohol, hop_and_bites_tip: f.tip, voorraad, actief: f.actief,
+            winkelprijs_incl_cents: winkel, inkoop_excl_cents: inkoop, btw_pct: f.btw_pct, herkomst: f.herkomst, alcohol: f.alcohol, hop_and_bites_tip: f.tip, actief: f.actief,
         };
         setBezig(true);
         try {
@@ -215,7 +216,9 @@ export function ProductDrawer({ product, onClose, herlaad, melding, onAangemaakt
                     <div className="field"><label>Winkelprijs incl. btw</label><input inputMode="decimal" value={f.winkel} onChange={(e) => zet('winkel', e.target.value)} placeholder="4,95" /><div className="field-hint">Leeg = onbekend; nooit 0 als gok</div></div>
                     <div className="field"><label>Inkoop excl. btw</label><input inputMode="decimal" value={f.inkoop} onChange={(e) => zet('inkoop', e.target.value)} placeholder="2,75" /><div className="field-hint">Voor de marge, nooit voor de klant</div></div>
                     <div className="field"><label>Btw</label><div className="ws-keuze">{([0, 9, 21] as const).map((p) => <button key={p} type="button" aria-pressed={f.btw_pct === p} onClick={() => zet('btw_pct', p)}>{p}%</button>)}</div></div>
-                    <div className="field"><label>Voorraad</label><input inputMode="decimal" value={f.voorraad} onChange={(e) => zet('voorraad', e.target.value)} placeholder="niet bijgehouden" /><div className="field-hint">In {eenheidLabel}. Leeg = niet bijgehouden, blokkeert nooit. Een getal = harde grens.</div></div>
+                    <div className="field"><label>Voorraad</label>
+                        <div style={{ fontSize: 14, padding: '8px 0' }}>{product?.voorraad == null ? <span style={{ color: 'var(--muted)' }}>niet bijgehouden</span> : <span className="ws-mono">{hoeveelheidTekst(product.voorraad, product.eenheid)}</span>}</div>
+                        <div className="field-hint">Verandert alleen via tellen, ontvangst of overboeken: {product ? <a href={`/voorraad/winkel?product=${product.id}`} style={{ color: 'var(--brand)' }}>open in Winkelvoorraad</a> : 'na het aanmaken in Winkelvoorraad'}.</div></div>
                 </div>
                 <div className="field"><label>Herkomst</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {HERKOMST.map((h) => <button key={h.key} type="button" className="ws-pil" aria-pressed={f.herkomst === h.key} onClick={() => zet('herkomst', f.herkomst === h.key ? null : h.key)}>{h.label}</button>)}

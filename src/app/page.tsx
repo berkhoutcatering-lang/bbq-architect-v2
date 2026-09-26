@@ -29,6 +29,7 @@ import { trackOnce } from '@/lib/track';
 
 // Today-redesign components
 import GreetingStrip from '@/components/dashboard/today/GreetingStrip';
+import VoorraadBel from '@/components/voorraad/VoorraadBel';
 import EventHero, { type EventHeroEvent } from '@/components/dashboard/today/EventHero';
 import AIQuickPrompts from '@/components/dashboard/today/AIQuickPrompts';
 import type { QuickPrompt } from '@/components/dashboard/today/AIPromptDrawer';
@@ -873,7 +874,8 @@ export default function DashboardPage() {
             currentTime={currentTime}
             daysToNextEvent={heroEvent ? heroEvent.daysAway : null}
           />
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+            <VoorraadBel />
             <Link href="/administratie/rittenregistratie" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <Car size={14} /> Rit registreren
             </Link>

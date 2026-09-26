@@ -8,6 +8,7 @@
  * myPOS eist https zonder poortnummer, dus daar zet je WINKEL_WEBHOOK_URL.
  */
 import { myposConfig } from '@/lib/mypos/config';
+import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import type { KassaContext } from './kassa';
 import { stuurBevestigingsmail } from './mail';
 import { maakSupabaseStore } from './supabaseStore';
@@ -40,6 +41,7 @@ export function kassaContext(req: Request): KassaContext {
         webhookUrl: process.env.WINKEL_WEBHOOK_URL || undefined,
         webhookQuery: previewBypass(),
         mail: stuurBevestigingsmail,
+        naBetaling: (orgId) => evalueerWinkelMeldingen(orgId),
     };
 }
 

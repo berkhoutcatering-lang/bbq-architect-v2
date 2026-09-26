@@ -20,7 +20,7 @@ import {
     afstandLabel, bouwVakjes, dagenTot, datumKort, datumLang, opmerkingNietGelezen, tijdvak, vakjeNaam,
     type ArtikelRij, type ComponentRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
 } from '../_lib/vakjes';
-import { boekRestBetaling, plaatsOpnieuw, zetKlaargezet, zetWensenHandmatig } from '../actions';
+import { boekRestBetaling, plaatsOpnieuw, zetKlaargezet, zetOpgehaald, zetWensenHandmatig } from '../actions';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -110,7 +110,10 @@ export default function VakjesPaneel({ orders, artikelen, momenten, componenten,
                             <div key={o.id} className="ws-tabel-rij" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,2fr) auto', cursor: v ? 'pointer' : 'default' }} onClick={() => { if (v) { setOpenSleutel(v.sleutel); setZoek(''); } }}>
                                 <div><div style={{ fontSize: 14, fontWeight: 600 }}>{o.contact_naam}</div><div className="ws-mono" style={{ fontSize: 12, color: 'var(--muted)' }}>{o.nummer} · {o.status}{v ? ` · ${datumKort(v.datum)}` : ''}</div></div>
                                 <div style={{ fontSize: 13, color: 'var(--muted)' }}>{regelsKort(o)}</div>
-                                <div onClick={(e) => e.stopPropagation()}><RestBetaling order={o} herlaad={herlaad} melding={melding} /></div>
+                                <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                                    <RestBetaling order={o} herlaad={herlaad} melding={melding} />
+                                    <Opgehaald order={o} herlaad={herlaad} melding={melding} />
+                                </div>
                             </div>
                         );
                     })}
@@ -423,6 +426,41 @@ function VandaagDrawer({ v, vandaag, onClose, herlaad, melding }: { v: Vakje; va
                 </div>
             </div>
         </Drawer>
+    );
+}
+
+/* ── De balie: opgehaald (W3) ────────────────────────────────────────────────
+   Alleen status. De voorraad is bij het inpakken al afgeboekt; ophalen raakt
+   hem niet (docs/voorraad-bouwplan.md W3). */
+
+function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
+    const [bezig, setBezig] = useState(false);
+    if (o.status !== 'betaald') return null;
+    const regels = o.winkel_order_regels;
+    const opgehaald = regels.length > 0 && regels.every((r) => r.opgehaald_at);
+    const ingepakt = regels.length > 0 && regels.every((r) => r.klaargezet_at);
+    async function zet(aan: boolean) {
+        setBezig(true);
+        try {
+            const r = await zetOpgehaald({ orderId: o.id, opgehaald: aan });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            melding(aan ? `${o.nummer} opgehaald` : `${o.nummer} weer op niet opgehaald`, 'success');
+            await herlaad();
+        } finally { setBezig(false); }
+    }
+    if (opgehaald) {
+        const t = regels[0]?.opgehaald_at;
+        return (
+            <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Check size={13} style={{ color: 'var(--green)' }} />Opgehaald {t ? new Date(t).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                <button type="button" onClick={() => zet(false)} disabled={bezig} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>ongedaan</button>
+            </div>
+        );
+    }
+    return (
+        <Button size="sm" variant={ingepakt ? 'brand' : 'ghost'} icon={<Check size={14} />} loading={bezig} onClick={() => zet(true)} title={ingepakt ? undefined : 'Nog niet alles is ingepakt'}>
+            Opgehaald
+        </Button>
     );
 }
 

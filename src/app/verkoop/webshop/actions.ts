@@ -21,6 +21,8 @@ import { createServerSupabase, createServiceSupabase } from '@/lib/supabase-serv
 import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import { hertelEvent, plaatsBestelling } from '@/lib/winkel/plaatsing';
 import { stelKoppelingenVoor, type KoppelArtikel, type KoppelVoorstel } from '@/lib/ai/winkelKoppelVoorsteller';
+import { voorraadFout } from '@/lib/winkel/voorraad';
+import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -379,6 +381,8 @@ export async function werkInstellingenBij(input: unknown): Promise<ActionResult<
         /* Sinterklaas S5/S7: reserveringsbedrag per order (leeg = uit) en de QR-basis-URL. */
         reservering_bedrag_cents: z.number().int().min(1).nullable().optional(),
         qr_basis_url: z.string().trim().url('Dat is geen geldige QR-basis-URL').nullable().or(z.literal('')).optional(),
+        /* Voorraadmeldingen (W4). Leeg = alleen de bel. */
+        melding_email: z.string().trim().email('Dat is geen geldig e-mailadres').nullable().or(z.literal('')).optional(),
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
     const d = parsed.data;
@@ -388,7 +392,7 @@ export async function werkInstellingenBij(input: unknown): Promise<ActionResult<
 
     const { error } = await s.supabase
         .from('winkel_instellingen')
-        .upsert({ organization_id: s.orgId, ...d, site_url: d.site_url || null, reservering_bedrag_cents: d.reservering_bedrag_cents ?? null, qr_basis_url: d.qr_basis_url || null }, { onConflict: 'organization_id' });
+        .upsert({ organization_id: s.orgId, ...d, site_url: d.site_url || null, reservering_bedrag_cents: d.reservering_bedrag_cents ?? null, qr_basis_url: d.qr_basis_url || null, melding_email: d.melding_email || null }, { onConflict: 'organization_id' });
     if (error) return { error: error.message };
     revalidatePath(PAD);
     return { data: { ok: true } };
@@ -449,16 +453,40 @@ export async function zetWensenHandmatig(input: unknown): Promise<ActionResult<{
     return { data: { status: uit.status, fout: uit.fout } };
 }
 
-/** Vaste bak: een regel klaargezet (of weer niet). */
-export async function zetKlaargezet(input: unknown): Promise<ActionResult<{ ok: true }>> {
+/**
+ * Een regel ingepakt (of weer uitgepakt). Besluit Mathijs (26 sep): afboeken
+ * bij inpakken. De database zet het vinkje en boekt de componenten af als
+ * verkoop_online in één transactie; uitpakken boekt retour. Netto en
+ * idempotent, alleen op een betaalde order (WV006). Plan: docs/voorraad-bouwplan.md W3.
+ */
+export async function zetKlaargezet(input: unknown): Promise<ActionResult<{ ok: true; boekingen: number }>> {
     const parsed = z.object({ regelId: z.coerce.number().int().positive(), klaargezet: z.boolean() }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { data, error } = await s.supabase.rpc('winkel_zet_klaargezet', {
+        p_org: s.orgId, p_regel_id: parsed.data.regelId, p_klaargezet: parsed.data.klaargezet,
+    });
+    if (error) return { error: voorraadFout(error.code, error.message) };
+    const boekingen = ((data as { boekingen?: { product_id: string }[] } | null)?.boekingen ?? []);
+    if (boekingen.length) await evalueerWinkelMeldingen(s.orgId, boekingen.map((b) => b.product_id));
+    revalidatePath(PAD);
+    revalidatePath('/voorraad/winkel');
+    return { data: { ok: true, boekingen: boekingen.length } };
+}
+
+/** Afgehaald aan de balie. Alleen status: de voorraad is bij het inpakken al afgeboekt. */
+export async function zetOpgehaald(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({ orderId: z.coerce.number().int().positive(), opgehaald: z.boolean() }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
     const { error } = await s.supabase
         .from('winkel_order_regels')
-        .update({ klaargezet_at: parsed.data.klaargezet ? new Date().toISOString() : null })
-        .eq('id', parsed.data.regelId)
+        .update(parsed.data.opgehaald
+            ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id }
+            : { opgehaald_at: null, opgehaald_door: null })
+        .eq('order_id', parsed.data.orderId)
         .eq('organization_id', s.orgId);
     if (error) return { error: error.message };
     revalidatePath(PAD);
@@ -502,8 +530,8 @@ const ProductVelden = z.object({
     herkomst: z.enum(['lokaal', 'groothandel', 'mr_hop', 'eigen']).nullable().default(null),
     alcohol: z.boolean().default(false),
     hop_and_bites_tip: z.boolean().default(false),
-    /* Leeg = niet bijgehouden: blokkeert nooit. */
-    voorraad: z.number().min(0).nullable().default(null),
+    /* De voorraad staat hier bewust niet: die verandert alleen via het
+       logboek (tellen, ontvangst, overboeken, afwijking) in /voorraad/winkel. */
     actief: z.boolean().default(true),
 });
 

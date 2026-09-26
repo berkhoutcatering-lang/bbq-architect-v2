@@ -26,13 +26,14 @@ export interface InstellingenRij {
     /* Sinterklaas S5/S7. */
     reservering_bedrag_cents: number | null;
     qr_basis_url: string | null;
+    melding_email: string | null;
 }
 
-const STANDAARD: InstellingenRij = { verzendkosten_cents: null, gratis_verzenden_vanaf_cents: null, verzendkosten_btw_pct: 21, reservering_minuten: 30, offerte_geldig_minuten: 15, nummer_prefix: 'HB', nummer_jaar: null, nummer_laatste: 0, kassa_open: false, site_url: null, reservering_bedrag_cents: null, qr_basis_url: null };
+const STANDAARD: InstellingenRij = { verzendkosten_cents: null, gratis_verzenden_vanaf_cents: null, verzendkosten_btw_pct: 21, reservering_minuten: 30, offerte_geldig_minuten: 15, nummer_prefix: 'HB', nummer_jaar: null, nummer_laatste: 0, kassa_open: false, site_url: null, reservering_bedrag_cents: null, qr_basis_url: null, melding_email: null };
 
 export default function InstellingenPaneel({ instellingen, herlaad, melding }: { instellingen: InstellingenRij | null; herlaad: () => Promise<void>; melding: Melding }) {
     const i = instellingen ?? STANDAARD;
-    const [f, setF] = useState({ verzend: toonEuro(i.verzendkosten_cents), gratis: toonEuro(i.gratis_verzenden_vanaf_cents), btw: i.verzendkosten_btw_pct as 0 | 9 | 21, reservering: String(i.reservering_minuten), offerte: String(i.offerte_geldig_minuten), prefix: i.nummer_prefix, site: i.site_url ?? '', reserveringBedrag: toonEuro(i.reservering_bedrag_cents), qr: i.qr_basis_url ?? '' });
+    const [f, setF] = useState({ verzend: toonEuro(i.verzendkosten_cents), gratis: toonEuro(i.gratis_verzenden_vanaf_cents), btw: i.verzendkosten_btw_pct as 0 | 9 | 21, reservering: String(i.reservering_minuten), offerte: String(i.offerte_geldig_minuten), prefix: i.nummer_prefix, site: i.site_url ?? '', reserveringBedrag: toonEuro(i.reservering_bedrag_cents), qr: i.qr_basis_url ?? '', meldingEmail: i.melding_email ?? '' });
     const [open, setOpen] = useState(i.kassa_open);
     const [bezig, setBezig] = useState<'opslaan' | 'kassa' | null>(null);
     useEffect(() => { setOpen(i.kassa_open); }, [i.kassa_open]);
@@ -46,7 +47,7 @@ export default function InstellingenPaneel({ instellingen, herlaad, melding }: {
         return {
             kassa_open: kassaOpen, verzendkosten_cents: verzend, gratis_verzenden_vanaf_cents: gratis, verzendkosten_btw_pct: f.btw,
             reservering_minuten: Number(f.reservering), offerte_geldig_minuten: Number(f.offerte), nummer_prefix: f.prefix.trim().toUpperCase(), site_url: f.site.trim() || null,
-            reservering_bedrag_cents: reserveringBedrag, qr_basis_url: f.qr.trim() || null,
+            reservering_bedrag_cents: reserveringBedrag, qr_basis_url: f.qr.trim() || null, melding_email: f.meldingEmail.trim() || null,
         };
     }
     async function bewaar(kassaOpen: boolean, wat: 'opslaan' | 'kassa') {
@@ -94,6 +95,7 @@ export default function InstellingenPaneel({ instellingen, herlaad, melding }: {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <div className="field"><label>Ordernummer</label><input value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value })} /><div className="field-hint">Volgende: {f.prefix.trim().toUpperCase() || 'HB'}-{jaar}-{String(i.nummer_laatste + 1).padStart(4, '0')}</div></div>
                         <div className="field"><label>Site-URL</label><input value={f.site} onChange={(e) => setF({ ...f, site: e.target.value })} placeholder="https://hopbites.nl" /><div className="field-hint">Waar de klant na betalen terugkeert</div></div>
+                        <div className="field" style={{ gridColumn: '1 / -1' }}><label>Voorraadmeldingen naar</label><input type="email" value={f.meldingEmail} onChange={(e) => setF({ ...f, meldingEmail: e.target.value })} placeholder="jij@hopbites.nl" /><div className="field-hint">"Op" en "pakket kan niet meer besteld worden" meteen; "bijna op" in één overzicht om 8:00. Leeg = alleen de bel in de app.</div></div>
                         <div className="field" style={{ gridColumn: '1 / -1' }}><label>QR-app (Experience)</label><input value={f.qr} onChange={(e) => setF({ ...f, qr: e.target.value })} placeholder="https://experience.hopbites.nl" /><div className="field-hint">Basis-URL voor de QR op het etiket: {(f.qr.trim() || '…').replace(/\/+$/, '')}/sint?artikel=sint-bier-35&order=HB-2026-0042. Leeg = geen QR op het etiket.</div></div>
                     </div>
                 </div>

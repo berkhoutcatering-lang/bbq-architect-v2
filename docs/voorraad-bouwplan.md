@@ -1,0 +1,114 @@
+# Bouwplan — één voorraad voor het hele bedrijf
+
+Opdracht: `docs/OPDRACHT-BBQ-ARCHITECT-WINKELVOORRAAD.md` (26 sep 2026).
+Branch: `feat/winkelvoorraad`, gestapeld op `feat/sinterklaas-2026`. **Stacked PR: nooit mergen met `--delete-branch`.**
+
+## 0. Stand
+
+| Blok | Stand |
+|---|---|
+| W1 Twee plekken, één logboek | in aanbouw |
+| W2 De winkel vullen | — |
+| W3 Afboeken bij inpakken | — |
+| W4 Let op, bijna op | — |
+| W5 Afwijkingen | — |
+| Fase 2 en 3 | na fase 1 |
+
+## 1. Controle van §2 "Wat er al is" (26 sep)
+
+Wat klopt: de keukenvoorraad met `stock_movements` en `increment_inventory_stock`, partijen met een QR per eenheid, de webshop die reserveert tegen `winkel_producten.voorraad` (WK009), `klaargezet_at` dat niets afboekt, Moneybird die geen webshoporders boekt, en het bestelvoorstel dat alleen voor de keuken werkt.
+
+Wat anders is:
+
+1. **`OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md` bestaat niet.** De overdracht heet `OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md` en heeft geen hernoemtabel.
+2. **Er is geen QR per doos.** S7 zet één QR per artikel per order op het etiket (`{qr_basis_url}/sint?artikel=<slug>&order=<nummer>`, `src/lib/winkel/productie.ts:196`). Geen enkele winkel-tabel heeft een scan_token. Voor W3 maakt dat niet uit, want ophalen boekt geen voorraad. Voor W12 wel: daar moet een scan per doos nog bedacht worden, en BBQ Architect maakt nooit zelf een token (bouwplan Sinterklaas §0).
+3. **`winkel_order_regels` kent geen "opgehaald"**, en `winkel_orders` kent geen `geannuleerd`. De statussen zijn wacht, betaald, afgebroken, mislukt en verlopen.
+4. **`voorraad_tonen` staat niet in deze repo.** Het is een schakelaar aan de websitekant.
+5. **De keuken rondt stil af op nul.** `increment_inventory_stock` doet `greatest(0, …)` en logt het gevraagde getal, niet wat er werkelijk afging. Dat botst met "nooit stil op nul". De keuken verbouwen we niet; overboekingen en keuken-afwijkingen krijgen een eigen functie die weigert in plaats van afrondt.
+6. **Er is geen bel voor `notifications`.** De bel in `Changelog.tsx` telt nieuwe app-versies.
+7. **`inventory` heeft geen `tht`, `avg_daily` of `lead_time_days` in een migratie.** De levertijd staat op `leveranciers`; `tht` en `avg_daily` bestaan live maar staan in geen SQL-bestand.
+8. **Bijvangst**, beide als losse taak voorgesteld:
+   - De Sinterklaas-migratie heeft het unieke achtervoegsel op het myPOS-ordernummer teruggedraaid, waardoor een dubbele order-ID weer kan. Dat moet vóór december opgelost.
+   - De cron `ritten-vergeten` schrijft `titel` in plaats van `title`, waardoor zijn melding nooit wordt opgeslagen.
+
+## 2. Antwoorden van Mathijs (26 sep)
+
+| Vraag | Antwoord |
+|---|---|
+| Afboeken bij inpakken of betaling | **Bij inpakken.** Vinkje "klaargezet" aan = eraf, vinkje uit = retour. |
+| Drempel | **Standaard met overschrijven**: genoeg voor 5 pakketten van het artikel dat het meeste van dit product vraagt. Een eigen getal per product wint. |
+| Meldingen | **"Op" en "artikel dicht" direct mailen; "bijna op" en vooruit-tekorten in één overzicht om 8:00.** Altijd ook de bel. Het adres is een nieuw veld in de webshop-instellingen. |
+| Eigen maak (amandelen, marmelade, worst) | Mathijs: "keuken en winkel is eigenlijk 1, catering is een andere tak, maar ook weer niet". Zie hieronder. |
+| Stil liggen | Nog niet gevraagd; standaard **180 dagen**, per plek in te stellen. |
+| Wie mag een afwijking vastleggen | Nog niet gevraagd; standaard **iedereen met een login**, en de naam staat in het logboek. |
+
+**Eigen maak — de keuze.** Er is één bedrijf met twee plekken waar spullen liggen:
+
+- **De makerij** is waar gemaakt en bewaard wordt, voor catering én winkel. Eigen maak ontstaat daar als partij, met THT en kostprijs; dat bestaat al.
+- **De winkel** is de plank waar klanten van kopen.
+
+Wat van de makerij naar de plank gaat, is een overboeking. Catering is geen derde plek: het is een reden om uit de makerij te verbruiken, net als een event nu al. Het overzicht bovenaan de voorraadkaart (W6) telt beide plekken op, zodat Mathijs het als één bedrijf ziet.
+
+## 3. Keuzes per blok
+
+### W1 — Twee plekken, één logboek
+
+**Een eigen winkel-logboek naast `stock_movements`, en voor het lezen één view die ze samenvoegt.** Een nieuw gezamenlijk logboek zou betekenen dat de keuken erop overstapt, en dat raakt `inventory` en `stock_movements`, die met de hand zijn aangemaakt en blijven zoals ze zijn. Twee tabellen, één view `voorraad_logboek` met een kolom `plek`: de voorraadkaart, het logboek per product en de maandtotalen lezen alleen die view.
+
+- **`voorraad_plekken`:** Keuken/makerij en Winkel Tramstraat, met `stil_na_dagen` (standaard 180).
+- **`winkel_voorraad_mutaties`:** de kolommen uit de opdracht, plus `tht`, `inkoop_order_id` en een unieke `idempotency_key`.
+  - Types: telling, ontvangst, overboeking, verkoop_online, verkoop_kassa, retour, afwijking.
+  - Redenen: eigen_gebruik, proeven, derving_breuk, derving_tht, keuken_verbruik, manko, telling_meer.
+  - Een afwijking heeft altijd een reden. Manko en telling_meer komen alleen uit een telling.
+- **`winkel_producten.voorraad` blijft het getal waar de webshop tegen reserveert**, maar is voortaan de som van het logboek.
+  - Een trigger weigert elke wijziging van dat getal die niet uit de logboekfunctie komt. Het productformulier kan de voorraad dus niet meer overschrijven; het verwijst naar tellen.
+  - De test controleert dat het getal gelijk is aan de som van de regels.
+- **`winkel_muteer_voorraad`:**
+  - Vergrendelt het product met `FOR UPDATE`, dezelfde rij-lock die `winkel_controleer_capaciteit` neemt.
+  - Een telling krijgt het getelde getal en rekent het verschil binnen de lock uit, zodat een verkoop tijdens het tellen niet verloren gaat.
+  - Onder nul geeft `WV001`. Een product dat nog niet wordt bijgehouden accepteert alleen een telling (`WV002`).
+  - De waarde is `hoeveelheid × inkoop_excl_cents ÷ prijs_per`, dezelfde som als `inkoopwaardeCenten`.
+- **`voorraad_overboeken`:** één transactie die de keuken zonder afronden controleert, er een `stock_movements`-regel (type `overboeking`) en een winkelregel van maakt, en de eenheden omrekent met de bestaande `eenheid_factor` (kg → gram). Kan hij niet omrekenen, dan weigert hij.
+
+### W2 — De winkel vullen
+
+- **`/voorraad/winkel`:** per product aanwezig, gereserveerd, beschikbaar, drempel, THT, inkoop- en winkelprijs, en per artikel "nog X pakketten te maken".
+  - Een drawer per product toont het logboek en de knoppen tellen, ontvangst, overboeken en afwijking.
+- **`/voorraad/winkel/tellen`:** tellen op de telefoon per schap (producttype), naar het patroon van de nulmeting.
+- **Ontvangst:** aantal, inkoopprijs en THT, met een optionele koppeling aan een inkooporder.
+- **Overboeken:** een keukenproduct kiezen, het aantal invullen, klaar. De koppeling blijft bewaard voor de volgende keer.
+
+### W3 — Afboeken bij inpakken
+
+- Het vinkje "klaargezet" roept `winkel_boek_regel` aan. Die boekt **netto**: doel min wat al geboekt is. Twee keer klikken doet dus niets extra, en het vinkje uitzetten boekt retour.
+- Alleen op orders met status `betaald`.
+- De bezetting (reservering) telt klaargezette regels niet meer mee, want die zijn al van het getal af. Niets telt dubbel.
+- Afgebroken en verlopen orders tellen nu al niet mee in de bezetting; er wordt niets geboekt.
+- "Opgehaald" (`opgehaald_at`) is een knop aan de balie en raakt de voorraad niet.
+
+### W4 — Let op, bijna op
+
+- **`voorraad_melding_staat`** onthoudt per product en soort sinds wanneer het eronder zit. Een melding komt er alleen als die rij nieuw is: één keer per keer dat het product onder de drempel zakt. De rij wordt gewist zodra het product er weer boven zit.
+- **Soorten:** `voorraad_laag`, `voorraad_op`, `artikel_dicht`, `voorraad_tekort_vooruit`.
+- **Kanalen:** de bel (op Vandaag en op het winkelscherm), direct mail bij "op" en "artikel dicht", en één overzicht om 8:00 via een dagelijkse cron.
+- **Let op:** `RESEND_FROM_EMAIL` is leeg. Tot er een eigen verzenddomein is, komt mail alleen aan op het adres van het Resend-account.
+
+### W5 — Afwijkingen
+
+- **`/voorraad/afwijking`:** bovenaan de laatst gebruikte producten van winkel en keuken, dan zoeken. Tik op een product, tik op een reden, klaar. Het aantal staat op 1 en kan met plus en min worden aangepast.
+- **Winkelproduct:** gaat via `winkel_muteer_voorraad`.
+- **Keukenproduct:** gaat via `keuken_afwijking`, die weigert in plaats van afrondt en de reden in `stock_movements.reden` vastlegt.
+- **Maandtotalen:** per reden in euro, uit de view `voorraad_afwijkingen_maand`.
+
+## 4. Vragen voor de boekhouder (open)
+
+1. Webshopomzet boeken bij betaling of bij ophalen?
+2. Btw-verdeling van gemengde pakketten naar winkelwaarde — akkoord?
+3. Eigen gebruik: hoe boeken (privé-onttrekking, btw-correctie)?
+4. Voorraadwaarde op de balans: laatste, gemiddelde of FIFO-inkoopprijs? Tot het antwoord er is: de laatste inkoopprijs.
+
+## 5. Werkwijze
+
+- Per blok: migratie, dan de SQL-test in `supabase/tests/` (draait op live en draait zichzelf terug), dan pure TypeScript met vitest, dan het scherm.
+- `npx tsc --noEmit`, `npm test` en `npm run build` moeten groen zijn vóór elke commit.
+- Migraties draaien één voor één via `npx supabase db query --linked -f`, nooit via `db push`.

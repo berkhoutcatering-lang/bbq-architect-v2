@@ -26,6 +26,8 @@ export interface RegelRij {
     klaar_op: string;
     event_id: number | null;
     klaargezet_at: string | null;
+    /** Afgehaald aan de balie (W3). Alleen status: de voorraad ging al bij het inpakken. */
+    opgehaald_at?: string | null;
     afhaalmoment_tekst: string | null;
     /** Sinterklaas: 18+ en btw per tarief (leeg bij oude regels). */
     alcohol?: boolean;
