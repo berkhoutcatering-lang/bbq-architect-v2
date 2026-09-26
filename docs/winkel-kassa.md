@@ -74,6 +74,35 @@ Wat myPOS ons leerde tijdens het bouwen:
 - `kerst-box-vegetarisch`: zelfde prijs, `publiek = false`, deelt de dagen én de
   capaciteit van de Kerst-Box (`moment_groep = 'kerst-box'`).
 
+## Sinterklaas 2026 — betaalwijze, templates, productie (26 september)
+
+Opdracht `docs/OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md`, plan `docs/sinterklaas-bouwplan.md`,
+migratie `20260927120000_winkel_sinterklaas.sql`. Wat er voor de website verandert (blok S5):
+
+- `POST offerte` en `POST order` accepteren `betaalwijze: "volledig" | "reservering"`
+  (optioneel, standaard `volledig`). De offerte geeft `betaalwijze`, `nuTeBetalenCenten`,
+  `restInWinkelCenten` en `reserveringCenten` terug; `totaalCenten` verandert niet — de
+  reservering (€ 2,50 per order, instelling `reservering_bedrag_cents`) is geen toeslag.
+- Bij `reservering` int myPOS alleen het reserveringsbedrag; de status wordt `betaald`
+  zodra dat binnen is. `GET order/{token}` geeft `betaalwijze`, `nuTeBetalenCenten`,
+  `restInWinkelCenten` en `restBetaald`; de site toont het restbedrag. Reserveren kan
+  alleen bij afhalen; zonder ingesteld bedrag is het `validatie`.
+- Een regel met een `keuzes`-veld is `validatie`: de pakketten zijn vast (fase 2 komt later).
+- Meerdere agenda-momenten in één order mogen als ze hetzelfde tijdvak zijn (plank in
+  groep `sint-plank` én pakketten in `sint-pakket` op hetzelfde moment: twee tellingen).
+- `GET momenten?artikel=<slug>` geeft de momenten van de groep van dat artikel;
+  `vrij` is 100000 als het moment geen grens heeft. Een moment met `sluit_op` (deadline
+  met tijd) verdwijnt daarna uit de lijst; een order erop is `moment-verlopen`.
+
+Intern: producten (`winkel_producten`) en slots (`winkel_artikel_slots`) maken een artikel
+tot template; zonder product in elk slot is het artikel niet verkoopbaar ("kan op dit
+moment niet besteld worden"). Bij het plaatsen wordt de inhoud per regel vastgelegd
+(`winkel_order_regel_componenten`) en daarop gereserveerd (WK009 = product op; voorraad
+NULL = niet bijgehouden). Btw per regel naar rato van de winkelwaarde (`btw_cents`),
+overschrijfbaar per artikel. De balie boekt het rest met `winkel_boek_rest` (contant/pin).
+Productie- en inpaklijsten en het Zebra-etiket (printsoort `winkel_etiket`, QR =
+`{qr_basis_url}/sint?artikel=<slug>&order=<nummer>`) staan in het vakje op `/verkoop/webshop`.
+
 ## Instellen — via /verkoop/webshop
 
 Sinds 25 september 2026 heeft de kassa een beheerscherm: `/verkoop/webshop` met vier
@@ -91,6 +120,9 @@ zegt wat waar staat; de Supabase-tabel-editor is niet meer nodig.
 | Grens van de kleine doos | `winkel_artikelen.doos_klein_max` (nu 3, te bevestigen) |
 | Reserveringsduur | `winkel_instellingen.reservering_minuten` (30) |
 | Kassa dicht | `winkel_instellingen.kassa_open = false` |
+| Producten, slots per artikel, 18+, btw-verdeling | panelen Producten en Artikelen |
+| Reserveringsbedrag, QR-basis-URL | paneel Instellingen |
+| Capaciteit leeg = onbeperkt, deadline met tijd | paneel Momenten |
 
 `node scripts/winkel-seed-hop-en-bites.mjs` zet de catalogus opnieuw (idempotent;
 ingevulde prijzen blijven staan).

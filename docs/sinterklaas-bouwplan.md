@@ -142,7 +142,15 @@ Zuiver in `src/lib/winkel/productie.ts` (getest), scherm in `_components/Product
 - Pakketten per moment, gegroepeerd per artikel: totaal, dan de orders met inhoud (uit de componenten), afvinkvakjes en controleveld — print-vriendelijk.
 - Etiket: template `winkeletiket` (klantnaam, ordernummer, moment, artikel, QR, 18+, "reeds betaald / rest"). Labelmaat komt van de printerinstelling (`/instellingen/printers`), dus configureerbaar. QR-URL: `{qr_basis_url}/sint?artikel={slug}&order={nummer}`.
 
-## 6 · Volgorde
+## 6 · Stand (26 september 2026)
+
+S1–S7 gebouwd op `feat/sinterklaas-2026`; migratie en seed op de live database gedraaid
+(60 slots, 23 producten, acht artikelen **uit**, reservering € 2,50). Tests: `src/lib/winkel/
+sinterklaas.test.ts` (S1–S6), `productie.test.ts` (S7); 1815 groen. Niet gedaan: een
+echte print op de ZQ630 (alles via de mock-transport) en een ingelogde doorloop van het
+beheerscherm in de browser (geen testsessie beschikbaar).
+
+## 6b · Volgorde
 
 S1 datamodel + rekenen + seed → S2 verkoopbaarheid + reservering → S3 momenten → S4 schalen → S5 betaalwijze → S6 btw → S7 productie/etiket. Elk blok: `npx tsc --noEmit`, `npm test`. Eén PR. Migratie via `npx supabase db query --linked -f …` (buiten de sandbox; nooit `db push`), daarna de seed.
 
