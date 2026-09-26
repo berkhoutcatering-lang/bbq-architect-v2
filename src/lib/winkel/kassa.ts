@@ -70,6 +70,8 @@ const MandSchema = z.object({
         slug: z.string().regex(/^[a-z0-9-]{1,80}$/),
         aantal: z.number().int().min(1).max(9999),
         moment: z.string().max(80).nullable().optional().transform((v) => v ?? null),
+        /* De pakketten zijn vast (S1): keuzes horen er nog niet bij. Meesturen = validatie. */
+        keuzes: z.unknown().optional(),
     })).max(50),
 });
 
@@ -77,6 +79,8 @@ const OfferteSchema = z.object({
     mand: MandSchema,
     leverwijze: z.enum(['afhalen', 'verzenden']),
     momentId: z.string().max(80).nullable().optional().transform((v) => v ?? null),
+    /* S5: volledig online, of het reserveringsbedrag nu en de rest in de winkel. */
+    betaalwijze: z.enum(['volledig', 'reservering']).optional().default('volledig'),
 });
 
 const OrderSchema = OfferteSchema.extend({
@@ -158,6 +162,11 @@ export function nummerUitOrderId(orderId: string): string {
     return orderId.replace(/-\d+(-[a-f0-9]{6})?$/, '');
 }
 
+/** "€ 32,50" — voor de omschrijving richting myPOS. */
+function euroTekst(centen: number): string {
+    return '€ ' + (centen / 100).toFixed(2).replace('.', ',');
+}
+
 function isVerlopen(o: OrderRij, nu: Date): boolean {
     return o.status === 'wacht' && new Date(o.reservering_tot).getTime() <= nu.getTime();
 }
@@ -171,7 +180,7 @@ export async function haalMomenten(ctx: KassaContext, slug: string, groep = 'age
     /* Een artikel-slug mag ook: dan de groep van dat artikel. */
     const artikel = t.bronnen.artikelen.find((a) => a.slug === groep);
     const g = artikel?.moment_groep ?? groep;
-    const momenten = t.bronnen.momenten.filter((m) => m.groep === g && momentOpen(m, vandaag)).map(naarMoment);
+    const momenten = t.bronnen.momenten.filter((m) => m.groep === g && momentOpen(m, vandaag, ctx.nu?.())).map(naarMoment);
     return { status: 200, body: { momenten } };
 }
 
@@ -182,8 +191,8 @@ export async function offreer(ctx: KassaContext, slug: string, invoer: unknown):
     if (!t) return fout(404, { ok: false, soort: 'niet-beschikbaar', melding: 'Onbekende winkel.' });
     const parsed = OfferteSchema.safeParse(invoer);
     if (!parsed.success) return fout(400, { ok: false, soort: 'validatie', fouten: zodFouten(parsed.error) });
-    const { mand, leverwijze, momentId } = parsed.data;
-    const uit = berekenOfferte({ ...t.bronnen, nu: ctx.nu?.() }, mand as Mand, leverwijze, momentId);
+    const { mand, leverwijze, momentId, betaalwijze } = parsed.data;
+    const uit = berekenOfferte({ ...t.bronnen, nu: ctx.nu?.() }, mand as Mand, leverwijze, momentId, betaalwijze);
     if (uit.ok === false) return foutVanUitkomst(uit);
     return { status: 200, body: { ok: true, offerte: uit.intern.offerte } };
 }
@@ -213,7 +222,7 @@ export async function plaatsOrder(ctx: KassaContext, slug: string, invoer: unkno
         return fout(400, { ok: false, soort: 'validatie', fouten: ['Vul een bezorgadres in.'] });
     }
 
-    const uit = berekenOfferte({ ...t.bronnen, nu: ctx.nu?.() }, d.mand as Mand, d.leverwijze, d.momentId);
+    const uit = berekenOfferte({ ...t.bronnen, nu: ctx.nu?.() }, d.mand as Mand, d.leverwijze, d.momentId, d.betaalwijze);
     if (uit.ok === false) return foutVanUitkomst(uit);
     const { offerte, regels, btwCenten, momentId } = uit.intern;
 
@@ -239,12 +248,17 @@ export async function plaatsOrder(ctx: KassaContext, slug: string, invoer: unkno
         btwCenten,
         terugUrl: d.terugUrl,
         regels,
+        betaalwijze: offerte.betaalwijze,
+        nuTeBetalenCenten: offerte.nuTeBetalenCenten,
+        restCenten: offerte.restInWinkelCenten,
     });
     if (geplaatst.ok === false) {
         const code = geplaatst.code;
         switch (code) {
             case 'WK001': return fout(409, { ok: false, soort: 'moment-vol', melding: 'Dit afhaalmoment is net volgeboekt. Kies een ander moment.' });
             case 'WK002': return fout(400, { ok: false, soort: 'validatie', fouten: ['Een van de producten is net uitverkocht. Pas je mand aan.'] });
+            case 'WK009': return fout(400, { ok: false, soort: 'validatie', fouten: ['Een onderdeel van je bestelling is net uitverkocht. Pas je mand aan.'] });
+            case 'WK008': return fout(409, { ok: false, soort: 'moment-vol', melding: 'Dit product is net uitverkocht. Er is geen plek meer.' });
             case 'WK003': return fout(409, { ok: false, soort: 'moment-verlopen', melding: 'Dit afhaalmoment is niet meer beschikbaar. Kies een ander moment.' });
             default: return fout(503, { ok: false, soort: 'niet-beschikbaar', melding: NIET_BESCHIKBAAR });
         }
@@ -300,6 +314,10 @@ export async function haalStatus(ctx: KassaContext, slug: string, token: string)
         emailGemaskeerd: maskeerEmail(order.contact_email),
         aangemaakt: order.created_at,
         betaalUrl: kanBetalen ? betaalUrlVoor(ctx, slug, order.token) : null,
+        betaalwijze: order.betaalwijze,
+        nuTeBetalenCenten: order.nu_te_betalen_cents,
+        restInWinkelCenten: order.rest_cents,
+        restBetaald: order.rest_betaald_at != null,
     };
     return { status: 200, body: { ok: true, status } };
 }
@@ -313,7 +331,7 @@ async function controleerBijMypos(ctx: KassaContext, tenant: Tenant, order: Orde
     if (!ctx.mypos || !order.mypos_order_id) return null;
     try {
         const s = await getTxnStatus(ctx.mypos, order.mypos_order_id);
-        if (!s.betaald || !s.trnref || s.amountCenten !== order.totaal_cents) return null;
+        if (!s.betaald || !s.trnref || s.amountCenten !== order.nu_te_betalen_cents) return null;
         return verwerkBetaling(ctx, tenant, order, { trnref: s.trnref, centen: s.amountCenten, methode: 'statuscontrole', referentie: `txn:${s.trnref}`, methodeNaam: 'IPCGetTxnStatus', payload: s.ruw });
     } catch (e) {
         console.error('[winkel] statuscontrole bij myPOS faalde:', e instanceof Error ? e.message : e);
@@ -426,10 +444,10 @@ export async function verwerkBetaalbericht(ctx: KassaContext, slug: string, body
         return { status: 200, tekst: 'OK' };
     }
 
-    if (bericht.currency !== 'EUR' || bericht.amountCenten !== order.totaal_cents) {
+    if (bericht.currency !== 'EUR' || bericht.amountCenten !== order.nu_te_betalen_cents) {
         const nieuw = await ctx.store.registreerBetaalbericht(tenant.orgId, referentie, bericht.methode, bericht.velden, order.id);
         if (nieuw) await ctx.store.noteerBetaalberichtUitkomst(tenant.orgId, referentie, `bedrag-wijkt-af:${bericht.amountCenten}`);
-        console.error('[winkel] betaalbericht met afwijkend bedrag:', order.nummer, bericht.amountCenten, 'verwacht', order.totaal_cents);
+        console.error('[winkel] betaalbericht met afwijkend bedrag:', order.nummer, bericht.amountCenten, 'verwacht', order.nu_te_betalen_cents);
         return { status: 200, tekst: 'OK' };
     }
 
@@ -476,11 +494,16 @@ export async function betaalPagina(ctx: KassaContext, slug: string, token: strin
         const q = new URLSearchParams({ ...extra, ...(ctx.webhookQuery ?? {}) }).toString();
         return q ? `${url}?${q}` : url;
     };
+    /* Bij een reservering int myPOS alleen het reserveringsbedrag, als één
+       regel; de rest wordt in de winkel betaald (S5). */
+    const reservering = o.betaalwijze === 'reservering';
     const velden = purchaseVelden(ctx.mypos, {
         orderId: o.mypos_order_id!,
-        totaalCenten: o.totaal_cents,
-        regels: regels.map((r) => ({ naam: `${r.naam} — ${r.aantal} ${meervoud(r.eenheid, r.aantal)}`, aantal: 1, stukCenten: r.bedrag_cents })),
-        leverkostenCenten: o.leverkosten_cents,
+        totaalCenten: o.nu_te_betalen_cents,
+        regels: reservering
+            ? [{ naam: `Reservering bestelling ${o.nummer} — rest ${euroTekst(o.rest_cents)} in de winkel`, aantal: 1, stukCenten: o.nu_te_betalen_cents }]
+            : regels.map((r) => ({ naam: `${r.naam} — ${r.aantal} ${meervoud(r.eenheid, r.aantal)}`, aantal: 1, stukCenten: r.bedrag_cents })),
+        leverkostenCenten: reservering ? 0 : o.leverkosten_cents,
         urlOk: metQuery(`${basis}/api/public-winkel/${slug}/betaal/${token}/terug`, { uitkomst: 'ok' }),
         urlCancel: metQuery(`${basis}/api/public-winkel/${slug}/betaal/${token}/terug`, { uitkomst: 'afgebroken' }),
         urlNotify: metQuery(`${basis}/api/public-winkel/${slug}/mypos-webhook`),

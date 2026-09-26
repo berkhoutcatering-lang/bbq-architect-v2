@@ -40,9 +40,10 @@ async function betaaldeOrder(nummerHint: string, regels: { artikel: Artikel; aan
         orgId: tenant.orgId, sleutel: `s-${nummerHint}`, token: `t-${nummerHint}`, leverwijze: 'afhalen', momentId: opties.momentId ?? null,
         contact: { naam: opties.naam ?? 'Jan Jansen', email: 'jan@voorbeeld.nl', telefoon: '' }, adres: null, opmerking: opties.opmerking ?? '',
         subtotaalCenten: 0, leverkostenCenten: 0, totaalCenten: 0, btwCenten: {}, terugUrl: '/b',
+        betaalwijze: 'volledig', nuTeBetalenCenten: 0, restCenten: 0,
         regels: regels.map((r) => ({
             slug: r.artikel.slug, naam: r.artikel.naam, aantal: r.aantal, eenheid: r.artikel.eenheid, stukCenten: r.artikel.prijs_cents ?? 0, bedragCenten: 0, afhaalmoment: null,
-            artikel_id: r.artikel.id, btw_pct: 9, moment_id: r.moment, eenheden: 1, voorraad_eenheden: 0,
+            artikel_id: r.artikel.id, btw_pct: 9, btw_cents: {}, moment_id: r.moment, eenheden: 1, voorraad_eenheden: 0, componenten: [], alcohol: false,
         })),
     });
     if (uit.ok === false) throw new Error(uit.code);
@@ -74,7 +75,7 @@ describe('telTotalen', () => {
     const art = new Map(artikelen.map((a) => [a.id, a]));
     const regel = (id: number, a: Artikel, aantal: number): OrderRegelRij => ({
         id, artikel_id: a.id, slug: a.slug, naam: a.naam, aantal, eenheid: a.eenheid, stuk_cents: 0, bedrag_cents: 0, btw_pct: 9,
-        moment_id: 'd-23', eenheden: 1, voorraad_eenheden: 0, afhaalmoment_tekst: null, klaar_op: '2026-12-23', event_id: 1, klaargezet_at: null,
+        moment_id: 'd-23', eenheden: 1, voorraad_eenheden: 0, afhaalmoment_tekst: null, btw_cents: null, alcohol: false, klaar_op: '2026-12-23', event_id: 1, klaargezet_at: null,
     });
     it('telt per gerecht en telt vegetarisch uit artikel én opmerking, zonder dubbel', () => {
         const rijen: RegelOpEvent[] = [
@@ -157,7 +158,8 @@ describe('plaatsBestelling', () => {
             orgId: tenant.orgId, sleutel: 's-x', token: 't-x', leverwijze: 'afhalen', momentId: null,
             contact: { naam: 'Jan', email: 'j@v.nl', telefoon: '' }, adres: null, opmerking: '',
             subtotaalCenten: 0, leverkostenCenten: 0, totaalCenten: 0, btwCenten: {}, terugUrl: '/b',
-            regels: [{ slug: 'kerst-box', naam: 'Kerst-Box', aantal: 2, eenheid: 'per persoon', stukCenten: 2350, bedragCenten: 4700, afhaalmoment: null, artikel_id: 'a-kerst', btw_pct: 9, moment_id: 'd-23', eenheden: 1, voorraad_eenheden: 0 }],
+            betaalwijze: 'volledig', nuTeBetalenCenten: 0, restCenten: 0,
+            regels: [{ slug: 'kerst-box', naam: 'Kerst-Box', aantal: 2, eenheid: 'per persoon', stukCenten: 2350, bedragCenten: 4700, afhaalmoment: null, artikel_id: 'a-kerst', btw_pct: 9, btw_cents: {}, moment_id: 'd-23', eenheden: 1, voorraad_eenheden: 0, componenten: [], alcohol: false }],
         });
         if (uit.ok === false) throw new Error(uit.code);
         const u = await plaatsBestelling(store, tenant, uit.waarde, nu);

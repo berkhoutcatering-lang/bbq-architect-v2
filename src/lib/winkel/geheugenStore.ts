@@ -6,9 +6,9 @@
  * database onder vergrendeling doet staat in de migratie en is apart getest
  * in de end-to-end-doorloop.
  */
-import type { Artikel, Instellingen, MomentRij } from './rekenen';
+import type { Artikel, Instellingen, MomentRij, Product, Slot } from './rekenen';
 import { vandaagISO } from './rekenen';
-import type { Bronnen, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+import type { Bronnen, ComponentRij, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
 
 /** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
 export interface EventGeheugen extends EventTotalen {
@@ -27,12 +27,17 @@ interface Geheugen {
     tenant: Tenant;
     artikelen: Artikel[];
     momenten: Omit<MomentRij, 'bezet'>[];
-    instellingen: Instellingen & { site_url: string | null };
+    /** Producten en slots (templates); ontbreekt = geen templates. */
+    producten?: Omit<Product, 'voorraad_bezet'>[];
+    slots?: Slot[];
+    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null };
     nu: () => Date;
 }
 
 export interface GeheugenStore extends WinkelStore {
     orders: (OrderRij & { regels: OrderRegelRij[] })[];
+    /** De componenten per regel, zoals vastgelegd bij het plaatsen. */
+    componenten: ComponentRij[];
     berichten: { referentie: string; uitkomst: string | null }[];
     /** De events die de plaatsing heeft aangemaakt. */
     events: EventGeheugen[];
@@ -43,25 +48,38 @@ export interface GeheugenStore extends WinkelStore {
 export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): GeheugenStore {
     let nu = g.nu ?? new Date();
     const orders: GeheugenStore['orders'] = [];
+    const componenten: ComponentRij[] = [];
     const berichten: GeheugenStore['berichten'] = [];
     const events: EventGeheugen[] = [];
     let teller = 0;
     let regelTeller = 0;
     let eventTeller = 0;
+    let componentTeller = 0;
 
     const telt = (o: OrderRij) => o.status === 'betaald' || (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime());
     const bezetMoment = (id: string, zonder: number | null) =>
         orders.filter((o) => o.id !== zonder && telt(o)).flatMap((o) => o.regels).filter((r) => r.moment_id === id).reduce((s, r) => s + r.eenheden, 0);
     const bezetVoorraad = (artikelId: string, zonder: number | null) =>
         orders.filter((o) => o.id !== zonder && telt(o)).flatMap((o) => o.regels.map((r) => ({ r, o }))).filter(({ r }) => g.artikelen.find((a) => a.slug === r.slug)?.id === artikelId).reduce((s, { r }) => s + r.voorraad_eenheden, 0);
+    /* Productvoorraad: de componenten van betaalde en lopende orders. */
+    const bezetProduct = (productId: string, zonder: number | null) => {
+        const regelIds = new Set(orders.filter((o) => o.id !== zonder && telt(o)).flatMap((o) => o.regels.map((r) => r.id)));
+        return componenten.filter((c) => c.product_id === productId && regelIds.has(c.order_regel_id)).reduce((s, c) => s + c.hoeveelheid, 0);
+    };
 
-    function controleer(regels: OrderRegelRij[], zonder: number | null): OpslagUitkomst<true> {
+    function controleer(regels: OrderRegelRij[], nieuweComponenten: { product_id: string | null; hoeveelheid: number }[], zonder: number | null): OpslagUitkomst<true> {
         const perMoment = new Map<string, number>();
         for (const r of regels) if (r.moment_id) perMoment.set(r.moment_id, (perMoment.get(r.moment_id) ?? 0) + r.eenheden);
         for (const [id, nodig] of perMoment) {
             const m = g.momenten.find((x) => x.id === id);
             if (!m || !m.actief) return { ok: false, code: 'WK003' };
-            if (bezetMoment(id, zonder) + nodig > m.capaciteit) return { ok: false, code: 'WK001' };
+            if (m.capaciteit != null && bezetMoment(id, zonder) + nodig > m.capaciteit) return { ok: false, code: 'WK001' };
+        }
+        const perProduct = new Map<string, number>();
+        for (const c of nieuweComponenten) if (c.product_id) perProduct.set(c.product_id, (perProduct.get(c.product_id) ?? 0) + c.hoeveelheid);
+        for (const [id, nodig] of perProduct) {
+            const p = (g.producten ?? []).find((x) => x.id === id);
+            if (p && p.voorraad != null && bezetProduct(id, zonder) + nodig > p.voorraad) return { ok: false, code: 'WK009', detail: p.naam };
         }
         const perArtikel = new Map<string, number>();
         for (const r of regels) {
@@ -76,6 +94,11 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         return { ok: true, waarde: true };
     }
 
+    const eigenComponenten = (o: { regels: OrderRegelRij[] }) => {
+        const ids = new Set(o.regels.map((r) => r.id));
+        return componenten.filter((c) => ids.has(c.order_regel_id));
+    };
+
     const zonderRegels = (o: OrderRij & { regels: OrderRegelRij[] }): OrderRij => {
         const { regels: _r, ...rest } = o;
         return { ...rest };
@@ -83,6 +106,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
 
     return {
         orders,
+        componenten,
         berichten,
         events,
         zetNu(d) { nu = d; },
@@ -93,6 +117,8 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             return {
                 artikelen: g.artikelen.map((a) => (a.voorraad == null ? a : { ...a, voorraad_bezet: bezetVoorraad(a.id, null) })),
                 momenten: g.momenten.map((m) => ({ ...m, bezet: bezetMoment(m.id, null) })),
+                producten: (g.producten ?? []).map((p) => (p.voorraad == null ? p : { ...p, voorraad_bezet: bezetProduct(p.id, null) })),
+                slots: g.slots ?? [],
                 instellingen: g.instellingen,
             };
         },
@@ -113,6 +139,20 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             return o ? zonderRegels(o) : null;
         },
         async laadRegels(orderId) { return orders.find((x) => x.id === orderId)?.regels ?? []; },
+        async laadComponenten(orderId) {
+            const ids = new Set((orders.find((x) => x.id === orderId)?.regels ?? []).map((r) => r.id));
+            return componenten.filter((c) => ids.has(c.order_regel_id));
+        },
+        async boekRest(orderId, methode) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return 'onbekend';
+            if (o.status !== 'betaald') return 'niet_betaald';
+            if (o.rest_betaald_at) return 'al_geboekt';
+            if (o.rest_cents === 0) return 'geen_rest';
+            o.rest_betaald_at = nu.toISOString();
+            o.rest_betaalmethode = methode;
+            return 'geboekt';
+        },
 
         async plaatsOrder(n) {
             /* Zonder await tussen zoeken en schrijven: zo is dit, net als de
@@ -127,9 +167,11 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 slug: r.slug, naam: r.naam, aantal: r.aantal, eenheid: r.eenheid, stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten,
                 btw_pct: r.btw_pct, moment_id: r.moment_id, eenheden: r.eenheden, voorraad_eenheden: r.voorraad_eenheden, afhaalmoment_tekst: r.afhaalmoment,
                 klaar_op: datumVan(r.moment_id) ?? datumVan(n.momentId) ?? vandaagISO(nu), event_id: null, klaargezet_at: null,
+                btw_cents: r.btw_cents, alcohol: r.alcohol,
             }));
-            const c = controleer(regels, null);
-            if (c.ok === false) return { ok: false, code: c.code };
+            const nieuweComponenten: ComponentRij[] = n.regels.flatMap((r, i) => (r.componenten ?? []).map((c) => ({ ...c, id: ++componentTeller, order_regel_id: regels[i]!.id })));
+            const c = controleer(regels, nieuweComponenten, null);
+            if (c.ok === false) return { ok: false, code: c.code, detail: c.detail };
             teller += 1;
             const o: OrderRij & { regels: OrderRegelRij[] } = {
                 id: teller,
@@ -164,9 +206,11 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 mail_fout: null,
                 created_at: nu.toISOString(),
                 wensen: null, wensen_bron: null, plaatsing_status: null, plaatsing_fout: null, plaatsing_at: null,
+                betaalwijze: n.betaalwijze, nu_te_betalen_cents: n.nuTeBetalenCenten, rest_cents: n.restCenten, rest_betaald_at: null, rest_betaalmethode: null,
                 regels,
             };
             orders.push(o);
+            componenten.push(...nieuweComponenten);
             return { ok: true, waarde: zonderRegels(o) };
         },
 
@@ -175,7 +219,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             if (!o) return { ok: false, code: 'WK006' };
             if (o.status === 'betaald') return { ok: false, code: 'WK007' };
             if (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime() && o.betaalpoging > 0) return { ok: true, waarde: zonderRegels(o) };
-            const c = controleer(o.regels, o.id);
+            const c = controleer(o.regels, eigenComponenten(o), o.id);
             if (c.ok === false) return { ok: false, code: c.code };
             o.status = 'wacht';
             o.status_reden = null;
@@ -190,7 +234,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             if (!o) return 'onbekend';
             if (o.status === 'betaald') return 'al_betaald';
             if (o.status !== 'wacht' || new Date(o.reservering_tot).getTime() <= nu.getTime()) {
-                const c = controleer(o.regels, o.id);
+                const c = controleer(o.regels, eigenComponenten(o), o.id);
                 if (!c.ok) {
                     Object.assign(o, { status: 'mislukt', status_reden: 'verlopen-en-vol', mypos_trnref: b.trnref, betaald_cents: b.centen, betaalmethode: b.methode, refund_status: 'nodig' });
                     return 'vol';

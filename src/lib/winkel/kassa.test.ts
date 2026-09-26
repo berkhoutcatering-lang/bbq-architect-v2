@@ -210,7 +210,7 @@ describe('status', () => {
         const uit = await haalStatus(ctx, 'hop-en-bites', token);
         expect(uit.status).toBe(200);
         const s = (uit.body as { status: Record<string, unknown> }).status;
-        expect(Object.keys(s).sort()).toEqual(['aangemaakt', 'betaalUrl', 'emailGemaskeerd', 'leverkostenCenten', 'leverwijze', 'moment', 'naam', 'nummer', 'regels', 'status', 'subtotaalCenten', 'token', 'totaalCenten']);
+        expect(Object.keys(s).sort()).toEqual(['aangemaakt', 'betaalUrl', 'betaalwijze', 'emailGemaskeerd', 'leverkostenCenten', 'leverwijze', 'moment', 'naam', 'nuTeBetalenCenten', 'nummer', 'regels', 'restBetaald', 'restInWinkelCenten', 'status', 'subtotaalCenten', 'token', 'totaalCenten']);
         expect(s).toMatchObject({ status: 'wacht', nummer: 'HB-2026-0001', emailGemaskeerd: 't•••@voorbeeld.nl', naam: 'Test Persoon', totaalCenten: 11960, moment: { id: 'm-1', vrij: 1 } });
         expect(s.betaalUrl).toContain(token);
         expect(JSON.stringify(s)).not.toContain('0612345678');
