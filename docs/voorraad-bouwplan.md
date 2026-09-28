@@ -9,7 +9,7 @@ Branch: `feat/winkelvoorraad`, gestapeld op `feat/sinterklaas-2026`. **Stacked P
 |---|---|
 | W1 Twee plekken, één logboek | gebouwd, migratie live (`20260928120000`) |
 | W2 De winkel vullen | gebouwd: `/voorraad/winkel`, `/voorraad/winkel/tellen` |
-| W2b Voorraad toevoegen op elke manier | in aanbouw |
+| W2b Voorraad toevoegen op elke manier | gebouwd: `/voorraad/ontvangst`, migraties live (`20260928140000`, `20260928140100`); mail-in wacht op het adres |
 | W3 Afboeken bij inpakken | gebouwd, migratie live (`20260928120100`) |
 | W4 Let op, bijna op | gebouwd, migratie live (`20260928120200`) |
 | W5 Afwijkingen | gebouwd: `/voorraad/afwijking` |
@@ -101,6 +101,29 @@ Wat van de makerij naar de plank gaat, is een overboeking. Catering is geen derd
 - **`/voorraad/winkel/tellen`:** tellen op de telefoon per schap (producttype), naar het patroon van de nulmeting.
 - **Ontvangst:** aantal, inkoopprijs en THT, met een optionele koppeling aan een inkooporder.
 - **Overboeken:** een keukenproduct kiezen, het aantal invullen, klaar. De koppeling blijft bewaard voor de volgende keer.
+
+### W2b — Voorraad toevoegen op elke manier
+
+Alle manieren maken eerst een **concept** (`voorraad_invoer` + `voorraad_invoer_regels`) en komen uit op één controlescherm, `/voorraad/ontvangst/[id]`. Pas bij **"Klopt, boeken"** boekt `voorraad_invoer_boeken` alles in één transactie: winkelregels als `ontvangst` via `winkel_muteer_voorraad`, makerijregels als `receive` via `increment_inventory_stock`. Een geboekt concept zit op slot (`WV008`); een regel zonder product of aantal houdt het boeken tegen (`WV009`).
+
+| Manier | Hoe |
+|---|---|
+| Foto, meerdere foto's, pdf, e-factuur (UBL) | De bestaande bonnen-straat (`MultiFormatDropZone` → `api/bonnen/extract`). Het bestand gaat naar het bonnenarchief (voor de boekhouding), daarna ontstaat het concept. Een bestand dat al eens is ingelezen houdt de bonnen-straat tegen. |
+| Barcode | Handscanner (veld) of camera (`BarcodeScanner`). Een bekende EAN telt +1; een onbekende wordt een regel zonder product, en in het scherm maak je het product aan (de EAN gaat mee). |
+| Inkooporder | Bij een verstuurde bestelling: "Binnen" maakt een concept met de open aantallen. Na boeken staan de ontvangen aantallen ook op de orderregels. |
+| Handmatig | Regel toevoegen op naam; het voorstel zoekt het product. |
+| Doorgestuurde mail | Nog niet: wacht op het adres (vraag 8). |
+| Foto van het schap | Niet in W2b: hoort bij tellen. `api/voorraad-ai` kan geen foto's lezen, dus dit wordt nieuw werk. |
+
+**Het voorstel** (`src/lib/voorraad/invoer.ts`, puur en getest): eerst wat eerder bevestigd is (`voorraad_invoer_koppelingen`, per leverancier + regelnaam of per EAN), dan de EAN, dan de naam. Geen AI. De omrekening ("krat (24)" = 24, kg = 1000 g) leest het uit de tekst en staat zichtbaar in het scherm; bij boeken wordt de bevestigde omrekening onthouden.
+
+**Btw:** een foto is meestal een kassabon (prijzen incl. btw), een pdf of e-factuur meestal excl. Het concept heeft daar een schakelaar voor; bij boeken wordt de inkoop excl. btw.
+
+**Dubbel:** het scherm waarschuwt als hetzelfde factuurnummer of hetzelfde bestand al in een ander concept zit.
+
+**De keuken** (besluit 26 sep): het bonnenvenster in de boekhouder boekt geen voorraad meer direct. De regels die "ook voor voorraad" zijn, worden een concept met een link naar het controlescherm. De knop "Factuur scannen → voorraad" op `/inkoop` opent Ontvangst.
+
+**Niet veranderd:** de snelle aanpassing per product in `/voorraad` en de ontvangst in de lade van `/voorraad/winkel` boeken nog direct. Dat is invoer van één regel waarvan je het getal zelf typt en ziet. Moet dat ook via het concept, dan is dat een kleine aanpassing.
 
 ### W3 — Afboeken bij inpakken
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Package, ShoppingCart, Store, ScanLine, Archive, TrendingUp, Tag, ShoppingBag } from 'lucide-react';
+import { Package, ShoppingCart, Store, ScanLine, Archive, TrendingUp, Tag, ShoppingBag, PackagePlus } from 'lucide-react';
 import HubTabs, { type HubTab } from './HubTabs';
 
 /* Operatie Overzicht (2026-06-12): hub Inkoop & Voorraad — Bonnen en
@@ -10,6 +10,7 @@ const TABS: HubTab[] = [
   { href: '/voorraad', label: 'Voorraad', icon: Package },
   { href: '/voorraad/partijen', label: 'Partijen', icon: Tag },
   { href: '/voorraad/winkel', label: 'Winkel', icon: ShoppingBag },
+  { href: '/voorraad/ontvangst', label: 'Ontvangst', icon: PackagePlus },
   { href: '/inkoop', label: 'Inkoop', icon: ShoppingCart },
   { href: '/leveranciers', label: 'Leveranciers', icon: Store },
   { href: '/bonnen', label: 'Bonnen', icon: ScanLine },

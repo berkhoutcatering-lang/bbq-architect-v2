@@ -121,6 +121,7 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <VoorraadBel />
+                    <Link href="/voorraad/ontvangst" className="btn btn-ghost"><PackagePlus size={14} /> Ontvangst</Link>
                     <Link href="/voorraad/afwijking" className="btn btn-ghost"><Minus size={14} /> Afwijking</Link>
                     <Link href="/voorraad/winkel/tellen" className="btn btn-brand"><ClipboardList size={14} /> Tellen</Link>
                 </div>
