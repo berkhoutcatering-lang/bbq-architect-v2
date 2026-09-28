@@ -21,7 +21,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
 
     const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }] = await Promise.all([
         supabase.from('winkel_producten')
-            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id')
+            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url')
             .order('type').order('naam'),
         supabase.from('winkel_artikel_slots')
             .select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven')
@@ -59,6 +59,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
             tht: (p.tht as string | null) ?? null,
             laatste_beweging_at: (p.laatste_beweging_at as string | null) ?? null,
             inventory_id: (p.inventory_id as number | null) ?? null,
+            foto_url: (p.foto_url as string | null) ?? null,
         })),
         slots: (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as WinkelData['slots'],
         artikelen: (artikelen ?? []) as WinkelData['artikelen'],

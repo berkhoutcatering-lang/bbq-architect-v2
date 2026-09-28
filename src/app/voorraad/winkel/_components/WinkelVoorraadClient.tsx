@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, ClipboardList, Minus, PackageCheck, PackagePlus, Settings2, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, Gift, Ham, Minus, Nut, Package, PackageCheck, PackagePlus, Salad, Settings2, Soup, Store, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
@@ -38,6 +38,7 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     tht: string | null;
     laatste_beweging_at: string | null;
     inventory_id: number | null;
+    foto_url: string | null;
 }
 
 export interface WinkelData {
@@ -73,14 +74,26 @@ function thtTekst(iso: string | null): string {
     return new Date(`${iso}T12:00:00Z`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
 }
 
+const TYPE_ICOON: Record<string, typeof Beer> = {
+    bier: Beer, wijn: Wine, worst: Beef, vleeswaar: Ham, amandelen: Nut, crackers: Cookie, krokant: Cookie,
+    marmelade: Soup, doos: Gift, verpakking: Package, kaas: Salad, zuur: Carrot, overig: Package,
+};
+const TYPE_LABEL_MV: Record<string, string> = {
+    bier: 'Bier', wijn: 'Wijn', worst: 'Worst', vleeswaar: 'Vleeswaren', amandelen: 'Amandelen', crackers: 'Crackers', krokant: 'Krokant',
+    marmelade: 'Marmelades', doos: 'Dozen', verpakking: 'Verpakking', kaas: 'Kaas', zuur: 'Zuur', overig: 'Overig',
+};
+
+type Filter = 'alles' | 'aandacht' | 'niet_geteld';
+
 export default function WinkelVoorraadClient({ data, openProductId }: { data: WinkelData; openProductId: string | null }) {
     const router = useRouter();
     const stil = useReducedMotion();
     const [openId, setOpenId] = useState<string | null>(openProductId);
+    const [filter, setFilter] = useState<Filter>('alles');
     useEffect(() => { setOpenId(openProductId); }, [openProductId]);
 
     const actief = useMemo(() => new Set(data.artikelen.filter((a) => a.actief).map((a) => a.id)), [data.artikelen]);
-    const rijen = useMemo(() => data.producten.map((p) => {
+    const rijen = useMemo(() => data.producten.filter((p) => p.actief).map((p) => {
         const b = beschikbaar(p);
         const d = geldendeDrempel(p, data.slots, actief);
         return { p, b, drempel: d, status: voorraadstatus(b, d.waarde), waarde: p.voorraad == null ? null : waardeCenten(p, p.voorraad) };
@@ -91,65 +104,99 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
         return {
             waarde: bij.reduce((s, r) => s + (r.waarde ?? 0), 0),
             zonderPrijs: bij.filter((r) => r.waarde == null).length,
-            bijgehouden: bij.length,
-            aandacht: rijen.filter((r) => r.p.actief && (r.status === 'laag' || r.status === 'op' || r.status === 'tekort')).length,
+            geteld: bij.length,
+            aandacht: rijen.filter((r) => r.status === 'laag' || r.status === 'op' || r.status === 'tekort').length,
         };
     }, [rijen]);
+    const nietsGeteld = totaal.geteld === 0;
 
+    const zichtbaar = rijen.filter((r) => filter === 'alles'
+        || (filter === 'aandacht' && (r.status === 'laag' || r.status === 'op' || r.status === 'tekort'))
+        || (filter === 'niet_geteld' && r.status === 'niet_bijgehouden'));
     const perType = useMemo(() => {
-        const m = new Map<string, typeof rijen>();
-        for (const r of rijen) m.set(r.p.type, [...(m.get(r.p.type) ?? []), r]);
+        const m = new Map<string, typeof zichtbaar>();
+        for (const r of zichtbaar) m.set(r.p.type, [...(m.get(r.p.type) ?? []), r]);
         return [...m.entries()];
-    }, [rijen]);
+    }, [zichtbaar]);
 
     const pakketten = useMemo(() => data.artikelen
         .filter((a) => a.actief && data.slots.some((s) => s.artikel_id === a.id))
-        .map((a) => ({ a, n: pakkettenTeMaken(a.id, data.slots, data.producten), door: beperkendProduct(a.id, data.slots, data.producten) })),
+        .map((a) => ({ a, n: pakkettenTeMaken(a.id, data.slots, data.producten), door: beperkendProduct(a.id, data.slots, data.producten) }))
+        .sort((x, y) => (x.n ?? 1e9) - (y.n ?? 1e9)),
     [data.artikelen, data.slots, data.producten]);
+    const maxPakket = Math.max(1, ...pakketten.map((x) => x.n ?? 0));
 
     const open = openId ? data.producten.find((p) => p.id === openId) ?? null : null;
     const sluit = useCallback(() => { setOpenId(null); router.replace('/voorraad/winkel', { scroll: false }); }, [router]);
 
     return (
         <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge, 16px) 48px', maxWidth: 1180, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
                 <div style={{ flex: 1, minWidth: 220 }}>
                     <h1 className="chassis-titel" style={{ margin: 0 }}>{data.plekNaam}</h1>
                     <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                        Wat er staat, wat besteld is en wat de webshop nog kan verkopen. Elke verandering staat in het logboek.
+                        Wat er staat, wat besteld is en wat de webshop nog kan verkopen.
                     </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <VoorraadBel />
                     <Link href="/voorraad/ontvangst" className="btn btn-ghost"><PackagePlus size={14} /> Ontvangst</Link>
                     <Link href="/voorraad/afwijking" className="btn btn-ghost"><Minus size={14} /> Afwijking</Link>
-                    <Link href="/voorraad/winkel/tellen" className="btn btn-brand"><ClipboardList size={14} /> Tellen</Link>
+                    {!nietsGeteld && <Link href="/voorraad/winkel/tellen" className="btn btn-brand"><ClipboardList size={14} /> Tellen</Link>}
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 22 }}>
-                <Stat label="In de winkel (inkoop)" waarde={totaal.bijgehouden ? eur(totaal.waarde) : '—'} onder={totaal.zonderPrijs ? `${totaal.zonderPrijs} zonder inkoopprijs telt niet mee` : undefined} />
-                <Stat label="Bijgehouden" waarde={`${totaal.bijgehouden} / ${data.producten.length}`} onder={totaal.bijgehouden < data.producten.length ? 'De rest telt pas mee na de eerste telling' : 'Alles geteld'} />
-                <Stat label="Bijna op of op" waarde={String(totaal.aandacht)} kleur={totaal.aandacht ? 'var(--brand-gold, #c4a35a)' : undefined} />
-            </div>
+            {nietsGeteld ? (
+                <motion.div initial={stil ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                    style={{ ...kaart, padding: '28px 26px', marginBottom: 26, display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap',
+                        background: 'radial-gradient(120% 140% at 0% 0%, rgba(196,163,90,.16), transparent 60%), var(--color-bg-elevated)' }}>
+                    <div style={{ width: 64, height: 64, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(196,163,90,.16)', color: 'var(--brand-gold, #c4a35a)', flexShrink: 0 }}>
+                        <Store size={30} />
+                    </div>
+                    <div style={{ flex: '1 1 280px', minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 24, fontWeight: 300, lineHeight: 1.2 }}>Je winkel is nog niet geteld</div>
+                        <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.55 }}>
+                            Loop met je telefoon langs de schappen: {data.producten.filter((p) => p.actief).length} producten, ongeveer een kwartier.
+                            Daarna zie je hier per schap wat er staat, wat bijna op is en hoeveel pakketten je nog kunt maken.
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+                        <Link href="/voorraad/winkel/tellen" className="btn btn-brand btn-touch" style={{ justifyContent: 'center', minWidth: 200 }}><ClipboardList size={16} /> Winkel tellen</Link>
+                        <Link href="/voorraad/ontvangst" className="btn btn-ghost" style={{ justifyContent: 'center' }}><PackagePlus size={14} /> Of begin met een levering</Link>
+                    </div>
+                </motion.div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
+                    <Stat label="Geteld" waarde={`${totaal.geteld} / ${rijen.length}`} balk={totaal.geteld / Math.max(1, rijen.length)}
+                        onder={totaal.geteld < rijen.length ? 'Tik om de rest te tellen' : 'Alles wordt bijgehouden'} onClick={totaal.geteld < rijen.length ? () => setFilter('niet_geteld') : undefined} />
+                    <Stat label="In de winkel (inkoop)" waarde={eur(totaal.waarde)} onder={totaal.zonderPrijs ? `${totaal.zonderPrijs} zonder inkoopprijs telt niet mee` : undefined} />
+                    <Stat label="Bijna op of op" waarde={String(totaal.aandacht)} kleur={totaal.aandacht ? 'var(--brand-gold, #c4a35a)' : 'var(--green, #22c55e)'}
+                        onder={totaal.aandacht ? 'Tik om ze te zien' : 'Niets om je zorgen over te maken'} onClick={totaal.aandacht ? () => setFilter('aandacht') : undefined} />
+                </div>
+            )}
 
-            {pakketten.length > 0 && (
-                <section style={{ marginBottom: 26 }}>
+            {pakketten.length > 0 && !nietsGeteld && (
+                <section style={{ marginBottom: 28 }}>
                     <div className="kf-eyebrow" style={{ marginBottom: 10 }}>Nog te maken</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-                        {pakketten.map(({ a, n, door }, i) => (
-                            <motion.div key={a.id} initial={stil ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                                style={{ ...kaart, padding: 14, borderColor: n === 0 ? 'rgba(220,38,38,.45)' : 'var(--border)' }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{a.naam}</div>
-                                <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 28, fontWeight: 300, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: n === 0 ? 'var(--red, #dc2626)' : 'var(--text)' }}>
-                                    {n == null ? '—' : n}
-                                    <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 6, fontFamily: 'var(--font-sans)' }}>{a.telt === 'personen' ? 'personen' : 'pakketten'}</span>
-                                </div>
-                                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>
-                                    {n == null ? 'Geen onderdeel wordt nog bijgehouden' : door ? <>Grens: <button type="button" onClick={() => setOpenId(door.id)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>{door.naam}</button></> : ''}
-                                </div>
-                            </motion.div>
-                        ))}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
+                        {pakketten.map(({ a, n, door }, i) => {
+                            const kleur = n == null ? 'var(--muted)' : n === 0 ? 'var(--red, #dc2626)' : n <= 5 ? 'var(--brand-gold, #c4a35a)' : 'var(--green, #22c55e)';
+                            return (
+                                <motion.div key={a.id} initial={stil ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.04, 0.3) }}
+                                    style={{ ...kaart, padding: 16, borderColor: n === 0 ? 'rgba(220,38,38,.45)' : 'var(--border)' }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}><Gift size={14} style={{ color: 'var(--brand-gold, #c4a35a)' }} />{a.naam}</div>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                                        <span style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 34, fontWeight: 300, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: kleur }}>{n == null ? '—' : n}</span>
+                                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{a.telt === 'personen' ? 'personen' : 'pakketten'}</span>
+                                    </div>
+                                    <Balk deel={n == null ? 0 : n / maxPakket} kleur={kleur} stil={!!stil} />
+                                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
+                                        {n == null ? 'Nog geen onderdeel geteld'
+                                            : door ? <>Grens: <button type="button" onClick={() => setOpenId(door.id)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>{door.naam}</button>{n === 0 ? ' is op' : ''}</> : ''}
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
                     </div>
                 </section>
             )}
@@ -158,59 +205,101 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
                 <div className="kf-empty"><p>Nog geen winkelproducten. Je maakt ze aan in <Link href="/verkoop/webshop#producten" style={{ color: 'var(--brand)' }}>Webshop → Producten</Link>; daarna tel je ze hier.</p></div>
             )}
 
-            {perType.map(([type, lijst]) => (
-                <section key={type} style={{ marginBottom: 20 }}>
-                    <div className="kf-eyebrow" style={{ marginBottom: 8 }}>{type} · {lijst.length}</div>
-                    <div style={{ ...kaart, overflow: 'hidden' }}>
-                        {lijst.map(({ p, b, drempel, status }) => (
-                            <button key={p.id} type="button" onClick={() => setOpenId(p.id)}
-                                style={{
-                                    width: '100%', display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) repeat(3, minmax(64px, .8fr)) minmax(0, 1fr)', gap: 10, alignItems: 'center',
-                                    padding: '12px 14px', background: 'none', border: 'none', borderBottom: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left',
-                                    opacity: p.actief ? 1 : 0.55,
-                                }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-                                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, background: STATUS_KLEUR[status], flexShrink: 0 }} />
-                                    <span style={{ minWidth: 0 }}>
-                                        <span style={{ display: 'block', fontSize: 14, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.naam}</span>
-                                        <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)' }}>{STATUS_LABEL[status]}{p.tht ? ` · THT ${thtTekst(p.tht)}` : ''}</span>
-                                    </span>
-                                </span>
-                                <Getal label="aanwezig" waarde={p.voorraad == null ? '—' : hoeveelheidKort(p.voorraad, p.eenheid)} />
-                                <Getal label="besteld" waarde={p.voorraad == null ? '—' : hoeveelheidKort(gereserveerd(p), p.eenheid)} />
-                                <Getal label="beschikbaar" waarde={b == null ? '—' : hoeveelheidKort(b, p.eenheid)} kleur={status === 'ok' || status === 'niet_bijgehouden' ? undefined : STATUS_KLEUR[status]} />
-                                <span style={{ fontSize: 11.5, color: 'var(--muted)', textAlign: 'right' }} className="winkel-verberg-smal">
-                                    {drempel.waarde == null ? 'geen grens' : `grens ${hoeveelheidKort(drempel.waarde, p.eenheid)}${drempel.bron === 'voorstel' ? ' (voorstel)' : ''}`}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </section>
-            ))}
+            {!nietsGeteld && (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                    {([['alles', `Alles · ${rijen.length}`], ['aandacht', `Bijna op · ${totaal.aandacht}`], ['niet_geteld', `Niet geteld · ${rijen.length - totaal.geteld}`]] as const).map(([f, label]) => (
+                        <button key={f} type="button" className={`kf-chip${filter === f ? ' is-on' : ''}`} onClick={() => setFilter(f)}>{label}</button>
+                    ))}
+                </div>
+            )}
 
-            <style>{`@media (max-width: 640px) { .winkel-verberg-smal { display: none; } }`}</style>
+            {/* Eén doorlopend raster, gesorteerd op schap; het schap staat op de tegel. */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10 }}>
+                {perType.flatMap(([type, lijst]) => lijst.map(({ p, b, drempel, status }, i) => (
+                    <Tegel key={p.id} p={p} b={b} drempel={drempel.waarde} status={status} Icoon={TYPE_ICOON[type] ?? Package} schap={TYPE_LABEL_MV[type] ?? type}
+                        stil={!!stil} vertraging={Math.min(i * 0.02, 0.3)} onClick={() => setOpenId(p.id)} />
+                )))}
+            </div>
+            {!nietsGeteld && zichtbaar.length === 0 && <div className="kf-empty"><p>Niets in deze selectie.</p></div>}
 
             {open && <ProductDrawer key={open.id} p={open} data={data} actief={actief} onClose={sluit} />}
         </div>
     );
 }
 
-function Stat({ label, waarde, onder, kleur }: { label: string; waarde: string; onder?: string; kleur?: string }) {
+function Balk({ deel, kleur, stil, grens }: { deel: number; kleur: string; stil: boolean; grens?: number | null }) {
+    const w = `${Math.max(0, Math.min(1, deel)) * 100}%`;
     return (
-        <div style={{ ...kaart, padding: '14px 16px' }}>
-            <div style={{ fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{label}</div>
-            <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 26, fontWeight: 300, color: kleur ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.25 }}>{waarde}</div>
-            {onder && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{onder}</div>}
+        <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'rgba(255,255,255,.07)', marginTop: 10, overflow: 'hidden' }}>
+            <motion.div initial={stil ? false : { width: 0 }} animate={{ width: w }} transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
+                style={{ position: 'absolute', inset: '0 auto 0 0', width: w, background: kleur, borderRadius: 3 }} />
+            {grens != null && grens > 0 && grens < 1 && (
+                <div title="bijna-op-grens" style={{ position: 'absolute', top: -2, bottom: -2, left: `${grens * 100}%`, width: 2, background: 'var(--text)', opacity: 0.35 }} />
+            )}
         </div>
     );
 }
 
-function Getal({ label, waarde, kleur }: { label: string; waarde: string; kleur?: string }) {
+function Tegel({ p, b, drempel, status, Icoon, schap, stil, vertraging, onClick }: {
+    p: WinkelProductRij; b: number | null; drempel: number | null; status: Voorraadstatus; Icoon: typeof Beer; schap: string; stil: boolean; vertraging: number; onClick: () => void;
+}) {
+    const geteld = p.voorraad != null;
+    /* Schaal: twee keer de grens, of wat er ligt als dat meer is. De streep is de grens. */
+    const schaal = Math.max(1, (drempel ?? 0) * 2, p.voorraad ?? 0);
+    const kleur = STATUS_KLEUR[status];
     return (
-        <span style={{ textAlign: 'right' }}>
-            <span style={{ display: 'block', fontSize: 13.5, fontVariantNumeric: 'tabular-nums', color: kleur ?? 'var(--text)' }}>{waarde}</span>
-            <span style={{ display: 'block', fontSize: 10, color: 'var(--muted)' }}>{label}</span>
-        </span>
+        <motion.button type="button" onClick={onClick}
+            initial={stil ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: vertraging }}
+            whileHover={stil ? undefined : { y: -2 }}
+            style={{
+                ...kaart, padding: 0, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                borderStyle: geteld ? 'solid' : 'dashed', borderColor: status === 'op' || status === 'tekort' ? 'rgba(220,38,38,.5)' : status === 'laag' ? 'rgba(196,163,90,.5)' : 'var(--border)',
+            }}>
+            <div style={{ height: 64, position: 'relative', display: 'grid', placeItems: 'center', background: geteld ? 'rgba(255,255,255,.03)' : 'transparent', borderBottom: '1px solid var(--border)' }}>
+                {p.foto_url
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.foto_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: geteld ? 1 : 0.45 }} />
+                    : <Icoon size={28} style={{ color: geteld ? kleur : 'var(--muted)', opacity: geteld ? 0.9 : 0.5 }} />}
+                <span style={{ position: 'absolute', top: 8, left: 9, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                    <Icoon size={10} />{schap}
+                </span>
+                {geteld && status !== 'ok' && (
+                    <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '3px 7px', borderRadius: 999, background: 'rgba(0,0,0,.55)', color: kleur }}>
+                        {STATUS_LABEL[status]}
+                    </span>
+                )}
+            </div>
+            <div style={{ padding: '10px 12px 12px' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, minHeight: 34, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.naam}</div>
+                {geteld ? (
+                    <>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
+                            <span style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 22, fontWeight: 300, fontVariantNumeric: 'tabular-nums', color: status === 'ok' ? 'var(--text)' : kleur }}>{hoeveelheidKort(b ?? 0, p.eenheid)}</span>
+                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>vrij</span>
+                        </div>
+                        <Balk deel={Math.max(0, b ?? 0) / schaal} kleur={kleur} stil={stil} grens={drempel != null ? drempel / schaal : null} />
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 7 }}>
+                            {hoeveelheidKort(p.voorraad ?? 0, p.eenheid)} staat{gereserveerd(p) ? ` · ${hoeveelheidKort(gereserveerd(p), p.eenheid)} besteld` : ''}{p.tht ? ` · THT ${thtTekst(p.tht)}` : ''}
+                        </div>
+                    </>
+                ) : (
+                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Nog niet geteld</div>
+                )}
+            </div>
+        </motion.button>
+    );
+}
+
+function Stat({ label, waarde, onder, kleur, balk, onClick }: { label: string; waarde: string; onder?: string; kleur?: string; balk?: number; onClick?: () => void }) {
+    const Tag = onClick ? 'button' : 'div';
+    return (
+        <Tag type={onClick ? 'button' : undefined} onClick={onClick}
+            style={{ ...kaart, padding: '14px 16px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default', font: 'inherit' }}>
+            <div style={{ fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{label}</div>
+            <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 26, fontWeight: 300, color: kleur ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.25 }}>{waarde}</div>
+            {balk != null && <Balk deel={balk} kleur="var(--brand-gold, #c4a35a)" stil={false} />}
+            {onder && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{onder}</div>}
+        </Tag>
     );
 }
 
