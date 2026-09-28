@@ -2,10 +2,15 @@
  * De etiketten van een webshop-order laden voor de printroute (S7).
  * Alles uit de order, de artikelen, het moment en de instellingen — het
  * aantal labels is het aantal pakketten en schalen, nooit een vrij getal.
+ *
+ * Elke doos of schaal krijgt bij het printen een eigen code (winkel_dozen);
+ * opnieuw printen houdt dezelfde codes. De QR op het etiket is
+ * {qr_basis_url}/g/{code}: aan de balie "opgehaald", op een telefoon de
+ * Experience-app (docs/OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md S7).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { LabelVerzoek } from '@/lib/labelprinter/render';
-import { etikettenVoorRegel, momentTekst, type ProductieArtikel, type ProductieRegel, type WinkelEtiketData } from './productie';
+import { dozenVoorRegel, etikettenVoorRegel, momentTekst, type ProductieArtikel, type ProductieRegel, type WinkelEtiketData } from './productie';
 
 export type EtikettenUitkomst =
     | { ok: true; verzoek: LabelVerzoek }
@@ -54,9 +59,14 @@ export async function laadWinkelEtiketten(supabase: SupabaseClient, orgId: strin
             componenten: [],
         };
         const m = momentOpId.get((r.moment_id as string | null) ?? (order.moment_id as string | null) ?? '') ?? null;
-        labels.push(...etikettenVoorRegel(pr, artikelOpId.get(r.artikel_id as string) ?? null, momentTekst(m), inst?.qr_basis_url as string | null | undefined));
+        const artikel = artikelOpId.get(r.artikel_id as string) ?? null;
+        const omschrijvingen = dozenVoorRegel(pr, artikel);
+        if (labels.length + omschrijvingen.length > 200) return { ok: false, status: 400, error: 'Meer dan 200 etiketten in één keer; print per regel' };
+        const { data: dozen, error: dErr } = await supabase.rpc('winkel_dozen_voor_regel', { p_org: orgId, p_regel_id: Number(r.id), p_omschrijvingen: omschrijvingen });
+        if (dErr) return { ok: false, status: 500, error: dErr.message };
+        const codes = ((dozen ?? []) as { volgnr: number; code: string }[]).sort((a, b) => a.volgnr - b.volgnr).map((d) => d.code);
+        labels.push(...etikettenVoorRegel(pr, artikel, momentTekst(m), inst?.qr_basis_url as string | null | undefined, codes));
     }
-    if (labels.length > 200) return { ok: false, status: 400, error: 'Meer dan 200 etiketten in één keer; print per regel' };
 
     return { ok: true, verzoek: { soort: 'winkel_etiket', labels, referentie: { orderId, nummer: order.nummer, regelIds: regels.map((r) => Number(r.id)) } } };
 }

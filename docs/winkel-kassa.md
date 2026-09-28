@@ -76,7 +76,7 @@ Wat myPOS ons leerde tijdens het bouwen:
 
 ## Sinterklaas 2026 — betaalwijze, templates, productie (26 september)
 
-Opdracht `docs/OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md`, plan `docs/sinterklaas-bouwplan.md`,
+Opdracht `docs/OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md`, plan `docs/sinterklaas-bouwplan.md`,
 migratie `20260927120000_winkel_sinterklaas.sql`. Wat er voor de website verandert (blok S5):
 
 - `POST offerte` en `POST order` accepteren `betaalwijze: "volledig" | "reservering"`
@@ -89,7 +89,7 @@ migratie `20260927120000_winkel_sinterklaas.sql`. Wat er voor de website verande
   alleen bij afhalen; zonder ingesteld bedrag is het `validatie`.
 - Een regel met een `keuzes`-veld is `validatie`: de pakketten zijn vast (fase 2 komt later).
 - Meerdere agenda-momenten in één order mogen als ze hetzelfde tijdvak zijn (plank in
-  groep `sint-plank` én pakketten in `sint-pakket` op hetzelfde moment: twee tellingen).
+  groep `borrelplank` én pakketten in `geschenkpakket` op hetzelfde moment: twee tellingen).
 - `GET momenten?artikel=<slug>` geeft de momenten van de groep van dat artikel;
   `vrij` is 100000 als het moment geen grens heeft. Een moment met `sluit_op` (deadline
   met tijd) verdwijnt daarna uit de lijst; een order erop is `moment-verlopen`.
@@ -101,7 +101,7 @@ moment niet besteld worden"). Bij het plaatsen wordt de inhoud per regel vastgel
 NULL = niet bijgehouden). Btw per regel naar rato van de winkelwaarde (`btw_cents`),
 overschrijfbaar per artikel. De balie boekt het rest met `winkel_boek_rest` (contant/pin).
 Productie- en inpaklijsten en het Zebra-etiket (printsoort `winkel_etiket`, QR =
-`{qr_basis_url}/sint?artikel=<slug>&order=<nummer>`) staan in het vakje op `/verkoop/webshop`.
+`{qr_basis_url}/g/<code>`, één code per doos in `winkel_dozen`; de balie scant hem als "opgehaald", de Experience-app leest met `GET …/doos/{code}` alleen het artikel) staan in het vakje op `/verkoop/webshop`.
 
 ## Instellen — via /verkoop/webshop
 

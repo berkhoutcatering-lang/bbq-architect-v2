@@ -1,17 +1,19 @@
 /**
  * Winkel-etiket — op elk pakket en elke schaal van een webshop-order
- * (Sinterklaas 2026, blok S7).
+ * (geschenkpakketten en borrelplank, blok S7). De gewone opmaak: geen
+ * feestdag op het etiket (besluit 26 september).
  *
- *   ★ SINTERKLAAS                          ┌────────┐
- *   JAN JANSEN                             │  QR    │
+ *   JAN JANSEN                             ┌────────┐
+ *                                          │  QR    │
  *   HB-2026-0042 · 2/3                     │        │
  *   Bierpakket € 35                        └────────┘
  *   vr 4 dec · 16:00–18:00
  *   ──────────────────────────────────────────────
  *   18+ · reeds betaald € 2,50 · rest € 32,50
  *
- * Alles komt uit de order; de template verzint niets. Zonder QR-basis-URL in
- * de instellingen valt de QR weg. De labelmaat komt van de printer
+ * Alles komt uit de order; de template verzint niets. De QR is de code van
+ * deze ene doos ({qr_basis_url}/g/{code}): de kassascan bij het ophalen.
+ * Zonder QR-basis-URL in de instellingen valt de QR weg. De labelmaat komt van de printer
  * (/instellingen/printers) — daarmee is het formaat configureerbaar.
  */
 
@@ -22,7 +24,7 @@ import type { WinkelEtiketData } from '@/lib/winkel/productie';
 
 export const winkeletiket: LabelTemplate<WinkelEtiketData> = {
     code: 'winkel',
-    versie: 1,
+    versie: 2,
     naam: 'Winkel-etiket (pakket / schaal)',
     minFormaat: { breedte_mm: 50, hoogte_mm: 30 },
 
@@ -46,10 +48,7 @@ export const winkeletiket: LabelTemplate<WinkelEtiketData> = {
             qrOnder = sc.y(10) + qrZ;
         }
 
-        /* Sinterklaas-opmaak: een kleine kop, het feest zit in de sticker. */
-        let y = sc.y(8);
-        velden.push(tekst({ x: marge, y, hoogte: sc.h(18), tekst: '* SINTERKLAAS *' }));
-        y += sc.h(18) + sc.y(6);
+        let y = sc.y(10);
 
         /* Klantnaam: groot, krimpt, twee regels, nooit afgekapt. */
         const naam = d.klantnaam.trim().toUpperCase();

@@ -1,4 +1,4 @@
-# Overdracht — wat BBQ Architect moet leveren voor Sinterklaas 2026
+# Overdracht — wat BBQ Architect moet leveren voor de borrelplank en de geschenkpakketten (december 2026)
 
 Datum: 26 september 2026. Hoort bij de bouwopdracht `sinterklaas-2026-bouwopdracht.md`
 (besloten 26-09-2026) en bouwt voort op `OVERDRACHT-BBQ-ARCHITECT-WEBSHOP.md` en blok A7
@@ -13,15 +13,36 @@ veld in de adapter (`betaalwijze`).
 
 Kopieer dit bestand naar de root van `bbq-architect-v2` en open daar een sessie met:
 
-> Lees `OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md` en `docs/winkel-kassa.md`. Controleer
+> Lees `OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md` en `docs/winkel-kassa.md`. Controleer
 > eerst wat er van blok A7 (Kerst-Box, branch `kerst-box-groepen`) al gemerged is — de
-> Sinterklaas-artikelen gebruiken dezelfde mechanieken (`moment_groep`, groepsminimum,
+> acht artikelen gebruiken dezelfde mechanieken (`moment_groep`, groepsminimum,
 > interne verdeling, productieoverzicht, QR per artikel). Bouw daarna de blokken S1 t/m S7
 > in volgorde, één per keer, met tests groen. Publiceer niets waar `[BEVESTIGEN]` bij staat.
 
 ---
 
 ## De besluiten van 26 september waar dit op rust
+
+0. **Niets hangt aan Sinterklaas — nergens.** Het is een borrelplank en zeven
+   geschenkpakketten; dat december het moment is, is toeval (besluit Mathijs, later op
+   26 september: "het is het moment met Sinterklaas", geen productlijn). Niet in namen,
+   niet in slugs, niet in groepen, niet op het etiket, niet in de QR-URL.
+   **Gevolg voor BBQ Architect (al gebouwd op 26 september met de oude namen — hernoemen,
+   er zijn nog geen orders):**
+
+   | Was | Wordt |
+   | --- | --- |
+   | slug `sinterklaas-borrelplank`, naam "Sinterklaas-borrelplank" | slug `borrelplank`, naam "Borrelplank" |
+   | `sint-bier-20` · `sint-bier-35` · `sint-bier-50` | `bierpakket-20` · `bierpakket-35` · `bierpakket-50` |
+   | `sint-wijn-35` · `sint-wijn-50` | `wijnpakket-35` · `wijnpakket-50` |
+   | `sint-bier-wijn-35` · `sint-bier-wijn-50` | `bier-en-wijn-35` · `bier-en-wijn-50` |
+   | momentgroepen `sint-plank` · `sint-pakket` | `borrelplank` · `geschenkpakket` |
+   | QR-URL `{qr_basis_url}/sint?artikel=…` | `{qr_basis_url}/geschenk?artikel=…` |
+   | etiket met "Sinterklaas-opmaak" | de gewone Hop & Bites-opmaak |
+
+   De website gebruikt de nieuwe namen al (tests/geschenkpakketten.test.ts bewaakt dat er
+   geen feestdag in slug, naam of tekst zit). Tot BBQ Architect hernoemd is, sluiten de
+   twee kanten niet op elkaar aan.
 
 1. **Alleen afhalen** aan de Tramstraat 13. Geen bezorging, geen verzending.
 2. **Bier en wijn mogen online besteld worden voor afhaal, nu al.** Losse verkoop in de
@@ -42,7 +63,7 @@ Alle bedragen in **hele centen**. Tijdzone `Europe/Amsterdam`; datums ISO.
 
 ## Wat BBQ Architect al kan (contract van 13 september)
 
-| Route | Bestaat | Wat Sinterklaas ervan gebruikt |
+| Route | Bestaat | Wat deze acht artikelen ervan gebruiken |
 | --- | --- | --- |
 | `GET …/momenten[?artikel=]` | ja | eigen afhaaldagen en tijdsloten per artikelgroep |
 | `POST …/offerte` | ja | herberekening op slug + aantal; groepsminimum; **nieuw: `betaalwijze`** |
@@ -60,19 +81,22 @@ contactgegevens en een verwacht totaal. Niets uit de browser is waarheid.
 Acht artikelen, één `moment_groep` per soort. Prijzen zijn de startprijzen uit de
 bouwopdracht; `[BEVESTIGEN]` waar de opdracht dat zelf zegt.
 
-| slug | Naam | Eenheid | Prijs | Minimum | `moment_groep` | Alcohol |
+| slug | Naam | Eenheid | Prijs | Minimum | Capaciteitsgroep | Alcohol |
 | --- | --- | --- | --- | --- | --- | --- |
-| `sinterklaas-borrelplank` | Sinterklaas-borrelplank | per persoon | € 14,95 `[BEVESTIGEN]` | 2 personen | `sint-plank` | nee |
-| `sint-bier-20` | Bierpakket € 20 | per stuk | € 20,00 | 1 | `sint-pakket` | ja |
-| `sint-bier-35` | Bierpakket € 35 | per stuk | € 35,00 | 1 | `sint-pakket` | ja |
-| `sint-bier-50` | Bierpakket € 50 | per stuk | € 50,00 | 1 | `sint-pakket` | ja |
-| `sint-wijn-35` | Wijnpakket € 35 | per stuk | € 35,00 | 1 | `sint-pakket` | ja |
-| `sint-wijn-50` | Wijnpakket € 50 | per stuk | € 50,00 | 1 | `sint-pakket` | ja |
-| `sint-bier-wijn-35` | Bier & wijn € 35 | per stuk | € 35,00 | 1 | `sint-pakket` | ja |
-| `sint-bier-wijn-50` | Bier & wijn € 50 | per stuk | € 50,00 | 1 | `sint-pakket` | ja |
+| `borrelplank` | Borrelplank | per persoon | € 14,95 `[BEVESTIGEN]` | 2 personen | `borrelplank` | nee |
+| `bierpakket-20` | Bierpakket € 20 | per stuk | € 20,00 | 1 | `geschenkpakket` | ja |
+| `bierpakket-35` | Bierpakket € 35 | per stuk | € 35,00 | 1 | `geschenkpakket` | ja |
+| `bierpakket-50` | Bierpakket € 50 | per stuk | € 50,00 | 1 | `geschenkpakket` | ja |
+| `wijnpakket-35` | Wijnpakket € 35 | per stuk | € 35,00 | 1 | `geschenkpakket` | ja |
+| `wijnpakket-50` | Wijnpakket € 50 | per stuk | € 50,00 | 1 | `geschenkpakket` | ja |
+| `bier-en-wijn-35` | Bier & wijn € 35 | per stuk | € 35,00 | 1 | `geschenkpakket` | ja |
+| `bier-en-wijn-50` | Bier & wijn € 50 | per stuk | € 50,00 | 1 | `geschenkpakket` | ja |
 
 De namen op de site komen uit `content.ts` van de website; BBQ Architect is de bron voor
-prijs, verkoopbaarheid, voorraad en capaciteit.
+prijs, verkoopbaarheid, voorraad en capaciteit. **Gebouwd (26 september) als twee
+momentgroepen** met dezelfde tijdvakken: `borrelplank` en `geschenkpakket`. De website vraagt
+`GET momenten?artikel=borrelplank` en `?artikel=geschenkpakket` en stuurt per regel het
+moment-id van de eigen groep mee; de kassa eist hetzelfde tijdvak binnen één order.
 
 ### Inhoud van de pakketten (vast)
 
@@ -80,11 +104,11 @@ prijs, verkoopbaarheid, voorraad en capaciteit.
 | --- | --- | --- | --- | --- | --- | --- |
 | Bier € 20 | 1 groothandel + 1 H&B-advies + 1 lokaal | – | 1 | 100 g | – | – |
 | Bier € 35 | 5 | – | 1 | 150 g | 1 bakje 60 g | – |
-| Bier € 50 | 5, waarvan 1 Mr. Hop | – | 2 | 200 g | 1 bakje 60 g | Cerveza of rode peper `[BEVESTIGEN: welke van de twee — vast pakket, dus één soort]` |
+| Bier € 50 | 5, waarvan 1 Mr. Hop | – | 2 | 200 g | 1 bakje 60 g | bier- én rodewijnmarmelade |
 | Wijn € 35 | – | 2 | 1 | 150 g | 1 bakje 60 g | – |
-| Wijn € 50 | – | 2 | 3 (worstproeverij) | 200 g | 1 bakje 60 g | vijg of rode wijn `[BEVESTIGEN: welke]` |
+| Wijn € 50 | – | 2 | 3 (worstproeverij) | 200 g | 1 bakje 60 g | bier- én rodewijnmarmelade |
 | Bier & wijn € 35 | 3 lokaal | 1 | 1 | 150 g | 1 bakje 60 g | – |
-| Bier & wijn € 50 | 3, waarvan 1 Mr. Hop | 1 | 2 | 200 g | 1 bakje 60 g | ui |
+| Bier & wijn € 50 | 3, waarvan 1 Mr. Hop | 1 | 2 | 200 g | 1 bakje 60 g | bier- én rodewijnmarmelade |
 
 Elk pakket in een gesloten, stapelbare geschenkdoos met bescherming tussen de flessen;
 amandelen en crackers in afsluitbare bakjes. Alles ongeopend buiten de koelkast houdbaar.
@@ -108,7 +132,7 @@ hardcoden. Tot die invulling er is, is een pakket wel aan te maken maar niet ver
 | Spaanse schapenkaas | 25 |
 | Amsterdamse uien, uitgelekt | 20 |
 | Cornichons, uitgelekt | 20 |
-| Pizza-dipcrackers | 10 |
+| Pizzacrackers | 10 |
 | Chili-rijstcrackers | 10 |
 | Mexicano's | 10 |
 | Eigen BBQ-amandelen | 15 |
@@ -177,14 +201,17 @@ voorraad" toont.
 Zelfde mechaniek als de Kerst-Box (`?artikel=`), maar nu per `moment_groep`:
 
 - **Ophaaldagen met tijdsloten** zijn configureerbaar in het beheerscherm, niet in de
-  seed. Per slot een maximum, **apart voor `sint-plank` en `sint-pakket`**.
+  seed. Per slot een maximum, **apart voor `borrelplank` en `geschenkpakket`**.
 - **Besteldeadline per moment** (`sluit_op`, datum + tijd). Na de deadline komt het
   moment niet meer in `GET momenten` en geeft `POST order` `moment-verlopen`.
-- `GET …/momenten?artikel=sinterklaas-borrelplank` geeft de plank-momenten met `vrij` in
-  personen; `?artikel=sint-bier-35` de pakket-momenten met `vrij` in pakketten. Eén
-  order met plank én pakketten reserveert in beide tellingen op hetzelfde moment.
-- Dagen, sloten, maxima en deadline zijn nog open — bouw ze leeg, publiceer niets.
-  `[BEVESTIGEN: ophaaldagen, tijdsloten, maximum per slot, deadline]`
+- `GET …/momenten?artikel=borrelplank` en `?artikel=geschenkpakket` geven elk hun eigen
+  momenten (zelfde tijdvakken, eigen id en eigen telling); `vrij` is 100000 als het moment
+  geen grens heeft. Eén order met plank én pakketten mag als beide regels hetzelfde
+  tijdvak hebben; anders `validatie`. *Zo gebouwd op 26 september.*
+- **Besloten (Mathijs, 26 september): afhalen op woensdag, vrijdag en zaterdag, 10:00–16:00**
+  — één moment per dag, in beide groepen. Maak ze aan in het beheerscherm (Momenten) voor
+  de weken waarin er geleverd wordt. Maximum per moment en de besteldeadline zijn nog
+  open. `[BEVESTIGEN: maximum per moment, deadline, vanaf welke week]`
 
 **Klaar wanneer** een slot vol `moment-vol` geeft voor de ene groep en niet voor de andere,
 en een order na de deadline `moment-verlopen`.
@@ -194,27 +221,29 @@ en een order na de deadline `moment-verlopen`.
 De klant kiest en betaalt **personen**; de schaal is intern, zoals de doos bij de Kerst-Box.
 
 - Minimum 2 personen. `aantal: 1` → `validatie` "De borrelplank gaat vanaf 2 personen."
-- Verdeling: zo veel mogelijk grote schalen (5), de rest op één kleine (2–3); een schaal
-  met 1 persoon bestaat niet, dus bij rest 1 gaat er één persoon van de laatste grote
-  schaal af.
+- Verdeling: zo veel mogelijk grote schalen (5), de rest op één schaal (2–3 klein, 4
+  groot). Een schaal met 1 persoon bestaat niet: blijft er 1 over, dan worden de laatste
+  6 personen **twee kleine schalen van 3** (besloten door Mathijs, 26 september: 6 = 3 + 3,
+  niet 4 + 2). **Dit wijkt af van wat er gebouwd is** (`verdeelSchalen` geeft nu 4 + 2).
 
 | Personen | Verdeling |
 | --- | --- |
 | 2, 3 | 1 klein |
 | 4, 5 | 1 groot |
-| 6 | groot 4 + klein 2 `[BEVESTIGEN: de opdracht noemt 3 + 3, dat is twee kleine schalen — welke van de twee?]` |
+| 6 | klein 3 + klein 3 |
 | 7 | groot 5 + klein 2 |
 | 8 | groot 5 + klein 3 |
 | 9 | groot 5 + groot 4 |
 | 10 | groot 5 + groot 5 |
-| 11 | groot 5 + groot 4 + klein 2 |
+| 11 | groot 5 + klein 3 + klein 3 |
 | 12 | groot 5 + groot 5 + klein 2 |
+| 16 | groot 5 + groot 5 + klein 3 + klein 3 |
 
 - Per schaal zes bakjes. Verpakkingsbudget: € 2,25 klein, € 3,00 groot (incl. btw) —
   alleen voor de marge, nooit voor de klant.
 
-**Klaar wanneer** `POST offerte` met 1 persoon `validatie` geeft, en het productieoverzicht
-voor 11 personen "1 × groot (5), 1 × groot (4), 1 × klein (2)" laat zien.
+**Klaar wanneer** `POST offerte` met 1 persoon `validatie` geeft, het productieoverzicht
+voor 6 personen "2 × klein (3)" laat zien en voor 11 personen "1 × groot (5), 2 × klein (3)".
 
 ### S5 — Twee betaalwijzen: volledig of € 2,50 reservering
 
@@ -226,19 +255,27 @@ Dit is de enige wijziging aan het contract met de website.
 "betaalwijze": "volledig" | "reservering"
 ```
 
-Response van de offerte, naast de bestaande velden:
+Response van de offerte, naast de bestaande velden — **alle drie verplicht** zodra S5
+geleverd is; zolang ze ontbreken beschouwt de website een gevraagde reservering als
+`niet-beschikbaar` en toont hij geen € 2,50 die de kassa niet kent:
 
 ```json
+"betaalwijze": "reservering",
 "nuTeBetalenCenten": 250,
-"restInWinkelCenten": 3250,
-"reserveringCenten": 250
+"restInWinkelCenten": 3250
 ```
+
+Dezelfde drie velden in `GET order/{token}`; bij `volledig` is `nuTeBetalenCenten` gelijk
+aan `totaalCenten` en `restInWinkelCenten` 0.
 
 Bij `volledig` is `nuTeBetalenCenten` gelijk aan `totaalCenten` en `restInWinkelCenten`
 0. Bij `reservering` gaat **€ 2,50 per order** naar myPOS, niet per artikel.
 `[BEVESTIGEN: per order, of per pakket/plank? De opdracht zegt "€ 2,50 reserveringsbedrag",
 per order is het simpelst en het goedkoopst in iDEAL-kosten.]`
 
+- **Leeftijd.** `POST order` krijgt ook `"leeftijdBevestigd": true | false`. Ligt er een
+  artikel met alcohol in en is het `false`, dan `validatie`. Zet de bevestiging bij de
+  order en print 18+ op het etiket (S7).
 - **De reservering is geen toeslag.** `totaalCenten` verandert er niet door; de € 2,50
   wordt bij afhalen van het totaal afgetrokken. Op bevestigingsmail, statuspagina en
   kassabon: "reeds betaald: € 2,50 · te betalen in de winkel: € 32,50".
@@ -300,35 +337,72 @@ de aanbetaling is binnen).
 - Printer Zebra ZQ630. Etiketformaat nog open: maak de sjabloonmaat configureerbaar.
   `[BEVESTIGEN: etiketformaat]`
 - Op het etiket: klantnaam, ordernummer, ophaalmoment (dag + slot), product of pakket,
-  **QR-code**, Sinterklaas-opmaak, en bij alcohol een **18+**-markering voor de balie.
+  **QR-code**, de gewone Hop & Bites-opmaak, en bij alcohol een **18+**-markering voor de balie.
 - Bij `reservering`: "reeds betaald € 2,50 · rest € …" op het etiket of de bon, zodat de
   balie het ziet zonder de kassa te openen.
 
-**QR**
+**QR — één code per doos, en die code ís de kassascan** (besluit Mathijs, 26 september)
 
-- Doel-URL configureerbaar, naar de Sinterklaas-editie van de Experience-app, met de
-  artikel-slug én het ordernummer als parameter (zoals bij de Kerst-Box per variant):
-  `{EXPERIENCE_URL}/sint?artikel=sint-bier-35&order=HB-2026-0042`. De app toont dan de
-  uitleg over de vleeswaren en producten, serveertips, Instagram, website en de
-  borrelspellen. Wat de app precies doet is werk in de Experience-app, niet hier.
+Elke doos en elke schaal krijgt één eigen QR-code op het etiket. Die code vervangt de
+streepjescode bij de kassa en doet twee dingen:
+
+1. **Aan de balie (ingelogd, de kassa):** scannen = deze doos is opgehaald. BBQ Architect
+   zoekt de order erbij, boekt bij `reservering` eerst het restbedrag (contant of pin,
+   `winkel_boek_rest`), zet de doos op *opgehaald*, haalt hem uit de lijst met klaar te
+   leggen dozen van dat ophaalmoment, en boekt hem in de boekhouding als *verkocht*. Een
+   order met drie dozen is pas helemaal opgehaald als alle drie gescand zijn; de balie
+   ziet welke nog ontbreken.
+2. **Met een telefoon (de klant thuis):** dezelfde code opent de geschenk-editie van de
+   Experience-app: uitleg over de producten, serveertips, Instagram, website, de
+   borrelspellen. Wat de app precies doet is werk in de Experience-app, niet hier.
+
+Wat daarvoor nodig is:
+
+- **Een code per doos, niet per order**, onraadbaar (≥ 128 bit), vastgelegd bij het printen
+  van het etiket. In de URL staat die code, geen ordernummer, geen naam:
+  `{EXPERIENCE_URL}/g/{code}`. De Experience-app vraagt bij BBQ Architect alleen de
+  artikel-slug op (welk pakket, welke inhoud) — nooit persoonsgegevens.
+- **Alleen de ingelogde kassa kan "opgehaald" zetten.** Een klant die zijn eigen doos
+  scant verandert niets aan de status. Twee keer scannen aan de balie is idempotent: de
+  tweede scan zegt "al opgehaald om 14:12", boekt niets dubbel.
+- **Boekhouding:** de verkoop telt bij het ophalen (`opgehaald_at`), met de btw-verdeling
+  per regel uit S6. Wat er in de boekhouding precies gebeurt bij volledig vooraf betaald
+  versus reservering + rest, stem je af met de koppeling die er al is.
+  `[BEVESTIGEN door de boekhouder: omzet bij betaling of bij ophalen]`
+- **Niet opgehaald:** dozen die na het laatste ophaalmoment niet gescand zijn, staan op een
+  eigen lijst op `/verkoop/webshop`. Wat er dan gebeurt blijft handwerk.
 
 **Klaar wanneer** het overzicht voor één ophaalmoment de grammen per onderdeel, de schalen
-en bakjes toont; de inpaklijst per pakkettype groepeert; een etiket met QR uit de ZQ630
-komt en de QR de juiste artikel-slug meegeeft.
+en bakjes toont; de inpaklijst per pakkettype groepeert; elke doos een eigen QR-code op het
+etiket uit de ZQ630 krijgt; een scan aan de balie de doos op *opgehaald* zet en in de
+boekhouding als verkocht boekt; een tweede scan niets dubbel boekt; en dezelfde code op een
+telefoon de Experience-app opent zonder persoonsgegevens.
 
 ---
 
-## Wat er ná dit werk in de website-repo verandert
+## De websitekant — gebouwd op 26 september 2026, staat uit
 
 1. `lib/content/content.ts` — acht artikelen (plank per persoon vanaf 2, zeven pakketten
-   per stuk), hub `geschenken`, 18+-tekst bij alcohol.
-2. `config/schakelaars.ts` — `bier_wijn` opgesplitst in *online voor afhaal* (nu `aan`)
-   en *winkelverkoop* (`aan` vanaf maart 2027); Sinterklaas als stap in `FASEN`.
-3. `lib/winkel/adapter.ts` en `architect-adapter.ts` — `betaalwijze` mee in offerte en
-   order; `nuTeBetalenCenten` en `restInWinkelCenten` in offerte en status.
-4. Afrekenen — één keuze: "Nu alles betalen" of "€ 2,50 reserveren, rest in de winkel".
+   per stuk), `RESERVERING` en `ALCOHOL` als de ene formulering. Allergenen, bewaren en
+   besteltermijn zijn leeg (`[BEVESTIGEN]`): tot Mathijs ze levert blijft elk artikel
+   op aanvraag.
+2. `config/schakelaars.ts` — `borrelplank` en `geschenkpakketten` (de zeven pakketten
+   samen, via `SCHAKELAAR_VAN_SLUG`) en `alcohol_afhaal` (online bestellen voor afhaal,
+   los van `winkel_open`); `bier_wijn` is voortaan alleen de losse verkoop in de winkel.
+   De nieuwe schakelaars staan `uit`; in de demostand `aan`.
+3. `lib/winkel/adapter.ts`, `architect-adapter.ts`, `demo-adapter.ts` — `betaalwijze` mee
+   in offerte en order, `leeftijdBevestigd` in de order; `nuTeBetalenCenten` en
+   `restInWinkelCenten` in offerte en status. Stuurt BBQ Architect de betaalvelden niet
+   terug, dan is reserveren `niet-beschikbaar`.
+4. Afrekenen — de keuze "Alles nu online betalen" of "Reserveer voor € 2,50, betaal de
+   rest in de winkel" (alleen bij afhalen, alleen als élk artikel het toelaat), en de
+   leeftijdsbevestiging zodra er alcohol in de mand ligt (browser én server).
+5. Productpagina — 18+ en de betaalkeuze bij de feiten; statuspagina — "reeds betaald"
+   en "in de winkel bij afhalen".
 
-Verder niets: mand, checkout en statuspagina zijn adapter-onafhankelijk.
+Aanzetten is drie regels in `config/schakelaars.ts`: `borrelplank: 'aan'`,
+`geschenkpakketten: 'aan'` en `alcohol_afhaal: 'aan'`, nadat S1–S7 hier geleverd zijn en de productinformatie in
+`content.ts` staat. Bekijken vóór die tijd: `npm run demo:dev` (poort 3112).
 
 ---
 
@@ -356,7 +430,7 @@ Voor het beheerscherm en het margeoverzicht. Excl. btw tenzij anders vermeld.
 | Droge worst 120 g (gewone smaken) | € 2,46 | € 4,95 | 9 % |
 | Droge worst fazant / stier | € 2,59 | € 5,50 | 9 % |
 | BBQ-amandelen | € 15/kg incl. btw | 100 g € 2,95 · 150 g € 3,95 · 200 g € 4,95 | 9 % |
-| Pizza-dipcrackers 60 g | ca. € 0,55 + bakje € 0,15 | € 2,50 | 9 % |
+| Pizzacrackers 60 g | ca. € 0,55 + bakje € 0,15 | € 2,50 | 9 % |
 | Marmelade (ui, dadel, mango, sinaasappel) | € 1,95 | € 4,95 | 9 % |
 | Marmelade (rode peper, vijg, rode wijn) | € 2,25 | € 4,95 | 9 % |
 | Geschenkdoos + vulling | € 2,00 (€ 20) · € 2,50 (€ 35) · € 3,00 (€ 50) | – | – |
@@ -372,8 +446,7 @@ uitrekenen en rood kleuren als het niet klopt.
 
 - Definitieve prijs borrelplank (nu € 14,95).
 - Welke bieren, wijnen en worstsmaken per slot (Mathijs vult in via de data).
-- Marmeladesoort in Bier € 50 en Wijn € 50 (vast pakket, dus één soort kiezen).
-- Ophaaldagen, tijdsloten, maximum per slot, besteldeadline.
+- Maximum per moment, besteldeadline, en vanaf welke week de momenten open staan (dagen en tijden staan vast: wo/vr/za 10:00–16:00).
 - € 2,50 per order of per stuk; wat er gebeurt bij niet afhalen.
 - Verkopen op inkoopplanning of pas op fysieke voorraad.
 - Btw-splitsing gemengde pakketten (boekhouder).

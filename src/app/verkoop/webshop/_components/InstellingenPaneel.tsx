@@ -23,7 +23,7 @@ export interface InstellingenRij {
     nummer_laatste: number;
     kassa_open: boolean;
     site_url: string | null;
-    /* Sinterklaas S5/S7. */
+    /* Geschenkpakketten S5/S7. */
     reservering_bedrag_cents: number | null;
     qr_basis_url: string | null;
     melding_email: string | null;
@@ -96,7 +96,7 @@ export default function InstellingenPaneel({ instellingen, herlaad, melding }: {
                         <div className="field"><label>Ordernummer</label><input value={f.prefix} onChange={(e) => setF({ ...f, prefix: e.target.value })} /><div className="field-hint">Volgende: {f.prefix.trim().toUpperCase() || 'HB'}-{jaar}-{String(i.nummer_laatste + 1).padStart(4, '0')}</div></div>
                         <div className="field"><label>Site-URL</label><input value={f.site} onChange={(e) => setF({ ...f, site: e.target.value })} placeholder="https://hopbites.nl" /><div className="field-hint">Waar de klant na betalen terugkeert</div></div>
                         <div className="field" style={{ gridColumn: '1 / -1' }}><label>Voorraadmeldingen naar</label><input type="email" value={f.meldingEmail} onChange={(e) => setF({ ...f, meldingEmail: e.target.value })} placeholder="jij@hopbites.nl" /><div className="field-hint">"Op" en "pakket kan niet meer besteld worden" meteen; "bijna op" in één overzicht om 8:00. Leeg = alleen de bel in de app.</div></div>
-                        <div className="field" style={{ gridColumn: '1 / -1' }}><label>QR-app (Experience)</label><input value={f.qr} onChange={(e) => setF({ ...f, qr: e.target.value })} placeholder="https://experience.hopbites.nl" /><div className="field-hint">Basis-URL voor de QR op het etiket: {(f.qr.trim() || '…').replace(/\/+$/, '')}/sint?artikel=sint-bier-35&order=HB-2026-0042. Leeg = geen QR op het etiket.</div></div>
+                        <div className="field" style={{ gridColumn: '1 / -1' }}><label>QR-app (Experience)</label><input value={f.qr} onChange={(e) => setF({ ...f, qr: e.target.value })} placeholder="https://experience.hopbites.nl" /><div className="field-hint">Basis-URL voor de QR op elk etiket: {(f.qr.trim() || '…').replace(/\/+$/, '')}/g/&lt;code van de doos&gt;. Aan de balie is die scan "opgehaald"; op een telefoon opent hij de Experience-app. Leeg = geen QR op het etiket.</div></div>
                     </div>
                 </div>
                 <div className="mr-drawer-footer" style={{ background: 'transparent' }}>

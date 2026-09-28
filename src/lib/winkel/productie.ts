@@ -1,6 +1,6 @@
 /**
  * Productie, inpakken en etiket — blok S7, zuiver.
- * Opdracht: docs/OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md · plan: docs/sinterklaas-bouwplan.md §5
+ * Opdracht: docs/OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md · plan: docs/sinterklaas-bouwplan.md §5
  *
  * Alles hier rekent op wat bij het plaatsen is vastgelegd: de componenten van
  * elke regel (slots × aantal). Er wordt niets opnieuw uit het template gehaald,
@@ -190,14 +190,21 @@ export function inpaklijst(artikelen: ProductieArtikel[], rijen: ProductieRegel[
 /* ── Etiket ────────────────────────────────────────────────────────────────── */
 
 /**
- * De QR op het etiket: de Sinterklaas-editie van de Experience-app met de
- * artikel-slug en het ordernummer als parameters. Geen basis-URL = geen QR.
+ * De QR op het etiket: één code per doos of schaal (S7). Aan de balie is die
+ * scan "opgehaald"; op een telefoon opent hij de Experience-app, die met de
+ * code alleen het artikel opvraagt. Geen basis-URL of geen code = geen QR.
  */
-export function qrUrl(basis: string | null | undefined, slug: string, nummer: string): string | null {
+export function doosQrUrl(basis: string | null | undefined, code: string | null | undefined): string | null {
     const b = (basis ?? '').trim().replace(/\/+$/, '');
-    if (!b) return null;
-    const q = new URLSearchParams({ artikel: slug, order: nummer }).toString();
-    return `${b}/sint?${q}`;
+    if (!b || !code) return null;
+    return `${b}/g/${encodeURIComponent(code)}`;
+}
+
+/** De code uit een gescande QR (de hele URL) of een getypte code. */
+export function codeUitScan(invoer: string): string | null {
+    const t = invoer.trim();
+    const m = /\/g\/([0-9a-f]{32,128})\/?(?:[?#].*)?$/i.exec(t) ?? /^([0-9a-f]{32,128})$/i.exec(t);
+    return m ? m[1]!.toLowerCase() : null;
 }
 
 /** "reeds betaald € 2,50 · rest € 32,50" — alleen bij een reservering die nog openstaat. */
@@ -235,31 +242,36 @@ export interface WinkelEtiketData {
     rest: string | null;
 }
 
+/** Wat er per doos of schaal op het etiket staat, in volgorde (volgnr 1..n). */
+export function dozenVoorRegel(r: Pick<ProductieRegel, 'regel'>, artikel: ProductieArtikel | null): string[] {
+    if (artikel?.schaal_verdeling) {
+        return verdeelSchalen(r.regel.aantal, artikel.doos_klein_max ?? 3, artikel.doos_groot ?? 5)
+            .map((s) => `${r.regel.naam} · ${s.maat === 'groot' ? 'grote' : 'kleine'} schaal · ${s.personen} pers.`);
+    }
+    return Array.from({ length: r.regel.aantal }, () => r.regel.naam);
+}
+
 /**
  * De etiketten van één regel: één per pakket, één per schaal. Bij de plank
- * staat het aantal personen van die schaal op het etiket.
+ * staat het aantal personen van die schaal op het etiket. `codes` = de code
+ * per doos (winkel_dozen), in dezelfde volgorde; zonder code geen QR.
  */
 export function etikettenVoorRegel(
     r: ProductieRegel,
     artikel: ProductieArtikel | null,
     momentTekst: string | null,
     qrBasis: string | null | undefined,
+    codes: (string | null)[] = [],
 ): WinkelEtiketData[] {
-    const basis: Omit<WinkelEtiketData, 'volgnr' | 'artikel'> = {
+    const dozen = dozenVoorRegel(r, artikel);
+    return dozen.map((omschrijving, i) => ({
         klantnaam: r.order.contact_naam,
         ordernummer: r.order.nummer,
         moment: momentTekst,
-        qrUrl: qrUrl(qrBasis, r.regel.slug, r.order.nummer),
+        qrUrl: doosQrUrl(qrBasis, codes[i] ?? null),
         alcohol: r.regel.alcohol,
         rest: restTekst(r.order),
-    };
-    if (artikel?.schaal_verdeling) {
-        const schalen = verdeelSchalen(r.regel.aantal, artikel.doos_klein_max ?? 3, artikel.doos_groot ?? 5);
-        return schalen.map((s, i) => ({
-            ...basis,
-            artikel: `${r.regel.naam} · ${s.maat === 'groot' ? 'grote' : 'kleine'} schaal · ${s.personen} pers.`,
-            volgnr: `${i + 1}/${schalen.length}`,
-        }));
-    }
-    return Array.from({ length: r.regel.aantal }, (_, i) => ({ ...basis, artikel: r.regel.naam, volgnr: `${i + 1}/${r.regel.aantal}` }));
+        artikel: omschrijving,
+        volgnr: `${i + 1}/${dozen.length}`,
+    }));
 }

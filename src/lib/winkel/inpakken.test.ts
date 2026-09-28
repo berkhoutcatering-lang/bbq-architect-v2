@@ -18,8 +18,8 @@ import type { Artikel, Product, Slot } from './rekenen';
 import { regelBoekingen } from './voorraad';
 
 const bier35: Artikel = {
-    id: 'a-bier-35', slug: 'sint-bier-35', naam: 'Bierpakket € 35', eenheid: 'per stuk', telt: 'stuks', prijs_cents: 3500, btw_pct: 21, minimum: 1, maximum: null,
-    verzendbaar: false, gekoeld: false, moment_soort: 'moment', moment_groep: 'sint-pakket', afhaalmoment_tekst: null,
+    id: 'a-bier-35', slug: 'bierpakket-35', naam: 'Bierpakket € 35', eenheid: 'per stuk', telt: 'stuks', prijs_cents: 3500, btw_pct: 21, minimum: 1, maximum: null,
+    verzendbaar: false, gekoeld: false, moment_soort: 'moment', moment_groep: 'geschenkpakket', afhaalmoment_tekst: null,
     capaciteit_soort: 'aantal', doos_klein_max: null, doos_groot: null, voorraad: null, actief: true, publiek: true, segment: 'bier', alcohol: true,
 };
 const product = (id: string, naam: string, eenheid: 'stuk' | 'gram', voorraad: number | null): Omit<Product, 'voorraad_bezet'> =>
@@ -35,7 +35,7 @@ const slot = (id: string, naam: string, hoeveelheid: number, p: string, eenheid:
     ({ id, artikel_id: 'a-bier-35', volgorde: 0, slot_type: 'overig', naam, hoeveelheid, eenheid, per: 'stuk', standaard_product_id: p, wisselbaar: false, alternatieven: [] });
 /* Zoals in scripts/winkel-seed-hop-en-bites.mjs: 5 bier, worst, 150 g amandelen, crackers, doos. */
 const slots = [slot('s1', 'Bier', 5, 'p-bier'), slot('s2', 'Droge worst', 1, 'p-worst'), slot('s3', 'BBQ-amandelen', 150, 'p-amandel', 'gram'), slot('s4', 'Crackers', 1, 'p-cracker'), slot('s5', 'Doos', 1, 'p-doos')];
-const momenten = [{ id: 'm-pakket', groep: 'sint-pakket', datum: '2026-12-05', van: '10:00:00', tot: '12:00:00', capaciteit: null, bestellen_tot: null, sluit_op: null, actief: true }];
+const momenten = [{ id: 'm-pakket', groep: 'geschenkpakket', datum: '2026-12-05', van: '10:00:00', tot: '12:00:00', capaciteit: null, bestellen_tot: null, sluit_op: null, actief: true }];
 const tenant = { orgId: 'org-1', slug: 'hop-en-bites', bedrijfsnaam: 'Hop & Bites', email: null, telefoon: null, brandColor: null, ondertitel: null };
 const instellingen = { verzendkosten_cents: null, gratis_verzenden_vanaf_cents: null, verzendkosten_btw_pct: 21, reservering_minuten: 30, offerte_geldig_minuten: 15, kassa_open: true, site_url: 'https://hopbites.nl', reservering_bedrag_cents: null, qr_basis_url: null };
 
@@ -47,9 +47,9 @@ beforeEach(() => {
     _resetControleKlok();
 });
 
-const contact = { naam: 'Sint Nicolaas', email: 'sint@voorbeeld.nl', telefoon: '0612345678' };
+const contact = { naam: 'Jan Jansen', email: 'jan@voorbeeld.nl', telefoon: '0612345678' };
 const bestel = (sleutel: string) => plaatsOrder(ctx, 'hop-en-bites', {
-    mand: { versie: 1, regels: [{ slug: 'sint-bier-35', aantal: 1, moment: 'm-pakket' }] }, leverwijze: 'afhalen', momentId: null,
+    mand: { versie: 1, regels: [{ slug: 'bierpakket-35', aantal: 1, moment: 'm-pakket' }] }, leverwijze: 'afhalen', momentId: null,
     contact, adres: null, opmerking: '', sleutel, terugUrl: '/bestelling', verwachtTotaalCenten: 3500,
 });
 const stand = (id: string) => store.producten.find((p) => p.id === id)!.voorraad;

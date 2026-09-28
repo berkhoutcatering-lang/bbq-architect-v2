@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { etikettenVoorRegel, inpaklijst, plankProductie, qrUrl, restTekst, type ProductieRegel } from './productie';
+import { etikettenVoorRegel, inpaklijst, plankProductie, codeUitScan, doosQrUrl, dozenVoorRegel, restTekst, type ProductieRegel } from './productie';
 
-const plank = { id: 'a-plank', naam: 'Sinterklaas-borrelplank', slug: 'sinterklaas-borrelplank', schaal_verdeling: true, doos_klein_max: 3, doos_groot: 5 };
-const bier35 = { id: 'a-bier-35', naam: 'Bierpakket € 35', slug: 'sint-bier-35', alcohol: true };
-const wijn35 = { id: 'a-wijn-35', naam: 'Wijnpakket € 35', slug: 'sint-wijn-35', alcohol: true };
+const plank = { id: 'a-plank', naam: 'Borrelplank', slug: 'borrelplank', schaal_verdeling: true, doos_klein_max: 3, doos_groot: 5 };
+const bier35 = { id: 'a-bier-35', naam: 'Bierpakket € 35', slug: 'bierpakket-35', alcohol: true };
+const wijn35 = { id: 'a-wijn-35', naam: 'Wijnpakket € 35', slug: 'wijnpakket-35', alcohol: true };
 
 const order = (id: number, nummer: string, naam: string, extra: Partial<ProductieRegel['order']> = {}): ProductieRegel['order'] =>
     ({ id, nummer, contact_naam: naam, betaalwijze: 'volledig', nu_te_betalen_cents: 0, rest_cents: 0, rest_betaald_at: null, ...extra });
 
 /** Plank-componenten zoals de kassa ze vastlegt: gram p.p. × personen. */
 const plankRegel = (id: number, o: ProductieRegel['order'], personen: number): ProductieRegel => ({
-    regel: { id, artikel_id: 'a-plank', slug: 'sinterklaas-borrelplank', naam: 'Sinterklaas-borrelplank', aantal: personen, alcohol: false },
+    regel: { id, artikel_id: 'a-plank', slug: 'borrelplank', naam: 'Borrelplank', aantal: personen, alcohol: false },
     order: o,
     componenten: [
         { product_id: 'p1', slot_type: 'vleeswaar', naam: 'Pastrami', hoeveelheid: 20 * personen, eenheid: 'gram' },
@@ -36,22 +36,22 @@ describe('plankProductie (S7)', () => {
         ]);
         expect(p.personen).toBe(15);
         expect(p.orders).toBe(2);
-        /* 11 → 5 + 4 + 2; 4 → groot(4): drie grote, één kleine. */
-        expect(p.schalen).toEqual({ klein: 1, groot: 3, totaal: 4 });
+        /* 11 → 5 + 3 + 3; 4 → groot(4): twee grote, twee kleine. */
+        expect(p.schalen).toEqual({ klein: 2, groot: 2, totaal: 4 });
         expect(p.bakjes).toBe(24);
         expect(p.onderdelen.map((o) => `${o.naam} ${o.totaal} ${o.eenheid} (${o.perPersoon} p.p.)`)).toEqual([
             'Pastrami 300 gram (20 p.p.)', 'Eigen grillworst 600 gram (40 p.p.)', 'BBQ-amandelen 225 gram (15 p.p.)',
         ]);
     });
-    it('snij-/opmaaklijst per order: 11 personen = groot (5), groot (4), klein (2) met de grammen per schaal', () => {
+    it('snij-/opmaaklijst per order: 11 personen = groot (5), klein (3), klein (3) met de grammen per schaal', () => {
         const p = plankProductie(plank, [plankRegel(1, order(1, 'HB-2026-0002', 'Piet'), 11), plankRegel(2, order(2, 'HB-2026-0001', 'Jan'), 4)]);
         expect(p.perOrder.map((o) => o.order.nummer)).toEqual(['HB-2026-0001', 'HB-2026-0002']);
         const piet = p.perOrder[1]!;
-        expect(piet.schalen.map((s) => `${s.schaal.maat} (${s.schaal.personen})`)).toEqual(['groot (5)', 'groot (4)', 'klein (2)']);
+        expect(piet.schalen.map((s) => `${s.schaal.maat} (${s.schaal.personen})`)).toEqual(['groot (5)', 'klein (3)', 'klein (3)']);
         expect(piet.schalen[2]!.onderdelen).toEqual([
-            { naam: 'Pastrami', hoeveelheid: 40, eenheid: 'gram' },
-            { naam: 'Eigen grillworst', hoeveelheid: 80, eenheid: 'gram' },
-            { naam: 'BBQ-amandelen', hoeveelheid: 30, eenheid: 'gram' },
+            { naam: 'Pastrami', hoeveelheid: 60, eenheid: 'gram' },
+            { naam: 'Eigen grillworst', hoeveelheid: 120, eenheid: 'gram' },
+            { naam: 'BBQ-amandelen', hoeveelheid: 45, eenheid: 'gram' },
         ]);
     });
     it('zonder planken: lege lijst, geen deling door nul', () => {
@@ -83,10 +83,17 @@ describe('inpaklijst (S7)', () => {
 });
 
 describe('etiket (S7)', () => {
-    it('QR = basis + /sint?artikel=&order=; zonder basis geen QR', () => {
-        expect(qrUrl('https://experience.hopbites.nl/', 'sint-bier-35', 'HB-2026-0042')).toBe('https://experience.hopbites.nl/sint?artikel=sint-bier-35&order=HB-2026-0042');
-        expect(qrUrl(null, 'x', 'y')).toBeNull();
-        expect(qrUrl('  ', 'x', 'y')).toBeNull();
+    const CODE = 'a'.repeat(32) + 'b'.repeat(32);
+    it('QR = basis + /g/{code van de doos}; zonder basis of code geen QR', () => {
+        expect(doosQrUrl('https://experience.hopbites.nl/', CODE)).toBe(`https://experience.hopbites.nl/g/${CODE}`);
+        expect(doosQrUrl(null, CODE)).toBeNull();
+        expect(doosQrUrl('https://x.nl', null)).toBeNull();
+    });
+    it('de balie leest de code uit een gescande URL of een geplakte code', () => {
+        expect(codeUitScan(`https://experience.hopbites.nl/g/${CODE}`)).toBe(CODE);
+        expect(codeUitScan(`  ${CODE.toUpperCase()} `)).toBe(CODE);
+        expect(codeUitScan(`https://x.nl/g/${CODE}?utm=1`)).toBe(CODE);
+        expect(codeUitScan('HB-2026-0042')).toBeNull();
     });
     it('rest-tekst alleen bij een openstaande reservering', () => {
         expect(restTekst(order(1, 'n', 'x', { betaalwijze: 'reservering', nu_te_betalen_cents: 250, rest_cents: 3250 }))).toBe('reeds betaald € 2,50 · rest € 32,50');
@@ -95,14 +102,16 @@ describe('etiket (S7)', () => {
     });
     it('één etiket per pakket, één per schaal, met volgnummer en 18+', () => {
         const o = order(1, 'HB-2026-0042', 'Jan Jansen', { betaalwijze: 'reservering', nu_te_betalen_cents: 250, rest_cents: 3250 });
-        const pak = etikettenVoorRegel(pakketRegel(1, o, bier35, 2), bier35, 'vr 4 dec · 16:00–18:00', 'https://exp.test');
+        const pak = etikettenVoorRegel(pakketRegel(1, o, bier35, 2), bier35, 'vr 4 dec · 16:00–18:00', 'https://exp.test', ['c1'.repeat(16), 'c2'.repeat(16)]);
         expect(pak).toHaveLength(2);
         expect(pak[1]).toEqual({
             klantnaam: 'Jan Jansen', ordernummer: 'HB-2026-0042', moment: 'vr 4 dec · 16:00–18:00', artikel: 'Bierpakket € 35', volgnr: '2/2',
-            qrUrl: 'https://exp.test/sint?artikel=sint-bier-35&order=HB-2026-0042', alcohol: true, rest: 'reeds betaald € 2,50 · rest € 32,50',
+            qrUrl: `https://exp.test/g/${'c2'.repeat(16)}`, alcohol: true, rest: 'reeds betaald € 2,50 · rest € 32,50',
         });
         const pl = etikettenVoorRegel(plankRegel(2, o, 7), plank, null, null);
-        expect(pl.map((e) => `${e.artikel} ${e.volgnr}`)).toEqual(['Sinterklaas-borrelplank · grote schaal · 5 pers. 1/2', 'Sinterklaas-borrelplank · kleine schaal · 2 pers. 2/2']);
+        expect(pl.map((e) => `${e.artikel} ${e.volgnr}`)).toEqual(['Borrelplank · grote schaal · 5 pers. 1/2', 'Borrelplank · kleine schaal · 2 pers. 2/2']);
+        /* 6 personen = twee kleine schalen van 3 (S4), dus twee dozen met elk een eigen code. */
+        expect(dozenVoorRegel(plankRegel(3, o, 6), plank)).toEqual(['Borrelplank · kleine schaal · 3 pers.', 'Borrelplank · kleine schaal · 3 pers.']);
         expect(pl[0]!.qrUrl).toBeNull();
         expect(pl[0]!.alcohol).toBe(false);
     });

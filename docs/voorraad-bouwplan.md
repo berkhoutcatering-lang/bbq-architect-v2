@@ -7,12 +7,18 @@ Branch: `feat/winkelvoorraad`, gestapeld op `feat/sinterklaas-2026`. **Stacked P
 
 | Blok | Stand |
 |---|---|
-| W1 Twee plekken, één logboek | in aanbouw |
-| W2 De winkel vullen | — |
-| W3 Afboeken bij inpakken | — |
-| W4 Let op, bijna op | — |
-| W5 Afwijkingen | — |
+| W1 Twee plekken, één logboek | gebouwd, migratie live (`20260928120000`) |
+| W2 De winkel vullen | gebouwd: `/voorraad/winkel`, `/voorraad/winkel/tellen` |
+| W2b Voorraad toevoegen op elke manier | in aanbouw |
+| W3 Afboeken bij inpakken | gebouwd, migratie live (`20260928120100`) |
+| W4 Let op, bijna op | gebouwd, migratie live (`20260928120200`) |
+| W5 Afwijkingen | gebouwd: `/voorraad/afwijking` |
+| Geschenkpakketten §0, S4, S7 | gebouwd, migratie live (`20260928130000`) |
 | Fase 2 en 3 | na fase 1 |
+
+**Niet in productie tellen vóór PR #240 én deze branch gemerged zijn** (kort na elkaar).
+De SQL-tests (`supabase/tests/winkel_voorraad.sql`, `winkel_inpakken.sql`) draaien op een
+Supabase-branch, niet op live (besluit Mathijs, 26 sep).
 
 ## 1. Controle van §2 "Wat er al is" (26 sep)
 
@@ -20,16 +26,32 @@ Wat klopt: de keukenvoorraad met `stock_movements` en `increment_inventory_stock
 
 Wat anders is:
 
-1. **`OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md` bestaat niet.** De overdracht heet `OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md` en heeft geen hernoemtabel.
-2. **Er is geen QR per doos.** S7 zet één QR per artikel per order op het etiket (`{qr_basis_url}/sint?artikel=<slug>&order=<nummer>`, `src/lib/winkel/productie.ts:196`). Geen enkele winkel-tabel heeft een scan_token. Voor W3 maakt dat niet uit, want ophalen boekt geen voorraad. Voor W12 wel: daar moet een scan per doos nog bedacht worden, en BBQ Architect maakt nooit zelf een token (bouwplan Sinterklaas §0).
-3. **`winkel_order_regels` kent geen "opgehaald"**, en `winkel_orders` kent geen `geannuleerd`. De statussen zijn wacht, betaald, afgebroken, mislukt en verlopen.
-4. **`voorraad_tonen` staat niet in deze repo.** Het is een schakelaar aan de websitekant.
+1. **Deze sessie begon met verouderde opdrachten** (26 sep). De actuele versies staan nu in
+   `docs/`: `OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md` (vervangt de Sinterklaas-versie)
+   en `OPDRACHT-BBQ-ARCHITECT-WINKELVOORRAAD.md` (met W2b). De hernoeming uit §0, 6 = 3 + 3,
+   de QR per doos, twee marmelades en Pizzacrackers zijn op 28 sep bijgebouwd.
+2. **QR per doos (S7):** `winkel_dozen`, één rij en één onraadbare code per etiket. De QR is
+   `{qr_basis_url}/g/{code}` (S7 van de overdracht; de §0-tabel noemt nog
+   `/geschenk?artikel=…`, maar S7 vervangt de artikel-URL door een code per doos).
+   Aan de balie: scan = opgehaald (`winkel_doos_ophalen`); de Experience-app leest met
+   `GET /api/public-winkel/{slug}/doos/{code}` alleen artikel en inhoud.
+3. **`winkel_order_regels` kende geen "opgehaald"**; nu `opgehaald_at` per regel (gezet als
+   alle dozen gescand zijn) en per doos. `winkel_orders` kent geen `geannuleerd`: uitpakken
+   (vinkje klaargezet uit) boekt retour.
+4. **`voorraad_tonen` is een schakelaar op de website**, geen onderdeel van BBQ Architect.
+   Voor W10 levert BBQ Architect alleen `GET …/beschikbaarheid`.
 5. **De keuken rondt stil af op nul.** `increment_inventory_stock` doet `greatest(0, …)` en logt het gevraagde getal, niet wat er werkelijk afging. Dat botst met "nooit stil op nul". De keuken verbouwen we niet; overboekingen en keuken-afwijkingen krijgen een eigen functie die weigert in plaats van afrondt.
 6. **Er is geen bel voor `notifications`.** De bel in `Changelog.tsx` telt nieuwe app-versies.
 7. **`inventory` heeft geen `tht`, `avg_daily` of `lead_time_days` in een migratie.** De levertijd staat op `leveranciers`; `tht` en `avg_daily` bestaan live maar staan in geen SQL-bestand.
-8. **Bijvangst**, beide als losse taak voorgesteld:
-   - De Sinterklaas-migratie heeft het unieke achtervoegsel op het myPOS-ordernummer teruggedraaid, waardoor een dubbele order-ID weer kan. Dat moet vóór december opgelost.
-   - De cron `ritten-vergeten` schrijft `titel` in plaats van `title`, waardoor zijn melding nooit wordt opgeslagen.
+8. **Bijvangst.** De cron `ritten-vergeten` schrijft `titel` in plaats van `title` (losse taak).
+9. **myPOS-ordernummer (opgelost 28 sep).** De Sinterklaas-migratie had het achtervoegsel
+   van het ordernummer richting myPOS weggehaald: `HB-2026-0001-1` in plaats van
+   `HB-2026-0001-1-a3f9c2`. myPOS weigert een ordernummer dat hij al kent. Zonder
+   achtervoegsel botst het zodra de nummerteller opnieuw bij 1 begint, zoals op 13 sep
+   gebeurde, en preview en productie delen dezelfde myPOS-testwinkel. Op live stond de teller
+   op 0, er waren nog geen orders, en de Kerst-Box stond aan: de eerste Kerst-Box-betaling
+   had `HB-2026-0001-1` gekregen, een nummer dat myPOS van de tests op 13 sep al kan
+   kennen. Hersteld in `20260928130000`; er is in de tussentijd niets betaald.
 
 ## 2. Antwoorden van Mathijs (26 sep)
 
@@ -38,6 +60,8 @@ Wat anders is:
 | Afboeken bij inpakken of betaling | **Bij inpakken.** Vinkje "klaargezet" aan = eraf, vinkje uit = retour. |
 | Drempel | **Standaard met overschrijven**: genoeg voor 5 pakketten van het artikel dat het meeste van dit product vraagt. Een eigen getal per product wint. |
 | Meldingen | **"Op" en "artikel dicht" direct mailen; "bijna op" en vooruit-tekorten in één overzicht om 8:00.** Altijd ook de bel. Het adres is een nieuw veld in de webshop-instellingen. |
+| Keukenbonnen (W2b) | **Ook de keuken eerst langs het controlescherm**, niet meer direct boeken. |
+| Mailadres voor facturen (W2b) | Later; mail-in wordt gekoppeld zodra het adres er is. |
 | Eigen maak (amandelen, marmelade, worst) | Mathijs: "keuken en winkel is eigenlijk 1, catering is een andere tak, maar ook weer niet". Zie hieronder. |
 | Stil liggen | Nog niet gevraagd; standaard **180 dagen**, per plek in te stellen. |
 | Wie mag een afwijking vastleggen | Nog niet gevraagd; standaard **iedereen met een login**, en de naam staat in het logboek. |
@@ -91,6 +115,7 @@ Wat van de makerij naar de plank gaat, is een overboeking. Catering is geen derd
 - **`voorraad_melding_staat`** onthoudt per product en soort sinds wanneer het eronder zit. Een melding komt er alleen als die rij nieuw is: één keer per keer dat het product onder de drempel zakt. De rij wordt gewist zodra het product er weer boven zit.
 - **Soorten:** `voorraad_laag`, `voorraad_op`, `artikel_dicht`, `voorraad_tekort_vooruit`.
 - **Kanalen:** de bel (op Vandaag en op het winkelscherm), direct mail bij "op" en "artikel dicht", en één overzicht om 8:00 via een dagelijkse cron.
+- **Tijdstip van de cron (bewust gekozen):** `0 7 * * *` is UTC. Tot 25 oktober (zomertijd) is dat 09:00, daarna 08:00. De meldingen zijn vooral nodig in november en december, als er besteld en ingepakt wordt, en dan is het 08:00. Vercel Hobby rekent alleen in UTC en staat één run per dag toe.
 - **Let op:** `RESEND_FROM_EMAIL` is leeg. Tot er een eigen verzenddomein is, komt mail alleen aan op het adres van het Resend-account.
 
 ### W5 — Afwijkingen

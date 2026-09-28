@@ -1,6 +1,6 @@
 /**
- * Sinterklaas 2026 — de blokken S1 t/m S6 tegen de geheugen-opslag.
- * Opdracht: docs/OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md · plan: docs/sinterklaas-bouwplan.md
+ * Borrelplank en geschenkpakketten — de blokken S1 t/m S6 tegen de geheugen-opslag.
+ * Opdracht: docs/OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md · plan: docs/sinterklaas-bouwplan.md
  *
  * Wat hier bewezen wordt:
  *   S1  pakket als template met slots; de plank als receptuur per persoon
@@ -32,13 +32,13 @@ function bericht(v: Record<string, string>): string {
 /* ── Catalogus: de acht artikelen (verkort) ───────────────────────────────── */
 const basis: Omit<Artikel, 'id' | 'slug' | 'naam'> = {
     eenheid: 'per stuk', telt: 'stuks', prijs_cents: 100, btw_pct: 9, minimum: 1, maximum: null,
-    verzendbaar: false, gekoeld: false, moment_soort: 'moment', moment_groep: 'sint-pakket', afhaalmoment_tekst: null,
+    verzendbaar: false, gekoeld: false, moment_soort: 'moment', moment_groep: 'geschenkpakket', afhaalmoment_tekst: null,
     capaciteit_soort: 'aantal', doos_klein_max: null, doos_groot: null, voorraad: null, actief: true, publiek: true,
 };
-const plank: Artikel = { ...basis, id: 'a-plank', slug: 'sinterklaas-borrelplank', naam: 'Sinterklaas-borrelplank', eenheid: 'per persoon', telt: 'personen', prijs_cents: 1495, minimum: 2, gekoeld: true, moment_groep: 'sint-plank', schaal_verdeling: true, doos_klein_max: 3, doos_groot: 5 };
-const bier20: Artikel = { ...basis, id: 'a-bier-20', slug: 'sint-bier-20', naam: 'Bierpakket € 20', prijs_cents: 2000, btw_pct: 21, segment: 'bier', alcohol: true };
-const combi35: Artikel = { ...basis, id: 'a-combi-35', slug: 'sint-bier-wijn-35', naam: 'Bier & wijn € 35', prijs_cents: 3500, btw_pct: 21, segment: 'combi', alcohol: true };
-const wijn35: Artikel = { ...basis, id: 'a-wijn-35', slug: 'sint-wijn-35', naam: 'Wijnpakket € 35', prijs_cents: 3500, btw_pct: 21, segment: 'wijn', alcohol: true };
+const plank: Artikel = { ...basis, id: 'a-plank', slug: 'borrelplank', naam: 'Borrelplank', eenheid: 'per persoon', telt: 'personen', prijs_cents: 1495, minimum: 2, gekoeld: true, moment_groep: 'borrelplank', schaal_verdeling: true, doos_klein_max: 3, doos_groot: 5 };
+const bier20: Artikel = { ...basis, id: 'a-bier-20', slug: 'bierpakket-20', naam: 'Bierpakket € 20', prijs_cents: 2000, btw_pct: 21, segment: 'bier', alcohol: true };
+const combi35: Artikel = { ...basis, id: 'a-combi-35', slug: 'bier-en-wijn-35', naam: 'Bier & wijn € 35', prijs_cents: 3500, btw_pct: 21, segment: 'combi', alcohol: true };
+const wijn35: Artikel = { ...basis, id: 'a-wijn-35', slug: 'wijnpakket-35', naam: 'Wijnpakket € 35', prijs_cents: 3500, btw_pct: 21, segment: 'wijn', alcohol: true };
 
 const producten: Omit<Product, 'voorraad_bezet'>[] = [
     { id: 'p-wijn', naam: 'Huiswijn rood', type: 'wijn', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents: 1150, inkoop_excl_cents: 700, btw_pct: 21, alcohol: true, voorraad: null, actief: true },
@@ -47,7 +47,7 @@ const producten: Omit<Product, 'voorraad_bezet'>[] = [
     { id: 'p-worst', naam: 'Droge worst naturel', type: 'worst', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents: 495, inkoop_excl_cents: 246, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
     /* Winkelprijs per 150 g = € 3,95, precies het voorbeeld uit de overdracht (S6). */
     { id: 'p-amandel', naam: 'BBQ-amandelen', type: 'amandelen', eenheid: 'gram', prijs_per: 150, winkelprijs_incl_cents: 395, inkoop_excl_cents: 206, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
-    { id: 'p-cracker', naam: 'Pizza-dipcrackers 60 g', type: 'crackers', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents: 250, inkoop_excl_cents: 70, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
+    { id: 'p-cracker', naam: 'Pizzacrackers 60 g', type: 'crackers', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents: 250, inkoop_excl_cents: 70, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
     { id: 'p-doos', naam: 'Geschenkdoos € 35', type: 'doos', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents: null, inkoop_excl_cents: 250, btw_pct: 21, alcohol: false, voorraad: null, actief: true },
     { id: 'p-pastrami', naam: 'Pastrami', type: 'vleeswaar', eenheid: 'gram', prijs_per: 100, winkelprijs_incl_cents: null, inkoop_excl_cents: null, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
     { id: 'p-grillworst', naam: 'Eigen grillworst', type: 'vleeswaar', eenheid: 'gram', prijs_per: 100, winkelprijs_incl_cents: null, inkoop_excl_cents: null, btw_pct: 9, alcohol: false, voorraad: null, actief: true },
@@ -60,7 +60,7 @@ const slots: Slot[] = [
     slot('s-c2', 'a-combi-35', 2, 'bier', 'Lokaal bier', 3, 'p-bier-lokaal'),
     slot('s-c3', 'a-combi-35', 3, 'worst', 'Droge worst', 1, 'p-worst'),
     slot('s-c4', 'a-combi-35', 4, 'amandelen', 'BBQ-amandelen', 150, 'p-amandel', { eenheid: 'gram' }),
-    slot('s-c5', 'a-combi-35', 5, 'crackers', 'Pizza-dipcrackers', 1, 'p-cracker'),
+    slot('s-c5', 'a-combi-35', 5, 'crackers', 'Pizzacrackers', 1, 'p-cracker'),
     slot('s-c6', 'a-combi-35', 6, 'doos', 'Geschenkdoos', 1, 'p-doos'),
     /* Bier € 20: drie bieren, worst, 100 g amandelen — het groothandel-slot is nog leeg. */
     slot('s-b1', 'a-bier-20', 1, 'bier', 'Voordelig bier (groothandel)', 1, null),
@@ -78,9 +78,9 @@ const slots: Slot[] = [
 
 /* Afhaalmomenten: één tijdvak, twee groepen (twee tellingen). Plank onbeperkt, pakketten 10. */
 const momenten = [
-    { id: 'm-plank', groep: 'sint-plank', datum: '2026-12-04', van: '16:00:00', tot: '18:00:00', capaciteit: null, bestellen_tot: null, sluit_op: '2026-12-01T12:00:00Z', actief: true },
-    { id: 'm-pakket', groep: 'sint-pakket', datum: '2026-12-04', van: '16:00:00', tot: '18:00:00', capaciteit: 10, bestellen_tot: null, sluit_op: '2026-12-01T12:00:00Z', actief: true },
-    { id: 'm-pakket-2', groep: 'sint-pakket', datum: '2026-12-05', van: '10:00:00', tot: '12:00:00', capaciteit: 10, bestellen_tot: null, sluit_op: null, actief: true },
+    { id: 'm-plank', groep: 'borrelplank', datum: '2026-12-04', van: '16:00:00', tot: '18:00:00', capaciteit: null, bestellen_tot: null, sluit_op: '2026-12-01T12:00:00Z', actief: true },
+    { id: 'm-pakket', groep: 'geschenkpakket', datum: '2026-12-04', van: '16:00:00', tot: '18:00:00', capaciteit: 10, bestellen_tot: null, sluit_op: '2026-12-01T12:00:00Z', actief: true },
+    { id: 'm-pakket-2', groep: 'geschenkpakket', datum: '2026-12-05', van: '10:00:00', tot: '12:00:00', capaciteit: 10, bestellen_tot: null, sluit_op: null, actief: true },
 ];
 const tenant = { orgId: 'org-1', slug: 'hop-en-bites', bedrijfsnaam: 'Hop & Bites', email: 'info@hopbites.nl', telefoon: '06-1', brandColor: null, ondertitel: null };
 const instellingen = { verzendkosten_cents: 695, gratis_verzenden_vanaf_cents: null, verzendkosten_btw_pct: 21, reservering_minuten: 30, offerte_geldig_minuten: 15, kassa_open: true, site_url: 'https://hopbites.nl', reservering_bedrag_cents: 250, qr_basis_url: 'https://experience.hopbites.nl' };
@@ -101,7 +101,7 @@ const bron = () => ({ artikelen: [plank, bier20, combi35, wijn35], momenten: mom
 function mand(regels: { slug: string; aantal: number; moment?: string | null; keuzes?: unknown }[]): Mand {
     return { versie: 1, regels: regels.map((r) => ({ moment: null, ...r })) } as Mand;
 }
-const contact = { naam: 'Sint Nicolaas', email: 'sint@voorbeeld.nl', telefoon: '0612345678' };
+const contact = { naam: 'Jan Jansen', email: 'jan@voorbeeld.nl', telefoon: '0612345678' };
 const order = (sleutel: string, regels: Mand['regels'], extra: Record<string, unknown> = {}) => ({
     mand: { versie: 1, regels }, leverwijze: 'afhalen', momentId: null, contact, adres: null, opmerking: '', sleutel, terugUrl: '/bestelling', ...extra,
 });
@@ -114,13 +114,14 @@ describe('verdeelSchalen (S4)', () => {
         expect(t(3)).toBe('klein(3)');
         expect(t(4)).toBe('groot(4)');
         expect(t(5)).toBe('groot(5)');
-        expect(t(6)).toBe('groot(4) + klein(2)');
+        expect(t(6)).toBe('klein(3) + klein(3)');
         expect(t(7)).toBe('groot(5) + klein(2)');
         expect(t(8)).toBe('groot(5) + klein(3)');
         expect(t(9)).toBe('groot(5) + groot(4)');
         expect(t(10)).toBe('groot(5) + groot(5)');
-        expect(t(11)).toBe('groot(5) + groot(4) + klein(2)');
+        expect(t(11)).toBe('groot(5) + klein(3) + klein(3)');
         expect(t(12)).toBe('groot(5) + groot(5) + klein(2)');
+        expect(t(16)).toBe('groot(5) + groot(5) + klein(3) + klein(3)');
     });
     it('nooit een schaal met één persoon, en de personen tellen altijd op', () => {
         for (let n = 2; n <= 60; n++) {
@@ -130,7 +131,7 @@ describe('verdeelSchalen (S4)', () => {
             expect(s.reduce((t, x) => t + x.personen, 0)).toBe(n);
         }
         expect(verdeelSchalen(1)).toEqual([]);
-        expect(telSchalen(verdeelSchalen(11))).toEqual({ klein: 1, groot: 2, totaal: 3 });
+        expect(telSchalen(verdeelSchalen(11))).toEqual({ klein: 2, groot: 1, totaal: 3 });
     });
 });
 
@@ -138,13 +139,13 @@ describe('verdeelSchalen (S4)', () => {
 describe('template (S1)', () => {
     it('componenten van een pakket zijn slot × aantal; van de plank slot × personen', () => {
         expect(componentenVan('a-combi-35', slots, 2).map((c) => `${c.naam} ${c.hoeveelheid} ${c.eenheid}`)).toEqual([
-            'Fles wijn 2 stuk', 'Lokaal bier 6 stuk', 'Droge worst 2 stuk', 'BBQ-amandelen 300 gram', 'Pizza-dipcrackers 2 stuk', 'Geschenkdoos 2 stuk',
+            'Fles wijn 2 stuk', 'Lokaal bier 6 stuk', 'Droge worst 2 stuk', 'BBQ-amandelen 300 gram', 'Pizzacrackers 2 stuk', 'Geschenkdoos 2 stuk',
         ]);
         expect(componentenVan('a-plank', slots, 7).map((c) => `${c.naam} ${c.hoeveelheid} g`)).toEqual(['Pastrami 140 g', 'Eigen grillworst 280 g', 'BBQ-amandelen 105 g']);
         expect(componentenVan('a-onbekend', slots, 3)).toEqual([]);
     });
     it('keuzes op een regel: het pakket is vast', () => {
-        const uit = berekenOfferte(bron(), mand([{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket', keuzes: { wijn: 'x' } }]), 'afhalen', null);
+        const uit = berekenOfferte(bron(), mand([{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket', keuzes: { wijn: 'x' } }]), 'afhalen', null);
         expect(uit).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Bier & wijn € 35 is een vast pakket; kiezen kan nog niet.'] });
     });
 });
@@ -155,31 +156,31 @@ describe('verkoopbaarheid en voorraad per product (S2)', () => {
         expect(verkoopbaar('a-bier-20', slots)).toBe(false);
         expect(verkoopbaar('a-combi-35', slots)).toBe(true);
         expect(verkoopbaar('a-zonder-slots', slots)).toBe(true);
-        const uit = berekenOfferte(bron(), mand([{ slug: 'sint-bier-20', aantal: 1, moment: 'm-pakket' }]), 'afhalen', null);
+        const uit = berekenOfferte(bron(), mand([{ slug: 'bierpakket-20', aantal: 1, moment: 'm-pakket' }]), 'afhalen', null);
         expect(uit).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Bierpakket € 20 kan op dit moment niet besteld worden.'] });
     });
     it('reserveert de componenten: 6 lokale bieren op voorraad = twee combi-pakketten, niet drie', async () => {
-        const a = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [{ slug: 'sint-bier-wijn-35', aantal: 2, moment: 'm-pakket' }], { verwachtTotaalCenten: 7000 }));
+        const a = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [{ slug: 'bier-en-wijn-35', aantal: 2, moment: 'm-pakket' }], { verwachtTotaalCenten: 7000 }));
         expect(a.status).toBe(200);
         expect(store.componenten.filter((c) => c.product_id === 'p-bier-lokaal').reduce((s, c) => s + c.hoeveelheid, 0)).toBe(6);
-        const b = await offreer(ctx, 'hop-en-bites', { mand: mand([{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }]), leverwijze: 'afhalen' });
+        const b = await offreer(ctx, 'hop-en-bites', { mand: mand([{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }]), leverwijze: 'afhalen' });
         expect(b.status).toBe(400);
         expect(b.body).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Bier & wijn € 35 is uitverkocht: Lokaal bier is op.'] });
     });
     it('twee klanten tegelijk op de laatste bieren: de opslag telt onder vergrendeling (WK009)', async () => {
         const [a, b] = await Promise.all([
-            plaatsOrder(ctx, 'hop-en-bites', order('sleutel-a', [{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 })),
-            plaatsOrder(ctx, 'hop-en-bites', order('sleutel-b', [{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 })),
+            plaatsOrder(ctx, 'hop-en-bites', order('sleutel-a', [{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 })),
+            plaatsOrder(ctx, 'hop-en-bites', order('sleutel-b', [{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 })),
         ]);
         expect(a.status).toBe(200);
         expect(b.status).toBe(200);
         /* Zes bieren: precies twee pakketten. Een derde tegelijk stuit op de opslag. */
-        const c = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-c', [{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 }));
+        const c = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-c', [{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 }));
         expect(c.status).toBe(400);
         expect(c.body).toMatchObject({ ok: false, soort: 'validatie' });
     });
     it('een product zonder voorraadgetal blokkeert nooit (verkopen op inkoopplanning)', () => {
-        const uit = berekenOfferte(bron(), mand([{ slug: 'sint-wijn-35', aantal: 500, moment: 'm-pakket-2' }]), 'afhalen', null);
+        const uit = berekenOfferte(bron(), mand([{ slug: 'wijnpakket-35', aantal: 500, moment: 'm-pakket-2' }]), 'afhalen', null);
         expect(uit.ok).toBe(false);
         /* Niet de wijn (voorraad null) maar de pakketcapaciteit van het moment is de grens. */
         expect(uit).toMatchObject({ soort: 'moment-vol' });
@@ -189,50 +190,50 @@ describe('verkoopbaarheid en voorraad per product (S2)', () => {
 /* ── S3 · momenten per groep ───────────────────────────────────────────────── */
 describe('momenten per groep (S3)', () => {
     it('?artikel= geeft de momenten van de groep van dat artikel; onbeperkt is een groot getal', async () => {
-        const p = await haalMomenten(ctx, 'hop-en-bites', 'sinterklaas-borrelplank');
+        const p = await haalMomenten(ctx, 'hop-en-bites', 'borrelplank');
         expect(p.body).toEqual({ momenten: [{ id: 'm-plank', datum: '2026-12-04', van: '16:00:00', tot: '18:00:00', vrij: ONBEPERKT }] });
-        const k = await haalMomenten(ctx, 'hop-en-bites', 'sint-wijn-35');
+        const k = await haalMomenten(ctx, 'hop-en-bites', 'wijnpakket-35');
         expect((k.body as { momenten: { id: string; vrij: number }[] }).momenten.map((m) => `${m.id}:${m.vrij}`)).toEqual(['m-pakket:10', 'm-pakket-2:10']);
     });
     it('plank én pakket in hetzelfde tijdvak: één afhaalmoment, twee tellingen', async () => {
         const uit = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [
-            { slug: 'sinterklaas-borrelplank', aantal: 4, moment: 'm-plank' },
-            { slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' },
+            { slug: 'borrelplank', aantal: 4, moment: 'm-plank' },
+            { slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' },
         ], { verwachtTotaalCenten: 4 * 1495 + 3500 }));
         expect(uit.status).toBe(200);
         const o = store.orders[0]!;
         expect(o.moment_id).toBe('m-plank');
         expect(o.regels.map((r) => `${r.moment_id}:${r.eenheden}`)).toEqual(['m-plank:4', 'm-pakket:1']);
-        const k = await haalMomenten(ctx, 'hop-en-bites', 'sint-wijn-35');
+        const k = await haalMomenten(ctx, 'hop-en-bites', 'wijnpakket-35');
         expect((k.body as { momenten: { id: string; vrij: number }[] }).momenten[0]).toMatchObject({ id: 'm-pakket', vrij: 9 });
     });
     it('twee verschillende tijdvakken in één order blijft één afspraak te veel', () => {
-        const uit = berekenOfferte(bron(), mand([{ slug: 'sinterklaas-borrelplank', aantal: 2, moment: 'm-plank' }, { slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket-2' }]), 'afhalen', null);
+        const uit = berekenOfferte(bron(), mand([{ slug: 'borrelplank', aantal: 2, moment: 'm-plank' }, { slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket-2' }]), 'afhalen', null);
         expect(uit).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Kies één afhaalmoment voor de hele bestelling.'] });
     });
     it('na de besteldeadline (met tijd) verdwijnt het moment en geeft een order moment-verlopen', async () => {
         nu = new Date('2026-12-01T12:00:01Z');
         store.zetNu(nu);
-        const m = await haalMomenten(ctx, 'hop-en-bites', 'sint-wijn-35');
+        const m = await haalMomenten(ctx, 'hop-en-bites', 'wijnpakket-35');
         expect((m.body as { momenten: { id: string }[] }).momenten.map((x) => x.id)).toEqual(['m-pakket-2']);
-        const uit = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 }));
+        const uit = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }], { verwachtTotaalCenten: 3500 }));
         expect(uit.status).toBe(409);
         expect(uit.body).toMatchObject({ ok: false, soort: 'moment-verlopen' });
     });
     it('een vol pakketslot geeft moment-vol voor pakketten, niet voor de plank', () => {
         const b = bron();
         b.momenten = b.momenten.map((m) => (m.id === 'm-pakket' ? { ...m, bezet: 10 } : m));
-        expect(berekenOfferte(b, mand([{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }]), 'afhalen', null)).toMatchObject({ ok: false, soort: 'moment-vol' });
-        expect(berekenOfferte(b, mand([{ slug: 'sinterklaas-borrelplank', aantal: 40, moment: 'm-plank' }]), 'afhalen', null).ok).toBe(true);
+        expect(berekenOfferte(b, mand([{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }]), 'afhalen', null)).toMatchObject({ ok: false, soort: 'moment-vol' });
+        expect(berekenOfferte(b, mand([{ slug: 'borrelplank', aantal: 40, moment: 'm-plank' }]), 'afhalen', null).ok).toBe(true);
     });
 });
 
 /* ── S4 · het minimum van de plank ─────────────────────────────────────────── */
 describe('plank (S4)', () => {
     it('1 persoon is validatie; 2 mag', () => {
-        expect(berekenOfferte(bron(), mand([{ slug: 'sinterklaas-borrelplank', aantal: 1, moment: 'm-plank' }]), 'afhalen', null))
-            .toMatchObject({ ok: false, soort: 'validatie', fouten: ['Sinterklaas-borrelplank gaat vanaf 2 personen.'] });
-        const uit = berekenOfferte(bron(), mand([{ slug: 'sinterklaas-borrelplank', aantal: 2, moment: 'm-plank' }]), 'afhalen', null);
+        expect(berekenOfferte(bron(), mand([{ slug: 'borrelplank', aantal: 1, moment: 'm-plank' }]), 'afhalen', null))
+            .toMatchObject({ ok: false, soort: 'validatie', fouten: ['Borrelplank gaat vanaf 2 personen.'] });
+        const uit = berekenOfferte(bron(), mand([{ slug: 'borrelplank', aantal: 2, moment: 'm-plank' }]), 'afhalen', null);
         expect(uit.ok && uit.intern.offerte.totaalCenten).toBe(2990);
         expect(uit.ok && uit.intern.btwCenten).toEqual({ '9': btwDeel(2990, 9) });
     });
@@ -240,7 +241,7 @@ describe('plank (S4)', () => {
 
 /* ── S5 · twee betaalwijzen ────────────────────────────────────────────────── */
 describe('betaalwijze (S5)', () => {
-    const regels = [{ slug: 'sint-bier-wijn-35', aantal: 1, moment: 'm-pakket' }];
+    const regels = [{ slug: 'bier-en-wijn-35', aantal: 1, moment: 'm-pakket' }];
     it('dezelfde mand: zelfde totaal, ander bedrag nu — de reservering is geen toeslag', async () => {
         const vol = await offreer(ctx, 'hop-en-bites', { mand: mand(regels), leverwijze: 'afhalen' });
         const res = await offreer(ctx, 'hop-en-bites', { mand: mand(regels), leverwijze: 'afhalen', betaalwijze: 'reservering' });
@@ -252,7 +253,7 @@ describe('betaalwijze (S5)', () => {
         expect(uit).toMatchObject({ ok: false, soort: 'validatie' });
         const b = bron();
         b.artikelen = [{ ...combi35, verzendbaar: true, moment_soort: 'geen', moment_groep: null }];
-        expect(berekenOfferte(b, mand([{ slug: 'sint-bier-wijn-35', aantal: 1 }]), 'verzenden', null, 'reservering')).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Reserveren kan alleen bij afhalen in de winkel.'] });
+        expect(berekenOfferte(b, mand([{ slug: 'bier-en-wijn-35', aantal: 1 }]), 'verzenden', null, 'reservering')).toMatchObject({ ok: false, soort: 'validatie', fouten: ['Reserveren kan alleen bij afhalen in de winkel.'] });
     });
     it('myPOS int € 2,50; het volledige bedrag als betaalbericht wijkt af; de status noemt het rest en de balie boekt het', async () => {
         const o = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', regels, { verwachtTotaalCenten: 3500, betaalwijze: 'reservering' }));
@@ -322,8 +323,8 @@ describe('btw-verdeling (S6)', () => {
     });
     it('de order slaat per regel de verdeling op en telt die op tot btwCenten', async () => {
         const uit = await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', [
-            { slug: 'sint-bier-wijn-35', aantal: 2, moment: 'm-pakket' },
-            { slug: 'sinterklaas-borrelplank', aantal: 2, moment: 'm-plank' },
+            { slug: 'bier-en-wijn-35', aantal: 2, moment: 'm-pakket' },
+            { slug: 'borrelplank', aantal: 2, moment: 'm-plank' },
         ], { verwachtTotaalCenten: 7000 + 2990 }));
         expect(uit.status).toBe(200);
         const o = store.orders[0]!;

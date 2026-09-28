@@ -206,13 +206,11 @@ export interface Schaal {
 /**
  * Verdeel personen over schalen: klein 2–3, groot 4–5, nooit een schaal met
  * één persoon. Zo veel mogelijk grote schalen van 5; de rest 2–3 op een
- * kleine, 4 op een grote; bij rest 1 gaat er één persoon van de laatste
- * grote af (5 + 1 → 4 + 2).
+ * kleine, 4 op een grote. Blijft er 1 over, dan worden de laatste 6 personen
+ * twee kleine schalen van 3 (besluit Mathijs 26 september: 6 = 3 + 3).
  *
- *   2, 3 → klein · 4, 5 → groot · 6 → groot 4 + klein 2 · 7 → 5 + 2
- *   9 → 5 + 4 · 11 → 5 + 4 + 2 · 12 → 5 + 5 + 2
- *
- * `[BEVESTIGEN]` 6 personen: de opdracht noemt ook 3 + 3; dit is 4 + 2.
+ *   2, 3 → klein · 4, 5 → groot · 6 → klein 3 + klein 3 · 7 → 5 + 2
+ *   9 → 5 + 4 · 11 → 5 + 3 + 3 · 12 → 5 + 5 + 2 · 16 → 5 + 5 + 3 + 3
  */
 export function verdeelSchalen(personen: number, kleinMax = 3, groot = 5): Schaal[] {
     const min = 2;
@@ -230,10 +228,12 @@ export function verdeelSchalen(personen: number, kleinMax = 3, groot = 5): Schaa
         uit.push({ maat: rest <= kleinMax ? 'klein' : 'groot', personen: rest });
         return uit;
     }
-    /* rest 1: één persoon van de laatste grote schaal af, samen op een kleine. */
-    const laatste = uit[uit.length - 1]!;
-    laatste.personen -= 1;
-    uit.push({ maat: 'klein', personen: rest + 1 });
+    /* rest 1: de laatste grote schaal plus die ene persoon worden twee kleine. */
+    const laatste = uit.pop()!;
+    const samen = laatste.personen + rest;
+    const eerste = Math.ceil(samen / 2);
+    uit.push({ maat: eerste <= kleinMax ? 'klein' : 'groot', personen: eerste });
+    uit.push({ maat: samen - eerste <= kleinMax ? 'klein' : 'groot', personen: samen - eerste });
     return uit;
 }
 

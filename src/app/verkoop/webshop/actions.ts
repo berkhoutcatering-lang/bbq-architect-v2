@@ -22,6 +22,7 @@ import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import { hertelEvent, plaatsBestelling } from '@/lib/winkel/plaatsing';
 import { stelKoppelingenVoor, type KoppelArtikel, type KoppelVoorstel } from '@/lib/ai/winkelKoppelVoorsteller';
 import { voorraadFout } from '@/lib/winkel/voorraad';
+import { codeUitScan } from '@/lib/winkel/productie';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
@@ -475,6 +476,31 @@ export async function zetKlaargezet(input: unknown): Promise<ActionResult<{ ok: 
     return { data: { ok: true, boekingen: boekingen.length } };
 }
 
+export type ScanUitkomst =
+    | { uitkomst: 'onbekend' }
+    | { uitkomst: 'niet_betaald'; status: string; nummer: string }
+    | { uitkomst: 'al_opgehaald'; opgehaald_at: string; nummer: string; klant: string; doos: string }
+    | { uitkomst: 'rest_nodig'; rest_cents: number; reeds_cents: number; nummer: string; klant: string; doos: string }
+    | { uitkomst: 'opgehaald'; nummer: string; klant: string; doos: string; volgnr: number; totaal: number; nog_open: number; regels_zonder_etiket: number; rest_geboekt: 'contant' | 'pin' | null };
+
+/**
+ * De balie scant de QR van een doos (S7): die doos is opgehaald. Bij een
+ * reservering met openstaand rest eerst contant of pin; was de regel nog niet
+ * ingepakt, dan boekt de database hem eerst af. Twee keer scannen = al_opgehaald.
+ */
+export async function scanDoos(input: unknown): Promise<ActionResult<ScanUitkomst>> {
+    const parsed = z.object({ invoer: z.string().trim().min(1).max(400), restMethode: z.enum(['contant', 'pin']).nullable().default(null) }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const code = codeUitScan(parsed.data.invoer);
+    if (!code) return { data: { uitkomst: 'onbekend' } };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { data, error } = await s.supabase.rpc('winkel_doos_ophalen', { p_org: s.orgId, p_code: code, p_rest_methode: parsed.data.restMethode });
+    if (error) return { error: voorraadFout(error.code, error.message) };
+    revalidatePath(PAD);
+    return { data: data as ScanUitkomst };
+}
+
 /** Afgehaald aan de balie. Alleen status: de voorraad is bij het inpakken al afgeboekt. */
 export async function zetOpgehaald(input: unknown): Promise<ActionResult<{ ok: true }>> {
     const parsed = z.object({ orderId: z.coerce.number().int().positive(), opgehaald: z.boolean() }).safeParse(input);
@@ -489,6 +515,10 @@ export async function zetOpgehaald(input: unknown): Promise<ActionResult<{ ok: t
         .eq('order_id', parsed.data.orderId)
         .eq('organization_id', s.orgId);
     if (error) return { error: error.message };
+    /* De dozen van deze order mee, zodat de balie niets meer als open ziet. */
+    await s.supabase.from('winkel_dozen')
+        .update(parsed.data.opgehaald ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id } : { opgehaald_at: null, opgehaald_door: null })
+        .eq('order_id', parsed.data.orderId).eq('organization_id', s.orgId);
     revalidatePath(PAD);
     return { data: { ok: true } };
 }

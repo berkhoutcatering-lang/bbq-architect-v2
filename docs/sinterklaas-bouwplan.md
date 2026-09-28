@@ -1,7 +1,9 @@
 # Bouwplan — Sinterklaas 2026: borrelplank en zeven geschenkpakketten
 
 **Repo:** BBQ Architect. **Datum:** 26 september 2026. **Branch:** `feat/sinterklaas-2026`.
-**Opdracht:** `docs/OVERDRACHT-BBQ-ARCHITECT-SINTERKLAAS.md` (kopie uit de website-repo, 26 sep) — blokken S1–S7.
+**Opdracht:** `docs/OVERDRACHT-BBQ-ARCHITECT-GESCHENKPAKKETTEN.md` (kopie uit de website-repo, 26 sep; vervangt de Sinterklaas-versie) — blokken S1–S7.
+
+> **28 sep — hernoemd (§0 van de overdracht).** Niets hangt nog aan Sinterklaas: slugs `borrelplank`, `bierpakket-20/35/50`, `wijnpakket-35/50`, `bier-en-wijn-35/50`; groepen `borrelplank` en `geschenkpakket`; gewone etiketopmaak. Live gezet met `20260928130000_geschenkpakketten_dozen.sql`, samen met 6 = 3 + 3 (S4), één QR per doos (S7), twee marmelades en Pizzacrackers. De bestandsnaam van dit plan is gebleven.
 **Hoort bij:** `docs/winkel-kassa.md` (de kassa), `docs/webshop-beheer-bouwplan.md` (de vakjes, golf 1–3 live).
 
 Het contract met de website verandert op één punt: `betaalwijze` in offerte en order, met
@@ -23,7 +25,7 @@ Sinterklaas heeft hiervan nodig:
 
 | Mechaniek uit A7 | Sinterklaas | Hier |
 | --- | --- | --- |
-| `moment_groep` per artikel | ja: `sint-plank` en `sint-pakket` | bestaat al op main |
+| `moment_groep` per artikel | ja: `borrelplank` en `geschenkpakket` (was `sint-plank`/`sint-pakket`) | bestaat al op main |
 | Groepsminimum (2 samen) | nee — de plank heeft een gewoon artikelminimum van 2, pakketten minimum 1 | niet nodig |
 | Dagcapaciteit NULL = onbeperkt | ja: "bouw de momenten leeg" | overgenomen (zelfde `DROP NOT NULL`, idempotent) |
 | Interne verdeling (dozen) | ja, maar anders: schalen 2–3 / 4–5, nooit 1 | eigen functie `verdeelSchalen` |

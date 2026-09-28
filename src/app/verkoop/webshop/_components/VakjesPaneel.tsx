@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList, Flame, Loader2, MailWarning, MapPin, RotateCcw, Search, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail, Wallet } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList, Flame, Loader2, MailWarning, MapPin, RotateCcw, Search, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail, ScanLine, Wallet } from 'lucide-react';
 import Button from '@/components/Button';
 import { formatEur } from '@/lib/format';
 import { wensenSamenvatting } from '@/lib/winkel/plaatsing';
@@ -20,7 +20,7 @@ import {
     afstandLabel, bouwVakjes, dagenTot, datumKort, datumLang, opmerkingNietGelezen, tijdvak, vakjeNaam,
     type ArtikelRij, type ComponentRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
 } from '../_lib/vakjes';
-import { boekRestBetaling, plaatsOpnieuw, zetKlaargezet, zetOpgehaald, zetWensenHandmatig } from '../actions';
+import { boekRestBetaling, plaatsOpnieuw, scanDoos, zetKlaargezet, zetOpgehaald, zetWensenHandmatig, type ScanUitkomst } from '../actions';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -87,6 +87,7 @@ export default function VakjesPaneel({ orders, artikelen, momenten, componenten,
 
     return (
         <>
+            <BalieScan herlaad={herlaad} melding={melding} />
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <div className="ws-zoek" style={{ height: 36, minWidth: 260 }}><Search size={14} style={{ color: 'var(--muted)' }} /><input placeholder="Zoek order: HB-2026-0042 of naam" value={zoek} onChange={(e) => setZoek(e.target.value)} /></div>
                 {tel.nietGeplaatst > 0 && (
@@ -426,6 +427,61 @@ function VandaagDrawer({ v, vandaag, onClose, herlaad, melding }: { v: Vakje; va
                 </div>
             </div>
         </Drawer>
+    );
+}
+
+/* ── De balie: een doos scannen (S7) ─────────────────────────────────────────
+   De handscanner typt de QR (de hele URL) in het veld en drukt op Enter. Eén
+   scan = die doos is opgehaald. Bij een reservering eerst contant of pin. */
+
+function BalieScan({ herlaad, melding }: { herlaad: () => Promise<void>; melding: Melding }) {
+    const [invoer, setInvoer] = useState('');
+    const [bezig, setBezig] = useState(false);
+    const [laatste, setLaatste] = useState<{ invoer: string; uit: ScanUitkomst } | null>(null);
+
+    async function scan(tekst: string, restMethode: 'contant' | 'pin' | null = null) {
+        if (!tekst.trim()) return;
+        setBezig(true);
+        try {
+            const r = await scanDoos({ invoer: tekst, restMethode });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            setLaatste({ invoer: tekst, uit: r.data });
+            setInvoer('');
+            if (r.data.uitkomst === 'opgehaald') await herlaad();
+        } finally { setBezig(false); }
+    }
+
+    const u = laatste?.uit;
+    return (
+        <div className="panel" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <form onSubmit={(e) => { e.preventDefault(); void scan(invoer); }} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div className="ws-zoek" style={{ height: 40, flex: 1, minWidth: 220 }}>
+                    <ScanLine size={15} style={{ color: 'var(--muted)' }} />
+                    <input placeholder="Scan de QR op de doos (of plak de code)" value={invoer} onChange={(e) => setInvoer(e.target.value)} aria-label="Doos scannen" autoComplete="off" />
+                </div>
+                <Button size="sm" loading={bezig} type="submit">Opgehaald</Button>
+            </form>
+            {u && (
+                <div className="ws-rest" style={{ borderColor: u.uitkomst === 'opgehaald' ? 'rgba(34,197,94,.45)' : undefined }}>
+                    {u.uitkomst === 'opgehaald' && <>
+                        <span style={{ color: 'var(--green)', display: 'flex' }}><Check size={15} /></span>
+                        <div style={{ flex: 1, fontSize: 13 }}>
+                            <b>{u.klant}</b> · <span className="ws-mono">{u.nummer}</span> · {u.doos} ({u.volgnr}/{u.totaal}) opgehaald{u.rest_geboekt ? ` · rest ${u.rest_geboekt} geboekt` : ''}.
+                            {u.nog_open > 0 ? <> Nog <b>{u.nog_open}</b> {u.nog_open === 1 ? 'doos' : 'dozen'} van deze order.</> : u.regels_zonder_etiket > 0 ? ' Van deze order is nog niet alles geëtiketteerd.' : ' Order compleet.'}
+                        </div>
+                    </>}
+                    {u.uitkomst === 'al_opgehaald' && <div style={{ flex: 1, fontSize: 13 }}>Al opgehaald om {new Date(u.opgehaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: {u.doos} van {u.klant} (<span className="ws-mono">{u.nummer}</span>). Er is niets dubbel geboekt.</div>}
+                    {u.uitkomst === 'rest_nodig' && <>
+                        <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
+                        <div style={{ flex: 1, fontSize: 13 }}><b>{u.klant}</b> · <span className="ws-mono">{u.nummer}</span> · reeds betaald {eur(u.reeds_cents)} · te betalen: <b>{eur(u.rest_cents)}</b></div>
+                        <Button size="sm" variant="ghost" disabled={bezig} onClick={() => scan(laatste!.invoer, 'contant')}>Contant</Button>
+                        <Button size="sm" disabled={bezig} onClick={() => scan(laatste!.invoer, 'pin')}>Pin</Button>
+                    </>}
+                    {u.uitkomst === 'niet_betaald' && <div style={{ flex: 1, fontSize: 13 }}>Order <span className="ws-mono">{u.nummer}</span> is niet betaald ({u.status}). Niet meegeven.</div>}
+                    {u.uitkomst === 'onbekend' && <div style={{ flex: 1, fontSize: 13 }}>Deze code kennen we niet. Zoek de order op nummer of naam.</div>}
+                </div>
+            )}
+        </div>
     );
 }
 
