@@ -156,6 +156,8 @@ export interface ArtikelRij {
     btw_verdeling: Record<string, number> | null;
     verpakking_klein_cents: number | null;
     verpakking_groot_cents: number | null;
+    /** BA-6: inpakken in de makerij of wegzetten uit het schap. Ontbreekt vóór migratie 20261005140000 = inpakken. */
+    afhandeling?: 'inpakken' | 'wegzetten';
 }
 
 export interface MomentRij {

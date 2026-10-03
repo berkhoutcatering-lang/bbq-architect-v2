@@ -174,4 +174,8 @@
   .ws-root .mr-drawer { width: 100vw !important; min-width: 0; max-width: 100vw; }
   .ws-banner { grid-template-columns: auto minmax(0,1fr); }
   .ws-banner > :last-child { grid-column: 1 / -1; }
+  /* Apart zetten (BA-6): badge en knop onder de tekst. */
+  .ws-apart .ws-klaar { grid-template-columns: 44px minmax(0,1fr); }
+  .ws-apart .ws-klaar > :last-child { grid-column: 2; justify-content: flex-start !important; padding-top: 0 !important; }
+  .ws-apart .ws-klaar .btn { min-height: 44px; }
 }

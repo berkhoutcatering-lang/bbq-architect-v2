@@ -15,7 +15,9 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
 import { vandaagISO } from '@/lib/winkel/rekenen';
+import { taakUitRij, type WegzetTaak } from '@/lib/winkel/wegzetten';
 import VakjesPaneel from './_components/VakjesPaneel';
+import ApartZettenPaneel from './_components/ApartZettenPaneel';
 import ArtikelenPaneel, { type GerechtKeuze, type VoorraadKeuze } from './_components/ArtikelenPaneel';
 import MomentenPaneel from './_components/MomentenPaneel';
 import ProductenPaneel from './_components/ProductenPaneel';
@@ -24,9 +26,10 @@ import type { ArtikelRij, ComponentRij, MomentRij, OrderRij, ProductRij, SlotRij
 import '@/styles/menu-hub.css';
 import './webshop.css';
 
-type Paneel = 'vakjes' | 'artikelen' | 'producten' | 'momenten' | 'instellingen';
+type Paneel = 'vakjes' | 'apartzetten' | 'artikelen' | 'producten' | 'momenten' | 'instellingen';
 const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
     { key: 'vakjes', label: 'Vakjes', onderschrift: 'Elke betaalde bestelling van de website, in het vakje van de dag waarop hij klaar moet zijn.' },
+    { key: 'apartzetten', label: 'Apart zetten', onderschrift: 'Losse winkelwaar uit de webshop die nog uit het schap moet. Afvinken zet hem apart en boekt de voorraad af.' },
     { key: 'artikelen', label: 'Artikelen', onderschrift: 'Wat de website verkoopt, en wat de keuken daarvoor maakt of jij daarvoor inkoopt.' },
     { key: 'producten', label: 'Producten', onderschrift: 'Wat er in een pakket of op een plank ligt: bier, wijn, worst, amandelen, doos — met prijs en voorraad.' },
     { key: 'momenten', label: 'Momenten', onderschrift: 'Wanneer klanten kunnen ophalen, en hoeveel er per keer past.' },
@@ -55,9 +58,16 @@ export default function WebshopPagina() {
     const [producten, setProducten] = useState<ProductRij[]>([]);
     const [slots, setSlots] = useState<SlotRij[]>([]);
     const [componenten, setComponenten] = useState<ComponentRij[]>([]);
+    const [wegzetTaken, setWegzetTaken] = useState<WegzetTaak[]>([]);
     const vandaag = useMemo(() => vandaagISO(), []);
 
-    useEffect(() => { setPaneel(paneelUitHash()); }, []);
+    /* Ook bij een hash-wissel op dezelfde pagina (de link "Zet apart" vanaf Vandaag). */
+    useEffect(() => {
+        const volg = () => setPaneel(paneelUitHash());
+        volg();
+        window.addEventListener('hashchange', volg);
+        return () => window.removeEventListener('hashchange', volg);
+    }, []);
     function kies(p: Paneel) {
         setPaneel(p);
         if (typeof window !== 'undefined') window.history.replaceState(null, '', p === 'vakjes' ? window.location.pathname : `#${p}`);
@@ -66,7 +76,7 @@ export default function WebshopPagina() {
     const melding = useCallback((tekst: string, soort: 'success' | 'error' | 'info' = 'info') => toast(tekst, soort), [toast]);
 
     const laad = useCallback(async () => {
-        const [o, a, m, i, g, v, p, sl, c] = await Promise.all([
+        const [o, a, m, i, g, v, p, sl, c, w] = await Promise.all([
             supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief').order('datum'),
@@ -77,6 +87,10 @@ export default function WebshopPagina() {
             supabase.from('winkel_artikel_slots').select('*').order('volgorde'),
             /* De componenten van de regels (S7): wat er precies in elk pakket en op elke plank ligt. */
             supabase.from('winkel_order_regel_componenten').select('id, order_regel_id, product_id, slot_type, naam, hoeveelheid, eenheid').order('id').limit(5000),
+            /* De wegzet-taken (BA-6). Telt niet mee in `fout` hieronder: zonder
+               de view (migratie 20261005140000 nog niet gedraaid) blijft de
+               pagina gewoon werken, alleen het paneel Apart zetten is leeg. */
+            supabase.from('winkel_wegzet_taken').select('order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels').order('afhaalmoment'),
         ]);
         const fout = [o, a, m, i, g, v, p, sl, c].find((r) => r.error)?.error;
         if (fout) { melding(fout.message, 'error'); return; }
@@ -89,6 +103,7 @@ export default function WebshopPagina() {
         setInstellingen((i.data as InstellingenRij | null) ?? null);
         setGerechten((g.data ?? []) as GerechtKeuze[]);
         setVoorraad(((v.data ?? []) as VoorraadKeuze[]).map((x) => ({ ...x, id: Number(x.id) })));
+        setWegzetTaken(w.error ? [] : (w.data ?? []).map(taakUitRij).filter((t): t is WegzetTaak => t !== null));
     }, [melding]);
 
     useEffect(() => {
@@ -113,13 +128,19 @@ export default function WebshopPagina() {
             </div>
 
             <div className="ws-segment" role="tablist" aria-label="Webshop-onderdelen">
-                {PANELEN.map((p) => <button key={p.key} type="button" role="tab" aria-selected={paneel === p.key} onClick={() => kies(p.key)}>{p.label}</button>)}
+                {PANELEN.map((p) => (
+                    <button key={p.key} type="button" role="tab" aria-selected={paneel === p.key} onClick={() => kies(p.key)}>
+                        {p.label}{p.key === 'apartzetten' && wegzetTaken.length > 0 ? ` (${wegzetTaken.length})` : ''}
+                    </button>
+                ))}
             </div>
 
             {laden ? (
                 <div className="ws-leeg" style={{ padding: 24 }}>Laden…</div>
             ) : paneel === 'vakjes' ? (
                 <VakjesPaneel orders={orders} artikelen={artikelen} momenten={momenten} componenten={componenten} vandaag={vandaag} herlaad={laad} melding={melding} />
+            ) : paneel === 'apartzetten' ? (
+                <ApartZettenPaneel taken={wegzetTaken} orders={orders} artikelen={artikelen} herlaad={laad} melding={melding} />
             ) : paneel === 'artikelen' ? (
                 <ArtikelenPaneel artikelen={artikelen} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={slots} herlaad={laad} melding={melding} />
             ) : paneel === 'producten' ? (

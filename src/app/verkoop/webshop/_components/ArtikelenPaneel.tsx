@@ -157,6 +157,8 @@ interface Form {
     koppel: 'gerecht' | 'voorraad' | 'geen'; gerecht_id: string | null; inventory_id: number | null; inkoop_per_stuk: string;
     /* Sinterklaas. */
     segment: ArtikelRij['segment']; alcohol: boolean; schaal_verdeling: boolean; btw21: string; verpakking_klein: string; verpakking_groot: string;
+    /* BA-6. */
+    afhandeling: 'inpakken' | 'wegzetten';
 }
 
 /** Een slot in het formulier: alles als tekst, pas bij opslaan getallen. */
@@ -177,6 +179,7 @@ function vanArtikel(a: ArtikelRij | null): Form {
         segment: a?.segment ?? null, alcohol: a?.alcohol ?? false, schaal_verdeling: a?.schaal_verdeling ?? false,
         btw21: a?.btw_verdeling?.['21'] == null ? '' : String(a.btw_verdeling['21']),
         verpakking_klein: toonEuro(a?.verpakking_klein_cents), verpakking_groot: toonEuro(a?.verpakking_groot_cents),
+        afhandeling: a?.afhandeling ?? 'inpakken',
     };
 }
 
@@ -221,6 +224,7 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose
             segment: f.segment, alcohol: f.alcohol, schaal_verdeling: f.schaal_verdeling,
             btw_verdeling: btw21 == null ? null : { '21': btw21, '9': Math.round((100 - btw21) * 100) / 100 },
             verpakking_klein_cents: verpKlein, verpakking_groot_cents: verpGroot,
+            afhandeling: f.afhandeling,
         };
         /* Slots: alles als getal, elke regel een naam en een hoeveelheid. */
         const slotInvoer = slotForms.map((sl) => ({ id: sl.id, slot_type: sl.slot_type, naam: sl.naam.trim(), hoeveelheid: Number(sl.hoeveelheid.replace(',', '.')), eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id }));
@@ -328,6 +332,10 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose
                         <button type="button" aria-pressed={f.moment_soort === 'moment'} onClick={() => zet('moment_soort', 'moment')}>moment uit de agenda</button>
                         <button type="button" aria-pressed={f.moment_soort === 'dag'} onClick={() => zet('moment_soort', 'dag')}>dag</button>
                     </div><div className="field-hint">Geen = meenemen of verzenden, komt in het vakje Vandaag</div></div>
+                    <div className="field"><label>Klaarmaken</label><div className="ws-keuze">
+                        <button type="button" aria-pressed={f.afhandeling === 'inpakken'} onClick={() => zet('afhandeling', 'inpakken')}>inpakken in de makerij</button>
+                        <button type="button" aria-pressed={f.afhandeling === 'wegzetten'} onClick={() => zet('afhandeling', 'wegzetten')}>apart zetten uit het schap</button>
+                    </div><div className="field-hint">Apart zetten = losse winkelwaar (een fles, een pot): na betaling een taak onder Apart zetten en op Vandaag. Afvinken boekt de voorraad af.</div></div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         {f.moment_soort !== 'geen' && <div className="field"><label>Groep</label><input value={f.moment_groep} onChange={(e) => zet('moment_groep', e.target.value)} placeholder="agenda, kerst-box" /><div className="field-hint">Uit welke momenten de klant kiest</div></div>}
                         <div className="field"><label>Kassa-voorraad</label><input inputMode="numeric" value={f.voorraad} onChange={(e) => zet('voorraad', e.target.value)} /><div className="field-hint">Leeg = onbeperkt</div></div>
