@@ -23,6 +23,7 @@ import { hertelEvent, plaatsBestelling } from '@/lib/winkel/plaatsing';
 import { stelKoppelingenVoor, type KoppelArtikel, type KoppelVoorstel } from '@/lib/ai/winkelKoppelVoorsteller';
 import { voorraadFout } from '@/lib/winkel/voorraad';
 import { codeUitScan } from '@/lib/winkel/productie';
+import { ophaalMelding, terugMelding, type Melding, type OphaalUitkomst, type TerugUitkomst } from '@/lib/winkel/ophalen';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
@@ -501,26 +502,55 @@ export async function scanDoos(input: unknown): Promise<ActionResult<ScanUitkoms
     return { data: data as ScanUitkomst };
 }
 
-/** Afgehaald aan de balie. Alleen status: de voorraad is bij het inpakken al afgeboekt. */
-export async function zetOpgehaald(input: unknown): Promise<ActionResult<{ ok: true }>> {
-    const parsed = z.object({ orderId: z.coerce.number().int().positive(), opgehaald: z.boolean() }).safeParse(input);
+export type OpgehaaldResultaat =
+    | { soort: 'ophalen'; uitkomst: OphaalUitkomst; melding: Melding }
+    | { soort: 'terug'; uitkomst: TerugUitkomst; melding: Melding };
+
+/**
+ * Afgehaald aan de balie (BA-2: ophaallek dicht). Eén databasefunctie,
+ * winkel_order_ophalen, doet alles in één transactie: controleert betaald,
+ * al opgehaald, 18+ en de rest; pakt in wat nog niet ingepakt is
+ * (verkoop_online); boekt de rest; zet regels en dozen op opgehaald. Een "nee"
+ * (rest_nodig, leeftijd_nodig, geweigerd, te_weinig_voorraad, ...) is geen
+ * fout maar een uitkomst: het scherm toont de volgende stap.
+ *
+ * opgehaald: false = ongedaan maken via winkel_order_ophalen_terug: alleen de
+ * status, alleen op dezelfde dag. Voorraad en rest blijven staan.
+ */
+export async function zetOpgehaald(input: unknown): Promise<ActionResult<OpgehaaldResultaat>> {
+    const parsed = z.object({
+        orderId: z.coerce.number().int().positive(),
+        opgehaald: z.boolean(),
+        restMethode: z.enum(['contant', 'pin']).nullable().default(null),
+        leeftijd: z.enum(['vastgesteld', 'geweigerd']).nullable().default(null),
+    }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
-    const { error } = await s.supabase
-        .from('winkel_order_regels')
-        .update(parsed.data.opgehaald
-            ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id }
-            : { opgehaald_at: null, opgehaald_door: null })
-        .eq('order_id', parsed.data.orderId)
-        .eq('organization_id', s.orgId);
-    if (error) return { error: error.message };
-    /* De dozen van deze order mee, zodat de balie niets meer als open ziet. */
-    await s.supabase.from('winkel_dozen')
-        .update(parsed.data.opgehaald ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id } : { opgehaald_at: null, opgehaald_door: null })
-        .eq('order_id', parsed.data.orderId).eq('organization_id', s.orgId);
-    revalidatePath(PAD);
-    return { data: { ok: true } };
+    const { orderId, opgehaald, restMethode, leeftijd } = parsed.data;
+
+    if (!opgehaald) {
+        const { data, error } = await s.supabase.rpc('winkel_order_ophalen_terug', { p_org: s.orgId, p_order_id: orderId });
+        if (error) return { error: voorraadFout(error.code, error.message) };
+        const uitkomst = data as TerugUitkomst;
+        if (uitkomst.uitkomst === 'teruggezet') revalidatePath(PAD);
+        return { data: { soort: 'terug', uitkomst, melding: terugMelding(uitkomst) } };
+    }
+
+    const { data, error } = await s.supabase.rpc('winkel_order_ophalen', {
+        p_org: s.orgId, p_order_id: orderId, p_rest_methode: restMethode, p_leeftijd: leeftijd,
+        p_bron: 'ba', p_door_user_id: s.user.id, p_medewerker_id: null,
+    });
+    if (error) return { error: voorraadFout(error.code, error.message) };
+    const uitkomst = data as OphaalUitkomst;
+    if (uitkomst.uitkomst === 'opgehaald') {
+        if (uitkomst.boekingen.length) {
+            await evalueerWinkelMeldingen(s.orgId, [...new Set(uitkomst.boekingen.map((b) => b.product_id))]);
+            revalidatePath('/voorraad/winkel');
+        }
+        revalidatePath(PAD);
+    }
+    return { data: { soort: 'ophalen', uitkomst, melding: ophaalMelding(uitkomst) } };
 }
 
 /** Na een koppeling: de events waar dit artikel al in ligt opnieuw tellen. */
