@@ -306,7 +306,7 @@ begin
     begin
         perform public.winkel_zet_order_apart(v_org, v_a);
         v_fouten := v_fouten || '3 op het schap en 4 nodig niet geweigerd; ';
-    exception when sqlstate 'P0001' then
+    exception when sqlstate 'WV010' then
         get stacked diagnostics v_melding = message_text, v_detail = pg_exception_detail;
         if v_melding not like 'WV010%' then
             v_fouten := v_fouten || 'verkeerde melding bij te weinig voorraad: ' || v_melding || '; ';
@@ -340,7 +340,7 @@ begin
     begin
         perform public.winkel_zet_order_apart_terug(v_org, v_a);
         v_fouten := v_fouten || 'terug na ophalen niet geweigerd; ';
-    exception when sqlstate 'P0001' then
+    exception when sqlstate 'WV011' then
         get stacked diagnostics v_melding = message_text, v_detail = pg_exception_detail;
         if v_melding not like 'WV011%' then
             v_fouten := v_fouten || 'verkeerde melding na ophalen: ' || v_melding || '; ';

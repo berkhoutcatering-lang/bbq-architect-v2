@@ -117,6 +117,25 @@ describe('apart zetten — de 4 Naober (geheugen-opslag)', () => {
         expect(store.zetOrderApartTerug(o.id)).toEqual({ ok: true, uitkomst: 'niet_apart', boekingen: [] });
     });
 
+    it('voorraadversie (BA-5): apart en ongedaan elk één keer omhoog; WV010, al_apart en niet_apart niet', async () => {
+        const o = await bestel('s-1', [{ slug: 'roeg-naober', aantal: 4 }, { slug: 'cadeaudoos', aantal: 1 }], 1880);
+        const v0 = store.voorraadVersie();
+        store.producten.find((p) => p.id === 'p-naober')!.voorraad = 3;
+        expect(store.zetOrderApart(o.id)).toMatchObject({ ok: false, code: 'WV010' });
+        expect(store.voorraadVersie()).toBe(v0);
+        store.producten.find((p) => p.id === 'p-naober')!.voorraad = 6;
+        expect(store.zetOrderApart(o.id)).toMatchObject({ ok: true, uitkomst: 'apart' });
+        expect(store.voorraadVersie()).toBe(v0 + 1);
+        expect(store.zetOrderApart(o.id)).toMatchObject({ ok: true, uitkomst: 'al_apart' });
+        expect(store.voorraadVersie()).toBe(v0 + 1);
+        expect(store.zetOrderApartTerug(o.id)).toMatchObject({ ok: true, uitkomst: 'ongedaan' });
+        expect(store.voorraadVersie()).toBe(v0 + 2);
+        expect(store.zetOrderApartTerug(o.id)).toMatchObject({ ok: true, uitkomst: 'niet_apart' });
+        expect(store.voorraadVersie()).toBe(v0 + 2);
+        /* Alleen de wegzet-regel: de cadeaudoos (inpakken) blijft voor de makerij. */
+        expect(o.regels.find((r) => r.slug === 'cadeaudoos')!.klaargezet_at).toBeNull();
+    });
+
     it('terugdraaien op een latere dag = niet_zelfde_dag, er verandert niets', async () => {
         const o = await bestel('s-1', [{ slug: 'roeg-naober', aantal: 4 }], 1380);
         store.zetOrderApart(o.id);
@@ -253,15 +272,18 @@ describe('zelfdeBedrijfsdag', () => {
 describe('voorraadFout — WV010 en WV011', () => {
     it('WV010 met de tekorten uit DETAIL', () => {
         const details = JSON.stringify({ wv_code: 'WV010', order_id: 1042, nummer: 'HB-2026-1042', tekorten: [{ product_id: 'p', naam: 'Naober', ligt_er: 3, nodig: 4 }] });
-        expect(voorraadFout('P0001', 'WV010: te weinig voorraad om HB-2026-1042 apart te zetten', details))
+        expect(voorraadFout('WV010', 'WV010: te weinig voorraad om HB-2026-1042 apart te zetten', details))
             .toBe('Te weinig op het schap om apart te zetten. Naober: er liggen er 3, deze order vraagt er 4. Er is niets apart gezet: tel het schap en corrigeer de voorraad.');
     });
     it('WV010 zonder bruikbare details', () => {
-        expect(voorraadFout('P0001', 'WV010: te weinig', 'geen json')).toBe('Te weinig op het schap om apart te zetten. Er is niets apart gezet: tel het schap en corrigeer de voorraad.');
+        expect(voorraadFout('WV010', 'WV010: te weinig', 'geen json')).toBe('Te weinig op het schap om apart te zetten. Er is niets apart gezet: tel het schap en corrigeer de voorraad.');
     });
     it('WV011, WV006 en een gewone melding', () => {
-        expect(voorraadFout('P0001', 'WV011: order HB-2026-1042 is al opgehaald')).toMatch(/al opgehaald/);
+        expect(voorraadFout('WV011', 'WV011: order HB-2026-1042 is al opgehaald')).toMatch(/al opgehaald/);
         expect(voorraadFout('WV006', 'WV006: order HB-1 is niet betaald (wacht)')).toMatch(/niet betaald/);
         expect(voorraadFout('P0001', 'iets anders')).toBe('iets anders');
+    });
+    it('alleen de SQLSTATE telt: een code in de tekst bij P0001 wordt niet vertaald', () => {
+        expect(voorraadFout('P0001', 'WV010: te weinig')).toBe('WV010: te weinig');
     });
 });

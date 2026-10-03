@@ -184,13 +184,14 @@ export function hoeveelheidKort(n: number, eenheid: 'stuk' | 'gram'): string {
 }
 
 /**
- * De foutcodes van de databasefuncties in mensentaal. De code staat in de
- * SQLSTATE (WV001–WV009) of, bij de nieuwere codes, vooraan in de melding met
- * ERRCODE P0001 (WV010, WV011; migratie 20261005140000). `details` is wat
+ * De foutcodes van de databasefuncties in mensentaal. De code staat altijd in
+ * de SQLSTATE (error.code): WV001–WV011, ook WV010 en WV011 (migratie
+ * 20261005140000). Alleen daarop wordt vertaald, net als straks in de
+ * Toonbank-API; de tekst van de melding telt niet. `details` is wat
  * PostgREST uit DETAIL doorgeeft; bij WV010 is dat JSON met de tekorten.
  */
 export function voorraadFout(code: string | undefined, bericht: string, details?: string | null): string {
-    const wv = code && /^WV\d{3}$/.test(code) ? code : /^(WV\d{3})\b/.exec(bericht ?? '')?.[1];
+    const wv = code && /^WV\d{3}$/.test(code) ? code : undefined;
     switch (wv) {
         case 'WV001': return `Dat kan niet: dan komt de voorraad onder nul. ${bericht.replace(/^onder nul[^:]*: /, '')}`;
         case 'WV002': return 'Dit product wordt nog niet bijgehouden. Tel het eerst.';

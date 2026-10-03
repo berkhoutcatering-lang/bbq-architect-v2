@@ -30,15 +30,32 @@
 --  controleert het nog eens in de database):
 --    WV010  te weinig voorraad om apart te zetten; er is niets geboekt
 --    WV011  apart zetten terugdraaien nadat de order is opgehaald
---  Allebei als ERRCODE P0001, met de code vooraan in de melding en de details
---  als JSON in DETAIL (PostgREST geeft die door als `details`). WV006 (niet
---  betaald) blijft de bestaande SQLSTATE, net als in winkel_zet_klaargezet.
+--  Net als WV001–WV009 als eigen SQLSTATE (ERRCODE 'WV010' / 'WV011'), met
+--  de code ook vooraan in de melding en de details als JSON in DETAIL
+--  (PostgREST geeft die door als `details`). WV006 (niet betaald) is de
+--  bestaande SQLSTATE, net als in winkel_zet_klaargezet. De app vertaalt op
+--  error.code (voorraadFout), net als de Toonbank-API straks (BA-8/BA-10).
 --
---  Lockvolgorde: eerst de order (FOR UPDATE), dan al zijn regels, dan de
---  producten in id-volgorde. winkel_zet_klaargezet en winkel_muteer_voorraad
---  pakken daarna dezelfde rijen nog eens; daar wordt niet meer op gewacht.
---  winkel_doos_ophalen (doos → order → regel → producten) en het losse
---  inpakken (regel → producten) passen in dezelfde volgorde.
+--  Lockvolgorde (20261005120100_winkel_lockvolgorde): eerst de order (FOR NO
+--  KEY UPDATE), dan al zijn regels, dan de producten in id-volgorde.
+--  winkel_zet_klaargezet en winkel_muteer_voorraad pakken daarna dezelfde
+--  rijen nog eens; die heeft deze transactie al, dus daar wordt niet meer op
+--  gewacht. Het losse vinkje (winkel_zet_klaargezet: order → regel →
+--  producten), de doosscan (winkel_doos_ophalen: order → regel → doos →
+--  producten) en het ophalen (winkel_order_ophalen) beginnen sinds die
+--  migratie ook bij de order, dus wie tegelijk dezelfde order raakt, wacht
+--  op elkaar in plaats van in een cirkel. NO KEY UPDATE en niet FOR UPDATE:
+--  een logboekregel of doos met deze order_id vraagt bij de insert een KEY
+--  SHARE op de order, en die botst niet met NO KEY UPDATE.
+--
+--  Uitrollen: eerst de migraties, dan de code. De code schrijft
+--  winkel_artikelen.afhandeling (artikelRij in verkoop/webshop/actions.ts):
+--  staat de code er vóór deze migratie, dan faalt het opslaan van artikelen.
+--  Volgorde M1: 20261003150000 (BA-S) → 20261005120000 en 20261005120100
+--  (BA-2) → 20261005130000 en 20261005130100 (BA-5) → 20261005140000 (BA-6)
+--  → de code van feat/ba-6-wegzetten.
+--  Service_role gaat langs de RLS van de view: de Toonbank-API (BA-8) moet
+--  altijd op organization_id filteren.
 
 
 -- ── 0. Pre-flight ───────────────────────────────────────────────────────────
@@ -51,6 +68,9 @@ BEGIN
     END IF;
     IF to_regprocedure('public.winkel_zet_klaargezet(uuid, bigint, boolean)') IS NULL THEN
         RAISE EXCEPTION 'wegzetten: winkel_zet_klaargezet ontbreekt (migratie 20260928120100)';
+    END IF;
+    IF pg_get_functiondef('public.winkel_zet_klaargezet(uuid, bigint, boolean)'::REGPROCEDURE) NOT LIKE '%FOR NO KEY UPDATE%' THEN
+        RAISE EXCEPTION 'wegzetten: winkel_zet_klaargezet vergrendelt de order nog niet eerst (eerst migratie 20261005120100_winkel_lockvolgorde)';
     END IF;
     IF to_regprocedure('public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid)') IS NULL THEN
         RAISE EXCEPTION 'wegzetten: winkel_muteer_voorraad ontbreekt (migratie 20260928120000)';
@@ -163,7 +183,7 @@ SELECT o.id                                         AS id,
  GROUP BY o.id, o.organization_id, o.nummer, o.contact_naam;
 
 COMMENT ON VIEW public.winkel_wegzet_taken IS
-    'Wegzet-taken (BA-6): per betaalde webshoporder de losse winkelwaar (afhandeling wegzetten) die nog apart moet. Verdwijnt als alles klaargezet is. Alleen ordernummer en naam, geen contactgegevens.';
+    'Wegzet-taken (BA-6): per betaalde webshoporder de losse winkelwaar (afhandeling wegzetten) die nog apart moet. Verdwijnt als alles klaargezet is. Alleen ordernummer en naam, geen contactgegevens. Let op: service_role gaat langs de RLS en ziet alle organisaties; filter daar altijd op organization_id (Toonbank-API, BA-8).';
 
 REVOKE ALL ON public.winkel_wegzet_taken FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT ON public.winkel_wegzet_taken TO authenticated, service_role;
@@ -216,10 +236,10 @@ BEGIN
         END IF;
     END IF;
 
-    -- 1. Eerst de order.
+    -- 1. Eerst de order (FOR NO KEY UPDATE, zie de lockvolgorde in de kop).
     SELECT * INTO v_order FROM public.winkel_orders
      WHERE id = p_order_id AND organization_id = p_org
-       FOR UPDATE;
+       FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'order % niet in deze organisatie', p_order_id USING ERRCODE = 'P0002';
     END IF;
@@ -273,13 +293,18 @@ BEGIN
 
     IF v_tekorten IS NOT NULL THEN
         RAISE EXCEPTION 'WV010: te weinig voorraad om % apart te zetten (%). Er is niets apart gezet.', v_order.nummer, v_tekst
-            USING ERRCODE = 'P0001',
+            USING ERRCODE = 'WV010',
                   DETAIL  = jsonb_build_object('wv_code', 'WV010', 'order_id', v_order.id, 'nummer', v_order.nummer, 'tekorten', v_tekorten)::TEXT,
                   HINT    = 'Tel het schap en corrigeer de voorraad; zet de order daarna opnieuw apart.';
     END IF;
 
     -- 4. Boeken: per regel winkel_zet_klaargezet (netto en idempotent).
-    SELECT COALESCE(max(id), 0) INTO v_vanaf FROM public.winkel_voorraad_mutaties;
+    -- v_vanaf: de laatste logboekregel van déze regels. Die zijn vergrendeld
+    -- (FOR UPDATE hierboven), dus alleen deze transactie kan er nog regels
+    -- bij zetten; geen lezing over andere orders of organisaties.
+    SELECT COALESCE(max(m.id), 0) INTO v_vanaf
+      FROM public.winkel_voorraad_mutaties m
+     WHERE m.organization_id = p_org AND m.order_regel_id = ANY (v_open);
     FOREACH v_regel IN ARRAY v_open LOOP
         v_r := public.winkel_zet_klaargezet(p_org, v_regel, true);
         FOR v_b IN SELECT * FROM jsonb_array_elements(COALESCE(v_r->'boekingen', '[]'::JSONB)) LOOP
@@ -298,8 +323,9 @@ BEGIN
            notitie      = COALESCE(m.notitie,
                               'Apart gezet' || CASE p_bron WHEN 'toonbank' THEN ' aan de toonbank' ELSE ' in BBQ Architect' END
                               || COALESCE(' door ' || v_medewerker, ''))
-     WHERE m.id > v_vanaf
-       AND m.order_regel_id = ANY (v_open);
+     WHERE m.organization_id = p_org
+       AND m.order_regel_id = ANY (v_open)
+       AND m.id > v_vanaf;
 
     RETURN jsonb_build_object('uitkomst', 'apart', 'order_id', v_order.id, 'nummer', v_order.nummer, 'bron', p_bron, 'boekingen', v_boekingen);
 END $$;
@@ -354,10 +380,10 @@ BEGIN
         END IF;
     END IF;
 
-    -- 1. Eerst de order, dan zijn regels.
+    -- 1. Eerst de order (FOR NO KEY UPDATE), dan zijn regels.
     SELECT * INTO v_order FROM public.winkel_orders
      WHERE id = p_order_id AND organization_id = p_org
-       FOR UPDATE;
+       FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RAISE EXCEPTION 'order % niet in deze organisatie', p_order_id USING ERRCODE = 'P0002';
     END IF;
@@ -379,7 +405,7 @@ BEGIN
     IF v_opgehaald IS NOT NULL THEN
         RAISE EXCEPTION 'WV011: order % is al opgehaald (%): apart zetten kan niet meer terug', v_order.nummer,
                         to_char(v_opgehaald AT TIME ZONE 'Europe/Amsterdam', 'DD-MM-YYYY HH24:MI')
-            USING ERRCODE = 'P0001',
+            USING ERRCODE = 'WV011',
                   DETAIL  = jsonb_build_object('wv_code', 'WV011', 'order_id', v_order.id, 'nummer', v_order.nummer, 'opgehaald_at', v_opgehaald)::TEXT,
                   HINT    = 'Klopt de voorraad niet meer, corrigeer hem dan met een telling.';
     END IF;
@@ -399,8 +425,10 @@ BEGIN
      ORDER BY p.id
        FOR UPDATE;
 
-    -- 3. Uitpakken = retour, per regel.
-    SELECT COALESCE(max(id), 0) INTO v_vanaf FROM public.winkel_voorraad_mutaties;
+    -- 3. Uitpakken = retour, per regel. v_vanaf: zie winkel_zet_order_apart.
+    SELECT COALESCE(max(m.id), 0) INTO v_vanaf
+      FROM public.winkel_voorraad_mutaties m
+     WHERE m.organization_id = p_org AND m.order_regel_id = ANY (v_apart);
     FOREACH v_regel IN ARRAY v_apart LOOP
         v_r := public.winkel_zet_klaargezet(p_org, v_regel, false);
         FOR v_b IN SELECT * FROM jsonb_array_elements(COALESCE(v_r->'boekingen', '[]'::JSONB)) LOOP
@@ -418,8 +446,9 @@ BEGIN
            notitie      = COALESCE(m.notitie,
                               'Apart zetten ongedaan' || CASE p_bron WHEN 'toonbank' THEN ' aan de toonbank' ELSE ' in BBQ Architect' END
                               || COALESCE(' door ' || v_medewerker, ''))
-     WHERE m.id > v_vanaf
-       AND m.order_regel_id = ANY (v_apart);
+     WHERE m.organization_id = p_org
+       AND m.order_regel_id = ANY (v_apart)
+       AND m.id > v_vanaf;
 
     RETURN jsonb_build_object('uitkomst', 'ongedaan', 'order_id', v_order.id, 'nummer', v_order.nummer, 'bron', p_bron, 'boekingen', v_boekingen);
 END $$;
@@ -455,7 +484,15 @@ BEGIN
                           AND proconfig @> ARRAY['search_path=public, pg_temp']) THEN
             v_fouten := v_fouten || E'\n  geen SECURITY DEFINER met search_path public, pg_temp: ' || v_sig;
         END IF;
+        IF pg_get_functiondef(v_sig::REGPROCEDURE) NOT LIKE '%FROM public.winkel_orders%FOR NO KEY UPDATE%' THEN
+            v_fouten := v_fouten || E'\n  vergrendelt de order niet met FOR NO KEY UPDATE: ' || v_sig;
+        END IF;
     END LOOP;
+
+    IF pg_get_functiondef('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)'::REGPROCEDURE) NOT LIKE '%ERRCODE = ''WV010''%'
+       OR pg_get_functiondef('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)'::REGPROCEDURE) NOT LIKE '%ERRCODE = ''WV011''%' THEN
+        v_fouten := v_fouten || E'\n  WV010/WV011 zijn geen eigen SQLSTATE';
+    END IF;
 
     IF has_table_privilege('anon', 'public.winkel_wegzet_taken', 'SELECT') THEN
         v_fouten := v_fouten || E'\n  anon mag winkel_wegzet_taken lezen';

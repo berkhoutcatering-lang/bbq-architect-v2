@@ -253,6 +253,14 @@ proef AS (
     SELECT 11, 'fix', 'lockvolgorde: winkel_doos_ophalen vergrendelt eerst de order (FOR NO KEY UPDATE)',
            '20261005120100_winkel_lockvolgorde (BA-2)',
            COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)')) LIKE '%FOR NO KEY UPDATE%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'wegzetten: WV010 is een eigen SQLSTATE (niet P0001)',
+           '20261005140000_winkel_wegzetten (BA-6)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)')) LIKE '%ERRCODE = ''WV010''%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'wegzetten: WV011 is een eigen SQLSTATE (niet P0001)',
+           '20261005140000_winkel_wegzetten (BA-6)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)')) LIKE '%ERRCODE = ''WV011''%', false)
 )
 SELECT soort, naam, migratie, CASE WHEN ok THEN 'OK' ELSE 'ONTBREEKT' END AS status
   FROM proef
