@@ -360,6 +360,10 @@ export function bouwVakjes(orders: OrderRij[], artikelen: ArtikelRij[], momenten
         let metDozen = false;
         const ongekoppeld = new Set<string>();
         for (const { regel, artikel } of regels) {
+            /* Wegzetten (BA-6) is geen werk voor de makerij: die regels staan in
+               het paneel Apart zetten. Hier blijven ze alleen bij de order (om
+               mee te geven) en bij klaargezet, niet in de tellingen. */
+            if (artikel?.afhandeling === 'wegzetten') continue;
             if (artikel?.telt === 'personen') personen += regel.aantal; else stuks += regel.aantal;
             if (artikel?.dieet === 'vegetarisch') vegetarisch += regel.aantal;
             const pa = perArtikelMap.get(regel.artikel_id) ?? { artikel_id: regel.artikel_id, naam: artikel?.naam ?? regel.naam, aantal: 0, dieet: artikel?.dieet ?? null, gekoppeld: Boolean(artikel?.gerecht_id || artikel?.inventory_id) };

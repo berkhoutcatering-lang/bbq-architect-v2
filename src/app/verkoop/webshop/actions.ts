@@ -527,7 +527,10 @@ export async function zetOrderApart(input: unknown): Promise<ActionResult<ApartU
     });
     if (error) return { error: voorraadFout(error.code, error.message, error.details) };
     const uit = data as ApartUitkomst;
-    if (uit.boekingen?.length) await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+    if (uit.boekingen?.length) {
+        await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+        verversNaAfloop();
+    }
     revalidatePath(PAD);
     revalidatePath('/voorraad/winkel');
     return { data: uit };
@@ -547,7 +550,10 @@ export async function zetOrderApartTerug(input: unknown): Promise<ActionResult<A
     if (uit.uitkomst === 'niet_zelfde_dag') {
         return { error: 'Dit is op een eerdere dag apart gezet. Terugdraaien kan alleen dezelfde dag; klopt de voorraad niet, tel dan opnieuw.' };
     }
-    if (uit.boekingen?.length) await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+    if (uit.boekingen?.length) {
+        await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+        verversNaAfloop();
+    }
     revalidatePath(PAD);
     revalidatePath('/voorraad/winkel');
     return { data: uit };

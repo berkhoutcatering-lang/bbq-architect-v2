@@ -88,6 +88,18 @@ export default function DashboardPage() {
   const wgz = useSupabase<{ id: number }>('winkel_wegzet_taken', [], {
     columns: 'id, order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels',
   });
+  /* Realtime werkt niet op een view: daarom elke minuut en bij terugkomen in
+     het venster opnieuw ophalen, zodat een net betaalde order zonder herladen
+     als taak verschijnt. */
+  const wegzetVerversen = wgz.refetch;
+  useEffect(() => {
+    const t = window.setInterval(wegzetVerversen, 60_000);
+    window.addEventListener('focus', wegzetVerversen);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener('focus', wegzetVerversen);
+    };
+  }, [wegzetVerversen]);
 
   const events: DbEvent[] = ev.data || [];
   const facturen: Factuur[] = fac.data || [];

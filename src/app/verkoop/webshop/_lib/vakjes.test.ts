@@ -102,6 +102,19 @@ describe('bouwVakjes', () => {
         expect(v[0].regels.map((r) => r.regel.id)).toEqual([oud.id]);
     });
 
+    it('wegzetten (BA-6): de order blijft in het vakje om mee te geven, maar telt niet als werk voor de makerij', () => {
+        const naober: ArtikelRij = { ...basis, id: 'a-naober', slug: 'naober', naam: 'Naober', afhandeling: 'wegzetten' };
+        const alle = [...artikelen, naober];
+        const v = bouwVakjes([order(1, [regel(naober, 4, null, { klaar_op: '2026-09-25' }), regel(artikelen[3], 2, null, { klaar_op: '2026-09-25' })])], alle, momenten, '2026-09-25');
+        const vandaag = v[0];
+        expect(vandaag.orders.map((o) => o.id)).toEqual([1]);
+        expect(vandaag.regels).toHaveLength(2);
+        expect(vandaag.stuks).toBe(2);
+        expect(vandaag.perArtikel.map((p) => p.naam)).toEqual(['Speciaalbier']);
+        expect(vandaag.ongekoppeld).toEqual([]);
+        expect(vandaag.klaargezet).toEqual({ klaar: 0, totaal: 2 });
+    });
+
     it('een losse regel voor later krijgt zijn eigen vaste bak op die dag', () => {
         const v = bouwVakjes([order(1, [regel(artikelen[3], 1, null, { klaar_op: '2026-10-02' })])], artikelen, momenten, '2026-09-25');
         expect(v.map((x) => [x.soort, x.datum, x.regels.length])).toEqual([['vaste_bak', '2026-09-25', 0], ['vaste_bak', '2026-10-02', 1]]);
