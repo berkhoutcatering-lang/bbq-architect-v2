@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { leesVoorbeeldToken, maakVoorbeeldToken, seinWebsite } from './catalogus';
-import { maakSlug, naarCatalogus, soortVanType, typeVan, watOntbreekt, type ArtikelRij, type ProductRij } from './productsoorten';
+import { maakSlug, naarCatalogus, ontbreektVoorSite, ontbreektVoorVerkoop, soortVanType, typeVan, watOntbreekt, type ArtikelRij, type ProductRij } from './productsoorten';
 
 const URL = 'https://abc.supabase.co';
 
@@ -96,10 +96,15 @@ describe('watOntbreekt', () => {
     });
     it('noemt in gewone taal wat er mist', () => {
         const uit = watOntbreekt(rij({ foto: null, allergenen: [] }), { prijs_cents: null });
-        expect(uit).toEqual(expect.arrayContaining(['nog geen foto', 'nog geen prijs', 'nog geen allergenen (van het etiket)']));
+        expect(uit).toEqual(['nog geen prijs', 'nog geen allergenen (van het etiket)', 'nog geen foto']);
     });
-    it('weigert drank van 15 % of meer', () => {
-        expect(watOntbreekt(rij({ alcohol_pct: 19.5 }), artikel).join()).toMatch(/onder de 15 %/);
+    it('weigert drank van 15 % of meer op de site', () => {
+        expect(ontbreektVoorSite(rij({ alcohol_pct: 19.5 })).join()).toMatch(/onder de 15 %/);
+    });
+    it('laat een bier zonder prijs of allergenen op de site, niet in de verkoop', () => {
+        const kaal = rij({ allergenen: null, foto: null });
+        expect(ontbreektVoorSite(kaal)).toEqual([]);
+        expect(ontbreektVoorVerkoop(kaal, { prijs_cents: null })).toEqual(['nog geen prijs', 'nog geen allergenen (van het etiket)']);
     });
     it('vraagt bij alcoholvrij de ingrediënten', () => {
         expect(watOntbreekt(rij({ alcohol_pct: 0.5 }), artikel)).toContain('alcoholvrij: de ingrediënten van het etiket');

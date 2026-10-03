@@ -264,26 +264,46 @@ export function naarCatalogus(rij: ProductRij, artikel: ArtikelRij | null, supab
     return { ...basis, soort, kenmerken: k.data };
 }
 
-/* ── Wat er nog ontbreekt voor live ───────────────────────────────────────── */
+/* ── Wat er nog ontbreekt ──────────────────────────────────────────────────── */
+
+type Controleerbaar = Pick<ProductRij, 'type' | 'slug' | 'foto' | 'allergenen' | 'ingredienten' | 'bewaren' | 'alcohol' | 'alcohol_pct' | 'kenmerken'>;
 
 /**
- * Wat er nog moet gebeuren voordat een product live kan, in gewone taal —
- * dezelfde regels als de database-poort (WC001–WC005). Leeg = klaar.
+ * Wat er moet gebeuren voordat een product op de site kan — dezelfde regels
+ * als de database-poort (WC001, WC003) plus kloppende kenmerken. Leeg = kan.
  */
-export function watOntbreekt(rij: Pick<ProductRij, 'type' | 'slug' | 'foto' | 'allergenen' | 'ingredienten' | 'bewaren' | 'alcohol' | 'alcohol_pct' | 'kenmerken'>, artikel: Pick<ArtikelRij, 'prijs_cents'> | null): string[] {
+export function ontbreektVoorSite(rij: Controleerbaar): string[] {
     const uit: string[] = [];
     const soort = soortVanType(rij.type);
     if (!soort) return ['Dit soort product heeft geen eigen pagina.'];
     if (!rij.slug) uit.push('nog geen adres (slug)');
     if (!KENMERKEN[soort].safeParse(rij.kenmerken).success) uit.push(soort === 'bier' ? 'brouwerij, stijl of verpakking' : soort === 'wijn' ? 'de wijngegevens zijn nog niet compleet' : 'de soort of de fototekst');
-    if (!fotoOpslagSchema.safeParse(rij.foto).success) uit.push('nog geen foto');
-    if (!artikel || artikel.prijs_cents == null) uit.push('nog geen prijs');
-    if (!rij.allergenen?.length) uit.push('nog geen allergenen (van het etiket)');
     const pct = getal(rij.alcohol_pct);
     if (rij.alcohol && pct == null) uit.push('nog geen alcoholpercentage');
     if (rij.alcohol && pct != null && pct >= ONLINE_ALCOHOL_TOT) uit.push(`${String(pct).replace('.', ',')} % — online alleen onder de ${ONLINE_ALCOHOL_TOT} %`);
+    return uit;
+}
+
+/**
+ * Wat er daarnaast nodig is om het online te kunnen kopen — dezelfde regels
+ * als de informatiegate van de website (VEREIST in lib/winkel/informatie.ts).
+ * Zonder foto kan het wel: dan toont de site de kaart in letters.
+ */
+export function ontbreektVoorVerkoop(rij: Controleerbaar, artikel: Pick<ArtikelRij, 'prijs_cents'> | null): string[] {
+    const uit: string[] = [];
+    const soort = soortVanType(rij.type);
+    if (!soort) return [];
+    if (!artikel || artikel.prijs_cents == null) uit.push('nog geen prijs');
+    if (!rij.allergenen?.length) uit.push('nog geen allergenen (van het etiket)');
+    const pct = getal(rij.alcohol_pct);
     if (soort === 'vlees' && !rij.ingredienten?.length) uit.push('nog geen ingrediënten');
     if (soort === 'vlees' && !rij.bewaren) uit.push('nog niet hoe je het bewaart');
     if (soort !== 'vlees' && pct != null && pct <= INGREDIENTEN_VERPLICHT_TOT && !rij.ingredienten?.length) uit.push('alcoholvrij: de ingrediënten van het etiket');
     return uit;
+}
+
+/** Alles wat er nog mist, voor de kaart: eerst wat de site tegenhoudt, dan wat de verkoop tegenhoudt, dan de foto. */
+export function watOntbreekt(rij: Controleerbaar, artikel: Pick<ArtikelRij, 'prijs_cents'> | null): string[] {
+    const foto = fotoOpslagSchema.safeParse(rij.foto).success ? [] : ['nog geen foto'];
+    return [...ontbreektVoorSite(rij), ...ontbreektVoorVerkoop(rij, artikel), ...foto];
 }
