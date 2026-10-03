@@ -549,6 +549,8 @@ export async function zetOpgehaald(input: unknown): Promise<ActionResult<Opgehaa
             revalidatePath('/voorraad/winkel');
         }
         revalidatePath(PAD);
+    } else if (uitkomst.uitkomst === 'geweigerd') {
+        revalidatePath(PAD);
     }
     return { data: { soort: 'ophalen', uitkomst, melding: ophaalMelding(uitkomst) } };
 }

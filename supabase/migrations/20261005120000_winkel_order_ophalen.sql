@@ -34,7 +34,8 @@
 --      onbekend            order bestaat niet (in deze organisatie)
 --      niet_betaald        status is niet betaald
 --      al_opgehaald        alle regels zijn al opgehaald (idempotent)
---      geweigerd           p_leeftijd = 'geweigerd': niets gewijzigd; de
+--      geweigerd           p_leeftijd = 'geweigerd': alleen vastgelegd
+--                          (winkel_orders.leeftijd_geweigerd_at/_door); de
 --                          klant krijgt de order niet mee (en betaalt dus
 --                          ook geen rest). Daarom vóór rest_nodig.
 --      rest_nodig          reservering met open rest en geen p_rest_methode
@@ -102,6 +103,17 @@ COMMENT ON COLUMN public.winkel_order_regels.opgehaald_bron IS
 COMMENT ON COLUMN public.winkel_order_regels.opgehaald_medewerker_id IS
     'De medewerker (personeel) die de order meegaf. Op de Toonbank de ingelogde medewerker; in BA leeg (dan staat de gebruiker in opgehaald_door).';
 
+-- De laatste 18+-weigering aan de balie (review 3 oktober: een weigering
+-- liet geen spoor na). Op de order, want er gaat niets mee; een latere
+-- weigering overschrijft, een latere "ID gezien" laat hem staan.
+ALTER TABLE public.winkel_orders
+    ADD COLUMN IF NOT EXISTS leeftijd_geweigerd_at   TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS leeftijd_geweigerd_door UUID;
+COMMENT ON COLUMN public.winkel_orders.leeftijd_geweigerd_at IS
+    '18+: wanneer aan de balie voor het laatst "Geweigerd" is gekozen (winkel_order_ophalen met p_leeftijd = geweigerd). Er is toen niets meegegeven en geen rest geboekt.';
+COMMENT ON COLUMN public.winkel_orders.leeftijd_geweigerd_door IS
+    'Wie weigerde: de ingelogde gebruiker, of p_door_user_id bij service_role. Op de Toonbank komt de medewerker in het journaal (BA-10).';
+
 
 -- ── 2. winkel_order_ophalen ─────────────────────────────────────────────────
 -- p_rest_methode   contant | pin; alleen nodig bij een reservering met open rest
@@ -111,8 +123,9 @@ COMMENT ON COLUMN public.winkel_order_regels.opgehaald_medewerker_id IS
 -- p_medewerker_id  personeel.id van wie het meegaf (Toonbank)
 --
 -- Geeft altijd {uitkomst, order_id, nummer, ...}; alleen bij 'opgehaald' is
--- er iets gewijzigd. Bij 'opgehaald' ook {opgehaald_at, rest_geboekt,
--- boekingen: [{product_id, hoeveelheid, voorraad}]}.
+-- er iets meegegeven (bij 'geweigerd' alleen de weigering vastgelegd). Bij
+-- 'opgehaald' ook {opgehaald_at, rest_geboekt, boekingen: [{product_id,
+-- hoeveelheid, voorraad}]}; bij 'geweigerd' {geweigerd_at}.
 CREATE OR REPLACE FUNCTION public.winkel_order_ophalen(
     p_org            UUID,
     p_order_id       BIGINT,
@@ -192,7 +205,11 @@ BEGIN
             'opgehaald_at', (SELECT max(opgehaald_at) FROM public.winkel_order_regels WHERE order_id = v_order.id));
     END IF;
     IF p_leeftijd = 'geweigerd' THEN
-        RETURN v_basis || jsonb_build_object('uitkomst', 'geweigerd');
+        -- Alleen de weigering vastleggen: geen voorraad, geen rest, niet opgehaald.
+        UPDATE public.winkel_orders
+           SET leeftijd_geweigerd_at = v_nu, leeftijd_geweigerd_door = v_uid
+         WHERE id = v_order.id AND organization_id = p_org;
+        RETURN v_basis || jsonb_build_object('uitkomst', 'geweigerd', 'geweigerd_at', v_nu);
     END IF;
     IF v_rest_open AND p_rest_methode IS NULL THEN
         RETURN v_basis || jsonb_build_object('uitkomst', 'rest_nodig', 'reeds_cents', v_order.nu_te_betalen_cents);

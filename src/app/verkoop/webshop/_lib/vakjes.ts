@@ -117,6 +117,8 @@ export interface OrderRij {
     rest_cents: number;
     rest_betaald_at: string | null;
     rest_betaalmethode: 'contant' | 'pin' | null;
+    /* BA-2: de laatste 18+-weigering aan de balie. */
+    leeftijd_geweigerd_at?: string | null;
     winkel_order_regels: RegelRij[];
 }
 

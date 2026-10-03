@@ -72,7 +72,7 @@ describe('ophaalMelding — elke uitkomst in mensentaal', () => {
         [{ uitkomst: 'onbekend', order_id: 7 }, 'error', /kennen we niet/],
         [{ ...basis, uitkomst: 'niet_betaald', status: 'verlopen' }, 'error', /HB-2026-0007 is niet betaald \(reservering verlopen\)\. Niet meegeven/],
         [{ ...basis, uitkomst: 'al_opgehaald', opgehaald_at: '2026-11-20T12:00:00Z' }, 'info', /al opgehaald om .*niets dubbel geboekt/],
-        [{ ...basis, uitkomst: 'geweigerd' }, 'info', /niet meegegeven: leeftijd niet vastgesteld.*geen rest geboekt/],
+        [{ ...basis, uitkomst: 'geweigerd', geweigerd_at: '2026-11-20T12:00:00Z' }, 'info', /niet meegegeven: leeftijd niet vastgesteld\. De weigering is vastgelegd.*geen rest geboekt/],
         [{ ...basis, uitkomst: 'rest_nodig', rest_cents: 3250, reeds_cents: 250 }, 'info', /Eerst de rest: € 32,50 contant of pin \(reeds betaald € 2,50\)/],
         [{ ...basis, uitkomst: 'leeftijd_nodig' }, 'info', /alcohol: eerst de leeftijd vaststellen/],
         [{ ...basis, uitkomst: 'te_weinig_voorraad', melding: 'onder nul: Naober (er is 2, gevraagd 4)' }, 'error', /te weinig om in te pakken\. Er is niets geboekt.*\(onder nul: Naober/],
@@ -251,11 +251,14 @@ describe('haalOp (geheugen) — elke uitkomst', () => {
         expect(store.mutaties).toHaveLength(0);
     });
 
-    it('geweigerd: niets gewijzigd, ook geen rest, ook bij open rest', async () => {
+    it('geweigerd: alleen de weigering vastgelegd, geen rest, ook bij open rest', async () => {
         const o = await betaaldeOrder('a');
         zetReservering(o);
-        const u = store.haalOp('org-1', o.id, { leeftijd: 'geweigerd' });
+        const u = store.haalOp('org-1', o.id, { leeftijd: 'geweigerd', doorUserId: 'user-1' });
         expect(u).toMatchObject({ uitkomst: 'geweigerd', rest_cents: 3250 });
+        expect(u.uitkomst === 'geweigerd' && u.geweigerd_at).toBeTruthy();
+        expect(o.leeftijd_geweigerd_at).toBeTruthy();
+        expect(o.leeftijd_geweigerd_door).toBe('user-1');
         expect(o.rest_betaald_at).toBeNull();
         expect(o.regels[0]!.opgehaald_at).toBeNull();
         expect(o.regels[0]!.klaargezet_at).toBeNull();

@@ -190,7 +190,13 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             const laatste = o.regels.map((r) => r.opgehaald_at).filter((t): t is string => !!t).sort().at(-1) ?? null;
             return { ...basis, uitkomst: 'al_opgehaald', opgehaald_at: laatste };
         }
-        if (blokkade === 'geweigerd') return { ...basis, uitkomst: 'geweigerd' };
+        if (blokkade === 'geweigerd') {
+            /* Alleen de weigering vastleggen, verder niets. */
+            const t = nu.toISOString();
+            o.leeftijd_geweigerd_at = t;
+            o.leeftijd_geweigerd_door = opties.doorUserId ?? null;
+            return { ...basis, uitkomst: 'geweigerd', geweigerd_at: t };
+        }
         if (blokkade === 'rest_nodig') return { ...basis, uitkomst: 'rest_nodig', reeds_cents: o.nu_te_betalen_cents };
         if (blokkade === 'leeftijd_nodig') return { ...basis, uitkomst: 'leeftijd_nodig' };
 

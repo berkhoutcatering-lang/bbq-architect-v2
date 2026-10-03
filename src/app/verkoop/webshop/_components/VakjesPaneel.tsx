@@ -525,7 +525,7 @@ function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: (
             if (u === 'leeftijd_nodig') setKeuze({ restMethode: k.restMethode });
             else if (u === 'rest_nodig') setKeuze({ leeftijd: k.leeftijd === 'vastgesteld' ? 'vastgesteld' : null });
             else setKeuze({});
-            if (u === 'opgehaald' || u === 'al_opgehaald') await herlaad();
+            if (u === 'opgehaald' || u === 'al_opgehaald' || u === 'geweigerd') await herlaad();
         } finally { setBezig(false); }
     }
 
@@ -561,7 +561,9 @@ function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: (
         inhoud = (
             <div className="ws-rest">
                 <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><IdCard size={14} /></span>
-                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>18+</b> · controleer de leeftijd (ID) vóór je meegeeft{rest ? <> · daarna rest <b>{eur(o.rest_cents)}</b></> : null}</div>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>18+</b> · controleer de leeftijd (ID) vóór je meegeeft{rest ? <> · daarna rest <b>{eur(o.rest_cents)}</b></> : null}
+                    {o.leeftijd_geweigerd_at && <> · <span style={{ color: 'var(--ws-vuur)' }}>eerder geweigerd {new Date(o.leeftijd_geweigerd_at).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></>}
+                </div>
                 <Button size="sm" variant="ghost" loading={bezig} disabled={bezig} onClick={() => void haalOp({ leeftijd: 'geweigerd' })}>Geweigerd</Button>
                 <Button size="sm" disabled={bezig} onClick={() => setKeuze({ ...keuze, leeftijd: 'vastgesteld' })}>ID gezien</Button>
             </div>

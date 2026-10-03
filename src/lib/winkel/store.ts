@@ -76,6 +76,9 @@ export interface OrderRij {
     rest_cents: number;
     rest_betaald_at: string | null;
     rest_betaalmethode: 'contant' | 'pin' | null;
+    /* BA-2: de laatste 18+-weigering aan de balie (niets meegegeven). */
+    leeftijd_geweigerd_at?: string | null;
+    leeftijd_geweigerd_door?: string | null;
 }
 
 /** Wat uit de opmerking van de klant gelezen is. Staat altijd naast het origineel. */

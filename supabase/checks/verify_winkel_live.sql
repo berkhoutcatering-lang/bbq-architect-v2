@@ -87,7 +87,9 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('voorraad_invoer',       'prijzen_incl_btw',        '20260928140100_voorraad_invoer_btw'),
     ('winkel_order_regels',   'leeftijd_vastgesteld_at', '20261005120000_winkel_order_ophalen (BA-2)'),
     ('winkel_order_regels',   'opgehaald_bron',          '20261005120000_winkel_order_ophalen (BA-2)'),
-    ('winkel_order_regels',   'opgehaald_medewerker_id', '20261005120000_winkel_order_ophalen (BA-2)')
+    ('winkel_order_regels',   'opgehaald_medewerker_id', '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_orders',         'leeftijd_geweigerd_at',   '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_orders',         'leeftijd_geweigerd_door', '20261005120000_winkel_order_ophalen (BA-2)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),

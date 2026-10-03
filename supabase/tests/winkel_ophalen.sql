@@ -16,7 +16,8 @@
 --   onbekend            onbekend ordernummer, en een order van een andere organisatie
 --   niet_betaald        een order die nog op de betaling wacht; niets gewijzigd
 --   leeftijd_nodig      alcohol zonder leeftijd; niets gewijzigd
---   geweigerd           niets gewijzigd, ook geen rest geboekt (ook bij open rest)
+--   geweigerd           alleen de weigering vastgelegd (leeftijd_geweigerd_at),
+--                       verder niets, ook geen rest geboekt (ook bij open rest)
 --   opgehaald           een niet-ingepakte regel wordt bij ophalen afgeboekt
 --                       (verkoop_online), regels en dozen op opgehaald, bron
 --                       en leeftijd vastgelegd
@@ -120,9 +121,12 @@ begin
     v_r := public.winkel_order_ophalen(v_org, v_o1);
     if v_r->>'uitkomst' is distinct from 'leeftijd_nodig' or (v_r->>'alcohol')::boolean is not true then v_fouten := v_fouten || 'alcohol zonder leeftijd gaf ' || v_r::text || '; '; end if;
 
-    -- geweigerd: niets gewijzigd
+    -- geweigerd: alleen de weigering vastgelegd, verder niets gewijzigd
     v_r := public.winkel_order_ophalen(v_org, v_o1, null, 'geweigerd');
-    if v_r->>'uitkomst' is distinct from 'geweigerd' then v_fouten := v_fouten || 'geweigerd gaf ' || (v_r->>'uitkomst') || '; '; end if;
+    if v_r->>'uitkomst' is distinct from 'geweigerd' or v_r->>'geweigerd_at' is null then v_fouten := v_fouten || 'geweigerd gaf ' || v_r::text || '; '; end if;
+    if not exists (select 1 from public.winkel_orders where id = v_o1 and leeftijd_geweigerd_at is not null) then
+        v_fouten := v_fouten || 'weigering niet vastgelegd op O1; ';
+    end if;
     if exists (select 1 from public.winkel_order_regels where order_id = v_o1 and (opgehaald_at is not null or klaargezet_at is not null or leeftijd_vastgesteld_at is not null))
        or exists (select 1 from public.winkel_dozen where order_id = v_o1 and opgehaald_at is not null)
        or exists (select 1 from public.winkel_voorraad_mutaties where order_id = v_o1) then
@@ -340,5 +344,5 @@ begin
     perform set_config('request.jwt.claims', '', true);
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: onbekend, niet_betaald, leeftijd_nodig, geweigerd (niets gewijzigd, ook geen rest), opgehaald met afboeken van de niet-ingepakte regel en dozen, al_opgehaald zonder dubbele boeking, rest_nodig, rest in dezelfde transactie, te_weinig_voorraad zonder enige boeking, ophalen na doosscan, terug alleen status en alleen dezelfde dag, 22023 bij ongeldige invoer, anon geweigerd, lid alleen eigen organisatie — alles teruggedraaid';
+    raise exception 'GESLAAGD: onbekend, niet_betaald, leeftijd_nodig, geweigerd (alleen vastgelegd, ook geen rest), opgehaald met afboeken van de niet-ingepakte regel en dozen, al_opgehaald zonder dubbele boeking, rest_nodig, rest in dezelfde transactie, te_weinig_voorraad zonder enige boeking, ophalen na doosscan, terug alleen status en alleen dezelfde dag, 22023 bij ongeldige invoer, anon geweigerd, lid alleen eigen organisatie — alles teruggedraaid';
 end $$;

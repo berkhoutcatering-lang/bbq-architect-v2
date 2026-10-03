@@ -61,7 +61,8 @@ export type OphaalUitkomst =
     | { uitkomst: 'onbekend'; order_id: number }
     | (Basis & { uitkomst: 'niet_betaald'; status: string })
     | (Basis & { uitkomst: 'al_opgehaald'; opgehaald_at: string | null })
-    | (Basis & { uitkomst: 'geweigerd' })
+    /** Niets meegegeven; alleen de weigering vastgelegd (winkel_orders.leeftijd_geweigerd_at). */
+    | (Basis & { uitkomst: 'geweigerd'; geweigerd_at: string })
     | (Basis & { uitkomst: 'rest_nodig'; reeds_cents: number })
     | (Basis & { uitkomst: 'leeftijd_nodig' })
     | (Basis & { uitkomst: 'te_weinig_voorraad'; melding: string })
@@ -162,7 +163,7 @@ export function ophaalMelding(u: OphaalUitkomst): Melding {
         case 'al_opgehaald':
             return { soort: 'info', tekst: `${u.nummer} is al opgehaald${tijd(u.opgehaald_at)}. Er is niets dubbel geboekt.` };
         case 'geweigerd':
-            return { soort: 'info', tekst: `${u.nummer} niet meegegeven: leeftijd niet vastgesteld. Er is niets gewijzigd en geen rest geboekt.` };
+            return { soort: 'info', tekst: `${u.nummer} niet meegegeven: leeftijd niet vastgesteld. De weigering is vastgelegd; er is niets meegegeven en geen rest geboekt.` };
         case 'rest_nodig':
             return { soort: 'info', tekst: `Eerst de rest: ${euro(u.rest_cents)} contant of pin (reeds betaald ${euro(u.reeds_cents)}). Er is nog niets meegegeven.` };
         case 'leeftijd_nodig':
