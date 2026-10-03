@@ -552,6 +552,8 @@ export async function zetOpgehaald(input: unknown): Promise<ActionResult<Opgehaa
         if (uitkomst.boekingen.length) {
             await evalueerWinkelMeldingen(s.orgId, [...new Set(uitkomst.boekingen.map((b) => b.product_id))]);
             revalidatePath('/voorraad/winkel');
+            /* Bij het ophalen ingepakt = afgeboekt: de website ververst (BA-5c). */
+            verversNaAfloop();
         }
         revalidatePath(PAD);
     } else if (uitkomst.uitkomst === 'geweigerd') {
