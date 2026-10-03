@@ -207,6 +207,8 @@ export type CatalogusProduct =
 export interface Catalogus {
     versie: 1;
     producten: CatalogusProduct[];
+    /** Alleen met een geldige voorbeeldlink: de slug van het product dat bekeken wordt. */
+    voorbeeld?: string;
 }
 
 /** De foto met een publieke basis-URL in de bucket. Een kapotte foto = geen foto. */
