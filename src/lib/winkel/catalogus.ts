@@ -3,10 +3,10 @@
  * voorbeeldlink. Plus het sein naar de website als er iets verandert.
  * Plan: docs/OPDRACHT-BBQ-ARCHITECT-CATALOGUS.md (blokken C2 en C8).
  *
- * De website (hopbites.nl) haalt GET /api/public-winkel/{slug}/catalogus op,
- * cachet hem onder de tag 'catalogus' en ververst zodra wij seinen
- * (POST {site_url}/api/catalogus/ververs). Mislukt het sein, dan pakt de site
- * het binnen vijf minuten alsnog op.
+ * De website (hopbites.nl) haalt GET /api/public-winkel/{slug}/catalogus op
+ * bij elke build. "Zet live" seint een nieuwe build (deploy hook, ±2 minuten);
+ * gaat er iets mis, dan blijft de vorige versie gewoon staan. Een concept
+ * bekijk je via een voorbeeldlink, die de website los en op aanvraag toont.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -100,26 +100,20 @@ export async function haalCatalogus(orgSlug: string, voorbeeld: string | null, c
 
 /* ── Het sein naar de website ─────────────────────────────────────────────── */
 
-export type SeinUitkomst = 'verstuurd' | 'geen-site' | 'geen-geheim' | 'mislukt';
+export type SeinUitkomst = 'verstuurd' | 'geen-hook' | 'mislukt';
 
 /**
- * Laat de website de catalogus opnieuw ophalen. Twee pogingen; mislukt het,
- * dan is de site binnen vijf minuten alsnog bij (revalidate 300).
+ * Laat de website opnieuw bouwen, zodat hij de catalogus opnieuw ophaalt
+ * (Vercel deploy hook; de URL zelf is het geheim). Twee pogingen. Mislukt
+ * het, dan staat de vorige versie van de site er nog — niets kapot, alleen
+ * nog niet bijgewerkt; de volgende wijziging of push neemt het mee.
  */
-export async function seinWebsite(orgId: string, client?: SupabaseClient, fetcher: typeof fetch = fetch): Promise<SeinUitkomst> {
-    const sleutel = process.env.HB_VERVERS_GEHEIM;
-    if (!sleutel) return 'geen-geheim';
-    const sb = client ?? createServiceSupabase();
-    const { data } = await sb.from('winkel_instellingen').select('site_url').eq('organization_id', orgId).maybeSingle();
-    const site = (data?.site_url as string | null)?.replace(/\/$/, '');
-    if (!site) return 'geen-site';
+export async function seinWebsite(fetcher: typeof fetch = fetch): Promise<SeinUitkomst> {
+    const hook = process.env.WEBSITE_DEPLOY_HOOK_URL;
+    if (!hook) return 'geen-hook';
     for (let poging = 0; poging < 2; poging++) {
         try {
-            const r = await fetcher(`${site}/api/catalogus/ververs`, {
-                method: 'POST',
-                headers: { 'x-hb-ververs': sleutel },
-                signal: AbortSignal.timeout(5000),
-            });
+            const r = await fetcher(hook, { method: 'POST', signal: AbortSignal.timeout(5000) });
             if (r.ok) return 'verstuurd';
         } catch {
             /* volgende poging */

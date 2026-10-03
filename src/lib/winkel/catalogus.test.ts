@@ -25,7 +25,7 @@ const rij = (extra: Partial<ProductRij> = {}): ProductRij => ({
     ingredienten: null,
     bewaren: null,
     lekker_bij: null,
-    foto_pad: 'org/rochefort-8.png',
+    foto: { basis: '0f8c1d2e-3a4b-4c5d-8e9f-0a1b2c3d4e5f/rochefort-8-1', breedte: 1024, hoogte: 1536, maten: [{ w: 640, h: 960 }, { w: 1024, h: 1536 }], formaten: ['webp'] },
     pagina_status: 'live',
     pagina_volgorde: 1,
     goedgekeurd: {},
@@ -42,15 +42,19 @@ describe('naarCatalogus', () => {
         expect(p.soort).toBe('bier');
         expect(p.prijsCenten).toBe(345);
         expect(p.alcoholPct).toBe(9.2);
-        expect(p.foto).toBe(`${URL}/storage/v1/object/public/winkel-fotos/org/rochefort-8.png`);
+        expect(p.foto?.basis).toBe(`${URL}/storage/v1/object/public/winkel-fotos/0f8c1d2e-3a4b-4c5d-8e9f-0a1b2c3d4e5f/rochefort-8-1`);
+        expect(p.foto?.maten).toHaveLength(2);
         expect(p.concept).toBe(false);
     });
 
-    it('laat een proefkaart weg zolang Mathijs hem niet goedkeurde', () => {
-        const zonder = naarCatalogus(rij(), artikel, URL);
-        expect(zonder?.soort === 'bier' && zonder.proefkaart).toBeNull();
+    it('zegt bij de proefkaart of Mathijs hem goedkeurde', () => {
+        expect(naarCatalogus(rij(), artikel, URL)).toMatchObject({ proefkaartGoedgekeurd: false });
         const met = naarCatalogus(rij({ goedgekeurd: { proefkaart: { door: 'u', op: '2026-10-03' } } }), artikel, URL);
-        expect(met?.soort === 'bier' && met.proefkaart?.ibu).toBe(22);
+        expect(met).toMatchObject({ proefkaartGoedgekeurd: true, proefkaart: { ibu: 22 } });
+    });
+
+    it('laat een kapotte foto weg', () => {
+        expect(naarCatalogus(rij({ foto: { basis: '../../geheim' } as never }), artikel, URL)?.foto).toBeNull();
     });
 
     it('geeft geen prijs als het artikel uit staat of ontbreekt', () => {
@@ -91,7 +95,7 @@ describe('watOntbreekt', () => {
         expect(watOntbreekt(rij(), artikel)).toEqual([]);
     });
     it('noemt in gewone taal wat er mist', () => {
-        const uit = watOntbreekt(rij({ foto_pad: null, allergenen: [] }), { prijs_cents: null });
+        const uit = watOntbreekt(rij({ foto: null, allergenen: [] }), { prijs_cents: null });
         expect(uit).toEqual(expect.arrayContaining(['nog geen foto', 'nog geen prijs', 'nog geen allergenen (van het etiket)']));
     });
     it('weigert drank van 15 % of meer', () => {
@@ -142,30 +146,22 @@ describe('voorbeeldlink', () => {
 });
 
 describe('seinWebsite', () => {
-    const client = (site: string | null) =>
-        ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { site_url: site } }) }) }) }) }) as never;
-
-    it('seint de website met het geheim', async () => {
-        process.env.HB_VERVERS_GEHEIM = 'g';
-        const gezien: { url: string; kop: string | null }[] = [];
-        const f = (async (url: string, init: RequestInit) => {
-            gezien.push({ url, kop: new Headers(init.headers).get('x-hb-ververs') });
-            return new Response(null, { status: 200 });
-        }) as unknown as typeof fetch;
-        expect(await seinWebsite('org', client('https://hopbites.nl/'), f)).toBe('verstuurd');
-        expect(gezien).toEqual([{ url: 'https://hopbites.nl/api/catalogus/ververs', kop: 'g' }]);
+    it('start een build via de deploy hook', async () => {
+        process.env.WEBSITE_DEPLOY_HOOK_URL = 'https://api.vercel.com/v1/integrations/deploy/x/y';
+        const gezien: string[] = [];
+        const f = (async (url: string) => { gezien.push(url); return new Response(null, { status: 201 }); }) as unknown as typeof fetch;
+        expect(await seinWebsite(f)).toBe('verstuurd');
+        expect(gezien).toEqual(['https://api.vercel.com/v1/integrations/deploy/x/y']);
     });
     it('probeert twee keer en zegt eerlijk dat het mislukte', async () => {
-        process.env.HB_VERVERS_GEHEIM = 'g';
+        process.env.WEBSITE_DEPLOY_HOOK_URL = 'https://hook';
         let n = 0;
         const f = (async () => { n++; return new Response(null, { status: 500 }); }) as unknown as typeof fetch;
-        expect(await seinWebsite('org', client('https://hopbites.nl'), f)).toBe('mislukt');
+        expect(await seinWebsite(f)).toBe('mislukt');
         expect(n).toBe(2);
     });
-    it('doet niets zonder site of geheim', async () => {
-        process.env.HB_VERVERS_GEHEIM = 'g';
-        expect(await seinWebsite('org', client(null))).toBe('geen-site');
-        delete process.env.HB_VERVERS_GEHEIM;
-        expect(await seinWebsite('org', client('https://hopbites.nl'))).toBe('geen-geheim');
+    it('doet niets zonder hook', async () => {
+        delete process.env.WEBSITE_DEPLOY_HOOK_URL;
+        expect(await seinWebsite()).toBe('geen-hook');
     });
 });

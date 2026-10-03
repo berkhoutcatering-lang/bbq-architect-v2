@@ -139,13 +139,23 @@ export interface ProductRij {
     ingredienten: string[] | null;
     bewaren: string | null;
     lekker_bij: string | null;
-    foto_pad: string | null;
+    foto: FotoOpslag | null;
     pagina_status: 'geen' | 'concept' | 'live';
     pagina_volgorde: number | null;
     goedgekeurd: Record<string, { door?: string; op?: string } | undefined>;
     actief: boolean;
     updated_at: string;
 }
+
+/** De foto zoals hij in de bucket staat: {basis}-{w}.{formaat}. */
+export const fotoOpslagSchema = z.object({
+    basis: z.string().min(3).max(300).regex(/^[0-9a-f-]{36}\/[a-z0-9-]+$/),
+    breedte: z.number().int().positive(),
+    hoogte: z.number().int().positive(),
+    maten: z.array(z.object({ w: z.number().int().positive(), h: z.number().int().positive() })).min(1).max(8),
+    formaten: z.array(z.enum(['avif', 'webp'])).min(1),
+});
+export type FotoOpslag = z.infer<typeof fotoOpslagSchema>;
 
 /** Het artikel van de losse verkoop: dezelfde slug, de prijs die de kassa rekent. */
 export interface ArtikelRij {
@@ -158,7 +168,7 @@ export interface ArtikelRij {
 
 /** De kolommen die de catalogus leest — nooit inkoop, leverancier of marge. */
 export const CATALOGUS_PRODUCT_KOLOMMEN =
-    'id, naam, type, slug, kenmerken, alcohol, alcohol_pct, allergenen, ingredienten, bewaren, lekker_bij, foto_pad, pagina_status, pagina_volgorde, goedgekeurd, actief, updated_at';
+    'id, naam, type, slug, kenmerken, alcohol, alcohol_pct, allergenen, ingredienten, bewaren, lekker_bij, foto, pagina_status, pagina_volgorde, goedgekeurd, actief, updated_at';
 export const CATALOGUS_ARTIKEL_KOLOMMEN = 'slug, eenheid, prijs_cents, actief, publiek';
 
 /* ── Wat de website krijgt ────────────────────────────────────────────────── */
@@ -175,8 +185,12 @@ interface CatalogusBasis {
     ingredienten: string[] | null;
     bewaren: string | null;
     lekkerBij: string | null;
-    /** Publieke URL in de bucket winkel-fotos. null: de website toont de kaart in letters. */
-    foto: string | null;
+    /**
+     * De foto: `basis` is de publieke URL zonder maat en extensie, de bestanden
+     * zijn `{basis}-{w}.{formaat}` — dezelfde vorm als het beeldregister van de
+     * website. null: de website toont de kaart in letters.
+     */
+    foto: (FotoOpslag & { basis: string }) | null;
     volgorde: number;
     /** Een concept (alleen via een voorbeeldlink). */
     concept: boolean;
@@ -184,7 +198,9 @@ interface CatalogusBasis {
 }
 
 export type CatalogusProduct =
-    | (CatalogusBasis & { soort: 'bier'; kenmerken: Omit<BierKenmerken, 'proefkaart'>; proefkaart: Proefkaart | null })
+    /* De proefkaart gaat mee met zijn stand: de website toont hem alleen als
+       hij goedgekeurd is (in de demo altijd) — net als de druiven bij wijn. */
+    | (CatalogusBasis & { soort: 'bier'; kenmerken: Omit<BierKenmerken, 'proefkaart'>; proefkaart: Proefkaart | null; proefkaartGoedgekeurd: boolean })
     | (CatalogusBasis & { soort: 'wijn'; kenmerken: WijnKenmerken; druivenGecontroleerd: boolean })
     | (CatalogusBasis & { soort: 'vlees'; kenmerken: VleesKenmerken });
 
@@ -193,10 +209,11 @@ export interface Catalogus {
     producten: CatalogusProduct[];
 }
 
-/** De publieke URL van een foto in de bucket. */
-export function fotoUrl(supabaseUrl: string, pad: string | null): string | null {
-    if (!pad) return null;
-    return `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/winkel-fotos/${pad.split('/').map(encodeURIComponent).join('/')}`;
+/** De foto met een publieke basis-URL in de bucket. Een kapotte foto = geen foto. */
+export function fotoVoorSite(supabaseUrl: string, foto: unknown): CatalogusBasis['foto'] {
+    const f = fotoOpslagSchema.safeParse(foto);
+    if (!f.success) return null;
+    return { ...f.data, basis: `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/winkel-fotos/${f.data.basis}` };
 }
 
 function getal(x: number | string | null): number | null {
@@ -208,7 +225,8 @@ function getal(x: number | string | null): number | null {
 /**
  * Een rij plus zijn artikel → wat de website krijgt. null als de rij geen
  * pagina is of zijn kenmerken niet kloppen: liever weglaten dan half tonen.
- * Wat de AI invulde en niet goedgekeurd is (proefkaart, druiven), gaat niet mee.
+ * Wat de AI invulde (proefkaart, druiven) gaat mee met de vlag of Mathijs het
+ * goedkeurde; de website toont het pas dan.
  */
 export function naarCatalogus(rij: ProductRij, artikel: ArtikelRij | null, supabaseUrl: string): CatalogusProduct | null {
     const soort = soortVanType(rij.type);
@@ -223,7 +241,7 @@ export function naarCatalogus(rij: ProductRij, artikel: ArtikelRij | null, supab
         ingredienten: rij.ingredienten?.length ? rij.ingredienten : null,
         bewaren: rij.bewaren || null,
         lekkerBij: rij.lekker_bij || null,
-        foto: fotoUrl(supabaseUrl, rij.foto_pad),
+        foto: fotoVoorSite(supabaseUrl, rij.foto),
         volgorde: rij.pagina_volgorde ?? 9999,
         concept: rij.pagina_status !== 'live',
         bijgewerkt: rij.updated_at,
@@ -234,7 +252,7 @@ export function naarCatalogus(rij: ProductRij, artikel: ArtikelRij | null, supab
         const k = bierKenmerkenSchema.safeParse(rij.kenmerken);
         if (!k.success) return null;
         const { proefkaart, ...kenmerken } = k.data;
-        return { ...basis, soort, kenmerken, proefkaart: proefkaart && goed('proefkaart') ? proefkaart : null };
+        return { ...basis, soort, kenmerken, proefkaart: proefkaart ?? null, proefkaartGoedgekeurd: Boolean(proefkaart) && goed('proefkaart') };
     }
     if (soort === 'wijn') {
         const k = wijnKenmerkenSchema.safeParse(rij.kenmerken);
@@ -252,13 +270,13 @@ export function naarCatalogus(rij: ProductRij, artikel: ArtikelRij | null, supab
  * Wat er nog moet gebeuren voordat een product live kan, in gewone taal —
  * dezelfde regels als de database-poort (WC001–WC005). Leeg = klaar.
  */
-export function watOntbreekt(rij: Pick<ProductRij, 'type' | 'slug' | 'foto_pad' | 'allergenen' | 'ingredienten' | 'bewaren' | 'alcohol' | 'alcohol_pct' | 'kenmerken'>, artikel: Pick<ArtikelRij, 'prijs_cents'> | null): string[] {
+export function watOntbreekt(rij: Pick<ProductRij, 'type' | 'slug' | 'foto' | 'allergenen' | 'ingredienten' | 'bewaren' | 'alcohol' | 'alcohol_pct' | 'kenmerken'>, artikel: Pick<ArtikelRij, 'prijs_cents'> | null): string[] {
     const uit: string[] = [];
     const soort = soortVanType(rij.type);
     if (!soort) return ['Dit soort product heeft geen eigen pagina.'];
     if (!rij.slug) uit.push('nog geen adres (slug)');
     if (!KENMERKEN[soort].safeParse(rij.kenmerken).success) uit.push(soort === 'bier' ? 'brouwerij, stijl of verpakking' : soort === 'wijn' ? 'de wijngegevens zijn nog niet compleet' : 'de soort of de fototekst');
-    if (!rij.foto_pad) uit.push('nog geen foto');
+    if (!fotoOpslagSchema.safeParse(rij.foto).success) uit.push('nog geen foto');
     if (!artikel || artikel.prijs_cents == null) uit.push('nog geen prijs');
     if (!rij.allergenen?.length) uit.push('nog geen allergenen (van het etiket)');
     const pct = getal(rij.alcohol_pct);
