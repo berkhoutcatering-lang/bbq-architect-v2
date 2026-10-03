@@ -13,7 +13,8 @@
 --  private.vereis_org staat ONTBREEKT tot BA-S (20261003150000) live is; de
 --  ophaalkolommen en winkel_order_ophalen(_terug) tot BA-2 (20261005120000);
 --  de vrij-objecten (teller, vier functies, triggers, grens) tot BA-5
---  (20261005130000 en 20261005130100).
+--  (20261005130000 en 20261005130100); de wegzet-objecten (view, kolom, twee
+--  functies) tot BA-6 (20261005140000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -38,7 +39,8 @@ tabellen(naam, migratie) AS (VALUES
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
-    ('voorraad_afwijkingen_maand', '20260928120200_winkelvoorraad_meldingen_afwijkingen')
+    ('voorraad_afwijkingen_maand', '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
+    ('winkel_wegzet_taken',        '20261005140000_winkel_wegzetten (BA-6)')
 ),
 kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_artikelen',      'gerecht_id',              '20260925120000_winkel_vakjes'),
@@ -93,7 +95,8 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_order_regels',   'opgehaald_medewerker_id', '20261005120000_winkel_order_ophalen (BA-2)'),
     ('winkel_orders',         'leeftijd_geweigerd_at',   '20261005120000_winkel_order_ophalen (BA-2)'),
     ('winkel_orders',         'leeftijd_geweigerd_door', '20261005120000_winkel_order_ophalen (BA-2)'),
-    ('winkel_instellingen',   'beschikbaar_grens',       '20261005130100_winkel_beschikbaar_grens (BA-5)')
+    ('winkel_instellingen',   'beschikbaar_grens',       '20261005130100_winkel_beschikbaar_grens (BA-5)'),
+    ('winkel_artikelen',      'afhandeling',             '20261005140000_winkel_wegzetten (BA-6)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -136,7 +139,9 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_vrij_producten(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
     ('public.winkel_vrij_artikelen(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
     ('public.winkel_reserveringen(uuid, uuid)',                  '20261005130000_winkel_vrij (BA-5)'),
-    ('public.winkel_voorraad_stand(uuid)',                       '20261005130000_winkel_vrij (BA-5)')
+    ('public.winkel_voorraad_stand(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',       '20261005140000_winkel_wegzetten (BA-6)'),
+    ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
