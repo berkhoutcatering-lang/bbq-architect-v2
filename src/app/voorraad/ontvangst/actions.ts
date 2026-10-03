@@ -16,6 +16,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { voorraadFout } from '@/lib/winkel/voorraad';
 import { evalueerKeukenMeldingen, evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import { stelVoor, type BronRegel, type Koppeling, type Plek } from '@/lib/voorraad/invoer';
+import { verversNaAfloop } from '@/lib/website/verversSignaal';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -381,6 +382,7 @@ export async function boekOntvangst(input: unknown): Promise<ActionResult<{ wink
     const keukenIds = [...new Set((regels ?? []).filter((r) => !r.overslaan && r.plek === 'makerij' && r.inventory_id).map((r) => Number(r.inventory_id)))];
     if (winkelIds.length) await evalueerWinkelMeldingen(s.orgId, winkelIds);
     if (keukenIds.length) await evalueerKeukenMeldingen(s.orgId, keukenIds);
+    if (winkelIds.length) verversNaAfloop();
     ververs(parsed.data.id);
     revalidatePath('/voorraad');
     revalidatePath('/voorraad/winkel');

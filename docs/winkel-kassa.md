@@ -67,6 +67,29 @@ Intern lezen de BA-schermen dezelfde getallen in één aanroep: `WinkelStore.laa
 order het nummer, de naam, het afhaalmoment en het aantal — nooit e-mail of telefoon — voor
 de Toonbank (contract `toonbank/v1` §1.9). Test op de dev-database: `supabase/tests/winkel_vrij.sql`.
 
+### Ververs-signaal naar de website (plan v5, BA-5c)
+
+Na iets dat de beschikbaarheid kan veranderen stuurt BBQ Architect de website een seintje
+om zijn cache weg te gooien (`src/lib/website/verversSignaal.ts`). Er gaan geen getallen
+mee; de website haalt daarna zelf `GET beschikbaarheid` op.
+
+- `POST {WEBSITE_VERVERS_URL}` met body `{"tags":["beschikbaarheid"]}`, header `x-hb-tijd`
+  (seconden) en `x-hb-handtekening` = `sha256=` + hex(HMAC-SHA256(`WEBSITE_VERVERS_GEHEIM`,
+  `` `${tijd}.${body}` ``)). De website controleert ±300 s en vergelijkt in constante tijd
+  (WEB-2b, variabele `HB_VERVERS_GEHEIM` = hetzelfde geheim).
+- Gedeelde testvector (aan beide kanten getest): geheim `testgeheim-hop-en-bites`, tijd
+  `1791000000`, body `{"tags":["beschikbaarheid"]}` →
+  `sha256=67c7c403fe3d7c60339cc7983cd93326dffd55f06331fd025f644590b3a2455a`.
+- Hooguit 2 seconden, gooit nooit, en verstuurt via `after()` pas na het antwoord: myPOS
+  en de knoppen in BA wachten er niet op. Zonder **beide** variabelen
+  (`WEBSITE_VERVERS_URL`, `WEBSITE_VERVERS_GEHEIM`) gebeurt er niets.
+- Wanneer: na een bevestigde betaling (`naBetaling` in `src/lib/winkel/context.ts`), na
+  inpakken/uitpakken (`zetKlaargezet`), na tellen, ontvangst, overboeken en een afwijking in
+  de winkel (`/voorraad/winkel`), na het boeken van een ontvangst met winkelproducten
+  (`/voorraad/ontvangst`), en na het wijzigen van een artikel (quotum, actief) of zijn slots.
+- Een gemist signaal is niet erg: de website ververst ook op tijd en op `vrij_verloopt_at`,
+  en BBQ Architect blijft de poort bij de order.
+
 ## Zo werkt een order
 
 1. **Offerte.** Prijs × aantal per regel, btw per tarief uit de prijs inclusief,

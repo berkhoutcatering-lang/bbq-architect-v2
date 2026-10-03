@@ -25,6 +25,7 @@ import { voorraadFout } from '@/lib/winkel/voorraad';
 import { codeUitScan } from '@/lib/winkel/productie';
 import { ophaalMelding, terugMelding, type Melding, type OphaalUitkomst, type TerugUitkomst } from '@/lib/winkel/ophalen';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { verversNaAfloop } from '@/lib/website/verversSignaal';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -147,6 +148,8 @@ export async function werkArtikelBij(input: unknown): Promise<ActionResult<{ ok:
 
     const { error } = await s.supabase.from('winkel_artikelen').update(artikelRij(parsed.data)).eq('id', parsed.data.id).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
+    /* Quotum (voorraad), actief of publiek kan de beschikbaarheid veranderen. */
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { ok: true } };
 }
@@ -158,6 +161,7 @@ export async function zetArtikelActief(input: unknown): Promise<ActionResult<{ o
     if (!s) return { error: 'unauthorized' };
     const { error } = await s.supabase.from('winkel_artikelen').update({ actief: parsed.data.actief }).eq('id', parsed.data.id).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { ok: true } };
 }
@@ -472,6 +476,7 @@ export async function zetKlaargezet(input: unknown): Promise<ActionResult<{ ok: 
     if (error) return { error: voorraadFout(error.code, error.message) };
     const boekingen = ((data as { boekingen?: { product_id: string }[] } | null)?.boekingen ?? []);
     if (boekingen.length) await evalueerWinkelMeldingen(s.orgId, boekingen.map((b) => b.product_id));
+    verversNaAfloop();
     revalidatePath(PAD);
     revalidatePath('/voorraad/winkel');
     return { data: { ok: true, boekingen: boekingen.length } };
@@ -675,6 +680,8 @@ export async function zetSlots(input: unknown): Promise<ActionResult<{ aantal: n
             : await s.supabase.from('winkel_artikel_slots').insert(rij);
         if (error) return { error: error.message };
     }
+    /* Een ander product of aantal per pakket verandert wat er nog te maken is. */
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { aantal: slots.length } };
 }

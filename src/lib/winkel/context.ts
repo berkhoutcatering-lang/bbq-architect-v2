@@ -9,6 +9,7 @@
  */
 import { myposConfig } from '@/lib/mypos/config';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { verversNaAfloop } from '@/lib/website/verversSignaal';
 import type { KassaContext } from './kassa';
 import { stuurBevestigingsmail } from './mail';
 import { maakSupabaseStore } from './supabaseStore';
@@ -41,7 +42,12 @@ export function kassaContext(req: Request): KassaContext {
         webhookUrl: process.env.WINKEL_WEBHOOK_URL || undefined,
         webhookQuery: previewBypass(),
         mail: stuurBevestigingsmail,
-        naBetaling: (orgId) => evalueerWinkelMeldingen(orgId),
+        /* De bestelling reserveert: meldingen bijwerken, en de website laten
+           verversen (BA-5c; na het antwoord, myPOS wacht er niet op). */
+        naBetaling: (orgId) => {
+            verversNaAfloop();
+            return evalueerWinkelMeldingen(orgId);
+        },
     };
 }
 
