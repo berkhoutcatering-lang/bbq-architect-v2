@@ -99,10 +99,15 @@ Editor van het dashboard. Het zijn allemaal losse SELECT's.
 
 **Wat de fix doet:**
 - anon (de publieke sleutel) mag geen enkele `winkel_*`-, `voorraad_*`-functie of
-  `keuken_afwijking` meer uitvoeren.
+  `keuken_afwijking` meer uitvoeren, en ook `productie_partij_afronden`,
+  `partij_als_jsonb` en `increment_inventory_stock` niet (dezelfde open deur).
 - Wat BA met de ingelogde gebruiker aanroept, blijft voor `authenticated`. Per
   functie staat de aanroeper in de migratie.
-- De betaal- en plaatsfuncties zijn alleen nog voor `service_role`.
+- De betaal- en plaatsfuncties en `partij_als_jsonb` zijn alleen nog voor
+  `service_role`.
+- Triggerfuncties (zoals `winkel_catalogus_poort`) gaan ook dicht; lukt dat niet
+  omdat een andere rol eigenaar is, dan geeft de migratie alleen een WARNING (een
+  triggerfunctie is niet los aan te roepen).
 - Er komt `private.vereis_org(p_org)` bij, voor alle nieuwe functies.
 
 **Gevolgen voor de app:** geen. De website roept nooit zelf een databasefunctie aan.

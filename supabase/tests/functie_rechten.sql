@@ -15,12 +15,14 @@
 --
 -- Wat hij bewijst:
 --   - anon mag geen enkele winkel_%-, voorraad_%-functie of keuken_afwijking
---     (alle overloads) en ook private.vereis_org niet;
+--     (alle overloads) en ook private.vereis_org niet; evenmin
+--     productie_partij_afronden, partij_als_jsonb en increment_inventory_stock;
 --   - wat de BA-gebruikersclient aanroept mag authenticated (o.a.
 --     winkel_bezetting_product), wat alleen via de service-client loopt niet;
 --   - nieuwe functies van postgres in public krijgen geen grant voor anon;
---   - in het echt: anon wordt geweigerd vóór de functie draait, en een lid van
---     e2e-hop-en-bites mag winkel_bezetting_product;
+--   - in het echt: anon wordt geweigerd vóór de functie draait (ook bij de
+--     productie- en keukenfuncties), en een lid van e2e-hop-en-bites mag
+--     winkel_bezetting_product maar niet partij_als_jsonb;
 --   - private.vereis_org laat door: geen claims, service_role, eigen
 --     organisatie; en weigert: anon, een vreemde organisatie, geen lid.
 
@@ -54,7 +56,8 @@ begin
     select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text) into v_lijst
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
      where n.nspname = 'public'
-       and (p.proname like 'winkel\_%' or p.proname like 'voorraad\_%' or p.proname = 'keuken_afwijking')
+       and (p.proname like 'winkel\_%' or p.proname like 'voorraad\_%'
+            or p.proname in ('keuken_afwijking', 'productie_partij_afronden', 'partij_als_jsonb', 'increment_inventory_stock'))
        and has_function_privilege('anon', p.oid, 'EXECUTE');
     if v_lijst is not null then v_fouten := v_fouten || 'anon mag: ' || v_lijst || '; '; end if;
 
@@ -87,7 +90,9 @@ begin
         'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid)',
         'public.voorraad_overboeken(uuid, integer, uuid, numeric, text, text, text)',
         'public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
-        'public.voorraad_invoer_boeken(uuid, uuid)'
+        'public.voorraad_invoer_boeken(uuid, uuid)',
+        'public.productie_partij_afronden(uuid, uuid, bigint, numeric, text, numeric, text, jsonb, date, date, text, text, uuid, uuid, integer, bigint, uuid, integer, numeric, jsonb, text)',
+        'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
@@ -106,7 +111,8 @@ begin
         'public.winkel_regels_json(bigint)',
         'public.winkel_bezetting_moment(uuid, bigint)',
         'public.winkel_bezetting_voorraad(uuid, bigint)',
-        'public.winkel_keuken_factor(text, text)'
+        'public.winkel_keuken_factor(text, text)',
+        'public.partij_als_jsonb(uuid, boolean)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
@@ -131,7 +137,8 @@ begin
     end if;
 
     -- ── 6. In het echt: anon wordt geweigerd vóór de functie draait.
-    foreach v_sig in array array['winkel_muteer_voorraad', 'winkel_bezetting_product', 'voorraad_overboeken'] loop
+    foreach v_sig in array array['winkel_muteer_voorraad', 'winkel_bezetting_product', 'voorraad_overboeken',
+                                 'productie_partij_afronden', 'partij_als_jsonb', 'increment_inventory_stock'] loop
         begin
             perform set_config('request.jwt.claims', '{"role":"anon"}', true);
             perform set_config('role', 'anon', true);
@@ -139,6 +146,12 @@ begin
                 perform public.winkel_muteer_voorraad(v_org, gen_random_uuid(), 'telling', 0);
             elsif v_sig = 'winkel_bezetting_product' then
                 perform public.winkel_bezetting_product(gen_random_uuid(), null);
+            elsif v_sig = 'productie_partij_afronden' then
+                perform public.productie_partij_afronden(v_org, gen_random_uuid(), 0, 1, 'kg', 1, 'kg', '[]'::jsonb);
+            elsif v_sig = 'partij_als_jsonb' then
+                perform public.partij_als_jsonb(gen_random_uuid(), false);
+            elsif v_sig = 'increment_inventory_stock' then
+                perform public.increment_inventory_stock(v_org, 0, 0, 'count');
             else
                 perform public.voorraad_overboeken(v_org, 0, gen_random_uuid(), 1);
             end if;
@@ -188,6 +201,12 @@ begin
             exception when insufficient_privilege then null;
             end;
 
+            begin
+                perform public.partij_als_jsonb(gen_random_uuid(), false);
+                v_fouten := v_fouten || 'authenticated kon partij_als_jsonb aanroepen; ';
+            exception when insufficient_privilege then null;
+            end;
+
             raise exception 'terug_naar_postgres';
         exception when others then
             if sqlerrm <> 'terug_naar_postgres' then
@@ -234,5 +253,5 @@ begin
     perform set_config('request.jwt.claims', '', true);
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: % winkel_/voorraad_-functies, geen enkele voor anon; gebruikersclient-functies voor authenticated, betaal- en plaatsfuncties alleen service_role; standaardrechten zonder anon; anon in het echt geweigerd; lid van e2e mag winkel_bezetting_product; vereis_org klopt op alle paden — alles teruggedraaid', v_aantal;
+    raise exception 'GESLAAGD: % winkel_/voorraad_-functies, geen enkele voor anon (ook productie_partij_afronden, partij_als_jsonb en increment_inventory_stock niet); gebruikersclient-functies voor authenticated, betaal- en plaatsfuncties en partij_als_jsonb alleen service_role; standaardrechten zonder anon; anon in het echt geweigerd; lid van e2e mag winkel_bezetting_product; vereis_org klopt op alle paden — alles teruggedraaid', v_aantal;
 end $$;

@@ -7,8 +7,10 @@
 --
 --  Vier delen:
 --    0 samenvatting     hoeveel functies anon mag uitvoeren
---    1 winkel/voorraad  elke winkel_%, voorraad_%, keuken_afwijking en
---                       private.vereis_org: anon / authenticated / service_role
+--    1 winkel/voorraad  elke winkel_%, voorraad_%, keuken_afwijking,
+--                       productie_partij_afronden, partij_als_jsonb,
+--                       increment_inventory_stock en private.vereis_org:
+--                       anon / authenticated / service_role
 --    2 standaardrechten pg_default_acl: wat krijgen NIEUWE functies?
 --    3 triage           ALLE SECURITY DEFINER-functies in public die anon mag
 --                       uitvoeren. Elke regel is een vraag: hoort dit publiek?
@@ -23,6 +25,7 @@ WITH fn AS (
            p.oid::regprocedure::text                 AS signatuur,
            p.proowner::regrole::text                 AS eigenaar,
            p.prosecdef                               AS definer,
+           p.prorettype = 'trigger'::regtype         AS is_trigger,
            has_function_privilege('anon',          p.oid, 'EXECUTE') AS anon,
            has_function_privilege('authenticated', p.oid, 'EXECUTE') AS authenticated,
            has_function_privilege('service_role',  p.oid, 'EXECUTE') AS service_role,
@@ -35,7 +38,8 @@ WITH fn AS (
 ),
 winkel AS (
     SELECT * FROM fn
-     WHERE (nspname = 'public' AND (proname LIKE 'winkel\_%' OR proname LIKE 'voorraad\_%' OR proname = 'keuken_afwijking'))
+     WHERE (nspname = 'public' AND (proname LIKE 'winkel\_%' OR proname LIKE 'voorraad\_%'
+                                    OR proname IN ('keuken_afwijking', 'productie_partij_afronden', 'partij_als_jsonb', 'increment_inventory_stock')))
         OR (nspname = 'private' AND proname = 'vereis_org')
 ),
 standaard AS (
@@ -87,7 +91,8 @@ uitkomst AS (
            CASE WHEN anon THEN 'ja' ELSE 'nee' END,
            CASE WHEN authenticated THEN 'ja' ELSE 'nee' END,
            CASE WHEN service_role THEN 'ja' ELSE 'nee' END,
-           CASE WHEN anon AND definer THEN 'LEK (SECURITY DEFINER, anon-sleutel volstaat)'
+           CASE WHEN anon AND is_trigger THEN 'triggerfunctie: niet los aan te roepen, wel intrekken (als eigenaar)'
+                WHEN anon AND definer THEN 'LEK (SECURITY DEFINER, anon-sleutel volstaat)'
                 WHEN anon THEN 'LEK (anon mag uitvoeren)'
                 ELSE 'OK' END
       FROM winkel
@@ -117,7 +122,9 @@ uitkomst AS (
            CASE WHEN authenticated THEN 'ja' ELSE 'nee' END,
            CASE WHEN service_role THEN 'ja' ELSE 'nee' END,
            CASE WHEN extensie IS NOT NULL THEN 'van extensie ' || extensie
-                WHEN proname LIKE 'winkel\_%' OR proname LIKE 'voorraad\_%' OR proname = 'keuken_afwijking' THEN 'BA-S hoort dit te dichten'
+                WHEN proname LIKE 'winkel\_%' OR proname LIKE 'voorraad\_%'
+                     OR proname IN ('keuken_afwijking', 'productie_partij_afronden', 'partij_als_jsonb', 'increment_inventory_stock')
+                THEN 'BA-S hoort dit te dichten'
                 ELSE 'beoordelen: hoort dit publiek?' END
       FROM fn
      WHERE nspname = 'public' AND definer AND anon
