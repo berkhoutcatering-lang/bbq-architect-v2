@@ -70,7 +70,7 @@ export default function WebshopPagina() {
             supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief').order('datum'),
-            supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url, melding_email').maybeSingle(),
+            supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url, melding_email, kassa_sleutel').maybeSingle(),
             supabase.from('gerechten').select('id, naam').eq('actief', true).order('naam'),
             supabase.from('inventory').select('id, naam, unit, current_stock').order('naam'),
             supabase.from('winkel_producten').select('*').order('type').order('naam'),

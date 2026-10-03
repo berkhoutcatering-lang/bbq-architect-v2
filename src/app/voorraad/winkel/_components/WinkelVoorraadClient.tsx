@@ -28,7 +28,8 @@ import {
     AFWIJKINGSREDENEN, REDEN_LABEL, TYPE_LABEL, beperkendProduct, beschikbaar, geldendeDrempel, gereserveerd,
     hoeveelheidKort, pakkettenTeMaken, voorraadstatus, waardeCenten, type Afwijkingsreden, type Mutatietype, type Reden, type Voorraadstatus,
 } from '@/lib/winkel/voorraad';
-import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetDrempel, type LogboekRegel } from '../actions';
+import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetBestelgegevens, type LogboekRegel } from '../actions';
+import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
 export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     voorraad_bezet?: number;
@@ -39,6 +40,10 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     laatste_beweging_at: string | null;
     inventory_id: number | null;
     foto_url: string | null;
+    par_niveau: number | null;
+    bestel_eenheid_naam: string | null;
+    bestel_prijs_cents: number | null;
+    leverancier_id: number | null;
 }
 
 export interface WinkelData {
@@ -47,6 +52,7 @@ export interface WinkelData {
     slots: Slot[];
     artikelen: { id: string; naam: string; slug: string; actief: boolean; telt: string }[];
     keuken: { id: number; naam: string; unit: string | null; current_stock: number | null }[];
+    leveranciers: { id: number; naam: string }[];
 }
 
 const STATUS_KLEUR: Record<Voorraadstatus, string> = {
@@ -278,6 +284,17 @@ function Tegel({ p, b, drempel, status, Icoon, schap, stil, vertraging, onClick 
                             <span style={{ fontSize: 11, color: 'var(--muted)' }}>vrij</span>
                         </div>
                         <Balk deel={Math.max(0, b ?? 0) / schaal} kleur={kleur} stil={stil} grens={drempel != null ? drempel / schaal : null} />
+                        {(() => {
+                            const best = bestelVoorstel({
+                                id: p.id, naam: p.naam, eenheid: p.eenheid, voorraad: p.voorraad, voorraad_bezet: p.voorraad_bezet, minimum: drempel,
+                                par_niveau: p.par_niveau, bestel_hoeveelheid: p.bestel_hoeveelheid, bestel_eenheid_naam: p.bestel_eenheid_naam, bestel_prijs_cents: null,
+                            });
+                            return best ? (
+                                <div style={{ marginTop: 7, fontSize: 11, fontWeight: 600, color: 'var(--brand-gold, #c4a35a)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <PackagePlus size={11} /> op bestellijst: {best.eenheid_label ?? hoeveelheidKort(best.besteld, p.eenheid)}
+                                </div>
+                            ) : null;
+                        })()}
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 7 }}>
                             {hoeveelheidKort(p.voorraad ?? 0, p.eenheid)} staat{gereserveerd(p) ? ` · ${hoeveelheidKort(gereserveerd(p), p.eenheid)} besteld` : ''}{p.tht ? ` · THT ${thtTekst(p.tht)}` : ''}
                         </div>
@@ -346,6 +363,10 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     const [drempel, setDrempel] = useState(p.drempel == null ? '' : String(p.drempel).replace('.', ','));
     const [bestel, setBestel] = useState(p.bestel_hoeveelheid == null ? '' : String(p.bestel_hoeveelheid).replace('.', ','));
     const [ean, setEan] = useState(p.ean ?? '');
+    const [par, setPar] = useState(p.par_niveau == null ? '' : String(p.par_niveau).replace('.', ','));
+    const [eenheidNaam, setEenheidNaam] = useState(p.bestel_eenheid_naam ?? '');
+    const [bestelPrijs, setBestelPrijs] = useState(p.bestel_prijs_cents == null ? '' : (p.bestel_prijs_cents / 100).toFixed(2).replace('.', ','));
+    const [leverancier, setLeverancier] = useState<number | null>(p.leverancier_id);
     const [notitie, setNotitie] = useState('');
     const keukenItem = data.keuken.find((k) => k.id === keukenId) ?? null;
 
@@ -379,9 +400,12 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
             if (!reden) { toast('Kies een reden.', 'error'); return; }
             await doe(() => legAfwijkingVast({ bron: 'winkel', id: p.id, hoeveelheid: n, reden, notitie: notitie || null, sleutel: key }), `Vastgelegd: ${hoeveelheidKort(n, p.eenheid)} ${REDEN_LABEL[reden]}`);
         } else {
-            const dr = leesGetal(drempel); const be = leesGetal(bestel);
-            if (Number.isNaN(dr) || Number.isNaN(be)) { toast('Dat is geen geldig getal.', 'error'); return; }
-            await doe(() => zetDrempel({ productId: p.id, drempel: dr, bestel_hoeveelheid: be, ean: ean.trim() || null }), 'Opgeslagen');
+            const dr = leesGetal(drempel); const be = leesGetal(bestel); const pa = leesGetal(par); const pr = leesGetal(bestelPrijs);
+            if ([dr, be, pa, pr].some((x) => Number.isNaN(x))) { toast('Dat is geen geldig getal.', 'error'); return; }
+            await doe(() => zetBestelgegevens({
+                productId: p.id, drempel: dr, par_niveau: pa, bestel_hoeveelheid: be, bestel_eenheid_naam: eenheidNaam.trim() || null,
+                bestel_prijs_cents: pr == null ? null : Math.round(pr * 100), leverancier_id: leverancier, ean: ean.trim() || null,
+            }), 'Opgeslagen');
         }
         setAantal(''); setNotitie(''); setReden(null);
     }
@@ -391,7 +415,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
         { k: 'overboeken', label: 'Makerij', icon: ArrowLeftRight, kan: p.voorraad != null },
         { k: 'tellen', label: 'Tellen', icon: ClipboardList, kan: true },
         { k: 'afwijking', label: 'Afwijking', icon: TriangleAlert, kan: p.voorraad != null },
-        { k: 'instellen', label: 'Grens', icon: Settings2, kan: true },
+        { k: 'instellen', label: 'Bestellen', icon: Settings2, kan: true },
     ];
 
     return (
@@ -402,7 +426,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     <Mini label="Aanwezig" waarde={p.voorraad == null ? '—' : hoeveelheidKort(p.voorraad, p.eenheid)} />
                     <Mini label="Besteld" waarde={p.voorraad == null ? '—' : hoeveelheidKort(gereserveerd(p), p.eenheid)} />
                     <Mini label="Beschikbaar" waarde={b == null ? '—' : hoeveelheidKort(b, p.eenheid)} />
-                    <Mini label={d.bron === 'voorstel' ? 'Grens (voorstel)' : 'Grens'} waarde={d.waarde == null ? '—' : hoeveelheidKort(d.waarde, p.eenheid)} />
+                    <Mini label={d.bron === 'voorstel' ? 'Minimum (voorstel)' : 'Minimum'} waarde={d.waarde == null ? '—' : hoeveelheidKort(d.waarde, p.eenheid)} />
                 </div>
 
                 <div className="kf-seg" role="tablist" style={{ flexWrap: 'wrap' }}>
@@ -469,23 +493,65 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     </div>
                 )}
 
-                {actie === 'instellen' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div className="kf-field">
-                            <label className="kf-label">Bijna-op-grens ({eenheid})</label>
-                            <input className="kf-input" inputMode="decimal" value={drempel} onChange={(e) => setDrempel(e.target.value)} placeholder={d.bron === 'voorstel' && d.waarde != null ? `voorstel ${d.waarde}` : 'geen grens'} />
-                            <div className="kf-help">Leeg = het voorstel: genoeg voor 5 pakketten.</div>
+                {actie === 'instellen' && (() => {
+                    /* Live: wat er nu op de bestellijst zou komen met deze getallen. */
+                    const n = (x: string) => { const v = leesGetal(x); return v == null || Number.isNaN(v) ? null : v; };
+                    const minimum = n(drempel) ?? d.waarde;
+                    const voorbeeld = bestelVoorstel({
+                        id: p.id, naam: p.naam, eenheid: p.eenheid, voorraad: p.voorraad, voorraad_bezet: p.voorraad_bezet,
+                        minimum, par_niveau: n(par), bestel_hoeveelheid: n(bestel), bestel_eenheid_naam: eenheidNaam.trim() || null, bestel_prijs_cents: null,
+                    });
+                    return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                <div className="kf-field">
+                                    <label className="kf-label">Minimum ({eenheid})</label>
+                                    <input className="kf-input" inputMode="decimal" value={drempel} onChange={(e) => setDrempel(e.target.value)} placeholder={d.bron === 'voorstel' && d.waarde != null ? `voorstel ${d.waarde}` : 'geen'} />
+                                    <div className="kf-help">Eronder: "tijd om bij te bestellen". Leeg = genoeg voor 5 pakketten.</div>
+                                </div>
+                                <div className="kf-field">
+                                    <label className="kf-label">Aanvullen tot ({eenheid})</label>
+                                    <input className="kf-input" inputMode="decimal" value={par} onChange={(e) => setPar(e.target.value)} placeholder="bijv. 30" />
+                                    <div className="kf-help">Zoveel wil je er hebben na een levering.</div>
+                                </div>
+                                <div className="kf-field">
+                                    <label className="kf-label">Besteleenheid ({eenheid})</label>
+                                    <input className="kf-input" inputMode="decimal" value={bestel} onChange={(e) => setBestel(e.target.value)} placeholder={p.eenheid === 'gram' ? 'bijv. 4000 (wiel)' : 'bijv. 24 (krat)'} />
+                                    <div className="kf-help">Je bestelt altijd hele besteleenheden: 8 nodig = 1 krat van 24.</div>
+                                </div>
+                                <div className="kf-field">
+                                    <label className="kf-label">Heet</label>
+                                    <input className="kf-input" value={eenheidNaam} onChange={(e) => setEenheidNaam(e.target.value)} placeholder="krat, doos, wiel" />
+                                </div>
+                                <div className="kf-field">
+                                    <label className="kf-label">Prijs per besteleenheid (excl. btw)</label>
+                                    <input className="kf-input" inputMode="decimal" value={bestelPrijs} onChange={(e) => setBestelPrijs(e.target.value)} placeholder="bijv. 21,60" />
+                                    {n(bestelPrijs) != null && n(bestel) ? <div className="kf-help">= {formatEur(n(bestelPrijs)! / n(bestel)!)} per {p.eenheid === 'gram' ? 'gram' : 'stuk'}{p.eenheid === 'gram' ? ` (${formatEur((n(bestelPrijs)! / n(bestel)!) * 1000)} per kg)` : ''}</div> : null}
+                                </div>
+                                <div className="kf-field">
+                                    <label className="kf-label">Leverancier</label>
+                                    <select className="kf-input" value={leverancier ?? ''} onChange={(e) => setLeverancier(e.target.value ? Number(e.target.value) : null)}>
+                                        <option value="">Nog te kiezen</option>
+                                        {data.leveranciers.map((l) => <option key={l.id} value={l.id}>{l.naam}</option>)}
+                                    </select>
+                                </div>
+                                <div className="kf-field" style={{ gridColumn: '1 / -1' }}>
+                                    <label className="kf-label">EAN (voor de kassa)</label>
+                                    <input className="kf-input" inputMode="numeric" value={ean} onChange={(e) => setEan(e.target.value)} placeholder="nog leeg" />
+                                </div>
+                            </div>
+                            <div className="kf-banner">
+                                <PackageCheck size={15} />
+                                <span>
+                                    {p.voorraad == null ? 'Nog niet geteld: zodra je telt, rekent de bestellijst mee.'
+                                        : voorbeeld ? <><strong>Nu op de bestellijst: {voorbeeld.eenheid_label ?? hoeveelheidKort(voorbeeld.besteld, p.eenheid)}.</strong> {voorbeeld.uitleg}</>
+                                        : minimum == null ? 'Zonder minimum komt dit product nooit op de bestellijst.'
+                                        : <>Niets te bestellen: {hoeveelheidKort(beschikbaar(p) ?? 0, p.eenheid)} vrij, boven het minimum van {hoeveelheidKort(minimum, p.eenheid)}.</>}
+                                </span>
+                            </div>
                         </div>
-                        <div className="kf-field">
-                            <label className="kf-label">Bestelhoeveelheid ({eenheid})</label>
-                            <input className="kf-input" inputMode="decimal" value={bestel} onChange={(e) => setBestel(e.target.value)} placeholder="bijv. een doos van 24" />
-                        </div>
-                        <div className="kf-field" style={{ gridColumn: '1 / -1' }}>
-                            <label className="kf-label">EAN (voor de kassa)</label>
-                            <input className="kf-input" inputMode="numeric" value={ean} onChange={(e) => setEan(e.target.value)} placeholder="nog leeg" />
-                        </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {actie !== 'instellen' && (
                     <div className="kf-field">

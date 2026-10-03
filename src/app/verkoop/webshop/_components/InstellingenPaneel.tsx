@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { Save } from 'lucide-react';
 import Button from '@/components/Button';
 import { leesEuro, toonEuro } from '../_lib/vakjes';
-import { werkInstellingenBij } from '../actions';
+import { maakKassaSleutel, werkInstellingenBij } from '../actions';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -27,6 +27,7 @@ export interface InstellingenRij {
     reservering_bedrag_cents: number | null;
     qr_basis_url: string | null;
     melding_email: string | null;
+    kassa_sleutel?: string | null;
 }
 
 const STANDAARD: InstellingenRij = { verzendkosten_cents: null, gratis_verzenden_vanaf_cents: null, verzendkosten_btw_pct: 21, reservering_minuten: 30, offerte_geldig_minuten: 15, nummer_prefix: 'HB', nummer_jaar: null, nummer_laatste: 0, kassa_open: false, site_url: null, reservering_bedrag_cents: null, qr_basis_url: null, melding_email: null };
@@ -99,10 +100,45 @@ export default function InstellingenPaneel({ instellingen, herlaad, melding }: {
                         <div className="field" style={{ gridColumn: '1 / -1' }}><label>QR-app (Experience)</label><input value={f.qr} onChange={(e) => setF({ ...f, qr: e.target.value })} placeholder="https://experience.hopbites.nl" /><div className="field-hint">Basis-URL voor de QR op elk etiket: {(f.qr.trim() || '…').replace(/\/+$/, '')}/g/&lt;code van de doos&gt;. Aan de balie is die scan "opgehaald"; op een telefoon opent hij de Experience-app. Leeg = geen QR op het etiket.</div></div>
                     </div>
                 </div>
+                <KassaKoppeling actief={!!i.kassa_sleutel} melding={melding} />
                 <div className="mr-drawer-footer" style={{ background: 'transparent' }}>
                     <Button icon={<Save size={14} />} loading={bezig === 'opslaan'} onClick={() => bewaar(open, 'opslaan')}>Opslaan</Button>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/* Kassakoppeling: de winkelkassa meldt verkopen; elke verkoop gaat van de
+   winkelvoorraad af (docs/voorraad-bouwplan.md "Winkel bestellen", stap 6). */
+function KassaKoppeling({ actief, melding }: { actief: boolean; melding: Melding }) {
+    const [sleutel, setSleutel] = useState<string | null>(null);
+    const [bezig, setBezig] = useState(false);
+    async function maak() {
+        if (actief && !confirm('Een nieuwe sleutel maakt de oude ongeldig. De kassa moet dan de nieuwe krijgen. Doorgaan?')) return;
+        setBezig(true);
+        try {
+            const r = await maakKassaSleutel();
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            setSleutel(r.data.sleutel);
+        } finally { setBezig(false); }
+    }
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/api/kassa/<slug>/verkoop` : '/api/kassa/<slug>/verkoop';
+    return (
+        <div style={{ padding: '0 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className="ws-lijn" />
+            <div className="ws-eyebrow">Kassa in de winkel</div>
+            <div className="ws-onderschrift">
+                {actief ? 'De kassakoppeling staat aan: elke verkoop aan de kassa gaat van de winkelvoorraad af.' : 'Nog geen kassa gekoppeld. Maak een sleutel en zet die in de kassa; daarna boekt elke verkoop vanzelf af.'}
+            </div>
+            {sleutel && (
+                <div className="ws-tip" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                    <div><b>Kopieer deze sleutel nu</b> — hij wordt niet nog eens getoond.</div>
+                    <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{sleutel}</code>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>De kassa stuurt verkopen naar {url} met de header <code>Authorization: Bearer &lt;sleutel&gt;</code>.</div>
+                </div>
+            )}
+            <div><Button variant="ghost" loading={bezig} onClick={maak}>{actief ? 'Nieuwe sleutel maken' : 'Kassasleutel maken'}</Button></div>
         </div>
     );
 }

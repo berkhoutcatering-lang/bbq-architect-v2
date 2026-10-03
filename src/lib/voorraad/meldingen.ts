@@ -26,7 +26,7 @@ import {
 type Sb = ReturnType<typeof createServiceSupabase>;
 type Staat = Pick<Melding, 'bron' | 'item_id' | 'soort'>;
 
-const PRODUCT_KOLOMMEN = 'id, naam, eenheid, voorraad, drempel, actief';
+const PRODUCT_KOLOMMEN = 'id, naam, eenheid, voorraad, drempel, actief, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam';
 const SLOT_KOLOMMEN = 'id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven';
 
 async function laadWinkel(sb: Sb, orgId: string) {
@@ -61,6 +61,9 @@ async function laadWinkel(sb: Sb, orgId: string) {
         voorraad: p.voorraad == null ? null : Number(p.voorraad),
         voorraad_bezet: p.voorraad == null ? undefined : bezet.get(p.id as string) ?? 0,
         drempel: p.drempel == null ? null : Number(p.drempel),
+        par_niveau: p.par_niveau == null ? null : Number(p.par_niveau),
+        bestel_hoeveelheid: p.bestel_hoeveelheid == null ? null : Number(p.bestel_hoeveelheid),
+        bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
     }));
     const sl = (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[];
     return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag };

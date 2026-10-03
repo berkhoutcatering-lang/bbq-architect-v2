@@ -19,9 +19,9 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
     const { product } = await searchParams;
     const supabase = await createServerSupabase();
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }, { data: leveranciers }] = await Promise.all([
         supabase.from('winkel_producten')
-            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url')
+            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, leverancier_id')
             .order('type').order('naam'),
         supabase.from('winkel_artikel_slots')
             .select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven')
@@ -29,6 +29,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         supabase.from('winkel_artikelen').select('id, naam, slug, actief, telt').order('naam'),
         supabase.from('inventory').select('id, naam, unit, current_stock').order('naam').limit(2000),
         supabase.from('voorraad_plekken').select('id, naam').eq('soort', 'winkel').maybeSingle(),
+        supabase.from('leveranciers').select('id, naam').is('archived_at', null).order('naam'),
     ]);
 
     const bijgehouden = (producten ?? []).filter((p) => p.voorraad != null);
@@ -60,10 +61,15 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
             laatste_beweging_at: (p.laatste_beweging_at as string | null) ?? null,
             inventory_id: (p.inventory_id as number | null) ?? null,
             foto_url: (p.foto_url as string | null) ?? null,
+            par_niveau: p.par_niveau == null ? null : Number(p.par_niveau),
+            bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
+            bestel_prijs_cents: (p.bestel_prijs_cents as number | null) ?? null,
+            leverancier_id: (p.leverancier_id as number | null) ?? null,
         })),
         slots: (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as WinkelData['slots'],
         artikelen: (artikelen ?? []) as WinkelData['artikelen'],
         keuken: (keuken ?? []).map((k) => ({ id: Number(k.id), naam: k.naam as string, unit: (k.unit as string | null) ?? null, current_stock: k.current_stock == null ? null : Number(k.current_stock) })),
+        leveranciers: (leveranciers ?? []).map((l) => ({ id: Number(l.id), naam: l.naam as string })),
     };
 
     return <WinkelVoorraadClient data={data} openProductId={product ?? null} />;

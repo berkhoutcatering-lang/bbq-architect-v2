@@ -430,7 +430,7 @@ function NietBijWinkel({ summary }: { summary: BestelvoorstelSummary }) {
             </div>
             <div>
                 {items.map((it, i) => (
-                    <div key={it.inventory_id} style={{
+                    <div key={it.winkel_product_id ?? it.inventory_id} style={{
                         display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px',
                         borderBottom: i === items.length - 1 ? 'none' : '1px solid var(--border)', fontSize: 13,
                     }}>
@@ -647,6 +647,9 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, le
             {/* Items */}
             <div>
                 {bucket.items.map(function (item, idx) {
+                    if (item.plek === 'winkel') {
+                        return <WinkelItemRow key={'w-' + item.winkel_product_id} item={item} isLast={idx === bucket.items.length - 1} />;
+                    }
                     return (
                         <ItemRow
                             key={item.inventory_id}
@@ -724,6 +727,27 @@ interface ItemRowProps {
     applyPatch: (patch: any) => void;
     /** Gemarkeerd: deze regel hoort bij het vakje waar je vandaan kwam. */
     letOp?: boolean;
+}
+
+/* Een winkelregel (docs/voorraad-bouwplan.md "Winkel bestellen"): het minimum
+   en de besteleenheid van het winkelproduct bepalen het aantal. Aanpassen doe
+   je bij het product zelf; bij ontvangst gaat het naar de winkelvoorraad. */
+function WinkelItemRow({ item, isLast }: { item: BestelvoorstelItem; isLast: boolean }) {
+    const [waarom, setWaarom] = useState(false);
+    return (
+        <div style={{ padding: '12px 18px', borderBottom: isLast ? 'none' : '1px solid var(--border)', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 999, background: 'rgba(196,163,90,.15)', color: 'var(--brand-gold, #c4a35a)' }}>winkel</span>
+                <span style={{ fontWeight: 600, flex: 1, minWidth: 140 }}>{item.naam}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{item.pack_label ?? fmtQty(item.qty, item.unit)}</span>
+                <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', minWidth: 70, textAlign: 'right' }}>{item.price_unknown ? 'prijs ?' : formatEur(item.est_total_eur)}</span>
+                <button type="button" onClick={() => setWaarom(!waarom)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>waarom?</button>
+                <Link href={`/voorraad/winkel?product=${item.winkel_product_id}`} style={{ color: 'var(--brand)', fontSize: 12 }}>aanpassen</Link>
+            </div>
+            {waarom && item.uitleg && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{item.uitleg}</div>}
+            {item.rounding_reason === 'no_pack' && <div style={{ fontSize: 12, color: 'var(--brand-gold, #c4a35a)', marginTop: 4 }}>Besteleenheid nog niet ingevuld: nu 1-op-1. Vul hem in bij het product (krat, doos, wiel).</div>}
+        </div>
+    );
 }
 
 function ItemRow({ item, bucket, otherSuppliers, isLast, applyPatch, letOp }: ItemRowProps) {
@@ -1336,7 +1360,7 @@ function PdfPreviewModal({
                             <tbody>
                                 {bucket.items.map(function (it) {
                                     return (
-                                        <tr key={it.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
+                                        <tr key={it.winkel_product_id ?? it.inventory_id} style={{ borderBottom: '1px solid #eee' }}>
                                             <td style={{ padding: '8px 0' }}>
                                                 <div style={{ fontWeight: 500 }}>{it.naam}</div>
                                                 {it.events.length > 0 && (

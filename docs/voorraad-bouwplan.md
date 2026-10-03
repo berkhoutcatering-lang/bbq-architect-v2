@@ -125,6 +125,33 @@ Alle manieren maken eerst een **concept** (`voorraad_invoer` + `voorraad_invoer_
 
 **Niet veranderd:** de snelle aanpassing per product in `/voorraad` en de ontvangst in de lade van `/voorraad/winkel` boeken nog direct. Dat is invoer van één regel waarvan je het getal zelf typt en ziet. Moet dat ook via het concept, dan is dat een kleine aanpassing.
 
+### Winkel bestellen — minimum, aanvullen tot, besteleenheid, kassa (3 okt)
+
+Wens van Mathijs: net als de keuken (par level). Een minimum per product: eronder krijg je "tijd om bij te bestellen" en staat het product op de bestellijst. Er wordt in hele **besteleenheden** besteld, die Mathijs zelf invult: krat van 24, wiel kaas. "8 nodig = 1 krat van 24."
+
+- **Velden** (`20260929120000_winkel_bestellen.sql`, live): `drempel` (minimum), `par_niveau` (aanvullen tot), `bestel_hoeveelheid` + `bestel_eenheid_naam` (besteleenheid), `bestel_prijs_cents` (per besteleenheid), `leverancier_id`. Invullen gebeurt in de productlade op `/voorraad/winkel`, tab **Bestellen**, met een live voorbeeld van wat er op de bestellijst komt.
+- **Rekenregel** (`src/lib/winkel/bestellen.ts`, getest):
+  - **Trigger:** beschikbaar + onderweg ≤ minimum.
+  - **Nodig:** aanvullen tot − (beschikbaar + onderweg).
+  - **Afronden:** omhoog op hele besteleenheden, met dezelfde `roundUpToPack` als de keuken.
+  - Elke regel krijgt een uitleg, bijvoorbeeld "9 st. vrij · minimum 10 st. · aanvullen tot 30 st. → 21 st. nodig → 1 krat (24)".
+  - Niet bijgehouden of geen minimum betekent niets op de lijst.
+- **Bestellijst:**
+  - `buildBestelvoorstel` neemt de winkelproducten mee in hetzelfde leveranciersblok als de keuken (`src/lib/dal/winkelBestelling.ts`).
+  - Een winkelregel heeft `plek: 'winkel'`, `winkel_product_id` en het label "winkel".
+  - Bij verzenden komt `winkel_product_id` op `inkoop_order_lines`, en de pdf noemt "1 krat (24)".
+  - Bij ontvangst (op `/inkoop`, of via het controlescherm Ontvangst) gaat de regel naar de winkelvoorraad.
+  - Er gaat niets vanzelf de deur uit.
+- **Melding:** "Tijd om bij te bestellen: X — nog 9", met "Op de bestellijst: 1 krat (24)" en een link naar `/inkoop`.
+- **Kassa** (stap 6, merk-onafhankelijk):
+  - De kassa stuurt `POST /api/kassa/{slug}/verkoop` met `Authorization: Bearer <sleutel>` en `{ bon, regels: [{ ean | product_id, aantal }] }`.
+  - Per regel wordt `verkoop_kassa` geboekt (of `retour` bij een negatief aantal). Dubbel melden boekt niets dubbel.
+  - Een onbekende barcode, een product dat nog niet geteld is, of een verkoop van meer dan er ligt, wordt een melding in de bel en wordt nooit stil overgeslagen.
+  - De sleutel maak je in Webshop → Instellingen → Kassa. Alleen de hash wordt bewaard.
+- **Open:**
+  - Welk kassamerk het wordt. Dat bepaalt alleen nog de vertaalstap naar dit formaat.
+  - Een minimale bestelwaarde per leverancier.
+
 ### W3 — Afboeken bij inpakken
 
 - Het vinkje "klaargezet" roept `winkel_boek_regel` aan. Die boekt **netto**: doel min wat al geboekt is. Twee keer klikken doet dus niets extra, en het vinkje uitzetten boekt retour.
