@@ -11,7 +11,7 @@ import { vandaagISO } from './rekenen';
 import { regelBoekingen } from './voorraad';
 import { heeftAlcohol, nogOpen, opDezelfdeDag, ophaalBlokkade, restOpen, type Boeking, type Leeftijd, type OphaalBron, type OphaalUitkomst, type RestMethode, type TerugUitkomst } from './ophalen';
 import type { Bronnen, ComponentRij, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
-import { vrijProducten } from './vrij';
+import { BESCHIKBAAR_GRENS, vrijArtikelen, vrijProducten } from './vrij';
 
 /** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
 export interface EventGeheugen extends EventTotalen {
@@ -59,7 +59,7 @@ interface Geheugen {
     /** Producten en slots (templates); ontbreekt = geen templates. */
     producten?: Omit<Product, 'voorraad_bezet'>[];
     slots?: Slot[];
-    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null };
+    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null; beschikbaar_grens?: number };
     nu: () => Date;
 }
 
@@ -110,7 +110,8 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
        (deferred trigger); hier één keer per handeling (pakIn, haalOp, …),
        nooit per regel binnen een handeling. */
     let versie = 0;
-    const versieOmhoog = () => { versie += 1; };
+    let versieAt: string | null = null;
+    const versieOmhoog = () => { versie += 1; versieAt = nu.toISOString(); };
 
     const telt = (o: OrderRij) => o.status === 'betaald' || (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime());
     const bezetMoment = (id: string, zonder: number | null) =>
@@ -510,10 +511,24 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             if (o) { o.plaatsing_status = status; o.plaatsing_fout = fout; o.plaatsing_at = nu.toISOString(); }
         },
 
-        /* ── Vrij (BA-5a): dezelfde regel als winkel_vrij_producten ── */
+        /* ── Vrij (BA-5a/5b): dezelfde regels als winkel_vrij_producten en winkel_vrij_artikelen ── */
         async laadVrij(orgId) {
             if (orgId !== g.tenant.orgId) return [];
             return vrijProducten(producten, new Map(producten.map((p) => [p.id, bezetProduct(p.id, null)])));
+        },
+        async laadBeschikbaarheid(orgId) {
+            if (orgId !== g.tenant.orgId) return null;
+            const wachtTot = orders
+                .filter((o) => o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime())
+                .map((o) => o.reservering_tot)
+                .sort();
+            const vrij = vrijProducten(producten, new Map(producten.map((p) => [p.id, bezetProduct(p.id, null)])));
+            const artikelen = g.artikelen.map((a) => ({ ...a, voorraad_bezet: a.voorraad == null ? undefined : bezetVoorraad(a.id, null) }));
+            return {
+                stand: { versie, gewijzigd_at: versieAt, vrij_verloopt_at: wachtTot[0] ?? null },
+                grens: g.instellingen.beschikbaar_grens ?? BESCHIKBAAR_GRENS,
+                artikelen: vrijArtikelen(artikelen, g.slots ?? [], vrij),
+            };
         },
     };
 }
