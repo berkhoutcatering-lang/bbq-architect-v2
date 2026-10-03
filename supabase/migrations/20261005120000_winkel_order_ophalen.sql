@@ -14,7 +14,9 @@
 --
 --  De fix
 --    winkel_order_ophalen doet alles in één transactie, onder vergrendeling
---    (eerst de order, dan de regels, dan de producten in id-volgorde):
+--    (eerst de order met FOR NO KEY UPDATE, dan de regels, dan de producten
+--    in id-volgorde; de volledige lockvolgorde staat in
+--    20261005120100_winkel_lockvolgorde.sql):
 --      1. controleren, en bij een "nee" niets wijzigen maar een uitkomst
 --         teruggeven, zodat het scherm (BA of de Toonbank) de volgende stap
 --         kan tonen;
@@ -153,14 +155,20 @@ BEGIN
         RAISE EXCEPTION 'deze medewerker hoort niet bij deze organisatie' USING ERRCODE = '22023';
     END IF;
 
-    -- Vergrendelen: eerst de order, dan de regels (id-volgorde), straks de producten.
+    -- Vergrendelen: eerst de order, dan de regels (id-volgorde), straks de
+    -- producten (id-volgorde). Zie de lockvolgorde in
+    -- 20261005120100_winkel_lockvolgorde.sql. FOR NO KEY UPDATE en niet
+    -- FOR UPDATE: een logboekregel (winkel_voorraad_mutaties.order_id) of een
+    -- doos die naar deze order verwijst, vraagt bij de insert een KEY SHARE
+    -- op de order; die botst niet met NO KEY UPDATE, wel met FOR UPDATE.
     SELECT * INTO v_order FROM public.winkel_orders
      WHERE id = p_order_id AND organization_id = p_org
-     FOR UPDATE;
+     FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('uitkomst', 'onbekend', 'order_id', p_order_id);
     END IF;
     PERFORM 1 FROM public.winkel_order_regels WHERE order_id = v_order.id ORDER BY id FOR UPDATE;
+    PERFORM 1 FROM public.winkel_dozen WHERE order_id = v_order.id ORDER BY id FOR UPDATE;
 
     -- Wat nog mee moet: de regels die nog niet zijn opgehaald (een deel kan al
     -- via een doosscan zijn meegegeven).
@@ -278,13 +286,15 @@ DECLARE
 BEGIN
     PERFORM private.vereis_org(p_org);
 
+    -- Zelfde lockvolgorde als winkel_order_ophalen: order (NO KEY UPDATE), regels, dozen.
     SELECT * INTO v_order FROM public.winkel_orders
      WHERE id = p_order_id AND organization_id = p_org
-     FOR UPDATE;
+     FOR NO KEY UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('uitkomst', 'onbekend', 'order_id', p_order_id);
     END IF;
     PERFORM 1 FROM public.winkel_order_regels WHERE order_id = v_order.id ORDER BY id FOR UPDATE;
+    PERFORM 1 FROM public.winkel_dozen WHERE order_id = v_order.id ORDER BY id FOR UPDATE;
 
     SELECT count(*) FILTER (WHERE opgehaald_at IS NOT NULL),
            count(*) FILTER (WHERE opgehaald_at IS NOT NULL AND (opgehaald_at AT TIME ZONE 'Europe/Amsterdam')::DATE <> v_vandaag)

@@ -218,6 +218,14 @@ proef AS (
     SELECT 11, 'fix', 'pakketten: winkel_controleer_capaciteit weigert een product dat op is (WK009)',
            '20260927120000_winkel_sinterklaas',
            COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_controleer_capaciteit(uuid, jsonb, bigint)')) LIKE '%WK009%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'lockvolgorde: winkel_zet_klaargezet vergrendelt eerst de order (FOR NO KEY UPDATE)',
+           '20261005120100_winkel_lockvolgorde (BA-2)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_klaargezet(uuid, bigint, boolean)')) LIKE '%FOR NO KEY UPDATE%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'lockvolgorde: winkel_doos_ophalen vergrendelt eerst de order (FOR NO KEY UPDATE)',
+           '20261005120100_winkel_lockvolgorde (BA-2)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)')) LIKE '%FOR NO KEY UPDATE%', false)
 )
 SELECT soort, naam, migratie, CASE WHEN ok THEN 'OK' ELSE 'ONTBREEKT' END AS status
   FROM proef
