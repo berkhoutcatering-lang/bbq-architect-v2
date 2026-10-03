@@ -107,6 +107,8 @@ BEGIN
 END;
 $$;
 
+ALTER FUNCTION public.winkel_catalogus_poort() SET search_path = public, pg_temp;
+
 DROP TRIGGER IF EXISTS trg_winkel_catalogus_poort ON public.winkel_producten;
 CREATE TRIGGER trg_winkel_catalogus_poort BEFORE INSERT OR UPDATE ON public.winkel_producten
     FOR EACH ROW EXECUTE FUNCTION public.winkel_catalogus_poort();
@@ -119,10 +121,20 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 VALUES ('winkel-fotos', 'winkel-fotos', true, 10 * 1024 * 1024, ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/avif'])
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS winkel_fotos_org_read   ON storage.objects;
 DROP POLICY IF EXISTS winkel_fotos_org_write  ON storage.objects;
 DROP POLICY IF EXISTS winkel_fotos_org_update ON storage.objects;
 DROP POLICY IF EXISTS winkel_fotos_org_delete ON storage.objects;
 
+-- Lezen via de API (nodig voor upsert); de publieke URL werkt los daarvan voor iedereen.
+CREATE POLICY winkel_fotos_org_read ON storage.objects FOR SELECT
+    USING (
+        bucket_id = 'winkel-fotos'
+        AND (storage.foldername(name))[1] IN (
+            SELECT organization_id::text FROM organization_members
+            WHERE user_id = auth.uid() AND status = 'active'
+        )
+    );
 CREATE POLICY winkel_fotos_org_write ON storage.objects FOR INSERT
     WITH CHECK (
         bucket_id = 'winkel-fotos'
