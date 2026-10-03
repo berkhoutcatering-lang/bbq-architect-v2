@@ -11,6 +11,7 @@ import { vandaagISO } from './rekenen';
 import { regelBoekingen } from './voorraad';
 import { heeftAlcohol, nogOpen, opDezelfdeDag, ophaalBlokkade, restOpen, type Boeking, type Leeftijd, type OphaalBron, type OphaalUitkomst, type RestMethode, type TerugUitkomst } from './ophalen';
 import type { Bronnen, ComponentRij, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+import { vrijProducten } from './vrij';
 
 /** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
 export interface EventGeheugen extends EventTotalen {
@@ -86,6 +87,8 @@ export interface GeheugenStore extends WinkelStore {
     haalOp(orgId: string, orderId: number, opties?: OphaalOpties): OphaalUitkomst;
     /** Opgehaald ongedaan maken, alleen op dezelfde dag; voorraad en rest blijven. */
     haalOpTerug(orgId: string, orderId: number): TerugUitkomst;
+    /** De voorraadversie (BA-5a): één omhoog per handeling die vrij raakt, zoals de deferred trigger per transactie. */
+    voorraadVersie(): number;
 }
 
 export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): GeheugenStore {
@@ -103,6 +106,11 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
     const producten = (g.producten ?? []).map((p) => ({ ...p }));
     const mutaties: GeheugenStore['mutaties'] = [];
     const dozen: GeheugenDoos[] = [];
+    /* De voorraadversie: de database verhoogt hem één keer per transactie
+       (deferred trigger); hier één keer per handeling (pakIn, haalOp, …),
+       nooit per regel binnen een handeling. */
+    let versie = 0;
+    const versieOmhoog = () => { versie += 1; };
 
     const telt = (o: OrderRij) => o.status === 'betaald' || (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime());
     const bezetMoment = (id: string, zonder: number | null) =>
@@ -153,7 +161,13 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         return { ...rest };
     };
 
-    function pakIn(regelId: number, ingepakt: boolean): ReturnType<GeheugenStore['pakIn']> {
+    /**
+     * Eén regel in- of uitpakken, zoals winkel_zet_klaargezet: vinkje + netto
+     * boeken, alles of niets. Verhoogt de versie niet: dat doet de handeling
+     * eromheen (pakIn, haalOp), één keer.
+     */
+    function boekRegel(regelId: number, ingepakt: boolean):
+        { ok: true; gewijzigd: boolean } | { ok: false; code: 'WV001' | 'WV006' | 'onbekend' } {
         const o = orders.find((x) => x.regels.some((r) => r.id === regelId));
         const r = o?.regels.find((x) => x.id === regelId);
         if (!o || !r) return { ok: false, code: 'onbekend' };
@@ -172,7 +186,16 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             p.voorraad = Math.round((p.voorraad! + b.hoeveelheid) * 1000) / 1000;
             mutaties.push({ ...b, order_regel_id: regelId });
         }
+        const was = r.klaargezet_at;
         r.klaargezet_at = ingepakt ? (r.klaargezet_at ?? nu.toISOString()) : null;
+        return { ok: true, gewijzigd: boekingen.length > 0 || was !== r.klaargezet_at };
+    }
+
+    /** Het losse vinkje: één regel, één handeling, hooguit één versie omhoog. */
+    function pakIn(regelId: number, ingepakt: boolean): ReturnType<GeheugenStore['pakIn']> {
+        const uit = boekRegel(regelId, ingepakt);
+        if (uit.ok === false) return uit;
+        if (uit.gewijzigd) versieOmhoog();
         return { ok: true };
     }
 
@@ -208,7 +231,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         const boekingen: Boeking[] = [];
         for (const r of o.regels.filter((x) => !x.opgehaald_at && !x.klaargezet_at).sort((a, b) => a.id - b.id)) {
             const n = mutaties.length;
-            const uit = pakIn(r.id, true);
+            const uit = boekRegel(r.id, true);
             if (uit.ok === false) {
                 producten.forEach((p, i) => { p.voorraad = voorraadVoor[i] ?? null; });
                 mutaties.length = mutatiesVoor;
@@ -239,6 +262,8 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         for (const d of dozen) {
             if (d.order_id === o.id && !d.opgehaald_at) { d.opgehaald_at = t; d.opgehaald_door = opties.doorUserId ?? null; }
         }
+        /* Inpakken en opgehaald in één transactie: één keer omhoog. */
+        versieOmhoog();
         return {
             ...basis, uitkomst: 'opgehaald', opgehaald_at: t, nog_open: 0, regels: basis.nog_open,
             rest_geboekt: restGeboekt, leeftijd: basis.alcohol ? (opties.leeftijd ?? null) : null, boekingen,
@@ -265,6 +290,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 teruggezetteDozen += 1;
             }
         }
+        versieOmhoog();
         return { uitkomst: 'teruggezet', order_id: o.id, nummer: o.nummer, regels: opgehaald.length, dozen: teruggezetteDozen };
     }
 
@@ -276,6 +302,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         zetNu(d) { nu = d; },
         producten,
         mutaties,
+        voorraadVersie() { return versie; },
         pakIn,
         dozen,
         haalOp,
@@ -382,6 +409,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             };
             orders.push(o);
             componenten.push(...nieuweComponenten);
+            versieOmhoog();
             return { ok: true, waarde: zonderRegels(o) };
         },
 
@@ -397,6 +425,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             o.reservering_tot = new Date(nu.getTime() + g.instellingen.reservering_minuten * 60_000).toISOString();
             o.betaalpoging += 1;
             o.mypos_order_id = `${o.nummer}-${o.betaalpoging}-${o.token.slice(0, 6)}`;
+            versieOmhoog();
             return { ok: true, waarde: zonderRegels(o) };
         },
 
@@ -408,16 +437,22 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 const c = controleer(o.regels, eigenComponenten(o), o.id);
                 if (!c.ok) {
                     Object.assign(o, { status: 'mislukt', status_reden: 'verlopen-en-vol', mypos_trnref: b.trnref, betaald_cents: b.centen, betaalmethode: b.methode, refund_status: 'nodig' });
+                    versieOmhoog();
                     return 'vol';
                 }
             }
             Object.assign(o, { status: 'betaald', status_reden: null, mypos_trnref: b.trnref, betaald_cents: b.centen, betaald_at: nu.toISOString(), betaalmethode: b.methode });
+            versieOmhoog();
             return 'betaald';
         },
 
         async zetStatus(orderId, status, reden = null) {
             const o = orders.find((x) => x.id === orderId);
-            if (o) { o.status = status; o.status_reden = reden; }
+            if (o) {
+                const was = o.status;
+                o.status = status; o.status_reden = reden;
+                if (was !== status) versieOmhoog();
+            }
         },
 
         async registreerBetaalbericht(_orgId, referentie) {
@@ -473,6 +508,12 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         async noteerPlaatsing(orderId, status, fout = null) {
             const o = orders.find((x) => x.id === orderId);
             if (o) { o.plaatsing_status = status; o.plaatsing_fout = fout; o.plaatsing_at = nu.toISOString(); }
+        },
+
+        /* ── Vrij (BA-5a): dezelfde regel als winkel_vrij_producten ── */
+        async laadVrij(orgId) {
+            if (orgId !== g.tenant.orgId) return [];
+            return vrijProducten(producten, new Map(producten.map((p) => [p.id, bezetProduct(p.id, null)])));
         },
     };
 }

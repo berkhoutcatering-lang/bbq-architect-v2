@@ -11,6 +11,7 @@
  */
 import type { Artikel, Component, Instellingen, MomentRij, Product, Regelintern, Slot } from './rekenen';
 import type { Betaalwijze, Leverwijze, Orderstatussoort } from './types';
+import type { VrijProduct } from './vrij';
 
 export interface Tenant {
     orgId: string;
@@ -222,4 +223,12 @@ export interface WinkelStore {
     laadBetaaldeRegelsOpEvent(eventId: number): Promise<RegelOpEvent[]>;
     werkEventTotalenBij(eventId: number, t: EventTotalen): Promise<void>;
     noteerPlaatsing(orderId: number, status: PlaatsingStatus, fout?: string | null): Promise<void>;
+
+    /* ── Vrij (plan v5, BA-5a) ── */
+    /**
+     * Ligt er / gereserveerd / vrij per product van de organisatie, in één
+     * aanroep (winkel_vrij_producten). Gooit bij een fout: een getal wordt
+     * nooit geraden.
+     */
+    laadVrij(orgId: string): Promise<VrijProduct[]>;
 }

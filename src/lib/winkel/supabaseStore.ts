@@ -12,6 +12,7 @@ import { createServiceSupabase } from '@/lib/supabase-server';
 import type { Artikel, MomentRij, Product, Slot } from './rekenen';
 import { vandaagISO } from './rekenen';
 import type { Bronnen, ComponentRij, EventVakje, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, RegelOpEvent, Tenant, WinkelStore } from './store';
+import type { VrijProduct } from './vrij';
 
 const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, btw_cents, reservering_tot, terug_url, betaalpoging, mypos_order_id, mypos_trnref, betaald_cents, betaald_at, betaalmethode, refund_status, refund_fout, mail_status, mail_fout, created_at, wensen, wensen_bron, plaatsing_status, plaatsing_fout, plaatsing_at, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode';
 const ARTIKEL_KOLOMMEN = 'id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek, gerecht_id, inventory_id, inkoop_per_stuk, dieet, segment, vast, alcohol, schaal_verdeling, btw_verdeling, verpakking_klein_cents, verpakking_groot_cents';
@@ -28,6 +29,22 @@ function code(e: { code?: string | null; message?: string } | null): OpslagCode 
 function eenRij<T>(data: unknown): T | null {
     if (Array.isArray(data)) return (data[0] as T) ?? null;
     return (data as T) ?? null;
+}
+
+/* ── Vrij: de rijen van winkel_vrij_producten (BA-5a) ───────────────────────
+   numeric kan als getal of als tekst binnenkomen; null blijft null. */
+const getalOfNull = (v: unknown): number | null => (v == null ? null : Number(v));
+
+function naarVrijProduct(r: Record<string, unknown>): VrijProduct {
+    return {
+        product_id: String(r.product_id),
+        naam: String(r.naam),
+        eenheid: r.eenheid === 'gram' ? 'gram' : 'stuk',
+        ligt_er: getalOfNull(r.ligt_er),
+        gereserveerd: Number(r.gereserveerd ?? 0),
+        vrij: getalOfNull(r.vrij),
+        bijgehouden: !!r.bijgehouden,
+    };
 }
 
 export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
@@ -232,6 +249,13 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
         },
         async noteerPlaatsing(orderId, status, fout = null) {
             await sb.from('winkel_orders').update({ plaatsing_status: status, plaatsing_fout: fout, plaatsing_at: new Date().toISOString() }).eq('id', orderId);
+        },
+
+        /* ── Vrij (plan v5, BA-5a) ── */
+        async laadVrij(orgId) {
+            const { data, error } = await sb.rpc('winkel_vrij_producten', { p_org: orgId });
+            if (error) throw new Error(`winkel_vrij_producten faalde: ${error.code ?? ''} ${error.message}`);
+            return ((data ?? []) as Record<string, unknown>[]).map(naarVrijProduct);
         },
 
         async plaatsOrder(o): Promise<OpslagUitkomst<OrderRij>> {

@@ -1,4 +1,6 @@
 import { createServerSupabase } from '@/lib/supabase-server';
+import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
+import type { VrijProduct } from '@/lib/winkel/vrij';
 import WinkelVoorraadClient, { type WinkelData } from './_components/WinkelVoorraadClient';
 
 export const dynamic = 'force-dynamic';
@@ -11,15 +13,25 @@ export const metadata = {
 /**
  * Winkelvoorraad (W2) — server-shell. Plan: docs/voorraad-bouwplan.md §3.
  *
- * Laadt producten, slots en artikelen via RLS, en per bijgehouden product de
- * bezetting (besteld, nog niet ingepakt) met dezelfde databasefunctie als de
- * webshop — zodat "beschikbaar" hier precies is wat de webshop nog verkoopt.
+ * Laadt producten, slots en artikelen via RLS, en in één aanroep de
+ * bezetting (besteld, nog niet ingepakt) van alle producten:
+ * winkel_vrij_producten, met dezelfde regel als de webshop
+ * (winkel_bezetting_product) — zodat "beschikbaar" hier precies is wat de
+ * webshop nog verkoopt.
  */
 export default async function WinkelVoorraadPage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
     const { product } = await searchParams;
     const supabase = await createServerSupabase();
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }] = await Promise.all([
+    /* De organisatie van de ingelogde gebruiker (zoals in de actions); de
+       proxy laat hier niemand zonder sessie door. */
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: lid } = user
+        ? await supabase.from('organization_members').select('organization_id').eq('user_id', user.id).eq('status', 'active').limit(1).maybeSingle()
+        : { data: null };
+    const orgId = (lid?.organization_id as string | undefined) ?? null;
+
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }, vrij] = await Promise.all([
         supabase.from('winkel_producten')
             .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url')
             .order('type').order('naam'),
@@ -29,14 +41,10 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         supabase.from('winkel_artikelen').select('id, naam, slug, actief, telt').order('naam'),
         supabase.from('inventory').select('id, naam, unit, current_stock').order('naam').limit(2000),
         supabase.from('voorraad_plekken').select('id, naam').eq('soort', 'winkel').maybeSingle(),
+        orgId ? maakSupabaseStore(supabase).laadVrij(orgId) : Promise.resolve([] as VrijProduct[]),
     ]);
 
-    const bijgehouden = (producten ?? []).filter((p) => p.voorraad != null);
-    const bezet = new Map<string, number>();
-    await Promise.all(bijgehouden.map(async (p) => {
-        const { data: n } = await supabase.rpc('winkel_bezetting_product', { p_product_id: p.id, p_zonder_order: null });
-        bezet.set(p.id as string, Number(n ?? 0));
-    }));
+    const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
 
     const data: WinkelData = {
         plekNaam: (plek?.naam as string | undefined) ?? 'Winkel',
