@@ -506,12 +506,12 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                 <div className="kf-field">
                                     <label className="kf-label">Minimum ({eenheid})</label>
-                                    <input className="kf-input" inputMode="decimal" value={drempel} onChange={(e) => setDrempel(e.target.value)} placeholder={d.bron === 'voorstel' && d.waarde != null ? `voorstel ${d.waarde}` : 'geen'} />
+                                    <input className="kf-input" inputMode="decimal" value={drempel} onChange={(e) => setDrempel(e.target.value)} placeholder={d.bron === 'voorstel' && d.waarde != null ? `voorstel ${d.waarde}` : p.eenheid === 'gram' ? 'bijv. 1000' : 'bijv. 10'} />
                                     <div className="kf-help">Eronder: "tijd om bij te bestellen". Leeg = genoeg voor 5 pakketten.</div>
                                 </div>
                                 <div className="kf-field">
                                     <label className="kf-label">Aanvullen tot ({eenheid})</label>
-                                    <input className="kf-input" inputMode="decimal" value={par} onChange={(e) => setPar(e.target.value)} placeholder="bijv. 30" />
+                                    <input className="kf-input" inputMode="decimal" value={par} onChange={(e) => setPar(e.target.value)} placeholder={p.eenheid === 'gram' ? 'bijv. 3000' : 'bijv. 30'} />
                                     <div className="kf-help">Zoveel wil je er hebben na een levering.</div>
                                 </div>
                                 <div className="kf-field">
