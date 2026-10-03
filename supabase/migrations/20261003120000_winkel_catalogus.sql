@@ -25,8 +25,9 @@
 --    3. Wat de AI voorstelt is een concept. Wat Mathijs nakeek staat in
 --       `goedgekeurd` (per veldgroep wie en wanneer); de website toont een
 --       proefkaart of druiven pas als die groep goedgekeurd is.
---    4. Live gaat alleen wat compleet is. De poort hieronder weigert het
---       anders, ook als de app een fout maakt.
+--    4. Live = op de site. Te koop = daarnaast prijs, allergenen (en bij
+--       vlees ingrediënten en bewaren) — dat bewaken de kassa en de website
+--       al. De poort hier weigert alleen wat nooit online mag (sterke drank).
 
 
 -- ── 0. Pre-flight ───────────────────────────────────────────────────────────
@@ -80,38 +81,23 @@ CREATE INDEX IF NOT EXISTS winkel_producten_live_idx
 
 
 -- ── 2. De poort naar live ───────────────────────────────────────────────────
---   WC001  geen slug of geen foto
---   WC002  allergenen niet ingevuld (of een lege lijst)
+--   Op de site staan en te koop zijn is niet hetzelfde (regel 4 van de
+--   website: verkoopbaarheid en publicatie). Live = zichtbaar; een bier
+--   zonder prijs of allergenen staat er met "nu niet online te bestellen" en
+--   de kassa weigert het. Hier alleen wat nooit zichtbaar mag:
+--   WC001  geen slug
 --   WC003  alcohol 15 % of meer, of alcohol zonder percentage (online alleen < 15 %)
---   WC004  ingrediënten of bewaren ontbreekt waar ze verplicht zijn
---   WC005  geen artikel met een prijs voor deze slug
 CREATE OR REPLACE FUNCTION public.winkel_catalogus_poort()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
     IF NEW.pagina_status = 'live' THEN
-        IF NEW.slug IS NULL OR NEW.foto IS NULL THEN
-            RAISE EXCEPTION 'live vraagt een slug en een foto' USING ERRCODE = 'WC001';
-        END IF;
-        -- Nooit een lege lijst: die zou op de site "geen allergenen" lijken (regel van de website).
-        IF NEW.allergenen IS NULL OR cardinality(NEW.allergenen) = 0 THEN
-            RAISE EXCEPTION 'live vraagt de allergenen van het etiket' USING ERRCODE = 'WC002';
+        IF NEW.slug IS NULL THEN
+            RAISE EXCEPTION 'live vraagt een slug' USING ERRCODE = 'WC001';
         END IF;
         IF NEW.alcohol AND (NEW.alcohol_pct IS NULL OR NEW.alcohol_pct >= 15) THEN
             RAISE EXCEPTION 'online alleen drank onder de 15 %%' USING ERRCODE = 'WC003';
-        END IF;
-        IF NEW.type IN ('worst', 'vleeswaar', 'kaas') AND (NEW.ingredienten IS NULL OR NEW.bewaren IS NULL) THEN
-            RAISE EXCEPTION 'live vraagt ingrediënten en bewaren' USING ERRCODE = 'WC004';
-        END IF;
-        IF NEW.type IN ('bier', 'wijn') AND NEW.alcohol_pct IS NOT NULL AND NEW.alcohol_pct <= 1.2 AND NEW.ingredienten IS NULL THEN
-            RAISE EXCEPTION 'alcoholvrij vraagt de ingrediënten' USING ERRCODE = 'WC004';
-        END IF;
-        IF NOT EXISTS (
-            SELECT 1 FROM public.winkel_artikelen a
-             WHERE a.organization_id = NEW.organization_id AND a.slug = NEW.slug AND a.prijs_cents IS NOT NULL
-        ) THEN
-            RAISE EXCEPTION 'live vraagt een artikel met een prijs' USING ERRCODE = 'WC005';
         END IF;
         IF TG_OP = 'INSERT' OR OLD.pagina_status IS DISTINCT FROM 'live' THEN
             NEW.pagina_live_at := now();
