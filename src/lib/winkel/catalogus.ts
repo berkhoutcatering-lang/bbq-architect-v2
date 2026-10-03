@@ -95,7 +95,8 @@ export async function haalCatalogus(orgSlug: string, voorbeeld: string | null, c
         .filter((p): p is CatalogusProduct => p !== null)
         .sort((a, b) => a.soort.localeCompare(b.soort) || a.volgorde - b.volgorde || a.naam.localeCompare(b.naam, 'nl'));
 
-    return { status: 200, body: { versie: 1, producten } };
+    const bekeken = voorbeeldId ? rijen.find((r) => r.id === voorbeeldId)?.slug : undefined;
+    return { status: 200, body: { versie: 1, producten, ...(bekeken ? { voorbeeld: bekeken } : {}) } };
 }
 
 /* ── Het sein naar de website ─────────────────────────────────────────────── */
