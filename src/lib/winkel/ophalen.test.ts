@@ -279,6 +279,19 @@ describe('haalOp (geheugen) — elke uitkomst', () => {
         expect(o.rest_betaald_at).toBeNull();
     });
 
+    it('voorraadversie (BA-5): één handeling = één keer omhoog, ook met twee regels; niets gebeurd = niet omhoog', async () => {
+        const o = await betaaldeOrder('a', [{ slug: 'bierpakket-35', aantal: 1 }, { slug: 'kaasplankje', aantal: 1 }]);
+        const v0 = store.voorraadVersie();
+        expect(store.haalOp('org-1', o.id)).toMatchObject({ uitkomst: 'leeftijd_nodig' });
+        expect(store.haalOp('org-1', o.id, { leeftijd: 'geweigerd' })).toMatchObject({ uitkomst: 'geweigerd' });
+        expect(store.voorraadVersie()).toBe(v0);
+        expect(store.haalOp('org-1', o.id, { leeftijd: 'vastgesteld' })).toMatchObject({ uitkomst: 'opgehaald' });
+        expect(store.mutaties.length).toBeGreaterThan(1);
+        expect(store.voorraadVersie()).toBe(v0 + 1);
+        expect(store.haalOpTerug('org-1', o.id)).toMatchObject({ uitkomst: 'teruggezet' });
+        expect(store.voorraadVersie()).toBe(v0 + 2);
+    });
+
     it('de dozen van de order gaan mee op opgehaald; een al gescande doos blijft zoals hij was', async () => {
         const o = await betaaldeOrder('a');
         const regel = o.regels[0]!.id;

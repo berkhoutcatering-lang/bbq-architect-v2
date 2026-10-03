@@ -95,7 +95,12 @@ begin
         'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)',
         -- BA-2 (20261005120000): zetOpgehaald, en straks de Toonbank via service_role
         'public.winkel_order_ophalen(uuid, bigint, text, text, text, uuid, uuid)',
-        'public.winkel_order_ophalen_terug(uuid, bigint)'
+        'public.winkel_order_ophalen_terug(uuid, bigint)',
+        -- BA-5 (20261005130000): voorraad/winkel, meldingen, beschikbaarheid, straks de Toonbank
+        'public.winkel_vrij_producten(uuid)',
+        'public.winkel_vrij_artikelen(uuid)',
+        'public.winkel_reserveringen(uuid, uuid)',
+        'public.winkel_voorraad_stand(uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
@@ -104,6 +109,15 @@ begin
             if not has_function_privilege('service_role',  v_sig, 'EXECUTE') then v_fouten := v_fouten || 'service_role mist '  || v_sig || '; '; end if;
         end if;
     end loop;
+
+    -- ── 3b. De triggerfunctie van de voorraadversie (BA-5): voor niemand los aan te roepen.
+    if to_regprocedure('private.winkel_voorraad_versie_omhoog()') is null then
+        v_fouten := v_fouten || 'private.winkel_voorraad_versie_omhoog() ontbreekt; ';
+    elsif has_function_privilege('anon', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE')
+       or has_function_privilege('authenticated', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE')
+       or has_function_privilege('service_role', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE') then
+        v_fouten := v_fouten || 'private.winkel_voorraad_versie_omhoog() is aan te roepen door anon, authenticated of service_role; ';
+    end if;
 
     -- ── 4. Alleen de service-client: service_role ja, authenticated nee.
     foreach v_sig in array array[

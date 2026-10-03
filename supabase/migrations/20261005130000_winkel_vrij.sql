@@ -18,8 +18,13 @@
 --    3. Eén teller per organisatie (winkel_voorraad_versie). Deferred
 --       constraint-triggers verhogen hem bij het committen, hooguit één keer
 --       per transactie en organisatie. Zo is de teller de laatste lock in elke
---       transactie (geen deadlock met de vaste lockvolgorde order → producten)
---       en zien lezers de nieuwe versie pas samen met de wijziging.
+--       transactie (geen deadlock met de vaste lockvolgorde uit
+--       20261005120100_winkel_lockvolgorde) en zien lezers de nieuwe versie
+--       pas samen met de wijziging. De triggers zitten op alles wat ligt er,
+--       gereserveerd of vrij raakt: het logboek, orders (nieuw, status,
+--       verwijderd), regels (ingepakt, opgehaald), slots, artikelen (nieuw,
+--       verwijderd, quotum, te koop, slug), producten (nieuw, verwijderd,
+--       voorraad, naam, eenheid) en de grens (20261005130100).
 --    4. Een verlopen reservering verandert vrij zonder dat er iets geschreven
 --       wordt. Daarom geeft winkel_voorraad_stand ook vrij_verloopt_at: het
 --       eerste reservering_tot in de toekomst van een wachtende order. Na dat
@@ -175,9 +180,13 @@ REVOKE ALL ON FUNCTION private.winkel_voorraad_versie_omhoog() FROM PUBLIC, anon
 DROP TRIGGER IF EXISTS trg_winkel_vv_mutaties        ON public.winkel_voorraad_mutaties;
 DROP TRIGGER IF EXISTS trg_winkel_vv_order_nieuw     ON public.winkel_orders;
 DROP TRIGGER IF EXISTS trg_winkel_vv_order_status    ON public.winkel_orders;
+DROP TRIGGER IF EXISTS trg_winkel_vv_order_weg       ON public.winkel_orders;
 DROP TRIGGER IF EXISTS trg_winkel_vv_regel_status    ON public.winkel_order_regels;
 DROP TRIGGER IF EXISTS trg_winkel_vv_slots           ON public.winkel_artikel_slots;
 DROP TRIGGER IF EXISTS trg_winkel_vv_artikel_quotum  ON public.winkel_artikelen;
+DROP TRIGGER IF EXISTS trg_winkel_vv_artikel_erbij   ON public.winkel_artikelen;
+DROP TRIGGER IF EXISTS trg_winkel_vv_product_erbij   ON public.winkel_producten;
+DROP TRIGGER IF EXISTS trg_winkel_vv_product         ON public.winkel_producten;
 
 -- Elke regel in het logboek (telling, ontvangst, verkoop, retour, afwijking, overboeking).
 CREATE CONSTRAINT TRIGGER trg_winkel_vv_mutaties
@@ -188,6 +197,12 @@ CREATE CONSTRAINT TRIGGER trg_winkel_vv_mutaties
 -- Een nieuwe order (wacht = reservering).
 CREATE CONSTRAINT TRIGGER trg_winkel_vv_order_nieuw
     AFTER INSERT ON public.winkel_orders
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
+
+-- Een verwijderde order (zijn regels tellen niet meer als gereserveerd).
+CREATE CONSTRAINT TRIGGER trg_winkel_vv_order_weg
+    AFTER DELETE ON public.winkel_orders
     DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
 
@@ -213,13 +228,37 @@ CREATE CONSTRAINT TRIGGER trg_winkel_vv_slots
     DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
 
--- Het artikelquotum en of het artikel te koop is (winkel_vrij_artikelen en de
--- beschikbaarheid voor de website hangen ervan af).
+-- Het artikelquotum, of het artikel te koop is en onder welke slug
+-- (winkel_vrij_artikelen en de beschikbaarheid voor de website hangen ervan af).
 CREATE CONSTRAINT TRIGGER trg_winkel_vv_artikel_quotum
-    AFTER UPDATE OF voorraad, actief, publiek ON public.winkel_artikelen
+    AFTER UPDATE OF voorraad, actief, publiek, slug ON public.winkel_artikelen
     DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW
-    WHEN (OLD.voorraad IS DISTINCT FROM NEW.voorraad OR OLD.actief IS DISTINCT FROM NEW.actief OR OLD.publiek IS DISTINCT FROM NEW.publiek)
+    WHEN (OLD.voorraad IS DISTINCT FROM NEW.voorraad OR OLD.actief IS DISTINCT FROM NEW.actief
+          OR OLD.publiek IS DISTINCT FROM NEW.publiek OR OLD.slug IS DISTINCT FROM NEW.slug)
+    EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
+
+-- Een nieuw of verwijderd artikel (een regel meer of minder in winkel_vrij_artikelen).
+CREATE CONSTRAINT TRIGGER trg_winkel_vv_artikel_erbij
+    AFTER INSERT OR DELETE ON public.winkel_artikelen
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
+
+-- Een nieuw of verwijderd product (een regel meer of minder in winkel_vrij_producten).
+CREATE CONSTRAINT TRIGGER trg_winkel_vv_product_erbij
+    AFTER INSERT OR DELETE ON public.winkel_producten
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
+
+-- Een product wijzigt in wat winkel_vrij_producten laat zien: naam, eenheid
+-- of ligt er. De voorraad verandert alleen via het logboek (WV003 bewaakt
+-- dat) en telt daar al mee; in dezelfde transactie blijft het één keer.
+-- Andere kolommen (prijs, foto, drempel, …) raken vrij niet.
+CREATE CONSTRAINT TRIGGER trg_winkel_vv_product
+    AFTER UPDATE OF voorraad, naam, eenheid ON public.winkel_producten
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    WHEN (OLD.voorraad IS DISTINCT FROM NEW.voorraad OR OLD.naam IS DISTINCT FROM NEW.naam OR OLD.eenheid IS DISTINCT FROM NEW.eenheid)
     EXECUTE FUNCTION private.winkel_voorraad_versie_omhoog();
 
 
@@ -494,16 +533,26 @@ BEGIN
         v_fouten := v_fouten || E'\n  de triggerfunctie is aan te roepen door anon of authenticated';
     END IF;
 
-    SELECT count(*) INTO v_n
-      FROM pg_trigger t
-     WHERE t.tgname LIKE 'trg\_winkel\_vv\_%'
-       AND t.tgconstraint <> 0
-       AND t.tgdeferrable
-       AND t.tginitdeferred
-       AND t.tgfoid = 'private.winkel_voorraad_versie_omhoog()'::REGPROCEDURE;
-    IF v_n <> 6 THEN
-        v_fouten := v_fouten || E'\n  ' || v_n || ' deferred constraint-triggers op de teller i.p.v. 6';
-    END IF;
+    -- Elke trigger bij naam (een latere migratie mag er een bij zetten, zoals
+    -- 20261005130100 op winkel_instellingen).
+    FOREACH v_sig IN ARRAY ARRAY[
+        'trg_winkel_vv_mutaties', 'trg_winkel_vv_order_nieuw', 'trg_winkel_vv_order_status',
+        'trg_winkel_vv_order_weg', 'trg_winkel_vv_regel_status', 'trg_winkel_vv_slots',
+        'trg_winkel_vv_artikel_quotum', 'trg_winkel_vv_artikel_erbij',
+        'trg_winkel_vv_product_erbij', 'trg_winkel_vv_product'
+    ]
+    LOOP
+        SELECT count(*) INTO v_n
+          FROM pg_trigger t
+         WHERE t.tgname = v_sig
+           AND t.tgconstraint <> 0
+           AND t.tgdeferrable
+           AND t.tginitdeferred
+           AND t.tgfoid = 'private.winkel_voorraad_versie_omhoog()'::REGPROCEDURE;
+        IF v_n <> 1 THEN
+            v_fouten := v_fouten || E'\n  deferred constraint-trigger ' || v_sig || ' ontbreekt';
+        END IF;
+    END LOOP;
 
     IF NOT (SELECT c.relrowsecurity FROM pg_class c WHERE c.oid = 'public.winkel_voorraad_versie'::REGCLASS) THEN
         v_fouten := v_fouten || E'\n  RLS staat uit op winkel_voorraad_versie';

@@ -19,6 +19,20 @@ export const metadata = {
  * (winkel_bezetting_product) — zodat "beschikbaar" hier precies is wat de
  * webshop nog verkoopt.
  */
+/**
+ * Vrij per product; faalt dat (bijvoorbeeld omdat migratie
+ * 20261005130000_winkel_vrij er nog niet staat), dan een lege lijst en een
+ * log in plaats van een 500. De pagina toont dan niets als gereserveerd.
+ */
+async function laadVrijOfLeeg(supabase: Awaited<ReturnType<typeof createServerSupabase>>, orgId: string): Promise<VrijProduct[]> {
+    try {
+        return await maakSupabaseStore(supabase).laadVrij(orgId);
+    } catch (e) {
+        console.error('[voorraad/winkel] winkel_vrij_producten mislukt, gereserveerd = 0:', e instanceof Error ? e.message : e);
+        return [];
+    }
+}
+
 export default async function WinkelVoorraadPage({ searchParams }: { searchParams: Promise<{ product?: string }> }) {
     const { product } = await searchParams;
     const supabase = await createServerSupabase();
@@ -41,7 +55,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         supabase.from('winkel_artikelen').select('id, naam, slug, actief, telt').order('naam'),
         supabase.from('inventory').select('id, naam, unit, current_stock').order('naam').limit(2000),
         supabase.from('voorraad_plekken').select('id, naam').eq('soort', 'winkel').maybeSingle(),
-        orgId ? maakSupabaseStore(supabase).laadVrij(orgId) : Promise.resolve([] as VrijProduct[]),
+        orgId ? laadVrijOfLeeg(supabase, orgId) : Promise.resolve([] as VrijProduct[]),
     ]);
 
     const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));

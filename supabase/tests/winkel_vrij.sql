@@ -339,12 +339,38 @@ begin
     select versie into v_v from public.winkel_voorraad_versie where organization_id = v_org;
     if v_v is distinct from v_v0 + 6 then v_fouten := v_fouten || format('quotum: teller %s i.p.v. %s; ', v_v, v_v0 + 6); end if;
 
+    -- Review 3 oktober: ook product, artikel weg en de grens. Een
+    -- productkolom die vrij niet raakt (drempel) telt niet.
+    perform set_config(v_vlag, '', true);
+    update public.winkel_producten set drempel = coalesce(drempel, 0) + 1 where id = v_los;   -- raakt vrij niet
+    select versie into v_v from public.winkel_voorraad_versie where organization_id = v_org;
+    if v_v is distinct from v_v0 + 6 then v_fouten := v_fouten || format('drempel verhoogde de teller (%s); ', v_v); end if;
+
+    perform set_config(v_vlag, '', true);
+    update public.winkel_producten set naam = naam || ' (nieuw)' where id = v_los;             -- product
+    select versie into v_v from public.winkel_voorraad_versie where organization_id = v_org;
+    if v_v is distinct from v_v0 + 7 then v_fouten := v_fouten || format('productnaam: teller %s i.p.v. %s; ', v_v, v_v0 + 7); end if;
+
+    perform set_config(v_vlag, '', true);
+    begin
+        delete from public.winkel_artikelen where id = v_a_leeg;                                -- artikel weg (+ zijn slots)
+    exception when foreign_key_violation then
+        v_fouten := v_fouten || 'artikel test-leeg niet te verwijderen (er hangt een order aan); ';
+    end;
+    select versie into v_v from public.winkel_voorraad_versie where organization_id = v_org;
+    if v_v is distinct from v_v0 + 8 then v_fouten := v_fouten || format('artikel weg: teller %s i.p.v. %s; ', v_v, v_v0 + 8); end if;
+
+    perform set_config(v_vlag, '', true);
+    update public.winkel_instellingen set beschikbaar_grens = beschikbaar_grens + 1 where organization_id = v_org;  -- grens
+    select versie into v_v from public.winkel_voorraad_versie where organization_id = v_org;
+    if v_v is distinct from v_v0 + 9 then v_fouten := v_fouten || format('grens: teller %s i.p.v. %s; ', v_v, v_v0 + 9); end if;
+
     -- De stand geeft dezelfde versie.
     v_stand := public.winkel_voorraad_stand(v_org);
-    if (v_stand->>'versie')::bigint is distinct from v_v0 + 6 or (v_stand->>'gewijzigd_at') is null then
+    if (v_stand->>'versie')::bigint is distinct from v_v0 + 9 or (v_stand->>'gewijzigd_at') is null then
         v_fouten := v_fouten || 'winkel_voorraad_stand: ' || v_stand::text || '; ';
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: Vier Naober 6/4/2, verlopen 6, ingepakt 2/0/2; pakket = minimum (1, Naober), leeg slot 0, zonder grens leeg, quotum 3 → 1; reserveringen zonder e-mail/telefoon; pariteit met winkel_bezetting_product; teller één keer per transactie (% → %), WHEN-filters werken; niet-lid 42501 — alles teruggedraaid', v_v0, v_v;
+    raise exception 'GESLAAGD: Vier Naober 6/4/2, verlopen 6, ingepakt 2/0/2; pakket = minimum (1, Naober), leeg slot 0, zonder grens leeg, quotum 3 → 1; reserveringen zonder e-mail/telefoon; pariteit met winkel_bezetting_product; teller één keer per transactie (% → %), ook bij productnaam, artikel weg en grens; WHEN-filters werken; niet-lid 42501 — alles teruggedraaid', v_v0, v_v;
 end $$;
