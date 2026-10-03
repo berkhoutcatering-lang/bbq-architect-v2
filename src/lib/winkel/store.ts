@@ -112,6 +112,8 @@ export interface OrderRegelRij {
     /** Het event waarin deze regel is geplaatst; leeg = vaste bak of nog niet geplaatst. */
     event_id: number | null;
     klaargezet_at: string | null;
+    /** Afgehaald aan de balie (W3); de geheugen-opslag gebruikt het voor WV011 (BA-6). */
+    opgehaald_at?: string | null;
     /** Btw per tarief van deze regel (S6); null bij oude regels. */
     btw_cents: Record<string, number> | null;
     /** 18+ op het moment van bestellen. */

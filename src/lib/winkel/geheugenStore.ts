@@ -10,8 +10,25 @@ import type { Artikel, Instellingen, MomentRij, Product, Slot } from './rekenen'
 import { vandaagISO } from './rekenen';
 import { regelBoekingen } from './voorraad';
 import { heeftAlcohol, nogOpen, opDezelfdeDag, ophaalBlokkade, restOpen, type Boeking, type Leeftijd, type OphaalBron, type OphaalUitkomst, type RestMethode, type TerugUitkomst } from './ophalen';
+import { tekortenVoorApart, zelfdeBedrijfsdag, type Tekort } from './wegzetten';
 import type { Bronnen, ComponentRij, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
 import { BESCHIKBAAR_GRENS, vrijArtikelen, vrijProducten } from './vrij';
+
+/** Eén boeking van apart zetten of terugdraaien, zoals winkel_zet_order_apart(_terug) hem teruggeeft. */
+export interface ApartBoeking {
+    regel_id: number;
+    product_id: string;
+    hoeveelheid: number;
+    type: 'verkoop_online' | 'retour';
+}
+
+export type ApartUitkomst =
+    | { ok: true; uitkomst: 'apart' | 'al_apart' | 'geen_taak'; boekingen: ApartBoeking[] }
+    | { ok: false; code: 'WV006' | 'WV010' | 'WV001' | 'onbekend'; tekorten?: Tekort[] };
+
+export type ApartTerugUitkomst =
+    | { ok: true; uitkomst: 'ongedaan' | 'niet_apart' | 'niet_zelfde_dag' | 'geen_taak'; boekingen: ApartBoeking[] }
+    | { ok: false; code: 'WV011' | 'WV001' | 'onbekend' };
 
 /** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
 export interface EventGeheugen extends EventTotalen {
@@ -89,6 +106,14 @@ export interface GeheugenStore extends WinkelStore {
     haalOpTerug(orgId: string, orderId: number): TerugUitkomst;
     /** De voorraadversie (BA-5a): één omhoog per handeling die vrij raakt, zoals de deferred trigger per transactie. */
     voorraadVersie(): number;
+    /**
+     * BA-6, zoals winkel_zet_order_apart: alle open wegzet-regels (artikel met
+     * afhandeling 'wegzetten') van een betaalde order in één keer apart.
+     * Alles of niets: ligt er te weinig, dan WV010 en verandert er niets.
+     */
+    zetOrderApart(orderId: number): ApartUitkomst;
+    /** BA-6, zoals winkel_zet_order_apart_terug: dezelfde bedrijfsdag retour; na ophalen WV011. */
+    zetOrderApartTerug(orderId: number): ApartTerugUitkomst;
 }
 
 export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): GeheugenStore {
@@ -164,11 +189,12 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
 
     /**
      * Eén regel in- of uitpakken, zoals winkel_zet_klaargezet: vinkje + netto
-     * boeken, alles of niets. Verhoogt de versie niet: dat doet de handeling
-     * eromheen (pakIn, haalOp), één keer.
+     * boeken, alles of niets. Geeft de boekingen terug en of er iets
+     * veranderde. Verhoogt de versie niet: dat doet de handeling eromheen
+     * (pakIn, haalOp, zetOrderApart, …), één keer.
      */
     function boekRegel(regelId: number, ingepakt: boolean):
-        { ok: true; gewijzigd: boolean } | { ok: false; code: 'WV001' | 'WV006' | 'onbekend' } {
+        { ok: true; boekingen: ApartBoeking[]; gewijzigd: boolean } | { ok: false; code: 'WV001' | 'WV006' | 'onbekend' } {
         const o = orders.find((x) => x.regels.some((r) => r.id === regelId));
         const r = o?.regels.find((x) => x.id === regelId);
         if (!o || !r) return { ok: false, code: 'onbekend' };
@@ -189,8 +215,36 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         }
         const was = r.klaargezet_at;
         r.klaargezet_at = ingepakt ? (r.klaargezet_at ?? nu.toISOString()) : null;
-        return { ok: true, gewijzigd: boekingen.length > 0 || was !== r.klaargezet_at };
+        return {
+            ok: true,
+            boekingen: boekingen.map((b) => ({ ...b, regel_id: regelId })),
+            gewijzigd: boekingen.length > 0 || was !== r.klaargezet_at,
+        };
     }
+
+    /** Legt voorraad, logboek en vinkjes vast; de teruggegeven functie zet ze terug (de terugrol van de transactie). */
+    function momentopname(): () => void {
+        const voorraad = producten.map((p) => p.voorraad);
+        const aantalMutaties = mutaties.length;
+        const vinkjes = orders.flatMap((o) => o.regels.map((r) => [r, r.klaargezet_at] as const));
+        return () => {
+            producten.forEach((p, i) => { p.voorraad = voorraad[i] ?? null; });
+            mutaties.length = aantalMutaties;
+            for (const [r, k] of vinkjes) r.klaargezet_at = k;
+        };
+    }
+
+    /** Voert f uit; lukt het niet, dan gaat alles terug zoals het was (één transactie). */
+    function alsTransactie<T extends { ok: boolean }>(f: () => T): T {
+        const terug = momentopname();
+        const uit = f();
+        if (!uit.ok) terug();
+        return uit;
+    }
+
+    /** De regels van artikelen die uit het schap komen (BA-6). */
+    const wegzetRegels = (o: { regels: GeheugenRegel[] }) =>
+        o.regels.filter((r) => g.artikelen.find((a) => a.id === r.artikel_id)?.afhandeling === 'wegzetten');
 
     /** Het losse vinkje: één regel, één handeling, hooguit één versie omhoog. */
     function pakIn(regelId: number, ingepakt: boolean): ReturnType<GeheugenStore['pakIn']> {
@@ -226,22 +280,17 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
 
         /* Inpakken wat nog niet ingepakt is: alles of niets, net als het blok
            met EXCEPTION WHEN SQLSTATE 'WV001' in de database. */
-        const voorraadVoor = producten.map((p) => p.voorraad);
-        const mutatiesVoor = mutaties.length;
-        const klaarVoor = o.regels.map((r) => r.klaargezet_at);
+        const terug = momentopname();
         const boekingen: Boeking[] = [];
         for (const r of o.regels.filter((x) => !x.opgehaald_at && !x.klaargezet_at).sort((a, b) => a.id - b.id)) {
-            const n = mutaties.length;
             const uit = boekRegel(r.id, true);
             if (uit.ok === false) {
-                producten.forEach((p, i) => { p.voorraad = voorraadVoor[i] ?? null; });
-                mutaties.length = mutatiesVoor;
-                o.regels.forEach((x, i) => { x.klaargezet_at = klaarVoor[i] ?? null; });
+                terug();
                 if (uit.code === 'WV001') return { ...basis, uitkomst: 'te_weinig_voorraad', melding: 'te weinig voorraad om in te pakken' };
                 throw new Error(`inpakken mislukt: ${uit.code}`);
             }
-            for (const m of mutaties.slice(n)) {
-                boekingen.push({ product_id: m.product_id, hoeveelheid: m.hoeveelheid, voorraad: producten.find((p) => p.id === m.product_id)?.voorraad ?? null });
+            for (const b of uit.boekingen) {
+                boekingen.push({ product_id: b.product_id, hoeveelheid: b.hoeveelheid, voorraad: producten.find((p) => p.id === b.product_id)?.voorraad ?? null });
             }
         }
 
@@ -308,6 +357,54 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         dozen,
         haalOp,
         haalOpTerug,
+
+        /* Eén handeling, één transactie: de versie gaat hooguit één keer omhoog. */
+        zetOrderApart(orderId) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return { ok: false, code: 'onbekend' };
+            if (o.status !== 'betaald') return { ok: false, code: 'WV006' };
+            const wegzet = wegzetRegels(o);
+            if (wegzet.length === 0) return { ok: true, uitkomst: 'geen_taak', boekingen: [] };
+            const open = wegzet.filter((r) => !r.klaargezet_at && !r.opgehaald_at);
+            if (open.length === 0) return { ok: true, uitkomst: 'al_apart', boekingen: [] };
+            const ids = new Set(open.map((r) => r.id));
+            const tekorten = tekortenVoorApart(componenten.filter((c) => ids.has(c.order_regel_id)), producten);
+            if (tekorten.length > 0) return { ok: false, code: 'WV010', tekorten };
+            const uit = alsTransactie((): ApartUitkomst => {
+                const boekingen: ApartBoeking[] = [];
+                for (const r of open) {
+                    const b = boekRegel(r.id, true);
+                    if (b.ok === false) return { ok: false, code: b.code };
+                    boekingen.push(...b.boekingen);
+                }
+                return { ok: true, uitkomst: 'apart', boekingen };
+            });
+            if (uit.ok) versieOmhoog();
+            return uit;
+        },
+
+        zetOrderApartTerug(orderId) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return { ok: false, code: 'onbekend' };
+            const wegzet = wegzetRegels(o);
+            if (wegzet.length === 0) return { ok: true, uitkomst: 'geen_taak', boekingen: [] };
+            if (wegzet.some((r) => r.opgehaald_at)) return { ok: false, code: 'WV011' };
+            const apart = wegzet.filter((r) => r.klaargezet_at);
+            if (apart.length === 0) return { ok: true, uitkomst: 'niet_apart', boekingen: [] };
+            const eerste = apart.map((r) => new Date(r.klaargezet_at!)).reduce((a, b) => (b < a ? b : a));
+            if (!zelfdeBedrijfsdag(eerste, nu)) return { ok: true, uitkomst: 'niet_zelfde_dag', boekingen: [] };
+            const uit = alsTransactie((): ApartTerugUitkomst => {
+                const boekingen: ApartBoeking[] = [];
+                for (const r of apart) {
+                    const b = boekRegel(r.id, false);
+                    if (b.ok === false) return { ok: false, code: b.code === 'WV001' ? 'WV001' : 'onbekend' };
+                    boekingen.push(...b.boekingen);
+                }
+                return { ok: true, uitkomst: 'ongedaan', boekingen };
+            });
+            if (uit.ok) versieOmhoog();
+            return uit;
+        },
 
         async laadTenant(slug) { return slug === g.tenant.slug ? g.tenant : null; },
         async laadBronnen(orgId): Promise<Bronnen | null> {

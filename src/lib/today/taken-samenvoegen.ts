@@ -18,7 +18,8 @@
  */
 
 export type TaakUrgentie = 'nu' | 'vandaag' | 'deze-week' | 'later';
-export type TaakBron = 'dagbriefing' | 'aandacht' | 'shift';
+/** 'winkel' = een wegzet-taak uit de webshop (BA-6, src/lib/today/wegzet-taken.ts). */
+export type TaakBron = 'dagbriefing' | 'aandacht' | 'shift' | 'winkel';
 
 export interface Taak {
   id: string;
@@ -31,6 +32,13 @@ export interface Taak {
   actie: string;
   href: string;
   bron: TaakBron;
+  /**
+   * Vast onderwerp voor het ontdubbelen, bv. "wegzet:1042". Leeg = afgeleid
+   * uit titel en detail (onderwerpVan). Een bron die precies weet waar een
+   * taak over gaat zet hem, zodat de woordregels hem nooit met iets anders
+   * laten samenvallen: "Zet 4 × Naober apart voor …" is geen voorraadmelding.
+   */
+  onderwerp?: string;
 }
 
 const URGENTIE_VOLGORDE: Record<TaakUrgentie, number> = {
@@ -49,6 +57,7 @@ export const BRON_LABEL: Record<TaakBron, string> = {
   dagbriefing: 'Dagbriefing',
   aandacht: 'Aandacht',
   shift: 'Planning',
+  winkel: 'Winkel',
 };
 
 /**
@@ -83,23 +92,28 @@ export function onderwerpVan(titel: string, detail: string): string {
 }
 
 /**
- * Voegt de drie stromen samen. Bij een dubbeling wint de bron met de concreetste
+ * Voegt de stromen samen. Bij een dubbeling wint de bron met de concreetste
  * actie: de shift-briefing weet hoe lang iets duurt en wat de knop moet zeggen,
  * de dagbriefing schrijft de mooiste zin. We houden de eerste die we tegenkomen
  * en vullen ontbrekende velden aan uit de latere.
+ *
+ * De winkel (wegzet-taken, BA-6) is optioneel en geeft elke taak een eigen
+ * onderwerp ("wegzet:{order_id}"): één regel per order, en nooit opgeslokt
+ * door — of zelf opslokkend — een bestel- of voorraadmelding.
  */
 export function voegTakenSamen(stromen: {
   dagbriefing: Taak[];
   aandacht: Taak[];
   shift: Taak[];
+  winkel?: Taak[];
 }): Taak[] {
   /* Volgorde bepaalt wie wint bij een dubbeling. Shift eerst: die heeft een
      tijdsindicatie en een werkwoord op de knop. */
-  const alles = [...stromen.shift, ...stromen.aandacht, ...stromen.dagbriefing];
+  const alles = [...stromen.shift, ...stromen.aandacht, ...stromen.dagbriefing, ...(stromen.winkel ?? [])];
 
   const perOnderwerp = new Map<string, Taak>();
   for (const taak of alles) {
-    const sleutel = onderwerpVan(taak.titel, taak.detail);
+    const sleutel = taak.onderwerp ?? onderwerpVan(taak.titel, taak.detail);
     const bestaand = perOnderwerp.get(sleutel);
     if (!bestaand) {
       perOnderwerp.set(sleutel, taak);
