@@ -12,6 +12,10 @@
 --  Alles additief. Een product zonder pagina (pagina_status 'geen') werkt
 --  precies zoals voorheen: een component in een pakket.
 --
+--  De website haalt de catalogus op bij elke build; "zet live" start een
+--  nieuwe build (deploy hook, ±2 minuten). Een voorbeeld van een concept
+--  rendert de website los, op aanvraag.
+--
 --  Vier ideeën:
 --    1. Een product met een pagina heeft een slug. De losse verkoop is het
 --       artikel met dezelfde slug en één slot naar dit product — zo lopen
@@ -47,8 +51,11 @@ ALTER TABLE public.winkel_producten
     ADD COLUMN IF NOT EXISTS ingredienten    TEXT[],
     ADD COLUMN IF NOT EXISTS bewaren         TEXT,
     ADD COLUMN IF NOT EXISTS lekker_bij      TEXT,
-    -- Pad in de bucket winkel-fotos: {org_id}/{slug}-{tijd}.{ext}
-    ADD COLUMN IF NOT EXISTS foto_pad        TEXT,
+    -- De foto in de bucket winkel-fotos, in een paar breedtes:
+    -- {"basis": "{org_id}/{slug}-{tijd}", "breedte": 1024, "hoogte": 1536,
+    --  "maten": [{"w": 640, "h": 960}, ...], "formaten": ["webp"]}
+    -- Bestanden: {basis}-{w}.{formaat}. Zo kan de website een srcset maken.
+    ADD COLUMN IF NOT EXISTS foto            JSONB       CHECK (foto IS NULL OR (jsonb_typeof(foto) = 'object' AND foto ? 'basis' AND foto ? 'maten')),
     ADD COLUMN IF NOT EXISTS pagina_status   TEXT        NOT NULL DEFAULT 'geen' CHECK (pagina_status IN ('geen', 'concept', 'live')),
     ADD COLUMN IF NOT EXISTS pagina_volgorde INTEGER,
     ADD COLUMN IF NOT EXISTS pagina_live_at  TIMESTAMPTZ,
@@ -84,7 +91,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     IF NEW.pagina_status = 'live' THEN
-        IF NEW.slug IS NULL OR NEW.foto_pad IS NULL THEN
+        IF NEW.slug IS NULL OR NEW.foto IS NULL THEN
             RAISE EXCEPTION 'live vraagt een slug en een foto' USING ERRCODE = 'WC001';
         END IF;
         -- Nooit een lege lijst: die zou op de site "geen allergenen" lijken (regel van de website).
@@ -123,7 +130,7 @@ CREATE TRIGGER trg_winkel_catalogus_poort BEFORE INSERT OR UPDATE ON public.wink
 -- Publiek te lezen (de website toont ze); schrijven alleen door org-leden in
 -- hun eigen map: winkel-fotos/{org_uuid}/{bestand}.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('winkel-fotos', 'winkel-fotos', true, 10 * 1024 * 1024, ARRAY['image/png', 'image/jpeg', 'image/webp'])
+VALUES ('winkel-fotos', 'winkel-fotos', true, 10 * 1024 * 1024, ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/avif'])
 ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS winkel_fotos_org_write  ON storage.objects;
