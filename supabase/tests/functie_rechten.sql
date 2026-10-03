@@ -92,7 +92,10 @@ begin
         'public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
         'public.voorraad_invoer_boeken(uuid, uuid)',
         'public.productie_partij_afronden(uuid, uuid, bigint, numeric, text, numeric, text, jsonb, date, date, text, text, uuid, uuid, integer, bigint, uuid, integer, numeric, jsonb, text)',
-        'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)'
+        'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)',
+        -- BA-2 (20261005120000): zetOpgehaald, en straks de Toonbank via service_role
+        'public.winkel_order_ophalen(uuid, bigint, text, text, text, uuid, uuid)',
+        'public.winkel_order_ophalen_terug(uuid, bigint)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';

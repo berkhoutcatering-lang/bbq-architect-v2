@@ -10,7 +10,8 @@
 --  Signaturen zijn de exacte argumenttypes uit de migraties op
 --  fix/ba-s-functierechten (basis feat/winkelvoorraad). "één versie" betekent:
 --  precies één overload met die naam; twee versies kan PostgREST niet kiezen.
---  private.vereis_org staat ONTBREEKT tot BA-S (20261003150000) live is.
+--  private.vereis_org staat ONTBREEKT tot BA-S (20261003150000) live is; de
+--  ophaalkolommen en winkel_order_ophalen(_terug) tot BA-2 (20261005120000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -83,7 +84,10 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_order_regels',   'opgehaald_door',          '20260928120100_winkelvoorraad_inpakken'),
     ('winkel_instellingen',   'melding_email',           '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
     ('stock_movements',       'idempotency_key',         '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
-    ('voorraad_invoer',       'prijzen_incl_btw',        '20260928140100_voorraad_invoer_btw')
+    ('voorraad_invoer',       'prijzen_incl_btw',        '20260928140100_voorraad_invoer_btw'),
+    ('winkel_order_regels',   'leeftijd_vastgesteld_at', '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_order_regels',   'opgehaald_bron',          '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_order_regels',   'opgehaald_medewerker_id', '20261005120000_winkel_order_ophalen (BA-2)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -118,7 +122,10 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_doos_ophalen(uuid, text, text)',             '20260928130000_geschenkpakketten_dozen'),
     ('public.voorraad_invoer_op_slot()',                         '20260928140000_voorraad_invoer'),
     ('public.voorraad_invoer_boeken(uuid, uuid)',                '20260928140000_voorraad_invoer + 20260928140100'),
-    ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)')
+    ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)'),
+    ('public.winkel_order_ophalen(uuid, bigint, text, text, text, uuid, uuid)',
+                                                                 '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('public.winkel_order_ophalen_terug(uuid, bigint)',          '20261005120000_winkel_order_ophalen (BA-2)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
