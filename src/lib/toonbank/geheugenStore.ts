@@ -8,8 +8,9 @@
 import { randomUUID } from 'node:crypto';
 import {
     OngeldigeMelding,
-    type Apparaat, type CatalogusRuw, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
-    type NieuweSessie, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraag, type WegzetVraagRuw,
+    type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type NieuweSessie, type OphaalVraag, type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij,
+    type WegzetVraag, type WegzetVraagRuw,
 } from './store';
 
 /** Een melding in het journaal (BA-9), zoals toonbank_journaal hem bewaart. */
@@ -61,7 +62,7 @@ export interface ToonbankGeheugen {
     /** Wat winkel_zet_order_apart(_terug) zou geven: {ok: true, …} of {ok: false, sqlstate, …}. */
     wegzetResultaat: (v: WegzetVraag) => Record<string, unknown>;
     /** Het journaal van de vragen, op gebeurtenis_id (per organisatie). */
-    journaal: { organization_id: string; gebeurtenis_id: string; payload: Record<string, unknown>; resultaat: Record<string, unknown> }[];
+    journaal: { organization_id: string; gebeurtenis_id: string; payload: Record<string, unknown>; resultaat: Record<string, unknown>; soort?: string }[];
     /** Hoe vaak de vraag echt is uitgevoerd (niet uit het journaal). */
     wegzetUitgevoerd: number;
     /* BA-9: de meldingen in het journaal en wat verwerken ervan maakt. */
@@ -70,6 +71,14 @@ export interface ToonbankGeheugen {
     verwerkMelding: (m: GeheugenMelding) => { status: string; product_ids?: string[]; fout_code?: string };
     /** Hoe vaak de wachtrij gedraaid heeft. */
     wachtrijGedraaid: number;
+    /* BA-10 */
+    /** Wat winkel_order_ophalen / winkel_doos_ophalen zou geven. */
+    ophaalResultaat: (v: OphaalVraag) => Record<string, unknown>;
+    /** Hoe vaak een ophaalvraag echt is uitgevoerd (niet uit het journaal). */
+    ophaalUitgevoerd: number;
+    dagstaatOverzicht: Record<string, Record<string, Record<string, unknown>>>;
+    /** Wat toonbank_dagstaten na verwerken zegt, op dagstaat-ID. */
+    dagstaten: Record<string, DagstaatStand>;
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -112,6 +121,10 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         meldingen: start.meldingen ?? [],
         verwerkMelding: start.verwerkMelding ?? standaardVerwerking,
         wachtrijGedraaid: 0,
+        ophaalResultaat: start.ophaalResultaat ?? (() => ({ uitkomst: 'onbekend', order_id: null })),
+        ophaalUitgevoerd: 0,
+        dagstaatOverzicht: start.dagstaatOverzicht ?? {},
+        dagstaten: start.dagstaten ?? {},
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -313,6 +326,33 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
                 uit.push({ journaal_id: m.id, gebeurtenis_id: m.gebeurtenis_id, soort: m.soort, status: r.status, product_ids: r.product_ids ?? [] });
             }
             return uit;
+        },
+
+        /* ── BA-10: zoals toonbank_ophaal_vraag ── */
+        async ophaalVraag(v) {
+            const soort = v.soort === 'order' ? 'ophalen' : 'doos_ophalen';
+            const oud = g.journaal.find((j) => j.organization_id === v.orgId && j.gebeurtenis_id === v.gebeurtenisId);
+            if (oud) return { journaal: 'bestond', soort: oud.soort ?? soort, payload: oud.payload, resultaat: oud.resultaat } satisfies OphaalVraagRuw;
+            const payload: Record<string, unknown> = {
+                order_id: v.orderId, code: v.code, bon_id: v.bonId, medewerker_id: v.medewerkerId, moment: v.moment, leeftijd: v.leeftijd,
+                rest: v.restMethode ? { methode: v.restMethode, bedrag_cents: v.restBedragCents } : null,
+            };
+            g.ophaalUitgevoerd += 1;
+            const resultaat = { ok: true, rest_dubbel: false, ...g.ophaalResultaat(v) };
+            g.journaal.push({ organization_id: v.orgId, gebeurtenis_id: v.gebeurtenisId, payload, resultaat, soort });
+            return { journaal: 'nieuw', soort, payload, resultaat } satisfies OphaalVraagRuw;
+        },
+
+        async dagstaatOverzicht(orgId, apparaatId, datum) {
+            const a = g.apparaten.find((x) => x.id === apparaatId && x.organization_id === orgId);
+            if (!a) throw new Error('tablet niet in deze organisatie (P0002)');
+            return g.dagstaatOverzicht[orgId]?.[datum] ?? {
+                datum, apparaat_code: a.code, aantal_bonnen: 0, hoogste_bonnummer: null, omzet: [], pin_cents: 0, contant_cents: 0,
+            };
+        },
+
+        async dagstaatStand(_orgId, dagstaatId) {
+            return g.dagstaten[dagstaatId] ?? null;
         },
     };
 }

@@ -22,7 +22,10 @@
 --  afhaallijst en scan_resolve tot BA-8 (20261006150000); bonnen, bonregels,
 --  de journaalverwerking, tekort_correctie, gebeurd_at en de nieuwe
 --  winkel_muteer_voorraad (17 parameters; de oude met 15 bestaat dan niet
---  meer) tot BA-9 (20261007120000).
+--  meer) tot BA-9 (20261007120000); de dagstaten, ophalen vanaf de Toonbank,
+--  rest_bon_id en de nieuwe winkel_doos_ophalen (6 parameters) en
+--  winkel_boek_rest (met p_org; de oude handtekeningen bestaan dan niet
+--  meer) tot BA-10 (20261007130000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -49,7 +52,8 @@ tabellen(naam, migratie) AS (VALUES
     ('toonbank_sessies',               '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_journaal',              '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_bonnen',                '20261007120000_toonbank_bonnen (BA-9)'),
-    ('toonbank_bon_regels',            '20261007120000_toonbank_bonnen (BA-9)')
+    ('toonbank_bon_regels',            '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_dagstaten',             '20261007130000_toonbank_afhalen_dagstaten (BA-10)')
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
@@ -121,7 +125,10 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_instellingen',   'toonbank_contant_aan',          '20261006140000_toonbank_status (BA-7b)'),
     ('winkel_instellingen',   'toonbank_contant_limiet_cents', '20261006140000_toonbank_status (BA-7b)'),
     ('winkel_voorraad_mutaties', 'gebeurd_at',            '20261007120000_toonbank_bonnen (BA-9)'),
-    ('winkel_voorraad_mutaties', 'toonbank_bon_regel_id', '20261007120000_toonbank_bonnen (BA-9)')
+    ('winkel_voorraad_mutaties', 'toonbank_bon_regel_id', '20261007120000_toonbank_bonnen (BA-9)'),
+    ('winkel_orders',         'rest_bon_id',             '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('winkel_dozen',          'opgehaald_bon_id',        '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('winkel_dozen',          'opgehaald_medewerker_id', '20261007130000_toonbank_afhalen_dagstaten (BA-10)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -141,7 +148,7 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_plaats_order(uuid, text, text, text, uuid, text, text, text, jsonb, text, integer, integer, integer, jsonb, text, jsonb, text, integer, integer)',
                                                                  '20260927120000_winkel_sinterklaas'),
     ('public.winkel_regels_json(bigint)',                        '20260927120000_winkel_sinterklaas'),
-    ('public.winkel_boek_rest(bigint, text)',                    '20260927120000_winkel_sinterklaas'),
+    ('public.winkel_boek_rest(uuid, bigint, text, uuid)',        '20260927120000_winkel_sinterklaas + 20261007130000 (BA-10)'),
     ('public.winkel_bezetting_product(uuid, bigint)',            '20260927120000_winkel_sinterklaas + 20260928120100'),
     ('public.winkel_voorraad_bewaken()',                         '20260928120000_winkelvoorraad_logboek'),
     ('public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
@@ -153,7 +160,7 @@ functies(signatuur, migratie) AS (VALUES
     ('public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
                                                                  '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
     ('public.winkel_dozen_voor_regel(uuid, bigint, text[])',     '20260928130000_geschenkpakketten_dozen'),
-    ('public.winkel_doos_ophalen(uuid, text, text)',             '20260928130000_geschenkpakketten_dozen'),
+    ('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)', '20260928130000_geschenkpakketten_dozen + 20261007130000 (BA-10)'),
     ('public.voorraad_invoer_op_slot()',                         '20260928140000_voorraad_invoer'),
     ('public.voorraad_invoer_boeken(uuid, uuid)',                '20260928140000_voorraad_invoer + 20260928140100'),
     ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)'),
@@ -192,7 +199,14 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)', '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_bon_vast()',                              '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_verwerk_melding(bigint, boolean)',        '20261007120000_toonbank_bonnen (BA-9)'),
-    ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)')
+    ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
+                                                                 '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('public.toonbank_dagstaat_overzicht(uuid, uuid, date)',     '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('private.toonbank_verwerk_dagstaat(bigint)',                '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('private.toonbank_dagstaat_vast()',                         '20261007130000_toonbank_afhalen_dagstaten (BA-10)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
@@ -228,7 +242,9 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('toonbank_bonnen',       'trg_toonbank_bonnen_vast',               '20261007120000_toonbank_bonnen (BA-9)'),
     ('toonbank_bonnen',       'trg_toonbank_bonnen_geen_truncate',      '20261007120000_toonbank_bonnen (BA-9)'),
     ('toonbank_bon_regels',   'trg_toonbank_bon_regels_vast',           '20261007120000_toonbank_bonnen (BA-9)'),
-    ('toonbank_bon_regels',   'trg_toonbank_bon_regels_geen_truncate',  '20261007120000_toonbank_bonnen (BA-9)')
+    ('toonbank_bon_regels',   'trg_toonbank_bon_regels_geen_truncate',  '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_dagstaten',    'trg_toonbank_dagstaten_vast',            '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('toonbank_dagstaten',    'trg_toonbank_dagstaten_geen_truncate',   '20261007130000_toonbank_afhalen_dagstaten (BA-10)')
 ),
 indexen(naam, migratie) AS (VALUES
     ('winkel_orders_sleutel_idx',     '20260913120000_winkel_kassa'),
@@ -324,7 +340,11 @@ proef AS (
     UNION ALL
     SELECT 11, 'fix', 'lockvolgorde: winkel_doos_ophalen vergrendelt eerst de order (FOR NO KEY UPDATE)',
            '20261005120100_winkel_lockvolgorde (BA-2)',
-           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)')) LIKE '%FOR NO KEY UPDATE%', false)
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%FOR NO KEY UPDATE%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'doos ophalen: leeftijd_nodig bij alcohol zonder vaststelling',
+           '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%leeftijd_nodig%', false)
     UNION ALL
     SELECT 11, 'fix', 'wegzetten: WV010 is een eigen SQLSTATE (niet P0001)',
            '20261005140000_winkel_wegzetten (BA-6)',

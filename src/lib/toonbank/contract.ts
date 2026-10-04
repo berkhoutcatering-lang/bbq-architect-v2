@@ -416,6 +416,7 @@ export const OphalenVerzoek = z
         leeftijd: Leeftijd.nullable(),
     })
     .refine((v) => v.rest === null || v.bon_id !== null, { message: 'een rest staat op een bon: bon_id is nodig', path: ['bon_id'] });
+export type OphalenVerzoek = z.infer<typeof OphalenVerzoek>;
 export const OrderOphalenVerzoek = OphalenVerzoek;
 export const DoosOphalenVerzoek = OphalenVerzoek;
 

@@ -434,22 +434,26 @@ function VandaagDrawer({ v, vandaag, onClose, herlaad, melding }: { v: Vakje; va
 
 /* ── De balie: een doos scannen (S7) ─────────────────────────────────────────
    De handscanner typt de QR (de hele URL) in het veld en drukt op Enter. Eén
-   scan = die doos is opgehaald. Bij een reservering eerst contant of pin. */
+   scan = die doos is opgehaald. Bij een reservering eerst contant of pin, bij
+   alcohol "ID gezien / Geweigerd" (BA-10). */
+
+type RestKeuze = 'contant' | 'pin' | null;
+type LeeftijdKeuze = 'vastgesteld' | 'geweigerd' | null;
 
 function BalieScan({ herlaad, melding }: { herlaad: () => Promise<void>; melding: Melding }) {
     const [invoer, setInvoer] = useState('');
     const [bezig, setBezig] = useState(false);
-    const [laatste, setLaatste] = useState<{ invoer: string; uit: ScanUitkomst } | null>(null);
+    const [laatste, setLaatste] = useState<{ invoer: string; uit: ScanUitkomst; restMethode: RestKeuze } | null>(null);
 
-    async function scan(tekst: string, restMethode: 'contant' | 'pin' | null = null) {
+    async function scan(tekst: string, restMethode: RestKeuze = null, leeftijd: LeeftijdKeuze = null) {
         if (!tekst.trim()) return;
         setBezig(true);
         try {
-            const r = await scanDoos({ invoer: tekst, restMethode });
+            const r = await scanDoos({ invoer: tekst, restMethode, leeftijd });
             if ('error' in r) { melding(r.error, 'error'); return; }
-            setLaatste({ invoer: tekst, uit: r.data });
+            setLaatste({ invoer: tekst, uit: r.data, restMethode });
             setInvoer('');
-            if (r.data.uitkomst === 'opgehaald') await herlaad();
+            if (r.data.uitkomst === 'opgehaald' || r.data.uitkomst === 'geweigerd') await herlaad();
         } finally { setBezig(false); }
     }
 
@@ -479,6 +483,14 @@ function BalieScan({ herlaad, melding }: { herlaad: () => Promise<void>; melding
                         <Button size="sm" variant="ghost" disabled={bezig} onClick={() => scan(laatste!.invoer, 'contant')}>Contant</Button>
                         <Button size="sm" disabled={bezig} onClick={() => scan(laatste!.invoer, 'pin')}>Pin</Button>
                     </>}
+                    {u.uitkomst === 'leeftijd_nodig' && <>
+                        <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><IdCard size={14} /></span>
+                        <div style={{ flex: 1, fontSize: 13 }}><b>{u.klant}</b> · <span className="ws-mono">{u.nummer}</span> · {u.doos}: er zit alcohol in. Vraag om een ID (18+).</div>
+                        <Button size="sm" variant="ghost" disabled={bezig} onClick={() => scan(laatste!.invoer, laatste!.restMethode, 'geweigerd')}>Geweigerd</Button>
+                        <Button size="sm" disabled={bezig} onClick={() => scan(laatste!.invoer, laatste!.restMethode, 'vastgesteld')}>ID gezien</Button>
+                    </>}
+                    {u.uitkomst === 'geweigerd' && <div style={{ flex: 1, fontSize: 13 }}>Geweigerd: {u.doos} van {u.klant} (<span className="ws-mono">{u.nummer}</span>) gaat niet mee. Dat is vastgelegd; er is niets afgeboekt en geen rest geboekt.</div>}
+                    {u.uitkomst === 'te_weinig_voorraad' && <div style={{ flex: 1, fontSize: 13 }}>Te weinig voorraad om {u.doos} van <span className="ws-mono">{u.nummer}</span> in te pakken. Er is niets geboekt. Tel het schap en corrigeer de voorraad.</div>}
                     {u.uitkomst === 'niet_betaald' && <div style={{ flex: 1, fontSize: 13 }}>Order <span className="ws-mono">{u.nummer}</span> is niet betaald ({u.status}). Niet meegeven.</div>}
                     {u.uitkomst === 'onbekend' && <div style={{ flex: 1, fontSize: 13 }}>Deze code kennen we niet. Zoek de order op nummer of naam.</div>}
                 </div>

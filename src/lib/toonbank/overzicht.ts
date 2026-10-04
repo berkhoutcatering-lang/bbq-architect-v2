@@ -152,6 +152,32 @@ export function meldingSamenvatting(soort: string, payload: unknown): string {
     }
 }
 
+const VERSCHIL_LABEL: Record<string, string> = {
+    aantal_bonnen: 'Aantal bonnen',
+    aantal_tegenbonnen: 'Aantal tegenbonnen',
+    aantal_geannuleerd: 'Aantal geannuleerd',
+    statiegeld_cents: 'Statiegeld',
+    order_rest_cents: 'Rest webshoporders',
+    tegenbonnen_cents: 'Tegenbonnen',
+    korting_cents: 'Korting',
+    afronding_cents: 'Afronding',
+    pin_toonbank_cents: 'Pin volgens de Toonbank',
+    contant_begin_cents: 'Wisselgeld bij openen',
+    contant_verwacht_cents: 'Contant verwacht',
+};
+
+/** "omzet_21_btw" → "Btw 21%"; "aantal_bonnen" → "Aantal bonnen". */
+export function verschilLabel(veld: string): string {
+    const m = /^omzet_(\d+)_(incl|btw)$/.exec(veld);
+    if (m) return m[2] === 'btw' ? `Btw ${m[1]}%` : `Omzet ${m[1]}% (incl. btw)`;
+    return VERSCHIL_LABEL[veld] ?? veld;
+}
+
+/** Is een verschilveld een aantal (geen bedrag)? */
+export function isAantal(veld: string): boolean {
+    return veld.startsWith('aantal_');
+}
+
 /** ISO-tijd van n minuten vóór nu. */
 export function minutenTerug(nu: Date, minuten: number): string {
     return new Date(nu.getTime() - minuten * 60_000).toISOString();

@@ -111,8 +111,9 @@ begin
     foreach v_sig in array array[
         'public.winkel_bezetting_product(uuid, bigint)',
         'public.winkel_zet_klaargezet(uuid, bigint, boolean)',
-        'public.winkel_doos_ophalen(uuid, text, text)',
-        'public.winkel_boek_rest(bigint, text)',
+        -- BA-10 (20261007130000): + leeftijd, medewerker en bon; boek_rest met p_org
+        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)',
+        'public.winkel_boek_rest(uuid, bigint, text, uuid)',
         'public.winkel_dozen_voor_regel(uuid, bigint, text[])',
         -- BA-9 (20261007120000): + p_gebeurd_at en p_toonbank_bon_regel_id
         'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
@@ -133,7 +134,10 @@ begin
         'public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',
         'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)',
         -- BA-9 (20261007120000): Te controleren in BA
-        'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)'
+        'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)',
+        -- BA-10 (20261007130000): Dagstaten in BA
+        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
+        'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';

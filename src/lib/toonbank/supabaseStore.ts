@@ -12,8 +12,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import {
     OngeldigeMelding,
-    type Apparaat, type CatalogusRuw, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
-    type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
+    type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
 } from './store';
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
@@ -225,6 +225,34 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             const { data, error } = await sb.rpc('toonbank_verwerk_wachtrij', { p_org: orgId, p_apparaat: apparaatId });
             if (error) throw new OpslagFout('toonbank_verwerk_wachtrij', error);
             return naarVerwerkt((data as { verwerkt?: unknown } | null)?.verwerkt);
+        },
+
+        /* ── BA-10 ── */
+        async ophaalVraag(v) {
+            const { data, error } = await sb.rpc('toonbank_ophaal_vraag', {
+                p_org: v.orgId, p_apparaat_id: v.apparaatId, p_soort: v.soort, p_order_id: v.orderId, p_code: v.code,
+                p_gebeurtenis_id: v.gebeurtenisId, p_moment: v.moment, p_medewerker_id: v.medewerkerId, p_bon_id: v.bonId,
+                p_rest_methode: v.restMethode, p_rest_bedrag_cents: v.restBedragCents, p_leeftijd: v.leeftijd, p_contract_versie: v.contractVersie,
+            });
+            if (error) throw new OpslagFout('toonbank_ophaal_vraag', error);
+            return data as OphaalVraagRuw;
+        },
+
+        async dagstaatOverzicht(orgId, apparaatId, datum) {
+            const { data, error } = await sb.rpc('toonbank_dagstaat_overzicht', { p_org: orgId, p_apparaat_id: apparaatId, p_datum: datum });
+            if (error) throw new OpslagFout('toonbank_dagstaat_overzicht', error);
+            return (data ?? {}) as Record<string, unknown>;
+        },
+
+        async dagstaatStand(orgId, dagstaatId) {
+            const { data, error } = await sb.from('toonbank_dagstaten').select('status, verschillen').eq('organization_id', orgId).eq('id', dagstaatId).maybeSingle();
+            if (error) throw new OpslagFout('toonbank_dagstaten', error);
+            if (!data) return null;
+            const r = data as { status: string; verschillen: { veld: string; tablet_cents: unknown; ba_cents: unknown }[] | null };
+            return {
+                status: String(r.status),
+                verschillen: (r.verschillen ?? []).map((x) => ({ veld: String(x.veld), tablet_cents: Number(x.tablet_cents), ba_cents: Number(x.ba_cents) })),
+            } satisfies DagstaatStand;
         },
     };
 }

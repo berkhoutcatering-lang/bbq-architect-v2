@@ -49,3 +49,30 @@ export async function handelMeldingAf(input: unknown): Promise<ActionResult<Afha
     revalidatePath('/verkoop/toonbank', 'layout');
     return { data: { status: String(r.status ?? ''), uitkomst: String(r.uitkomst ?? '') } };
 }
+
+/** Dagstaten: een dagstaat met verschillen achteraf goedkeuren (met reden). */
+export async function keurDagstaatGoed(input: unknown): Promise<ActionResult<{ status: string }>> {
+    const parsed = z.object({ dagstaatId: z.string().uuid(), reden: z.string().trim().min(1, 'Geef een reden.').max(500) }).safeParse(input);
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'validation' };
+    const s = await alsAdmin();
+    if (!s) return { error: 'Alleen een beheerder (Admin) keurt een dagstaat goed.' };
+    const { data, error } = await s.supabase.rpc('toonbank_dagstaat_goedkeuren', {
+        p_org: s.orgId, p_dagstaat_id: parsed.data.dagstaatId, p_reden: parsed.data.reden, p_door: s.user!.id,
+    });
+    if (error) return { error: error.code === '42501' ? 'Alleen een beheerder (Admin) keurt een dagstaat goed.' : error.message };
+    revalidatePath('/verkoop/toonbank', 'layout');
+    return { data: { status: String((data as { status?: string } | null)?.status ?? 'goedgekeurd') } };
+}
+
+/** Dagstaten: opnieuw narekenen uit de bonnen (bijvoorbeeld na het afhandelen van een bon). */
+export async function rekenDagstaatNa(input: unknown): Promise<ActionResult<{ status: string; verschillen: number }>> {
+    const parsed = z.object({ dagstaatId: z.string().uuid() }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await toonbankLid();
+    if (!s.user || !s.orgId) return { error: 'unauthorized' };
+    const { data, error } = await s.supabase.rpc('toonbank_dagstaat_herberekenen', { p_org: s.orgId, p_dagstaat_id: parsed.data.dagstaatId });
+    if (error) return { error: error.message };
+    const r = (data ?? {}) as { status?: string; verschillen?: unknown[] };
+    revalidatePath('/verkoop/toonbank', 'layout');
+    return { data: { status: String(r.status ?? ''), verschillen: (r.verschillen ?? []).length } };
+}

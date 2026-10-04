@@ -206,8 +206,8 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 .order('id', { ascending: true });
             return ((data ?? []) as unknown as (ComponentRij & { winkel_order_regels: unknown })[]).map(({ winkel_order_regels: _r, ...c }) => ({ ...c, hoeveelheid: Number(c.hoeveelheid) }));
         },
-        async boekRest(orderId, methode) {
-            const { data, error } = await sb.rpc('winkel_boek_rest', { p_order_id: orderId, p_methode: methode });
+        async boekRest(orgId, orderId, methode) {
+            const { data, error } = await sb.rpc('winkel_boek_rest', { p_org: orgId, p_order_id: orderId, p_methode: methode });
             if (error) { console.error('[winkel] winkel_boek_rest faalde:', error.code, error.message); return 'onbekend'; }
             const u = String(data);
             return u === 'geboekt' || u === 'al_geboekt' || u === 'geen_rest' || u === 'niet_betaald' ? u : 'onbekend';

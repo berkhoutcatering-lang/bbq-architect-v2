@@ -227,7 +227,8 @@ begin
     update public.winkel_orders set status = 'betaald', betaald_at = now() where id = v_o4;
     select id into v_r1 from public.winkel_order_regels where order_id = v_o4;
     v_codes := public.winkel_dozen_voor_regel(v_org, v_r1, array['TEST doos 1', 'TEST doos 2']);
-    v_r := public.winkel_doos_ophalen(v_org, v_codes->0->>'code');
+    -- Sinds BA-10 vraagt een doos met alcohol ook om de leeftijd.
+    v_r := public.winkel_doos_ophalen(v_org, v_codes->0->>'code', p_leeftijd => 'vastgesteld');
     if v_r->>'uitkomst' is distinct from 'opgehaald' then v_fouten := v_fouten || 'doosscan O4 gaf ' || v_r::text || '; '; end if;
     select count(*) into v_mut from public.winkel_voorraad_mutaties where order_id = v_o4;
     v_r := public.winkel_order_ophalen(v_org, v_o4);

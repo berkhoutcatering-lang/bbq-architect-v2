@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { controleLabel, dagTotalen, euro, geldigeDatum, meldingSamenvatting, vandaagAmsterdam, type BonRij } from './overzicht';
+import { controleLabel, dagTotalen, euro, geldigeDatum, meldingSamenvatting, vandaagAmsterdam, verschilLabel, type BonRij } from './overzicht';
 
 const bon = (o: Partial<BonRij>): BonRij => ({
     id: crypto.randomUUID(), soort: 'verkoop', status: 'afgerond', totaal_cents: 0, omzet_incl_cents: 0, btw: {}, statiegeld_cents: 0,
@@ -47,6 +47,12 @@ describe('kleine hulpjes', () => {
         expect(controleLabel('rest_dubbel')).toBe('Rest dubbel betaald?');
         expect(controleLabel('WV001')).toBe('WV001');
         expect(controleLabel(null)).toBe('Te controleren');
+    });
+    it('verschilLabel', () => {
+        expect(verschilLabel('omzet_21_btw')).toBe('Btw 21%');
+        expect(verschilLabel('omzet_9_incl')).toBe('Omzet 9% (incl. btw)');
+        expect(verschilLabel('aantal_bonnen')).toBe('Aantal bonnen');
+        expect(verschilLabel('iets_nieuws')).toBe('iets_nieuws');
     });
     it('meldingSamenvatting', () => {
         expect(meldingSamenvatting('bon', { bonnummer: 'T1-000412', totaal_cents: 2460, regels: [{}, {}, {}] })).toBe('T1-000412 · € 24,60 · 3 regels');

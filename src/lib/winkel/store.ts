@@ -207,8 +207,8 @@ export interface WinkelStore {
     laadRegels(orderId: number): Promise<OrderRegelRij[]>;
     /** De componenten van de regels van één order (S2/S7). */
     laadComponenten(orderId: number): Promise<ComponentRij[]>;
-    /** De balie boekt het restbedrag (S5). Idempotent. */
-    boekRest(orderId: number, methode: 'contant' | 'pin'): Promise<'geboekt' | 'al_geboekt' | 'geen_rest' | 'niet_betaald' | 'onbekend'>;
+    /** De balie boekt het restbedrag (S5). Idempotent; alleen een order van deze organisatie (BA-10: winkel_boek_rest met p_org). */
+    boekRest(orgId: string, orderId: number, methode: 'contant' | 'pin'): Promise<'geboekt' | 'al_geboekt' | 'geen_rest' | 'niet_betaald' | 'onbekend'>;
 
     /** Atomair: idempotentie op sleutel, capaciteit/voorraad tellen, nummer uitgeven, schrijven. */
     plaatsOrder(order: NieuweOrder): Promise<OpslagUitkomst<OrderRij>>;

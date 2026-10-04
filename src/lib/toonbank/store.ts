@@ -202,6 +202,38 @@ export interface VerwerktRij {
     product_ids: string[];
 }
 
+/* ── BA-10: ophalen en dagstaten ────────────────────────────────────────── */
+
+export interface OphaalVraag {
+    orgId: string;
+    apparaatId: string;
+    soort: 'order' | 'doos';
+    orderId: number | null;
+    code: string | null;
+    gebeurtenisId: string;
+    moment: string;
+    medewerkerId: string;
+    bonId: string | null;
+    restMethode: 'pin' | 'contant' | null;
+    restBedragCents: number | null;
+    leeftijd: 'vastgesteld' | 'geweigerd' | null;
+    contractVersie: string | null;
+}
+
+/** Wat toonbank_ophaal_vraag teruggeeft. */
+export interface OphaalVraagRuw {
+    journaal: 'nieuw' | 'bestond';
+    soort: string;
+    payload: Record<string, unknown>;
+    /** De uitkomst van winkel_order_ophalen of winkel_doos_ophalen, plus ok en rest_dubbel. */
+    resultaat: Record<string, unknown> | null;
+}
+
+export interface DagstaatStand {
+    status: string;
+    verschillen: { veld: string; tablet_cents: number; ba_cents: number }[];
+}
+
 /** De envelop van een melding klopt niet (de database zegt 22023): 400 ongeldig_verzoek. */
 export class OngeldigeMelding extends Error {
     constructor(melding: string, public readonly index: number | null = null) {
@@ -256,4 +288,12 @@ export interface ToonbankStore {
     journaalMarkeer(orgId: string, journaalId: number, code: string, melding: string): Promise<string>;
     /** toonbank_verwerk_wachtrij: alles op wacht van deze tablet. */
     verwerkWachtrij(orgId: string, apparaatId: string): Promise<VerwerktRij[]>;
+
+    /* ── Ophalen en dagstaten (BA-10) ── */
+    /** toonbank_ophaal_vraag: een order of doos meegeven, idempotent op gebeurtenis_id. */
+    ophaalVraag(v: OphaalVraag): Promise<OphaalVraagRuw>;
+    /** toonbank_dagstaat_overzicht (GET dagstaat). */
+    dagstaatOverzicht(orgId: string, apparaatId: string, datum: string): Promise<Record<string, unknown>>;
+    /** Status en verschillen van een dagstaat; null als hij (nog) niet bestaat. */
+    dagstaatStand(orgId: string, dagstaatId: string): Promise<DagstaatStand | null>;
 }

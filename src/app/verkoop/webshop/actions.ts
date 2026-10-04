@@ -580,29 +580,49 @@ export async function zetOrderApartTerug(input: unknown): Promise<ActionResult<A
     return { data: uit };
 }
 
+interface DoosBasis { nummer: string; klant: string; doos: string }
+
 export type ScanUitkomst =
     | { uitkomst: 'onbekend' }
-    | { uitkomst: 'niet_betaald'; status: string; nummer: string }
-    | { uitkomst: 'al_opgehaald'; opgehaald_at: string; nummer: string; klant: string; doos: string }
-    | { uitkomst: 'rest_nodig'; rest_cents: number; reeds_cents: number; nummer: string; klant: string; doos: string }
-    | { uitkomst: 'opgehaald'; nummer: string; klant: string; doos: string; volgnr: number; totaal: number; nog_open: number; regels_zonder_etiket: number; rest_geboekt: 'contant' | 'pin' | null };
+    | ({ uitkomst: 'niet_betaald'; status: string } & DoosBasis)
+    | ({ uitkomst: 'al_opgehaald'; opgehaald_at: string } & DoosBasis)
+    | ({ uitkomst: 'rest_nodig'; rest_cents: number; reeds_cents: number } & DoosBasis)
+    /* BA-10: een doos met alcohol vraagt eerst "ID gezien / Geweigerd". */
+    | ({ uitkomst: 'leeftijd_nodig'; rest_cents: number } & DoosBasis)
+    | ({ uitkomst: 'geweigerd'; geweigerd_at: string } & DoosBasis)
+    | ({ uitkomst: 'te_weinig_voorraad'; melding: string } & DoosBasis)
+    | ({ uitkomst: 'opgehaald'; volgnr: number; totaal: number; nog_open: number; regels_zonder_etiket: number; rest_geboekt: 'contant' | 'pin' | null; boekingen?: { product_id: string }[] } & DoosBasis);
 
 /**
  * De balie scant de QR van een doos (S7): die doos is opgehaald. Bij een
- * reservering met openstaand rest eerst contant of pin; was de regel nog niet
- * ingepakt, dan boekt de database hem eerst af. Twee keer scannen = al_opgehaald.
+ * reservering met openstaand rest eerst contant of pin; bij alcohol eerst de
+ * leeftijd (BA-10: leeftijd_nodig, of "Geweigerd": alleen vastgelegd). Was de
+ * regel nog niet ingepakt, dan boekt de database hem eerst af; te weinig
+ * voorraad = niets geboekt. Twee keer scannen = al_opgehaald.
  */
 export async function scanDoos(input: unknown): Promise<ActionResult<ScanUitkomst>> {
-    const parsed = z.object({ invoer: z.string().trim().min(1).max(400), restMethode: z.enum(['contant', 'pin']).nullable().default(null) }).safeParse(input);
+    const parsed = z.object({
+        invoer: z.string().trim().min(1).max(400),
+        restMethode: z.enum(['contant', 'pin']).nullable().default(null),
+        leeftijd: z.enum(['vastgesteld', 'geweigerd']).nullable().default(null),
+    }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
     const code = codeUitScan(parsed.data.invoer);
     if (!code) return { data: { uitkomst: 'onbekend' } };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
-    const { data, error } = await s.supabase.rpc('winkel_doos_ophalen', { p_org: s.orgId, p_code: code, p_rest_methode: parsed.data.restMethode });
+    const { data, error } = await s.supabase.rpc('winkel_doos_ophalen', {
+        p_org: s.orgId, p_code: code, p_rest_methode: parsed.data.restMethode, p_leeftijd: parsed.data.leeftijd,
+    });
     if (error) return { error: voorraadFout(error.code, error.message) };
+    const uit = data as ScanUitkomst;
+    if (uit.uitkomst === 'opgehaald' && uit.boekingen?.length) {
+        await evalueerWinkelMeldingen(s.orgId, [...new Set(uit.boekingen.map((b) => b.product_id))]);
+        revalidatePath('/voorraad/winkel');
+        verversNaAfloop();
+    }
     revalidatePath(PAD);
-    return { data: data as ScanUitkomst };
+    return { data: uit };
 }
 
 export type OpgehaaldResultaat =
@@ -800,8 +820,8 @@ export async function boekRestBetaling(input: unknown): Promise<ActionResult<{ u
     if (!s) return { error: 'unauthorized' };
     const { data: o } = await s.supabase.from('winkel_orders').select('id').eq('id', parsed.data.orderId).eq('organization_id', s.orgId).maybeSingle();
     if (!o) return { error: 'Order niet gevonden' };
-    /* De databasefunctie is idempotent en vergrendelt de order. */
-    const { data, error } = await s.supabase.rpc('winkel_boek_rest', { p_order_id: parsed.data.orderId, p_methode: parsed.data.methode });
+    /* De databasefunctie is idempotent, vergrendelt de order en controleert de organisatie (BA-10). */
+    const { data, error } = await s.supabase.rpc('winkel_boek_rest', { p_org: s.orgId, p_order_id: parsed.data.orderId, p_methode: parsed.data.methode });
     if (error) return { error: error.message };
     const uitkomst = String(data);
     if (uitkomst === 'niet_betaald') return { error: 'Deze order is nog niet (online) betaald.' };
