@@ -17,7 +17,7 @@ export async function start() {
     }
 
     if (!fs.existsSync(path.join(CLUSTER, 'PG_VERSION'))) {
-        console.log('Nieuw cluster aanmaken in tools/testdb/.data/pg …');
+        console.log(`Nieuw cluster aanmaken in ${path.relative(process.cwd(), CLUSTER) || CLUSTER} …`);
         const pwfile = path.join(os.tmpdir(), `testdb-pw-${process.pid}`);
         fs.writeFileSync(pwfile, WACHTWOORD + '\n', { mode: 0o600 });
         try {

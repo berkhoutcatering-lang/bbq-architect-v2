@@ -5,10 +5,13 @@
  *
  * Variabelen (alleen namen, waarden staan in .env.development.local):
  *   NEXT_PUBLIC_SUPABASE_URL  de database waar BA lokaal tegen praat (dev)
- *   LIVE_SUPABASE_REF         de project-ref van live; verplicht
+ *   LIVE_SUPABASE_REF         de project-ref van live; verplicht, behalve
+ *                             bij een lokale URL
  *
  * Weigert als LIVE_SUPABASE_REF ontbreekt of geen project-ref is, als
  * NEXT_PUBLIC_SUPABASE_URL ontbreekt, of als die URL de live-ref bevat.
+ * Een lokale URL (http://127.0.0.1:<poort>, localhost, ::1: de api-stand van
+ * tools/testdb) is nooit live en mag zonder LIVE_SUPABASE_REF.
  *
  * De check leest process.env, aangevuld met de .env-bestanden precies zoals
  * `next dev` ze laadt (loadEnvConfig uit @next/env, dev-modus). Zo ziet de
@@ -24,6 +27,25 @@ import { fileURLToPath } from 'node:url';
 const PROJECT_REF = /^[a-z0-9]{15,40}$/;
 
 /**
+ * Wijst de URL naar deze Mac zelf (127.0.0.1, localhost, ::1 of *.localhost)?
+ * Dan is het de lokale testdatabase (tools/testdb, api-stand) of een lokale
+ * Supabase, en nooit live. Alleen de hostnaam telt: localhost.voorbeeld.nl of
+ * 127.0.0.1.nip.io zijn géén lokale adressen.
+ * @param {string | undefined} waarde
+ */
+export function isLokaleUrl(waarde) {
+    let u;
+    try {
+        u = new URL((waarde ?? '').trim());
+    } catch {
+        return false;
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    return host === '127.0.0.1' || host === 'localhost' || host === '[::1]' || host.endsWith('.localhost');
+}
+
+/**
  * Pure controle, zonder bijwerkingen.
  * @param {Record<string, string | undefined>} env
  * @returns {{ ok: boolean, reden?: string }} ok false = niet starten; reden zegt waarom (zonder waarden)
@@ -31,6 +53,16 @@ const PROJECT_REF = /^[a-z0-9]{15,40}$/;
 export function controleerDevDb(env) {
     const liveRef = (env.LIVE_SUPABASE_REF ?? '').trim().toLowerCase();
     const url = (env.NEXT_PUBLIC_SUPABASE_URL ?? '').trim().toLowerCase();
+
+    /* De lokale testdatabase (npm --prefix tools/testdb run api) kan nooit
+       live zijn: die mag ook zonder LIVE_SUPABASE_REF. Staat de live-ref er
+       toch in (in een pad of query), dan niet. */
+    if (isLokaleUrl(url)) {
+        if (liveRef && url.includes(liveRef)) {
+            return { ok: false, reden: 'NEXT_PUBLIC_SUPABASE_URL is lokaal maar bevat de live-ref. Gebruik de URL uit tools/testdb (api-stand).' };
+        }
+        return { ok: true };
+    }
 
     if (!liveRef) {
         return {
@@ -72,7 +104,9 @@ function main() {
         console.error(`dev:branch start niet: ${uitkomst.reden}`);
         process.exit(1);
     }
-    console.log('dev:branch: de Supabase-URL wijst niet naar live. next dev start.');
+    console.log(isLokaleUrl(process.env.NEXT_PUBLIC_SUPABASE_URL)
+        ? 'dev:branch: de Supabase-URL is lokaal (tools/testdb, api-stand). next dev start.'
+        : 'dev:branch: de Supabase-URL wijst niet naar live. next dev start.');
 
     const nextBin = require.resolve('next/dist/bin/next');
     const kind = spawn(process.execPath, [nextBin, 'dev', ...process.argv.slice(2)], {

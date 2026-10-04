@@ -12,7 +12,9 @@
     "seed": "node sql-bestand.mjs @/supabase/tests/seed_vier_naober.sql",
     "test": "node test.mjs",
     "proef": "node sql-bestand.mjs @/supabase/checks/verify_winkel_live.sql",
-    "sql": "node sql-bestand.mjs"
+    "sql": "node sql-bestand.mjs",
+    "api": "node api.mjs",
+    "api:proef": "node api.mjs --proef"
   },
   "dependencies": {
     "embedded-postgres": "17.10.0-beta.17",
