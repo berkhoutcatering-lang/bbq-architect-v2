@@ -204,6 +204,40 @@ REVOKE ALL ON FUNCTION private.tb_getal(JSONB) FROM PUBLIC, anon, authenticated,
 REVOKE ALL ON FUNCTION private.tb_tijd(TEXT) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION private.toonbank_btw_uit_incl(BIGINT, INTEGER) FROM PUBLIC, anon, authenticated, service_role;
 
+-- De bedrijfsdag van een bon (review M2 K3). Een evenement van 18:00 tot
+-- 01:00 is één bedrijfsdag: de dag van de laatste dag_openen van deze tablet
+-- vóór de bon. Zonder dag_openen (of een van meer dan 36 uur terug) de
+-- kalenderdag in Europe/Amsterdam. p_tablet_tijd is de tijd op de tablet
+-- (dezelfde klok als dag_openen); p_tijd is die tijd begrensd op het moment
+-- van ontvangen (review M2 punt 8: een klok die voorloopt zet een bon nooit
+-- in de toekomst). BA-10 vervangt deze functie: een dag die vóór de bon al
+-- is afgesloten (dagstaat), telt dan ook niet meer.
+CREATE OR REPLACE FUNCTION private.toonbank_bedrijfsdag(p_apparaat UUID, p_tablet_tijd TIMESTAMPTZ, p_tijd TIMESTAMPTZ)
+RETURNS DATE
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_dag   DATE;
+    v_open  TIMESTAMPTZ;
+BEGIN
+    SELECT CASE WHEN private.tb_tijd((j.payload->>'bedrijfsdag') || 'T12:00:00Z') IS NOT NULL THEN (j.payload->>'bedrijfsdag')::DATE END,
+           j.apparaat_tijd
+      INTO v_dag, v_open
+      FROM public.toonbank_journaal j
+     WHERE j.apparaat_id = p_apparaat AND j.soort = 'dag_openen' AND j.verwerk_status <> 'fout'
+       AND j.apparaat_tijd IS NOT NULL AND j.apparaat_tijd <= p_tablet_tijd
+       AND j.payload->>'bedrijfsdag' ~ '^\d{4}-\d{2}-\d{2}$'
+     ORDER BY j.apparaat_tijd DESC, j.volgnummer DESC NULLS LAST
+     LIMIT 1;
+    IF v_dag IS NULL OR p_tablet_tijd - v_open > INTERVAL '36 hours' THEN
+        RETURN (p_tijd AT TIME ZONE 'Europe/Amsterdam')::DATE;
+    END IF;
+    RETURN v_dag;
+END $$;
+REVOKE ALL ON FUNCTION private.toonbank_bedrijfsdag(UUID, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated, service_role;
+
 
 -- ── 2. toonbank_bonnen ──────────────────────────────────────────────────────
 CREATE TABLE public.toonbank_bonnen (
@@ -239,8 +273,11 @@ CREATE TABLE public.toonbank_bonnen (
     pin_cents                INTEGER     NOT NULL DEFAULT 0,
     contant_cents            INTEGER     NOT NULL DEFAULT 0,
     prijs_afwijking          BOOLEAN     NOT NULL DEFAULT false,
+    -- De tijd op de tablet, begrensd op ontvangen_at (review M2 punt 8).
     gebeurd_at               TIMESTAMPTZ NOT NULL,
-    -- De dag in Europe/Amsterdam waarop de bon gemaakt is (de dagstaat, BA-10).
+    -- De bedrijfsdag van de laatste dag_openen van deze tablet vóór de bon,
+    -- anders de kalenderdag in Europe/Amsterdam (review M2 K3;
+    -- private.toonbank_bedrijfsdag). Welke dagstaat: toonbank_dagstaat_herberekenen.
     bedrijfsdag              DATE        NOT NULL,
     ontvangen_at             TIMESTAMPTZ NOT NULL,
     verwerkt_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -984,7 +1021,9 @@ BEGIN
     v_bon_id := v_j.gebeurtenis_id;
     v_soort := CASE WHEN v_j.soort = 'tegenbon' THEN 'tegenbon' ELSE 'verkoop' END;
     v_status := v_p->>'status';
-    v_tijd := v_j.apparaat_tijd;
+    -- Review M2 punt 8: de tijd van de tablet, maar nooit later dan het moment
+    -- waarop BBQ Architect de melding ontving (een klok die voorloopt).
+    v_tijd := LEAST(v_j.apparaat_tijd, v_j.ontvangen_at);
     v_bonnummer := v_p->>'bonnummer';
 
     -- 2a. Bestaat de bon al: niets opnieuw (idempotent).
@@ -1055,7 +1094,7 @@ BEGIN
         CASE WHEN v_soort = 'tegenbon' THEN left(v_p->>'reden', 500) END,
         v_p->>'kanaal', left(v_p->>'event_label', 120), v_mw, v_mw_naam,
         CASE WHEN v_alcohol AND v_status = 'afgerond' THEN COALESCE(v_leeftijd->>'uitkomst' = 'vastgesteld', false) END,
-        CASE WHEN v_leeftijd->>'uitkomst' = 'vastgesteld' THEN private.tb_tijd(v_leeftijd->>'at') END,
+        CASE WHEN v_leeftijd->>'uitkomst' = 'vastgesteld' THEN LEAST(private.tb_tijd(v_leeftijd->>'at'), v_j.ontvangen_at) END,
         COALESCE(v_leeftijd->>'uitkomst' = 'geweigerd', false),
         private.tb_int(v_p->'catalogus_versie'), private.tb_int(v_p->'voorraad_versie'),
         private.tb_int(v_p->'totaal_cents'), COALESCE(private.tb_int(v_p->'afronding_cents'), 0),
@@ -1064,7 +1103,8 @@ BEGIN
                   JOIN public.winkel_artikelen a ON a.id = private.tb_uuid(e->>'artikel_id') AND a.organization_id = v_org
                  WHERE e->>'soort' = 'verkoop' AND e->>'prijs_bron' = 'catalogus'
                    AND a.prijs_cents IS DISTINCT FROM private.tb_int(e->'stuk_cents')),
-        v_tijd, (v_tijd AT TIME ZONE 'Europe/Amsterdam')::DATE, v_j.ontvangen_at, now());
+        -- gebeurd_at begrensd (punt 8); de bedrijfsdag uit dag_openen (K3).
+        v_tijd, private.toonbank_bedrijfsdag(v_j.apparaat_id, v_j.apparaat_tijd, v_tijd), v_j.ontvangen_at, now());
 
     -- 2d. De regels (de onderdelen als momentopname).
     FOR v_r IN SELECT e FROM jsonb_array_elements(v_p->'regels') e ORDER BY private.tb_int(e->'regelnr') LOOP
@@ -1737,6 +1777,7 @@ BEGIN
     END IF;
     FOREACH v_sig IN ARRAY ARRAY[
         'private.tb_uuid(text)', 'private.tb_int(jsonb)', 'private.tb_getal(jsonb)', 'private.tb_tijd(text)',
+        'private.toonbank_bedrijfsdag(uuid, timestamp with time zone, timestamp with time zone)',
         'private.toonbank_btw_uit_incl(bigint, integer)', 'private.toonbank_bon_fouten(jsonb)',
         'private.toonbank_controleer_order_rest(uuid, uuid)', 'private.toonbank_verwerk_vrij_overschreden(bigint)',
         'private.toonbank_verwerk_melding(bigint, boolean)', 'private.toonbank_bon_vast()',
@@ -1753,6 +1794,12 @@ BEGIN
            NOT LIKE '%pg_advisory_xact_lock%toonbank_vergrendel_wachtrij%toonbank_melding_mislukt%'
        OR pg_get_functiondef('public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)'::REGPROCEDURE) NOT LIKE '%toonbank_melding_mislukt%' THEN
         v_fouten := v_fouten || E'\n  de wachtrij vergrendelt niet eerst alle producten, of een tijdelijke fout wordt fout';
+    END IF;
+
+    -- K3 en punt 8: de bedrijfsdag uit dag_openen, de tijd begrensd op ontvangen_at.
+    IF pg_get_functiondef('public.toonbank_boek_bon(bigint)'::REGPROCEDURE)
+           NOT LIKE '%LEAST(v_j.apparaat_tijd, v_j.ontvangen_at)%toonbank_bedrijfsdag(v_j.apparaat_id, v_j.apparaat_tijd, v_tijd)%' THEN
+        v_fouten := v_fouten || E'\n  toonbank_boek_bon zonder begrensde tijd of bedrijfsdag uit dag_openen';
     END IF;
 
     -- Tabellen: RLS, alleen lezen, append-only.

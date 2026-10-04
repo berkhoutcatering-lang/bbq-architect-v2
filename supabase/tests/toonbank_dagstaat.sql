@@ -53,9 +53,9 @@ end $$;
 -- Een dagstaat-melding zoals de tablet hem maakt; de getallen komen mee.
 create function pg_temp.tb_dagstaat(p_gid uuid, p_volgnr bigint, p_nr int, p_eerste text, p_laatste text, p_getallen jsonb)
 returns jsonb language sql as $$
-    select jsonb_build_object('soort', 'dagstaat', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2027-03-06T18:05:00+01:00',
-        'medewerker_id', null, 'dagstaat_id', p_gid, 'dagstaatnummer', p_nr, 'bedrijfsdag', '2027-03-06',
-        'geopend_at', '2027-03-06T09:55:00+01:00', 'gesloten_at', '2027-03-06T18:05:00+01:00',
+    select jsonb_build_object('soort', 'dagstaat', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2026-03-06T18:05:00+01:00',
+        'medewerker_id', null, 'dagstaat_id', p_gid, 'dagstaatnummer', p_nr, 'bedrijfsdag', '2026-03-06',
+        'geopend_at', '2026-03-06T09:55:00+01:00', 'gesloten_at', '2026-03-06T18:05:00+01:00',
         'eerste_bonnummer', p_eerste, 'laatste_bonnummer', p_laatste,
         'aantal_bonnen', 0, 'aantal_tegenbonnen', 0, 'aantal_geannuleerd', 0, 'omzet', '[]'::jsonb,
         'statiegeld_cents', 0, 'order_rest_cents', 0, 'tegenbonnen_cents', 0, 'korting_cents', 0, 'afronding_cents', 0,
@@ -96,6 +96,17 @@ declare
     v_b5       uuid := gen_random_uuid();
     v_t5       uuid := gen_random_uuid();
     v_d3       uuid := gen_random_uuid();
+    v_app4     uuid;
+    v_code4    text;
+    v_app5     uuid;
+    v_code5    text;
+    v_c1       uuid := gen_random_uuid();
+    v_c2       uuid := gen_random_uuid();
+    v_c3       uuid := gen_random_uuid();
+    v_c4       uuid := gen_random_uuid();
+    v_d4       uuid := gen_random_uuid();
+    v_d5       uuid := gen_random_uuid();
+    v_k1       uuid := gen_random_uuid();
     v_getallen jsonb;
     v_j        public.toonbank_journaal%rowtype;
     v_d        public.toonbank_dagstaten%rowtype;
@@ -133,23 +144,23 @@ begin
 
     -- ── Een dag op tablet 1: dag geopend met € 100, dan bonnen.
     perform pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'dag_openen', 'gebeurtenis_id', gen_random_uuid(), 'volgnummer', 1,
-        'moment', '2027-03-06T09:55:00+01:00', 'medewerker_id', v_mw, 'bedrijfsdag', '2027-03-06', 'contant_begin_cents', 10000));
+        'moment', '2026-03-06T09:55:00+01:00', 'medewerker_id', v_mw, 'bedrijfsdag', '2026-03-06', 'contant_begin_cents', 10000));
     -- b1, b2: elk 1 × € 3,95 (21%, btw 69). b3: 3 × € 3,95 (btw 206, niet 207). b4: worst 9% + statiegeld.
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b1, 2, v_code || '-000001', '2027-03-06T10:01:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b1, 2, v_code || '-000001', '2026-03-06T10:01:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b2, 3, v_code || '-000002', '2027-03-06T10:05:00+01:00', 'contant',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b2, 3, v_code || '-000002', '2026-03-06T10:05:00+01:00', 'contant',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b3, 4, v_code || '-000003', '2027-03-06T11:00:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b3, 4, v_code || '-000003', '2026-03-06T11:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 3, 395, 21, pg_temp.ond(v_bier)))));
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b4, 5, v_code || '-000004', '2027-03-06T12:00:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b4, 5, v_code || '-000004', '2026-03-06T12:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 595, 9, pg_temp.ond(v_worst)),
             jsonb_build_object('regelnr', 2, 'soort', 'statiegeld', 'hoort_bij_regelnr', 1, 'product_id', v_worst, 'aantal', 1, 'stuk_cents', 15, 'bedrag_cents', 15))));
     -- Tegenbon op b1 (contant terug); een geannuleerde bon; een bon met alleen de rest van de webshoporder.
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t1, 6, v_code || '-000005', '2027-03-06T13:00:00+01:00', 'contant',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t1, 6, v_code || '-000005', '2026-03-06T13:00:00+01:00', 'contant',
         jsonb_build_array(pg_temp.tb_regel(1, -1, 395, 21, pg_temp.ond(v_bier), '{"verwijst_naar_regelnr": 1}'::jsonb)),
         jsonb_build_object('verwijst_naar_bon_id', v_b1, 'reden', 'test')));
     -- De geannuleerde bon zoals kern hem maakt (maakGeannuleerdeBon): regels, geen betaling, totaal 0.
-    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_g1, 7, v_code || '-000006', '2027-03-06T14:00:00+01:00', 'pin',
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_g1, 7, v_code || '-000006', '2026-03-06T14:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 2, 1000, 21, pg_temp.ond(v_bier))),
         jsonb_build_object('status', 'geannuleerd', 'regels', jsonb_build_array(pg_temp.tb_regel(1, 2, 1000, 21, pg_temp.ond(v_bier))), 'totaal_cents', 0)));
     if v_j.verwerk_status <> 'verwerkt' then
@@ -157,7 +168,7 @@ begin
     end if;
     v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_order, null, gen_random_uuid(), now(), v_mw, v_rb, 'pin', 450, null);
     if v_r->'resultaat'->>'uitkomst' <> 'opgehaald' then v_fouten := v_fouten || 'ophalen met rest: ' || v_r::text || '; '; end if;
-    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_rb, 8, v_code || '-000007', '2027-03-06T16:32:00+01:00', 'pin',
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_rb, 8, v_code || '-000007', '2026-03-06T16:32:00+01:00', 'pin',
         jsonb_build_array(jsonb_build_object('regelnr', 1, 'soort', 'order_rest', 'order_id', v_order, 'nummer', v_o.nummer, 'bedrag_cents', 450))));
     if v_j.verwerk_status <> 'verwerkt' then v_fouten := v_fouten || 'restbon: ' || row_to_json(v_j)::text || '; '; end if;
 
@@ -180,7 +191,7 @@ begin
       into v_som
       from (select e.key::int as pct, sum((e.value->>'incl_cents')::bigint) as incl, sum((e.value->>'btw_cents')::bigint) as btw
               from public.toonbank_bonnen b, jsonb_each(b.btw) e
-             where b.apparaat_id = v_app and b.bedrijfsdag = '2027-03-06' and b.status = 'afgerond' group by 1) t;
+             where b.apparaat_id = v_app and b.bedrijfsdag = '2026-03-06' and b.status = 'afgerond' group by 1) t;
     if v_d.nagerekend->'omzet' <> v_som
        or v_d.nagerekend->'omzet' <> '[{"pct": 21, "btw_cents": 275, "incl_cents": 1580, "grondslag_cents": 1305}, {"pct": 9, "btw_cents": 49, "incl_cents": 595, "grondslag_cents": 546}]'::jsonb then
         v_fouten := v_fouten || 'narekening omzet: ' || coalesce((v_d.nagerekend->'omzet')::text, 'leeg') || ' / som bonnen ' || coalesce(v_som::text, 'leeg') || '; ';
@@ -196,20 +207,20 @@ begin
        or v_d.nagerekend->>'contant_begin_bron' <> 'dag_openen' or (v_d.nagerekend->>'contant_verwacht_cents')::int <> 10000 then
         v_fouten := v_fouten || 'narekening tellers: ' || v_d.nagerekend::text || '; ';
     end if;
-    if exists (select 1 from public.toonbank_bonnen where apparaat_id = v_app and bedrijfsdag = '2027-03-06' and dagstaat_id is distinct from v_d1) then
+    if exists (select 1 from public.toonbank_bonnen where apparaat_id = v_app and bedrijfsdag = '2026-03-06' and dagstaat_id is distinct from v_d1) then
         v_fouten := v_fouten || 'niet alle bonnen hangen aan de dagstaat; ';
     end if;
 
     -- ── GET dagstaat: alle bonnen, het hoogste bonnummer, omzet uit de bon-btw, pin en contant.
-    v_r := public.toonbank_dagstaat_overzicht(v_org, v_app, '2027-03-06');
-    if v_r <> jsonb_build_object('datum', '2027-03-06', 'apparaat_code', v_code, 'aantal_bonnen', 7, 'hoogste_bonnummer', v_code || '-000007',
+    v_r := public.toonbank_dagstaat_overzicht(v_org, v_app, '2026-03-06');
+    if v_r <> jsonb_build_object('datum', '2026-03-06', 'apparaat_code', v_code, 'aantal_bonnen', 7, 'hoogste_bonnummer', v_code || '-000007',
                                  'omzet', '[{"pct": 21, "btw_cents": 275, "incl_cents": 1580}, {"pct": 9, "btw_cents": 49, "incl_cents": 595}]'::jsonb,
                                  'pin_cents', 2640, 'contant_cents', 0) then
         v_fouten := v_fouten || 'overzicht: ' || v_r::text || '; ';
     end if;
 
     -- ── Een late bon (vóór het sluiten gemaakt, na de dagstaat binnen): aangevuld, verschil → te controleren.
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_laat, 10, v_code || '-000008', '2027-03-06T17:59:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_laat, 10, v_code || '-000008', '2026-03-06T17:59:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
     select * into v_d from public.toonbank_dagstaten where id = v_d1;
     select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_d1;
@@ -220,7 +231,7 @@ begin
         v_fouten := v_fouten || 'late bon: ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
     end if;
     -- Een bon ná het sluiten hoort niet bij deze dagstaat.
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_na, 11, v_code || '-000009', '2027-03-06T19:00:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_na, 11, v_code || '-000009', '2026-03-06T19:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
     if (select dagstaat_id from public.toonbank_bonnen where id = v_na) is not null then
         v_fouten := v_fouten || 'bon na het sluiten kreeg de dagstaat; ';
@@ -238,7 +249,7 @@ begin
     end if;
 
     -- ── Tablet 2 rekent zelf af en zegt btw 274 (opnieuw afgerond): verschil, te controleren.
-    perform pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_bon('bon', v_x1, 1, v_code2 || '-000001', '2027-03-06T10:00:00+01:00', 'pin',
+    perform pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_bon('bon', v_x1, 1, v_code2 || '-000001', '2026-03-06T10:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)), pg_temp.tb_regel(2, 3, 395, 21, pg_temp.ond(v_bier)))));
     -- Op de bon: 1580 in één keer afgerond = 274; zo rekent BBQ Architect ook (één bon). Het verschil zit in de dagstaat van de tablet: 275.
     v_j := pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_dagstaat(v_d2, 2, 1, v_code2 || '-000001', v_code2 || '-000001', jsonb_build_object(
@@ -259,10 +270,10 @@ begin
     --    totaal van de tegenbon: −690 bier en −30 statiegeld = −720. BBQ Architect rekent hetzelfde.
     v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 3 ' || v_sfx, 'winkel', v_hash);
     v_app3 := (v_r->>'apparaat_id')::uuid; v_code3 := v_r->>'code';
-    perform pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('bon', v_b5, 1, v_code3 || '-000001', '2027-03-06T11:00:00+01:00', 'pin', jsonb_build_array(
+    perform pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('bon', v_b5, 1, v_code3 || '-000001', '2026-03-06T11:00:00+01:00', 'pin', jsonb_build_array(
         pg_temp.tb_regel(1, 2, 345, 21, pg_temp.ond(v_bier)),
         jsonb_build_object('regelnr', 2, 'soort', 'statiegeld', 'hoort_bij_regelnr', 1, 'product_id', v_bier, 'aantal', 2, 'stuk_cents', 15, 'bedrag_cents', 30))));
-    v_j := pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('tegenbon', v_t5, 2, v_code3 || '-000002', '2027-03-06T11:30:00+01:00', 'pin', jsonb_build_array(
+    v_j := pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('tegenbon', v_t5, 2, v_code3 || '-000002', '2026-03-06T11:30:00+01:00', 'pin', jsonb_build_array(
         pg_temp.tb_regel(1, -2, 345, 21, pg_temp.ond(v_bier), '{"verwijst_naar_regelnr": 1}'::jsonb),
         jsonb_build_object('regelnr', 2, 'soort', 'statiegeld', 'hoort_bij_regelnr', 1, 'product_id', v_bier, 'aantal', -2, 'stuk_cents', 15, 'bedrag_cents', -30)),
         jsonb_build_object('verwijst_naar_bon_id', v_b5, 'reden', 'retour')));
@@ -271,6 +282,58 @@ begin
     select * into v_d from public.toonbank_dagstaten where id = v_d3;
     if v_d.verschillen <> '[]'::jsonb or (v_d.nagerekend->>'tegenbonnen_cents')::int <> -720 or v_j.verwerk_status <> 'verwerkt' then
         v_fouten := v_fouten || 'tegenbon met statiegeld: ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
+    end if;
+
+    -- ── Review M2 K3: een evenement van 18:00 tot 01:00. Tablet 4 opent de dag (6 maart) om 18:00,
+    --    bonnen om 22:00 en om 00:30 (7 maart), dicht om 01:00. De bon van 00:30 hoort bij
+    --    bedrijfsdag 6 maart (de laatste dag_openen) en bij de dagstaat van 6 maart (tussen openen
+    --    en sluiten): geen verschil in aantal, pin of omzet.
+    v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 4 ' || v_sfx, 'event', v_hash);
+    v_app4 := (v_r->>'apparaat_id')::uuid; v_code4 := v_r->>'code';
+    perform pg_temp.tb_stuur(v_org, v_app4, jsonb_build_object('soort', 'dag_openen', 'gebeurtenis_id', gen_random_uuid(), 'volgnummer', 1,
+        'moment', '2026-03-06T18:00:00+01:00', 'medewerker_id', v_mw, 'bedrijfsdag', '2026-03-06', 'contant_begin_cents', 0));
+    perform pg_temp.tb_stuur(v_org, v_app4, pg_temp.tb_bon('bon', v_c1, 2, v_code4 || '-000001', '2026-03-06T22:00:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 2, 345, 21, pg_temp.ond(v_bier)))));
+    perform pg_temp.tb_stuur(v_org, v_app4, pg_temp.tb_bon('bon', v_c2, 3, v_code4 || '-000002', '2026-03-07T00:30:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 345, 21, pg_temp.ond(v_bier)))));
+    v_getallen := jsonb_build_object('moment', '2026-03-07T01:00:00+01:00', 'geopend_at', '2026-03-06T18:00:00+01:00', 'gesloten_at', '2026-03-07T01:00:00+01:00',
+        'aantal_bonnen', 2, 'omzet', jsonb_build_array(jsonb_build_object('pct', 21, 'incl_cents', 1035, 'grondslag_cents', 855, 'btw_cents', 180)),
+        'pin_toonbank_cents', 1035, 'pin_mypos_app_cents', 1035, 'contant_begin_cents', 0, 'contant_verwacht_cents', 0, 'contant_geteld_cents', 0);
+    v_j := pg_temp.tb_stuur(v_org, v_app4, pg_temp.tb_dagstaat(v_d4, 4, 1, v_code4 || '-000001', v_code4 || '-000002', v_getallen));
+    select * into v_d from public.toonbank_dagstaten where id = v_d4;
+    if (select bedrijfsdag from public.toonbank_bonnen where id = v_c2) <> '2026-03-06'
+       or (select dagstaat_id from public.toonbank_bonnen where id = v_c2) is distinct from v_d4
+       or v_d.verschillen <> '[]'::jsonb or v_j.verwerk_status <> 'verwerkt'
+       or (public.toonbank_dagstaat_overzicht(v_org, v_app4, '2026-03-06')->>'aantal_bonnen')::int <> 2 then
+        v_fouten := v_fouten || 'na middernacht: bon 00:30 op ' || coalesce((select bedrijfsdag::text from public.toonbank_bonnen where id = v_c2), '?')
+                    || ', dagstaat ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Zonder dag_openen (zoals in de review, V4): de bon van 00:30 krijgt de kalenderdag, maar valt
+    -- toch in de dagstaat waarvan openen en sluiten hem dekken.
+    v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 5 ' || v_sfx, 'event', v_hash);
+    v_app5 := (v_r->>'apparaat_id')::uuid; v_code5 := v_r->>'code';
+    perform pg_temp.tb_stuur(v_org, v_app5, pg_temp.tb_bon('bon', v_c3, 1, v_code5 || '-000001', '2026-03-06T22:00:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 2, 345, 21, pg_temp.ond(v_bier)))));
+    perform pg_temp.tb_stuur(v_org, v_app5, pg_temp.tb_bon('bon', v_c4, 2, v_code5 || '-000002', '2026-03-07T00:30:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 345, 21, pg_temp.ond(v_bier)))));
+    v_j := pg_temp.tb_stuur(v_org, v_app5, pg_temp.tb_dagstaat(v_d5, 3, 1, v_code5 || '-000001', v_code5 || '-000002', v_getallen));
+    select * into v_d from public.toonbank_dagstaten where id = v_d5;
+    if (select bedrijfsdag from public.toonbank_bonnen where id = v_c4) <> '2026-03-07'
+       or (select dagstaat_id from public.toonbank_bonnen where id = v_c4) is distinct from v_d5
+       or v_d.verschillen <> '[]'::jsonb or v_j.verwerk_status <> 'verwerkt' then
+        v_fouten := v_fouten || 'na middernacht zonder dag_openen: ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
+    end if;
+
+    -- ── Review M2 punt 8: een tabletklok die voorloopt (2030) zet een bon nooit in de toekomst:
+    --    gebeurd_at, de bedrijfsdag en de voorraadmutatie worden begrensd op ontvangen_at.
+    v_j := pg_temp.tb_stuur(v_org, v_app5, pg_temp.tb_bon('bon', v_k1, 4, v_code5 || '-000003', '2030-01-01T12:00:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 345, 21, pg_temp.ond(v_bier)))));
+    if (select gebeurd_at from public.toonbank_bonnen where id = v_k1) <> v_j.ontvangen_at
+       or (select bedrijfsdag from public.toonbank_bonnen where id = v_k1) <> (v_j.ontvangen_at at time zone 'Europe/Amsterdam')::date
+       or v_j.apparaat_tijd <> '2030-01-01T11:00:00Z'::timestamptz
+       or exists (select 1 from public.winkel_voorraad_mutaties m join public.toonbank_bon_regels r on r.id = m.toonbank_bon_regel_id
+                   where r.bon_id = v_k1 and m.gebeurd_at is distinct from v_j.ontvangen_at) then
+        v_fouten := v_fouten || 'klok in de toekomst niet begrensd: ' || (select row_to_json(b)::text from public.toonbank_bonnen b where id = v_k1) || '; ';
     end if;
 
     -- ── De dagstaat is vast: wat de tablet afsloot verandert niet en gaat nooit weg.
@@ -294,5 +357,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
+    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; evenement 18:00–01:00: bon van 00:30 op bedrijfsdag 6 maart (dag_openen) en in de dagstaat van 6 maart, zonder dag_openen de kalenderdag maar toch in de dagstaat; klok in 2030 begrensd op ontvangen; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
 end $$;

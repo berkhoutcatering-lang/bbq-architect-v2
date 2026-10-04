@@ -25,7 +25,7 @@ $$;
 
 create function pg_temp.tb_bon(p_gid uuid, p_volgnr bigint, p_bonnummer text, p_regels jsonb)
 returns jsonb language sql as $$
-    select jsonb_build_object('soort', 'bon', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2027-03-06T11:12:08+01:00',
+    select jsonb_build_object('soort', 'bon', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2026-03-06T11:12:08+01:00',
         'medewerker_id', null, 'bon_id', p_gid, 'bonnummer', p_bonnummer, 'bon_volgnummer', split_part(p_bonnummer, '-', 2)::int,
         'status', 'afgerond', 'kanaal', 'winkel', 'catalogus_versie', 1, 'leeftijd', null,
         'regels', p_regels || jsonb_build_array(jsonb_build_object('regelnr', 99, 'soort', 'betaling', 'betaalmethode', 'pin',
@@ -36,7 +36,7 @@ $$;
 
 create function pg_temp.tb_klein(p_gid uuid, p_volgnr bigint, p_soort text)
 returns jsonb language sql as $$
-    select jsonb_build_object('soort', p_soort, 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2027-03-06T09:55:00+01:00', 'medewerker_id', null)
+    select jsonb_build_object('soort', p_soort, 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2026-03-06T09:55:00+01:00', 'medewerker_id', null)
 $$;
 
 do $$
@@ -96,7 +96,7 @@ begin
     select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g1;
     if v_j.payload <> pg_temp.tb_bon(v_g1, 1, v_code || '-000001', jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 2, 300, 21, v_onderdeel)))
        or v_j.soort <> 'bon' or v_j.volgnummer <> 1 or v_j.gat_voor or v_j.contract_versie <> '1.1.0'
-       or v_j.apparaat_tijd <> '2027-03-06T10:12:08Z'::timestamptz then
+       or v_j.apparaat_tijd <> '2026-03-06T10:12:08Z'::timestamptz then
         v_fouten := v_fouten || 'journaalregel bon niet ongewijzigd: ' || row_to_json(v_j)::text || '; ';
     end if;
     if (select bevestigd_tot_volgnummer from public.toonbank_apparaten where id = v_app) <> 2
@@ -157,7 +157,7 @@ begin
     end if;
     -- Een rare soort en een moment dat geen tijd is: bewaard, fout.
     v_r := public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(
-        jsonb_build_object('soort', 'Kassa!', 'gebeurtenis_id', v_g7, 'volgnummer', 6, 'moment', '2027-03-06T10:00:00+01:00'),
+        jsonb_build_object('soort', 'Kassa!', 'gebeurtenis_id', v_g7, 'volgnummer', 6, 'moment', '2026-03-06T10:00:00+01:00'),
         jsonb_build_object('soort', 'inloggen', 'gebeurtenis_id', v_g8, 'volgnummer', 7, 'moment', 'gisteren')));
     if (select soort || '/' || verwerk_status || '/' || fout_code from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g7) <> 'onbekend/fout/soort_onbekend'
        or (select verwerk_status || '/' || fout_code from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g8) <> 'fout/moment_ongeldig'
@@ -169,7 +169,7 @@ begin
     begin
         perform public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(
             pg_temp.tb_klein(gen_random_uuid(), 8, 'inloggen'),
-            jsonb_build_object('soort', 'bon', 'gebeurtenis_id', 'geen-uuid', 'volgnummer', 9, 'moment', '2027-03-06T10:00:00+01:00')));
+            jsonb_build_object('soort', 'bon', 'gebeurtenis_id', 'geen-uuid', 'volgnummer', 9, 'moment', '2026-03-06T10:00:00+01:00')));
         v_fouten := v_fouten || 'kapotte envelop opgeslagen; ';
     exception when invalid_parameter_value then null;
     end;
@@ -183,7 +183,7 @@ begin
 
     -- ── 5. De wachtrij blokkeert nooit: een kapotte bon (8) wordt fout, de goede bon erna (9) verwerkt.
     perform public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(
-        jsonb_build_object('soort', 'bon', 'gebeurtenis_id', v_g9, 'volgnummer', 8, 'moment', '2027-03-06T11:20:00+01:00', 'bon_id', v_g9),
+        jsonb_build_object('soort', 'bon', 'gebeurtenis_id', v_g9, 'volgnummer', 8, 'moment', '2026-03-06T11:20:00+01:00', 'bon_id', v_g9),
         pg_temp.tb_bon(v_g10, 9, v_code || '-000002', jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 1, 300, 21, v_onderdeel)))));
     v_w := public.toonbank_verwerk_wachtrij(v_org, v_app);
     select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g9;

@@ -44,8 +44,10 @@
 --                                 velden van de tablet veranderen nooit meer,
 --                                 alleen status, narekening en goedkeuring.
 --    toonbank_dagstaat_herberekenen(p_org, p_dagstaat_id)
---                                 de bonnen van die tablet en die dag (tot het
---                                 sluiten) krijgen dagstaat_id; BBQ Architect
+--                                 de bonnen van die tablet tussen geopend_at en
+--                                 gesloten_at (tijd op de tablet, ook na
+--                                 middernacht; review M2 K3) krijgen
+--                                 dagstaat_id; BBQ Architect
 --                                 rekent na: per tarief de som van de bon-btw,
 --                                 zonder opnieuw af te ronden (de btw-regel),
 --                                 en zet de verschillen met de tablet vast.
@@ -561,10 +563,47 @@ REVOKE ALL ON TABLE public.toonbank_dagstaten FROM PUBLIC, anon, authenticated, 
 GRANT SELECT ON TABLE public.toonbank_dagstaten TO authenticated, service_role;
 
 
+-- ── 6b. De bedrijfsdag kent nu ook de dagstaat ──────────────────────────────
+-- Zoals in BA-9 (de laatste dag_openen vóór de bon, anders de kalenderdag),
+-- met één regel erbij: is die dag al afgesloten vóór de bon (een dagstaat
+-- van deze tablet, gesloten na die dag_openen en vóór de bon), dan hoort de
+-- bon er niet meer bij en geldt de kalenderdag. Review M2 K3.
+CREATE OR REPLACE FUNCTION private.toonbank_bedrijfsdag(p_apparaat UUID, p_tablet_tijd TIMESTAMPTZ, p_tijd TIMESTAMPTZ)
+RETURNS DATE
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_dag   DATE;
+    v_open  TIMESTAMPTZ;
+BEGIN
+    SELECT CASE WHEN private.tb_tijd((j.payload->>'bedrijfsdag') || 'T12:00:00Z') IS NOT NULL THEN (j.payload->>'bedrijfsdag')::DATE END,
+           j.apparaat_tijd
+      INTO v_dag, v_open
+      FROM public.toonbank_journaal j
+     WHERE j.apparaat_id = p_apparaat AND j.soort = 'dag_openen' AND j.verwerk_status <> 'fout'
+       AND j.apparaat_tijd IS NOT NULL AND j.apparaat_tijd <= p_tablet_tijd
+       AND j.payload->>'bedrijfsdag' ~ '^\d{4}-\d{2}-\d{2}$'
+     ORDER BY j.apparaat_tijd DESC, j.volgnummer DESC NULLS LAST
+     LIMIT 1;
+    IF v_dag IS NULL OR p_tablet_tijd - v_open > INTERVAL '36 hours'
+       OR EXISTS (SELECT 1 FROM public.toonbank_dagstaten d
+                   WHERE d.apparaat_id = p_apparaat AND d.bedrijfsdag = v_dag
+                     AND d.gesloten_at >= v_open AND d.gesloten_at < p_tablet_tijd) THEN
+        RETURN (p_tijd AT TIME ZONE 'Europe/Amsterdam')::DATE;
+    END IF;
+    RETURN v_dag;
+END $$;
+REVOKE ALL ON FUNCTION private.toonbank_bedrijfsdag(UUID, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated, service_role;
+
+
 -- ── 7. Narekenen ────────────────────────────────────────────────────────────
--- De bonnen van deze tablet en deze bedrijfsdag die vóór het sluiten gemaakt
--- zijn en nog bij geen dagstaat horen (of al bij deze), gaan naar deze
--- dagstaat; bij twee dagstaten op één dag krijgt de eerste die hem dekt hem.
+-- Review M2 K3: de bonnen van deze tablet die tussen het openen en het
+-- sluiten van de dagstaat gemaakt zijn (tijd op de tablet, dezelfde klok als
+-- geopend_at en gesloten_at) en nog bij geen dagstaat horen, gaan naar deze
+-- dagstaat, ook na middernacht; bij twee dagstaten die een bon dekken krijgt
+-- de eerst gesloten hem.
 -- Dan per tarief de som van de bon-btw (de btw-regel, contract §1.3),
 -- nooit opnieuw afgerond; netto, dus met de tegenbonnen; zonder geannuleerde
 -- bonnen. Verschillen met de tablet → het journaal op conflict.
@@ -598,14 +637,16 @@ BEGIN
         RAISE EXCEPTION 'dagstaat % niet in deze organisatie', p_dagstaat_id USING ERRCODE = 'P0002';
     END IF;
 
-    -- 1. Welke bonnen horen erbij.
+    -- 1. Welke bonnen horen erbij: per tablet, tussen openen en sluiten (K3).
     UPDATE public.toonbank_bonnen b
        SET dagstaat_id = v_d.id
-     WHERE b.organization_id = p_org AND b.apparaat_id = v_d.apparaat_id AND b.bedrijfsdag = v_d.bedrijfsdag
-       AND b.dagstaat_id IS NULL AND b.gebeurd_at <= v_d.gesloten_at
+      FROM public.toonbank_journaal j
+     WHERE j.id = b.journaal_id
+       AND b.organization_id = p_org AND b.apparaat_id = v_d.apparaat_id AND b.dagstaat_id IS NULL
+       AND j.apparaat_tijd BETWEEN v_d.geopend_at AND v_d.gesloten_at
        AND NOT EXISTS (SELECT 1 FROM public.toonbank_dagstaten d2
-                        WHERE d2.apparaat_id = v_d.apparaat_id AND d2.bedrijfsdag = v_d.bedrijfsdag AND d2.id <> v_d.id
-                          AND d2.gesloten_at < v_d.gesloten_at AND b.gebeurd_at <= d2.gesloten_at);
+                        WHERE d2.apparaat_id = v_d.apparaat_id AND d2.id <> v_d.id AND d2.gesloten_at < v_d.gesloten_at
+                          AND j.apparaat_tijd BETWEEN d2.geopend_at AND d2.gesloten_at);
 
     -- 2. Narekenen: de som van de bon-btw per tarief, zonder opnieuw af te ronden.
     SELECT COALESCE(jsonb_agg(jsonb_build_object('pct', t.pct, 'incl_cents', t.incl, 'grondslag_cents', t.incl - t.btw, 'btw_cents', t.btw) ORDER BY t.pct DESC), '[]'::JSONB)
@@ -900,12 +941,14 @@ BEGIN
     END LOOP;
 
     -- Een bon van een dag die al is afgesloten (later binnengekomen): die dag
-    -- opnieuw narekenen, status 'aangevuld'. Nooit blokkerend.
+    -- opnieuw narekenen, status 'aangevuld'. Nooit blokkerend. Welke dag: de
+    -- dagstaat waarvan openen en sluiten de bon dekken (review M2 K3).
     FOR v_dag IN
         SELECT DISTINCT d.id
           FROM public.toonbank_dagstaten d
-          JOIN public.toonbank_bonnen b ON b.apparaat_id = d.apparaat_id AND b.bedrijfsdag = d.bedrijfsdag AND b.gebeurd_at <= d.gesloten_at
-         WHERE d.organization_id = p_org AND d.apparaat_id = p_apparaat AND b.dagstaat_id IS NULL
+          JOIN public.toonbank_bonnen b ON b.apparaat_id = d.apparaat_id AND b.dagstaat_id IS NULL
+          JOIN public.toonbank_journaal j ON j.id = b.journaal_id AND j.apparaat_tijd BETWEEN d.geopend_at AND d.gesloten_at
+         WHERE d.organization_id = p_org AND d.apparaat_id = p_apparaat
     LOOP
         BEGIN
             PERFORM public.toonbank_dagstaat_herberekenen(p_org, v_dag, true);
@@ -1075,7 +1118,8 @@ BEGIN
             v_fouten := v_fouten || E'\n  geen SECURITY DEFINER met search_path en vereis_org: ' || v_sig;
         END IF;
     END LOOP;
-    FOREACH v_sig IN ARRAY ARRAY['private.toonbank_verwerk_dagstaat(bigint)', 'private.toonbank_dagstaat_vast()', 'private.toonbank_verwerk_melding(bigint, boolean)'] LOOP
+    FOREACH v_sig IN ARRAY ARRAY['private.toonbank_verwerk_dagstaat(bigint)', 'private.toonbank_dagstaat_vast()', 'private.toonbank_verwerk_melding(bigint, boolean)',
+                                 'private.toonbank_bedrijfsdag(uuid, timestamp with time zone, timestamp with time zone)'] LOOP
         IF has_function_privilege('anon', v_sig, 'EXECUTE') OR has_function_privilege('authenticated', v_sig, 'EXECUTE')
            OR has_function_privilege('service_role', v_sig, 'EXECUTE') THEN
             v_fouten := v_fouten || E'\n  een rol mag de interne functie ' || v_sig;
@@ -1095,6 +1139,15 @@ BEGIN
     END IF;
     IF pg_get_functiondef('private.toonbank_verwerk_melding(bigint, boolean)'::REGPROCEDURE) NOT LIKE '%toonbank_verwerk_dagstaat%' THEN
         v_fouten := v_fouten || E'\n  de verdeler verwerkt geen dagstaat';
+    END IF;
+    -- Review M2 K3: bonnen per tablet op het venster openen–sluiten; de bedrijfsdag kent de dagstaat.
+    IF pg_get_functiondef('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)'::REGPROCEDURE)
+           NOT LIKE '%j.apparaat_tijd BETWEEN v_d.geopend_at AND v_d.gesloten_at%'
+       OR pg_get_functiondef('public.toonbank_verwerk_wachtrij(uuid, uuid)'::REGPROCEDURE)
+           NOT LIKE '%j.apparaat_tijd BETWEEN d.geopend_at AND d.gesloten_at%'
+       OR pg_get_functiondef('private.toonbank_bedrijfsdag(uuid, timestamp with time zone, timestamp with time zone)'::REGPROCEDURE)
+           NOT LIKE '%toonbank_dagstaten%' THEN
+        v_fouten := v_fouten || E'\n  dagstaat koppelt bonnen niet op openen–sluiten, of de bedrijfsdag kent de dagstaat niet';
     END IF;
     -- Review M2 B1: ook de vernieuwde wachtrij vergrendelt eerst alle producten.
     IF pg_get_functiondef('public.toonbank_verwerk_wachtrij(uuid, uuid)'::REGPROCEDURE)

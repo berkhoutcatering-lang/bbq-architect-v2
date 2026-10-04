@@ -17,7 +17,7 @@
 -- Een bon met alleen een restbetaling op een webshoporder (order_rest + pin).
 create function pg_temp.tb_restbon(p_gid uuid, p_volgnr bigint, p_bonnummer text, p_order_id bigint, p_nummer text, p_bedrag int)
 returns jsonb language sql as $$
-    select jsonb_build_object('soort', 'bon', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2027-03-06T16:32:00+01:00',
+    select jsonb_build_object('soort', 'bon', 'gebeurtenis_id', p_gid, 'volgnummer', p_volgnr, 'moment', '2026-03-06T16:32:00+01:00',
         'medewerker_id', null, 'bon_id', p_gid, 'bonnummer', p_bonnummer, 'bon_volgnummer', split_part(p_bonnummer, '-', 2)::int,
         'status', 'afgerond', 'kanaal', 'winkel', 'catalogus_versie', 1, 'leeftijd', null,
         'regels', jsonb_build_array(
