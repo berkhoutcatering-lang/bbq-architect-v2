@@ -11,9 +11,10 @@ export const metadata = {
 
 /**
  * Instellingen → Toonbank (BA-7a). Server-shell: leest tablets en personeel
- * via RLS met de gebruikersclient. De hashes van sleutel en koppelcode zijn
- * voor ingelogde gebruikers niet leesbaar (kolomrechten); van de inlogcode
- * gaat alleen "ingesteld ja/nee" naar de browser.
+ * via RLS met de gebruikersclient. De hashes van sleutel, koppelcode en
+ * inlogcode zijn voor ingelogde gebruikers niet leesbaar (kolomrechten); van
+ * de inlogcode komt alleen "ingesteld ja/nee" (toonbank_inlogcodes_ingesteld,
+ * review M2 K4).
  */
 export default async function ToonbankInstellingenPage() {
     const supabase = await createServerSupabase();
@@ -24,30 +25,32 @@ export default async function ToonbankInstellingenPage() {
     const orgId = (lid?.organization_id as string | undefined) ?? null;
     const isAdmin = lid?.role === 'Admin';
 
-    const [{ data: tablets }, { data: personeel }, { data: inst }] = orgId
+    const [{ data: tablets }, { data: personeel }, { data: inst }, { data: codes }] = orgId
         ? await Promise.all([
             supabase.from('toonbank_apparaten')
                 .select('id, naam, code, locatie, sleutel_prefix, gekoppeld_at, koppelcode_geldig_tot, koppelpogingen, laatst_gezien_at, app_versie, contract_versie, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer, ingetrokken_at, ingetrokken_reden')
                 .eq('organization_id', orgId)
                 .order('code'),
             supabase.from('personeel')
-                .select('id, naam, functie, actief, toonbank_rol, kds_pin_hash, kds_pin_lockout_until')
+                .select('id, naam, functie, actief, toonbank_rol, kds_pin_lockout_until')
                 .eq('organization_id', orgId)
                 .order('naam'),
             supabase.from('winkel_instellingen')
                 .select('toonbank_alcohol_toegestaan, toonbank_contant_aan, toonbank_contant_limiet_cents')
                 .eq('organization_id', orgId)
                 .maybeSingle(),
+            supabase.rpc('toonbank_inlogcodes_ingesteld', { p_org: orgId }),
         ])
-        : [{ data: [] }, { data: [] }, { data: null }];
+        : [{ data: [] }, { data: [] }, { data: null }, { data: [] }];
 
+    const metCode = new Set(((codes ?? []) as { personeel_id: string; ingesteld: boolean }[]).filter((c) => c.ingesteld).map((c) => c.personeel_id));
     const medewerkers: MedewerkerRij[] = (personeel ?? []).map((p) => ({
         id: p.id as string,
         naam: p.naam as string,
         functie: (p.functie as string | null) ?? null,
         actief: !!p.actief,
         toonbank_rol: p.toonbank_rol === 'eigenaar' || p.toonbank_rol === 'medewerker' ? p.toonbank_rol : null,
-        heeft_inlogcode: !!p.kds_pin_hash,
+        heeft_inlogcode: metCode.has(p.id as string),
         geblokkeerd_tot: (p.kds_pin_lockout_until as string | null) ?? null,
     }));
 

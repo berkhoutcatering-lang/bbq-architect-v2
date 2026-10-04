@@ -5,6 +5,15 @@ import { useOrg } from '@/lib/OrgContext';
 import type { Personeel } from '@/types';
 
 /**
+ * De kolommen die de app van personeel leest. Nooit select('*'): kds_pin_hash
+ * (de inlogcode van KDS en Toonbank, scrypt van 4-6 cijfers) is voor ingelogde
+ * gebruikers niet leesbaar (review M2 K4, kolomrechten), en dan faalt '*'.
+ * Werkt ook op een database zonder die kolomrechten.
+ */
+export const PERSONEEL_KOLOMMEN =
+  'id, organization_id, user_id, naam, email, telefoon, functie, uurtarief, contract_type, actief, notitie, kds_pin_lockout_until, created_at';
+
+/**
  * Personeel-hook met UUID id (los van useSupabase die number-id verwacht).
  * Realtime via shared postgres_changes channel; geen offline-support nodig
  * — personeel-CRUD gebeurt op kantoor, niet op het event.
@@ -30,7 +39,7 @@ export function usePersoneel(): {
     setLoading(true);
     supabase
       .from('personeel')
-      .select('*')
+      .select(PERSONEEL_KOLOMMEN)
       .eq('organization_id', orgId)
       .order('actief', { ascending: false })
       .order('naam', { ascending: true })
@@ -78,7 +87,7 @@ export function usePersoneel(): {
       supabase
         .from('personeel')
         .insert({ ...row, organization_id: orgId } as Record<string, unknown>)
-        .select()
+        .select(PERSONEEL_KOLOMMEN)
         .single(),
     ).then(function (res) {
       if (res.error) {
@@ -114,7 +123,7 @@ export function usePersoneel(): {
         .update(row as Record<string, unknown>)
         .eq('id', id)
         .eq('organization_id', orgId)
-        .select()
+        .select(PERSONEEL_KOLOMMEN)
         .single(),
     ).then(function (res) {
       if (res.error) {

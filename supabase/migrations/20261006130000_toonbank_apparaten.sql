@@ -41,7 +41,12 @@
 --
 --  Rechten
 --    - Beheer (apparaat nieuw, nieuwe koppelcode, intrekken): SECURITY
---      DEFINER met private.vereis_org, voor authenticated en service_role.
+--      DEFINER met private.vereis_org, voor authenticated en service_role;
+--      voor een ingelogde gebruiker alleen als Admin (review M2 K4,
+--      private.toonbank_vereis_admin).
+--    - personeel: toonbank_rol, kds_pin_hash en kds_pin_lockout_until zet
+--      via de API alleen een Admin (trigger); kds_pin_hash is voor ingelogde
+--      gebruikers niet leesbaar (kolomrechten, review M2 K4).
 --    - Koppelen en de inlogteller: alleen service_role (de Toonbank-API).
 --    - authenticated leest apparaten (zonder de hashes) en het journaal van
 --      de eigen organisatie; schrijven alleen via de functies.
@@ -85,6 +90,130 @@ ALTER TABLE public.personeel
         CONSTRAINT personeel_toonbank_rol_check CHECK (toonbank_rol IS NULL OR toonbank_rol IN ('medewerker', 'eigenaar'));
 COMMENT ON COLUMN public.personeel.toonbank_rol IS
     'Toegang tot de Toonbank: medewerker of eigenaar (mag verkopen boven vrij goedkeuren). NULL = geen toegang. De inlogcode is kds_pin_hash (één code per persoon), in te stellen in Instellingen → Toonbank.';
+
+
+-- ── 1b. Alleen een Admin beheert de Toonbank (review M2 K4) ─────────────────
+-- De controle "alleen een Admin" zat alleen in de server actions. Een gewoon
+-- lid kon de beheerfuncties direct aanroepen (een eigen tablet met een eigen
+-- koppelcode-hash), en via personeel (RLS: elk actief lid mag lezen en
+-- bijwerken) zichzelf eigenaar maken, een eigen inlogcode-hash zetten, de
+-- blokkade opheffen en kds_pin_hash lezen (scrypt van 4-6 cijfers: offline
+-- te kraken).
+--
+-- private.toonbank_vereis_admin(p_org): door bij een directe verbinding
+-- (migratie, test) en service_role (de Toonbank-API); authenticated alleen als
+-- actieve Admin van p_org. Anders 42501. Zelf SECURITY DEFINER, zodat ook de
+-- trigger hieronder (die als authenticated draait) organization_members kan
+-- lezen zonder RLS.
+CREATE OR REPLACE FUNCTION private.toonbank_vereis_admin(p_org UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_claims TEXT := NULLIF(current_setting('request.jwt.claims', true), '');
+BEGIN
+    PERFORM private.vereis_org(p_org);
+    IF v_claims IS NULL OR v_claims::JSONB ->> 'role' = 'service_role' THEN
+        RETURN;
+    END IF;
+    IF EXISTS (SELECT 1 FROM public.organization_members m
+                WHERE m.organization_id = p_org AND m.user_id = auth.uid() AND m.status = 'active' AND m.role = 'Admin') THEN
+        RETURN;
+    END IF;
+    RAISE EXCEPTION 'alleen een beheerder (Admin) beheert de Toonbank: tablets, rollen en inlogcodes' USING ERRCODE = '42501';
+END $$;
+COMMENT ON FUNCTION private.toonbank_vereis_admin(UUID) IS
+    'Review M2 K4: vereis_org plus, voor een ingelogde gebruiker, de rol Admin in p_org. Directe verbinding en service_role: door. Anders 42501.';
+REVOKE ALL ON FUNCTION private.toonbank_vereis_admin(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION private.toonbank_vereis_admin(UUID) TO authenticated, service_role;
+
+-- Op personeel: toonbank_rol, kds_pin_hash en kds_pin_lockout_until wijzigt
+-- (of zet bij een nieuwe rij) alleen een Admin. service_role (de Toonbank-API,
+-- de KDS-pincheck) en de eigenaar van de tabel (migraties en SECURITY
+-- DEFINER-functies zoals toonbank_inlogcode_mislukt) mogen altijd: dan is
+-- current_user niet authenticated of anon. Andere kolommen (naam, uurtarief,
+-- actief …) blijven voor elk lid zoals ze waren.
+CREATE OR REPLACE FUNCTION private.personeel_toonbank_bewaken()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF current_user NOT IN ('authenticated', 'anon') THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.toonbank_rol IS NULL AND NEW.kds_pin_hash IS NULL AND NEW.kds_pin_lockout_until IS NULL THEN
+            RETURN NEW;
+        END IF;
+    ELSIF NEW.toonbank_rol IS NOT DISTINCT FROM OLD.toonbank_rol
+          AND NEW.kds_pin_hash IS NOT DISTINCT FROM OLD.kds_pin_hash
+          AND NEW.kds_pin_lockout_until IS NOT DISTINCT FROM OLD.kds_pin_lockout_until
+          AND NEW.organization_id IS NOT DISTINCT FROM OLD.organization_id THEN
+        RETURN NEW;
+    END IF;
+    PERFORM private.toonbank_vereis_admin(NEW.organization_id);
+    IF TG_OP = 'UPDATE' AND NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
+        PERFORM private.toonbank_vereis_admin(OLD.organization_id);
+    END IF;
+    RETURN NEW;
+END $$;
+COMMENT ON FUNCTION private.personeel_toonbank_bewaken() IS
+    'Review M2 K4: trigger op personeel. toonbank_rol, kds_pin_hash en kds_pin_lockout_until wijzigt via de API alleen een Admin (42501); service_role en SECURITY DEFINER-functies altijd.';
+REVOKE ALL ON FUNCTION private.personeel_toonbank_bewaken() FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS trg_personeel_toonbank_bewaken ON public.personeel;
+CREATE TRIGGER trg_personeel_toonbank_bewaken
+    BEFORE INSERT OR UPDATE ON public.personeel
+    FOR EACH ROW EXECUTE FUNCTION private.personeel_toonbank_bewaken();
+
+-- kds_pin_hash is voor ingelogde gebruikers niet meer leesbaar. Een
+-- kolomrecht intrekken helpt niet zolang het tabelrecht SELECT er is; dus het
+-- tabelrecht weg en SELECT op alle andere kolommen terug. Let op: een kolom
+-- die later bij personeel komt, krijgt authenticated dan niet vanzelf (de
+-- objectproef meldt het); select('*') op personeel kan een gebruiker niet
+-- meer. BBQ Architect leest personeel daarom met een kolomlijst
+-- (usePersoneel), de KDS-pincheck met service_role, en het beheerscherm krijgt
+-- alleen "ingesteld ja/nee" (toonbank_inlogcodes_ingesteld).
+DO $$
+DECLARE
+    v_rol   TEXT;
+    v_kol   TEXT;
+BEGIN
+    SELECT string_agg(quote_ident(a.attname), ', ' ORDER BY a.attnum) INTO v_kol
+      FROM pg_attribute a
+     WHERE a.attrelid = 'public.personeel'::REGCLASS AND a.attnum > 0 AND NOT a.attisdropped AND a.attname <> 'kds_pin_hash';
+    FOREACH v_rol IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF has_table_privilege(v_rol, 'public.personeel', 'SELECT') THEN
+            EXECUTE format('REVOKE SELECT ON TABLE public.personeel FROM %I', v_rol);
+            EXECUTE format('GRANT SELECT (%s) ON public.personeel TO %I', v_kol, v_rol);
+        END IF;
+        EXECUTE format('REVOKE SELECT (kds_pin_hash) ON public.personeel FROM %I', v_rol);
+    END LOOP;
+END $$;
+
+-- Voor het beheerscherm: per medewerker alleen of er een inlogcode is.
+CREATE OR REPLACE FUNCTION public.toonbank_inlogcodes_ingesteld(p_org UUID)
+RETURNS TABLE (personeel_id UUID, ingesteld BOOLEAN)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    PERFORM private.vereis_org(p_org);
+    RETURN QUERY
+        SELECT p.id, p.kds_pin_hash IS NOT NULL
+          FROM public.personeel p
+         WHERE p.organization_id = p_org;
+END $$;
+COMMENT ON FUNCTION public.toonbank_inlogcodes_ingesteld(UUID) IS
+    'Review M2 K4: per medewerker van p_org of er een inlogcode (kds_pin_hash) is, zonder de hash. Voor Instellingen → Toonbank.';
+REVOKE ALL ON FUNCTION public.toonbank_inlogcodes_ingesteld(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.toonbank_inlogcodes_ingesteld(UUID) TO authenticated, service_role;
 
 
 -- ── 2. toonbank_apparaten ───────────────────────────────────────────────────
@@ -269,6 +398,7 @@ DECLARE
     v_rij  public.toonbank_apparaten%ROWTYPE;
 BEGIN
     PERFORM private.vereis_org(p_org);
+    PERFORM private.toonbank_vereis_admin(p_org);
 
     IF p_naam IS NULL OR length(btrim(p_naam)) NOT BETWEEN 1 AND 60 THEN
         RAISE EXCEPTION 'naam van de tablet: 1 tot 60 tekens' USING ERRCODE = '22023';
@@ -311,6 +441,7 @@ DECLARE
     v_rij public.toonbank_apparaten%ROWTYPE;
 BEGIN
     PERFORM private.vereis_org(p_org);
+    PERFORM private.toonbank_vereis_admin(p_org);
 
     IF p_koppelcode_hash IS NULL OR p_koppelcode_hash !~ '^[0-9a-f]{32}:[0-9a-f]{128}$' THEN
         RAISE EXCEPTION 'koppelcode-hash in het verkeerde formaat' USING ERRCODE = '22023';
@@ -350,6 +481,7 @@ DECLARE
     v_rij public.toonbank_apparaten%ROWTYPE;
 BEGIN
     PERFORM private.vereis_org(p_org);
+    PERFORM private.toonbank_vereis_admin(p_org);
 
     SELECT * INTO v_rij FROM public.toonbank_apparaten
      WHERE id = p_apparaat_id AND organization_id = p_org
@@ -607,7 +739,29 @@ BEGIN
            OR pg_get_functiondef(v_sig::REGPROCEDURE) NOT LIKE '%PERFORM private.vereis_org(p_org)%' THEN
             v_fouten := v_fouten || E'\n  geen SECURITY DEFINER met search_path en vereis_org: ' || v_sig;
         END IF;
+        IF pg_get_functiondef(v_sig::REGPROCEDURE) NOT LIKE '%PERFORM private.toonbank_vereis_admin(p_org)%' THEN
+            v_fouten := v_fouten || E'\n  beheer zonder Admin-controle (review M2 K4): ' || v_sig;
+        END IF;
     END LOOP;
+    -- Review M2 K4: personeel bewaakt, de inlogcode-hash niet leesbaar.
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.personeel'::REGCLASS AND tgname = 'trg_personeel_toonbank_bewaken' AND NOT tgisinternal) THEN
+        v_fouten := v_fouten || E'\n  trigger trg_personeel_toonbank_bewaken ontbreekt';
+    END IF;
+    IF has_column_privilege('authenticated', 'public.personeel', 'kds_pin_hash', 'SELECT')
+       OR has_column_privilege('anon', 'public.personeel', 'kds_pin_hash', 'SELECT') THEN
+        v_fouten := v_fouten || E'\n  anon of authenticated leest personeel.kds_pin_hash';
+    END IF;
+    IF NOT has_column_privilege('authenticated', 'public.personeel', 'naam', 'SELECT')
+       OR NOT has_column_privilege('authenticated', 'public.personeel', 'kds_pin_lockout_until', 'SELECT')
+       OR NOT has_column_privilege('service_role', 'public.personeel', 'kds_pin_hash', 'SELECT') THEN
+        v_fouten := v_fouten || E'\n  te veel ingetrokken op personeel (naam/blokkade voor authenticated, hash voor service_role)';
+    END IF;
+    IF has_function_privilege('anon', 'public.toonbank_inlogcodes_ingesteld(uuid)', 'EXECUTE')
+       OR NOT has_function_privilege('authenticated', 'public.toonbank_inlogcodes_ingesteld(uuid)', 'EXECUTE')
+       OR has_function_privilege('authenticated', 'private.personeel_toonbank_bewaken()', 'EXECUTE')
+       OR has_function_privilege('anon', 'private.toonbank_vereis_admin(uuid)', 'EXECUTE') THEN
+        v_fouten := v_fouten || E'\n  rechten op toonbank_inlogcodes_ingesteld, de personeel-trigger of toonbank_vereis_admin kloppen niet';
+    END IF;
     -- Alleen service_role.
     FOREACH v_sig IN ARRAY ARRAY[
         'public.toonbank_koppel_kandidaten()',

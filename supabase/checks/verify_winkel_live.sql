@@ -176,6 +176,9 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)'),
     ('private.winkel_catalogus_versie_omhoog()',                 '20261006120000_toonbank_catalogus (BA-4a)'),
     ('private.toonbank_journaal_alleen_toevoegen()',             '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('private.toonbank_vereis_admin(uuid)',                      '20261006130000_toonbank_apparaten (BA-7a, review M2 K4)'),
+    ('private.personeel_toonbank_bewaken()',                     '20261006130000_toonbank_apparaten (BA-7a, review M2 K4)'),
+    ('public.toonbank_inlogcodes_ingesteld(uuid)',               '20261006130000_toonbank_apparaten (BA-7a, review M2 K4)'),
     ('public.toonbank_apparaat_nieuw(uuid, text, text, text, uuid)', '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_apparaat_koppelcode(uuid, uuid, text)',    '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_apparaat_intrekken(uuid, uuid, text, uuid)', '20261006130000_toonbank_apparaten (BA-7a)'),
@@ -239,6 +242,7 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_producten',      'trg_winkel_cv_product_erbij',        '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_producten',      'trg_winkel_cv_product',              '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikel_slots',  'trg_winkel_cv_slots',                '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('personeel',             'trg_personeel_toonbank_bewaken',         '20261006130000_toonbank_apparaten (BA-7a, review M2 K4)'),
     ('toonbank_journaal',     'trg_toonbank_journaal_alleen_toevoegen', '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_journaal',     'trg_toonbank_journaal_geen_truncate',    '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_bonnen',       'trg_toonbank_bonnen_vast',               '20261007120000_toonbank_bonnen (BA-9)'),
@@ -347,6 +351,26 @@ proef AS (
     SELECT 11, 'fix', 'doos ophalen: leeftijd_nodig bij alcohol zonder vaststelling',
            '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
            COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%leeftijd_nodig%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'personeel.kds_pin_hash niet leesbaar voor anon en authenticated (review M2 K4)',
+           '20261006130000_toonbank_apparaten (BA-7a)',
+           NOT has_column_privilege('authenticated', 'public.personeel', 'kds_pin_hash', 'SELECT')
+           AND NOT has_column_privilege('anon', 'public.personeel', 'kds_pin_hash', 'SELECT')
+    UNION ALL
+    -- Na K4 heeft authenticated kolomrechten op personeel: een kolom die later
+    -- bij personeel komt, moet er expliciet bij (GRANT SELECT (kolom)).
+    SELECT 11, 'fix', 'personeel: authenticated leest alle kolommen behalve kds_pin_hash (review M2 K4)',
+           '20261006130000_toonbank_apparaten (BA-7a)',
+           NOT EXISTS (SELECT 1 FROM pg_attribute a
+                        WHERE a.attrelid = to_regclass('public.personeel') AND a.attnum > 0 AND NOT a.attisdropped
+                          AND a.attname <> 'kds_pin_hash'
+                          AND NOT has_column_privilege('authenticated', 'public.personeel', a.attname, 'SELECT'))
+    UNION ALL
+    SELECT 11, 'fix', 'Toonbank-beheer alleen door een Admin (review M2 K4)',
+           '20261006130000_toonbank_apparaten (BA-7a)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.toonbank_apparaat_nieuw(uuid, text, text, text, uuid)')) LIKE '%toonbank_vereis_admin%'
+                    AND pg_get_functiondef(to_regprocedure('public.toonbank_apparaat_koppelcode(uuid, uuid, text)')) LIKE '%toonbank_vereis_admin%'
+                    AND pg_get_functiondef(to_regprocedure('public.toonbank_apparaat_intrekken(uuid, uuid, text, uuid)')) LIKE '%toonbank_vereis_admin%', false)
     UNION ALL
     SELECT 11, 'fix', 'wachtrij: eerst alle producten vergrendelen, tijdelijke fout blijft wacht (review M2 B1)',
            '20261007130000_toonbank_afhalen_dagstaten (BA-10)',

@@ -23,6 +23,7 @@ declare
     v_sleutel   text := encode(sha256(convert_to('tb_test_' || gen_random_uuid()::text, 'UTF8')), 'hex');
     v_user      uuid := gen_random_uuid();
     v_user2     uuid := gen_random_uuid();
+    v_user3     uuid := gen_random_uuid();
     v_r         jsonb;
     v_a1        uuid;
     v_a2        uuid;
@@ -238,10 +239,12 @@ begin
     begin
         insert into auth.users (id, aud, role, email) values
             (v_user,  'authenticated', 'authenticated', 'toonbank-' || v_user  || '@example.invalid'),
-            (v_user2, 'authenticated', 'authenticated', 'toonbank-' || v_user2 || '@example.invalid');
+            (v_user2, 'authenticated', 'authenticated', 'toonbank-' || v_user2 || '@example.invalid'),
+            (v_user3, 'authenticated', 'authenticated', 'toonbank-' || v_user3 || '@example.invalid');
         insert into public.organization_members (organization_id, user_id, role, status) values
             (v_org, v_user, 'Admin', 'active'),
-            (v_ander, v_user2, 'Admin', 'active');
+            (v_ander, v_user2, 'Admin', 'active'),
+            (v_org, v_user3, 'Medewerker', 'active');
 
         -- Lid van e2e: ziet alleen de eigen tablets en het eigen journaal.
         perform set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, true);
@@ -275,11 +278,76 @@ begin
             v_fouten := v_fouten || 'lid leest de koppelcodes; ';
         exception when insufficient_privilege then null;
         end;
-        -- Beheer in de eigen organisatie mag wel.
+        -- Beheer in de eigen organisatie mag wel (als Admin).
         v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST via lid', 'winkel', v_hash);
         if not exists (select 1 from public.toonbank_apparaten where id = (v_r->>'apparaat_id')::uuid and aangemaakt_door = v_user) then
             v_fouten := v_fouten || 'aangemaakt_door is niet het lid; ';
         end if;
+
+        -- Review M2 K4: een gewoon lid (Medewerker) beheert geen tablets.
+        perform set_config('request.jwt.claims', json_build_object('sub', v_user3, 'role', 'authenticated')::text, true);
+        begin
+            perform public.toonbank_apparaat_nieuw(v_org, 'TEST door Medewerker', 'winkel', v_hash);
+            v_fouten := v_fouten || 'Medewerker maakt een tablet met een eigen koppelcode-hash; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            perform public.toonbank_apparaat_koppelcode(v_org, v_a2, v_hash);
+            v_fouten := v_fouten || 'Medewerker zet een nieuwe koppelcode; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            perform public.toonbank_apparaat_intrekken(v_org, v_a2, 'mag niet');
+            v_fouten := v_fouten || 'Medewerker trekt een tablet in; ';
+        exception when insufficient_privilege then null;
+        end;
+        -- personeel: rol, inlogcode en blokkade alleen via een Admin; de hash niet leesbaar.
+        -- (Op de testdb loopt de RLS van personeel via organization_members in een lus;
+        -- daarom staat RLS op personeel hier even uit. Getest worden de kolomrechten en de trigger.)
+        perform set_config('role', 'postgres', true);
+        execute 'alter table public.personeel disable row level security';
+        perform set_config('role', 'authenticated', true);
+        begin
+            perform kds_pin_hash from public.personeel where id = v_p_mw;
+            v_fouten := v_fouten || 'Medewerker leest kds_pin_hash; ';
+        exception when insufficient_privilege then null;
+        end;
+        select count(*) into v_n from public.personeel where id = v_p_mw and naam like 'TEST Mw%' and kds_pin_lockout_until is null;
+        if v_n <> 1 then v_fouten := v_fouten || 'Medewerker leest de gewone kolommen van personeel niet; '; end if;
+        begin
+            update public.personeel set toonbank_rol = 'eigenaar' where id = v_p_mw;
+            v_fouten := v_fouten || 'Medewerker maakt zichzelf eigenaar; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            update public.personeel set kds_pin_hash = v_hash where id = v_p_mw;
+            v_fouten := v_fouten || 'Medewerker zet een eigen inlogcode-hash; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            update public.personeel set kds_pin_lockout_until = null where id = v_p_eig;
+            v_fouten := v_fouten || 'Medewerker heft een blokkade op; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            insert into public.personeel (organization_id, naam, toonbank_rol, kds_pin_hash) values (v_org, 'TEST stiekem', 'eigenaar', v_hash);
+            v_fouten := v_fouten || 'Medewerker maakt een nieuwe eigenaar met inlogcode; ';
+        exception when insufficient_privilege then null;
+        end;
+        update public.personeel set notitie = 'gewone kolom' where id = v_p_mw;
+        insert into public.personeel (organization_id, naam) values (v_org, 'TEST gewoon nieuw');
+        if (select count(*) from public.toonbank_inlogcodes_ingesteld(v_org) i where i.personeel_id in (v_p_mw, v_p_eig)) <> 2 then
+            v_fouten := v_fouten || 'toonbank_inlogcodes_ingesteld voor een lid; ';
+        end if;
+        -- Een Admin mag het wel.
+        perform set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, true);
+        update public.personeel set toonbank_rol = 'eigenaar', kds_pin_hash = v_hash, kds_pin_lockout_until = null where id = v_p_mw;
+        if (select ingesteld from public.toonbank_inlogcodes_ingesteld(v_org) where personeel_id = v_p_mw) is not true then
+            v_fouten := v_fouten || 'Admin zet rol en inlogcode niet; ';
+        end if;
+        perform set_config('role', 'postgres', true);
+        execute 'alter table public.personeel enable row level security';
+        perform set_config('role', 'authenticated', true);
 
         -- Lid van de andere organisatie: ziet alleen die tablet.
         perform set_config('request.jwt.claims', json_build_object('sub', v_user2, 'role', 'authenticated')::text, true);
@@ -313,5 +381,5 @@ begin
     end;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, 5 foute pogingen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets — alles teruggedraaid', v_code1, v_code2;
+    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, 5 foute pogingen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets; een Medewerker maakt, koppelt of trekt geen tablet in, leest kds_pin_hash niet en zet geen rol, inlogcode of blokkade (ook niet bij een nieuwe rij), gewone kolommen wel; een Admin wel — alles teruggedraaid', v_code1, v_code2;
 end $$;
