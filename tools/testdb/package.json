@@ -1,0 +1,21 @@
+{
+  "name": "bbq-architect-testdb",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Lokale Postgres-testdatabase voor BBQ Architect (zonder Docker): migraties, seed en SQL-tests.",
+  "type": "module",
+  "scripts": {
+    "start": "node start.mjs",
+    "stop": "node stop.mjs",
+    "opnieuw": "node opnieuw.mjs",
+    "migreer": "node migreer.mjs",
+    "seed": "node sql-bestand.mjs @/supabase/tests/seed_vier_naober.sql",
+    "test": "node test.mjs",
+    "proef": "node sql-bestand.mjs @/supabase/checks/verify_winkel_live.sql",
+    "sql": "node sql-bestand.mjs"
+  },
+  "dependencies": {
+    "embedded-postgres": "17.10.0-beta.17",
+    "pg": "8.16.3"
+  }
+}
