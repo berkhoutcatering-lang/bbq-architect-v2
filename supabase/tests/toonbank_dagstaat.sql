@@ -91,6 +91,11 @@ declare
     v_d1       uuid := gen_random_uuid();
     v_x1       uuid := gen_random_uuid();
     v_d2       uuid := gen_random_uuid();
+    v_app3     uuid;
+    v_code3    text;
+    v_b5       uuid := gen_random_uuid();
+    v_t5       uuid := gen_random_uuid();
+    v_d3       uuid := gen_random_uuid();
     v_getallen jsonb;
     v_j        public.toonbank_journaal%rowtype;
     v_d        public.toonbank_dagstaten%rowtype;
@@ -250,6 +255,24 @@ begin
         v_fouten := v_fouten || 'dagstaat twee keer: ' || v_r::text || '; ';
     end if;
 
+    -- ── Review M2 K2: een tegenbon met statiegeld. kern (dagCijfers) zet tegenbonnen_cents op het
+    --    totaal van de tegenbon: −690 bier en −30 statiegeld = −720. BBQ Architect rekent hetzelfde.
+    v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 3 ' || v_sfx, 'winkel', v_hash);
+    v_app3 := (v_r->>'apparaat_id')::uuid; v_code3 := v_r->>'code';
+    perform pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('bon', v_b5, 1, v_code3 || '-000001', '2027-03-06T11:00:00+01:00', 'pin', jsonb_build_array(
+        pg_temp.tb_regel(1, 2, 345, 21, pg_temp.ond(v_bier)),
+        jsonb_build_object('regelnr', 2, 'soort', 'statiegeld', 'hoort_bij_regelnr', 1, 'product_id', v_bier, 'aantal', 2, 'stuk_cents', 15, 'bedrag_cents', 30))));
+    v_j := pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_bon('tegenbon', v_t5, 2, v_code3 || '-000002', '2027-03-06T11:30:00+01:00', 'pin', jsonb_build_array(
+        pg_temp.tb_regel(1, -2, 345, 21, pg_temp.ond(v_bier), '{"verwijst_naar_regelnr": 1}'::jsonb),
+        jsonb_build_object('regelnr', 2, 'soort', 'statiegeld', 'hoort_bij_regelnr', 1, 'product_id', v_bier, 'aantal', -2, 'stuk_cents', 15, 'bedrag_cents', -30)),
+        jsonb_build_object('verwijst_naar_bon_id', v_b5, 'reden', 'retour')));
+    v_j := pg_temp.tb_stuur(v_org, v_app3, pg_temp.tb_dagstaat(v_d3, 3, 1, v_code3 || '-000001', v_code3 || '-000002', jsonb_build_object(
+        'aantal_bonnen', 1, 'aantal_tegenbonnen', 1, 'tegenbonnen_cents', -720)));
+    select * into v_d from public.toonbank_dagstaten where id = v_d3;
+    if v_d.verschillen <> '[]'::jsonb or (v_d.nagerekend->>'tegenbonnen_cents')::int <> -720 or v_j.verwerk_status <> 'verwerkt' then
+        v_fouten := v_fouten || 'tegenbon met statiegeld: ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
+    end if;
+
     -- ── De dagstaat is vast: wat de tablet afsloot verandert niet en gaat nooit weg.
     begin
         update public.toonbank_dagstaten set pin_toonbank_cents = 0 where id = v_d2;
@@ -271,5 +294,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
+    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
 end $$;

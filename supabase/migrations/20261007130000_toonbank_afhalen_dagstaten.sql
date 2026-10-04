@@ -619,7 +619,9 @@ BEGIN
            count(*) FILTER (WHERE status = 'geannuleerd')                                             AS aantal_geannuleerd,
            COALESCE(sum(statiegeld_cents) FILTER (WHERE status = 'afgerond'), 0)                      AS statiegeld,
            COALESCE(sum(order_rest_cents) FILTER (WHERE status = 'afgerond'), 0)                      AS order_rest,
-           COALESCE(sum(omzet_incl_cents) FILTER (WHERE status = 'afgerond' AND soort = 'tegenbon'), 0) AS tegenbonnen,
+           -- Review M2 K2: zoals kern (dagCijfers): het totaal van de tegenbonnen,
+           -- dus inclusief statiegeld, rest en afronding; niet alleen de omzet.
+           COALESCE(sum(totaal_cents) FILTER (WHERE status = 'afgerond' AND soort = 'tegenbon'), 0)     AS tegenbonnen,
            COALESCE(sum(korting_cents) FILTER (WHERE status = 'afgerond'), 0)                         AS korting,
            COALESCE(sum(afronding_cents) FILTER (WHERE status = 'afgerond'), 0)                       AS afronding,
            COALESCE(sum(pin_cents) FILTER (WHERE status = 'afgerond'), 0)                             AS pin,

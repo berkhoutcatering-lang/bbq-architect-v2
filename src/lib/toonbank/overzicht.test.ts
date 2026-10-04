@@ -21,7 +21,7 @@ describe('dagTotalen', () => {
     it('netto met tegenbonnen, zonder geannuleerde bonnen; statiegeld en order_rest zijn geen omzet', () => {
         const t = dagTotalen([
             bon({ omzet_incl_cents: 1495, btw: { 21: { incl_cents: 996, btw_cents: 173 }, 9: { incl_cents: 499, btw_cents: 41 } }, statiegeld_cents: 45, order_rest_cents: 450, pin_cents: 1990 }),
-            bon({ soort: 'tegenbon', omzet_incl_cents: -499, btw: { 9: { incl_cents: -499, btw_cents: -41 } }, contant_cents: -499 }),
+            bon({ soort: 'tegenbon', omzet_incl_cents: -499, btw: { 9: { incl_cents: -499, btw_cents: -41 } }, statiegeld_cents: -15, contant_cents: -514, totaal_cents: -514 }),
             bon({ status: 'geannuleerd', omzet_incl_cents: 1000, btw: { 21: { incl_cents: 1000, btw_cents: 174 } }, pin_cents: 1000 }),
         ]);
         expect(t.omzet).toEqual([
@@ -30,8 +30,9 @@ describe('dagTotalen', () => {
         ]);
         expect([t.aantal_bonnen, t.aantal_tegenbonnen, t.aantal_geannuleerd]).toEqual([1, 1, 1]);
         expect(t.omzet_incl_cents).toBe(996);
-        expect(t.tegenbonnen_cents).toBe(-499);
-        expect(t.statiegeld_cents).toBe(45);
+        /* Het totaal van de tegenbon, met statiegeld (zoals kern dagCijfers; review M2 K2), niet alleen de omzet. */
+        expect(t.tegenbonnen_cents).toBe(-514);
+        expect(t.statiegeld_cents).toBe(30);
         expect(t.order_rest_cents).toBe(450);
         expect(t.pin_cents).toBe(1990);
     });

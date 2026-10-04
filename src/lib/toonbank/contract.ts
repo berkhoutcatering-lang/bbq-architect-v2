@@ -623,6 +623,11 @@ export const DagstaatMelding = z
         omzet: z.array(OmzetPerTarief),
         statiegeld_cents: Cents,
         order_rest_cents: Cents,
+        /**
+         * De som van totaal_cents van de afgeronde tegenbonnen van die dag (negatief), dus met statiegeld,
+         * rest en afronding: zoals kern (dagCijfers) en de narekening in BA (review M2 K2). Ter informatie:
+         * de netto omzet per tarief bevat de tegenbonnen al.
+         */
         tegenbonnen_cents: Cents,
         korting_cents: Cents,
         afronding_cents: Cents,

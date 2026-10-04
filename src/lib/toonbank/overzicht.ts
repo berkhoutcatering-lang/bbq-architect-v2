@@ -59,7 +59,8 @@ export function dagTotalen(bonnen: readonly BonRij[]): DagTotalen {
     };
     for (const b of bonnen) {
         if (b.status === 'geannuleerd') { t.aantal_geannuleerd += 1; continue; }
-        if (b.soort === 'tegenbon') { t.aantal_tegenbonnen += 1; t.tegenbonnen_cents += Number(b.omzet_incl_cents); } else { t.aantal_bonnen += 1; }
+        /* tegenbonnen_cents = het totaal van de tegenbonnen (met statiegeld), zoals kern (dagCijfers) en de narekening (review M2 K2). */
+        if (b.soort === 'tegenbon') { t.aantal_tegenbonnen += 1; t.tegenbonnen_cents += Number(b.totaal_cents); } else { t.aantal_bonnen += 1; }
         for (const [pct, d] of Object.entries(b.btw ?? {})) {
             const p = Number(pct);
             const som = perTarief.get(p) ?? { pct: p, incl_cents: 0, grondslag_cents: 0, btw_cents: 0 };
