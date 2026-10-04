@@ -35,9 +35,11 @@
 --    producten (via winkel_zet_klaargezet) → logboek.
 --
 --  winkel_boek_rest, vernieuwd: + p_org (vereis_org, alleen de eigen order),
---    + p_bon_id; SECURITY DEFINER; de order met FOR NO KEY UPDATE. De oude
---    (p_order_id, p_methode) bestaat daarna niet meer; de aanroeper in BA
---    (boekRestBetaling, src/lib/winkel/supabaseStore.ts) geeft p_org mee.
+--    + p_bon_id; SECURITY DEFINER; de order met FOR NO KEY UPDATE. De
+--    aanroeper in BA (boekRestBetaling, src/lib/winkel/supabaseStore.ts)
+--    geeft p_org mee. De oude (p_order_id, p_methode) blijft tijdelijk als
+--    doorgeefluik voor de code van vóór deze migratie (review M2 K6); weg met
+--    _draft_winkel_boek_rest_compat_weg.sql na de livegang van de code.
 --
 --  Dagstaten (contract §1.5)
 --    toonbank_dagstaten           één rij per afgesloten dag per tablet; de
@@ -172,6 +174,34 @@ COMMENT ON FUNCTION public.winkel_boek_rest(UUID, BIGINT, TEXT, UUID) IS
     'De balie boekt het restbedrag (S5, BA-10): alleen een order van p_org (vereis_org), idempotent. Uitkomst: onbekend | niet_betaald | al_geboekt | geen_rest | onbekende_methode | geboekt.';
 REVOKE ALL ON FUNCTION public.winkel_boek_rest(UUID, BIGINT, TEXT, UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.winkel_boek_rest(UUID, BIGINT, TEXT, UUID) TO authenticated, service_role;
+
+-- Review M2 K6: tijdelijk de oude handtekening (p_order_id, p_methode) terug.
+-- De werkregel is migratie eerst, code daarna; in die tussentijd roept de
+-- oude BBQ Architect winkel_boek_rest(p_order_id, p_methode) aan ("Rest
+-- boeken", en de winkel-store gaf dan stil 'onbekend'). SECURITY INVOKER
+-- zoals de oude: de organisatie volgt uit de order die de aanroeper mag zien
+-- (RLS), daarna precies de nieuwe functie (met vereis_org en de lockvolgorde).
+-- PostgREST kiest op de namen van de parameters: met p_org de nieuwe, zonder
+-- p_org deze. Weghalen zodra de nieuwe code live staat:
+-- supabase/migrations/_draft_winkel_boek_rest_compat_weg.sql (hernoemen met
+-- een tijdstempel na de livegang).
+CREATE FUNCTION public.winkel_boek_rest(p_order_id BIGINT, p_methode TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_org UUID;
+BEGIN
+    SELECT o.organization_id INTO v_org FROM public.winkel_orders o WHERE o.id = p_order_id;
+    IF NOT FOUND THEN RETURN 'onbekend'; END IF;
+    RETURN public.winkel_boek_rest(v_org, p_order_id, p_methode, NULL::UUID);
+END $$;
+COMMENT ON FUNCTION public.winkel_boek_rest(BIGINT, TEXT) IS
+    'TIJDELIJK (review M2 K6): de oude handtekening voor BBQ Architect-code van vóór BA-10, tijdens de livegang. Roept winkel_boek_rest(p_org, p_order_id, p_methode) aan met de organisatie van de order (RLS). Weg met _draft_winkel_boek_rest_compat_weg.sql.';
+REVOKE ALL ON FUNCTION public.winkel_boek_rest(BIGINT, TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.winkel_boek_rest(BIGINT, TEXT) TO authenticated, service_role;
 
 
 -- ── 3. winkel_doos_ophalen, vernieuwd ───────────────────────────────────────
@@ -1099,10 +1129,16 @@ BEGIN
        OR to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)') IS NULL THEN
         v_fouten := v_fouten || E'\n  winkel_doos_ophalen: niet precies de nieuwe versie';
     END IF;
+    -- De nieuwe versie plus tijdelijk de oude handtekening (review M2 K6), niets anders.
     IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-         WHERE n.nspname = 'public' AND p.proname = 'winkel_boek_rest') <> 1
-       OR to_regprocedure('public.winkel_boek_rest(uuid, bigint, text, uuid)') IS NULL THEN
-        v_fouten := v_fouten || E'\n  winkel_boek_rest: niet precies de nieuwe versie';
+         WHERE n.nspname = 'public' AND p.proname = 'winkel_boek_rest') <> 2
+       OR to_regprocedure('public.winkel_boek_rest(uuid, bigint, text, uuid)') IS NULL
+       OR to_regprocedure('public.winkel_boek_rest(bigint, text)') IS NULL THEN
+        v_fouten := v_fouten || E'\n  winkel_boek_rest: niet precies de nieuwe versie plus de tijdelijke oude handtekening';
+    ELSIF (SELECT prosecdef FROM pg_proc WHERE oid = 'public.winkel_boek_rest(bigint, text)'::REGPROCEDURE)
+          OR has_function_privilege('anon', 'public.winkel_boek_rest(bigint, text)', 'EXECUTE')
+          OR pg_get_functiondef('public.winkel_boek_rest(bigint, text)'::REGPROCEDURE) NOT LIKE '%winkel_boek_rest(v_org, p_order_id, p_methode%' THEN
+        v_fouten := v_fouten || E'\n  de oude winkel_boek_rest is niet de INVOKER-doorgeefluik naar de nieuwe, of anon mag hem';
     END IF;
     IF pg_get_functiondef('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)'::REGPROCEDURE)
        NOT LIKE '%FROM public.winkel_orders%FOR NO KEY UPDATE%FROM public.winkel_order_regels%FOR UPDATE%FROM public.winkel_dozen%FOR UPDATE%' THEN

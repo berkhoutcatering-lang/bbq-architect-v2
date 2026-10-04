@@ -24,8 +24,9 @@
 --  winkel_muteer_voorraad (17 parameters; de oude met 15 bestaat dan niet
 --  meer) tot BA-9 (20261007120000); de dagstaten, ophalen vanaf de Toonbank,
 --  rest_bon_id en de nieuwe winkel_doos_ophalen (6 parameters) en
---  winkel_boek_rest (met p_org; de oude handtekeningen bestaan dan niet
---  meer) tot BA-10 (20261007130000).
+--  winkel_boek_rest (met p_org; de oude handtekening (bigint, text) blijft
+--  tijdelijk als doorgeefluik, review M2 K6, dus "twee versies") tot BA-10
+--  (20261007130000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -149,6 +150,7 @@ functies(signatuur, migratie) AS (VALUES
                                                                  '20260927120000_winkel_sinterklaas'),
     ('public.winkel_regels_json(bigint)',                        '20260927120000_winkel_sinterklaas'),
     ('public.winkel_boek_rest(uuid, bigint, text, uuid)',        '20260927120000_winkel_sinterklaas + 20261007130000 (BA-10)'),
+    ('public.winkel_boek_rest(bigint, text)',                    '20261007130000 (BA-10): tijdelijk doorgeefluik, review M2 K6'),
     ('public.winkel_bezetting_product(uuid, bigint)',            '20260927120000_winkel_sinterklaas + 20260928120100'),
     ('public.winkel_voorraad_bewaken()',                         '20260928120000_winkelvoorraad_logboek'),
     ('public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
@@ -286,9 +288,16 @@ proef AS (
     SELECT 5, 'functie', f.signatuur, f.migratie, to_regprocedure(f.signatuur) IS NOT NULL
       FROM functies f
     UNION ALL
-    SELECT 6, 'functie (één versie)', split_part(f.signatuur, '(', 1), f.migratie,
+    -- winkel_boek_rest heeft tijdelijk twee versies: de nieuwe en het
+    -- doorgeefluik met de oude handtekening (review M2 K6), tot
+    -- _draft_winkel_boek_rest_compat_weg.sql. PostgREST kiest op de
+    -- parameternamen (p_org of niet), dus dat is hier geen probleem.
+    SELECT DISTINCT 6,
+           CASE WHEN split_part(f.signatuur, '(', 1) = 'public.winkel_boek_rest' THEN 'functie (twee versies, tijdelijk)' ELSE 'functie (één versie)' END,
+           split_part(f.signatuur, '(', 1), f.migratie,
            (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-             WHERE n.nspname || '.' || p.proname = split_part(f.signatuur, '(', 1)) = 1
+             WHERE n.nspname || '.' || p.proname = split_part(f.signatuur, '(', 1))
+             = CASE WHEN split_part(f.signatuur, '(', 1) = 'public.winkel_boek_rest' THEN 2 ELSE 1 END
       FROM functies f
      WHERE f.signatuur LIKE 'public.winkel\_%' OR f.signatuur LIKE 'public.voorraad\_%' OR f.signatuur LIKE 'public.keuken\_%'
     UNION ALL

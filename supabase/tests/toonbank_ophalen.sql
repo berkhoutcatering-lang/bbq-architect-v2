@@ -194,6 +194,22 @@ begin
         v_fouten := v_fouten || 'boek_rest buiten de organisatie; ';
     end if;
     if public.winkel_boek_rest(v_org, v_c, 'pin') <> 'al_geboekt' then v_fouten := v_fouten || 'boek_rest twee keer; '; end if;
+    -- Review M2 K6: de oude handtekening (code van vóór BA-10, tijdens de livegang) werkt nog
+    -- en gaat door de nieuwe functie; een lid dat de order niet ziet (RLS) krijgt onbekend.
+    if public.winkel_boek_rest(v_c, 'pin') <> 'al_geboekt' or public.winkel_boek_rest(-1::bigint, 'pin') <> 'onbekend' then
+        v_fouten := v_fouten || 'oude handtekening winkel_boek_rest(p_order_id, p_methode); ';
+    end if;
+    begin
+        perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated')::text, true);
+        perform set_config('role', 'authenticated', true);
+        if public.winkel_boek_rest(v_f, 'pin') <> 'onbekend' then v_fouten := v_fouten || 'oude winkel_boek_rest buiten de organisatie; '; end if;
+        raise exception 'terug_naar_postgres';
+    exception when others then
+        if sqlerrm <> 'terug_naar_postgres' then v_fouten := v_fouten || 'oude winkel_boek_rest als lid: ' || sqlerrm || '; '; end if;
+    end;
+    if (select rest_betaald_at from public.winkel_orders where id = v_f) is not null then
+        v_fouten := v_fouten || 'oude winkel_boek_rest boekte buiten de organisatie; ';
+    end if;
 
     -- ── 4. Doos E (alcohol): zonder leeftijd → leeftijd_nodig en er verandert niets.
     select count(*) into v_n from public.winkel_voorraad_mutaties where order_id = v_e;
@@ -263,10 +279,12 @@ begin
        or has_function_privilege('authenticated', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)', 'EXECUTE')
        or not has_function_privilege('service_role', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)', 'EXECUTE')
        or to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)') is not null
-       or to_regprocedure('public.winkel_boek_rest(bigint, text)') is not null then
+       -- De oude winkel_boek_rest bestaat tijdelijk nog (review M2 K6), niet voor anon.
+       or to_regprocedure('public.winkel_boek_rest(bigint, text)') is null
+       or has_function_privilege('anon', 'public.winkel_boek_rest(bigint, text)', 'EXECUTE') then
         v_fouten := v_fouten || 'rechten of oude handtekeningen kloppen niet; ';
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
+    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie, ook via de tijdelijke oude handtekening; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
 end $$;
