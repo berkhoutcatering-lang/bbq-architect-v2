@@ -1,4 +1,5 @@
--- Rechten-test voor BA-S (migratie 20261003150000_winkel_functies_niet_voor_anon).
+-- Rechten-test voor BA-S (migratie 20261003150000_winkel_functies_niet_voor_anon)
+-- en BA-S2 (migratie 20261004120000_functies_niet_voor_anon_2).
 -- Draait in een transactie die aan het eind wordt teruggedraaid: er blijft
 -- niets achter, ook niet de tijdelijke testgebruiker.
 --
@@ -25,6 +26,23 @@
 --     winkel_bezetting_product maar niet partij_als_jsonb;
 --   - private.vereis_org laat door: geen claims, service_role, eigen
 --     organisatie; en weigert: anon, een vreemde organisatie, geen lid.
+--
+-- En voor BA-S2:
+--   - anon mag geen van de 16 functies uit 20261004120000; wat BA met de
+--     gebruikersclient aanroept mag authenticated, de rest alleen service_role;
+--   - explode_event_to_inkooplijst, find_cheaper_substitutes_same_cut en
+--     get_latest_gerecht_cost_delta beginnen met private.vereis_org(p_org_id)
+--     en zijn nog SECURITY DEFINER met search_path public, pg_temp;
+--   - buiten triggerfuncties en de drie RLS-hulpfuncties (user_org_ids,
+--     is_member_with_role, pi_bridge_org_id) mag anon geen enkele SECURITY
+--     DEFINER-functie in public meer uitvoeren;
+--   - in het echt: anon wordt geweigerd; een lid van e2e-hop-en-bites krijgt
+--     zijn eigen organisatie wel en een vreemde niet ("geen toegang tot deze
+--     organisatie"), en mag kds_cleanup_expired en increment_share_access niet.
+-- Vijf functies staan alleen op live (geen bron op main):
+-- voorstellen_verlopen_markeren, current_role_in_org, current_venue_id,
+-- set_session_venue en decrement_stock. Ontbreken ze op dev, dan tellen ze
+-- niet mee.
 
 do $$
 declare
@@ -37,6 +55,15 @@ declare
     v_aantal   int;
     v_gebruiker_ok boolean := false;
     v_fouten   text := '';
+    v_ba_s2    int := 0;
+    v_alleen_live constant text[] := array[
+        'public.voorstellen_verlopen_markeren()',
+        'public.current_role_in_org()',
+        'public.current_venue_id()',
+        'public.set_session_venue(uuid)',
+        'public.decrement_stock(uuid, integer)'
+    ];
+    r          record;
 begin
     -- ── Dev-only-guard: de e2e-organisatie bestaat alleen op de dev-database.
     select id into v_org from public.organizations where slug = 'e2e-hop-en-bites';
@@ -165,6 +192,105 @@ begin
         v_fouten := v_fouten || 'standaardrechten van postgres in public geven anon nog EXECUTE; ';
     end if;
 
+    -- ── 5b. BA-S2: anon mag geen van de 16 functies.
+    select string_agg(s, ', ' order by s) into v_lijst
+      from unnest(array[
+          'public.explode_event_to_inkooplijst(uuid, integer)',
+          'public.find_cheaper_substitutes_same_cut(uuid, bigint, integer)',
+          'public.get_latest_gerecht_cost_delta(uuid, uuid)',
+          'public.get_market_pulse(uuid)',
+          'public.log_bon_action(bigint, text, text, jsonb)',
+          'public.unlock_bon(bigint)',
+          'public.voorstellen_verlopen_markeren()',
+          'public.anonymize_old_floor_plan_guests()',
+          'public.increment_share_access(bigint)',
+          'public.refresh_gerecht_allergens_mv()',
+          'public.kds_cleanup_expired()',
+          'public.backfill_ingredient_allergens()',
+          'public.current_role_in_org()',
+          'public.current_venue_id()',
+          'public.set_session_venue(uuid)',
+          'public.decrement_stock(uuid, integer)'
+      ]) s
+     where to_regprocedure(s) is not null
+       and has_function_privilege('anon', s, 'EXECUTE');
+    if v_lijst is not null then v_fouten := v_fouten || 'BA-S2: anon mag: ' || v_lijst || '; '; end if;
+
+    -- ── 5c. BA-S2 gebruikersclient: authenticated én service_role.
+    foreach v_sig in array array[
+        'public.explode_event_to_inkooplijst(uuid, integer)',
+        'public.find_cheaper_substitutes_same_cut(uuid, bigint, integer)',
+        'public.get_latest_gerecht_cost_delta(uuid, uuid)',
+        'public.get_market_pulse(uuid)',
+        'public.log_bon_action(bigint, text, text, jsonb)',
+        'public.unlock_bon(bigint)',
+        'public.voorstellen_verlopen_markeren()'
+    ] loop
+        if to_regprocedure(v_sig) is null then
+            if v_sig <> all (v_alleen_live) then v_fouten := v_fouten || v_sig || ' ontbreekt; '; end if;
+        else
+            v_ba_s2 := v_ba_s2 + 1;
+            if not has_function_privilege('authenticated', v_sig, 'EXECUTE') then v_fouten := v_fouten || 'authenticated mist ' || v_sig || '; '; end if;
+            if not has_function_privilege('service_role',  v_sig, 'EXECUTE') then v_fouten := v_fouten || 'service_role mist '  || v_sig || '; '; end if;
+        end if;
+    end loop;
+
+    -- ── 5d. BA-S2 alleen service_role: service_role ja, authenticated nee.
+    foreach v_sig in array array[
+        'public.anonymize_old_floor_plan_guests()',
+        'public.increment_share_access(bigint)',
+        'public.refresh_gerecht_allergens_mv()',
+        'public.kds_cleanup_expired()',
+        'public.backfill_ingredient_allergens()',
+        'public.current_role_in_org()',
+        'public.current_venue_id()',
+        'public.set_session_venue(uuid)',
+        'public.decrement_stock(uuid, integer)'
+    ] loop
+        if to_regprocedure(v_sig) is null then
+            if v_sig <> all (v_alleen_live) then v_fouten := v_fouten || v_sig || ' ontbreekt; '; end if;
+        else
+            v_ba_s2 := v_ba_s2 + 1;
+            if not has_function_privilege('service_role', v_sig, 'EXECUTE') then v_fouten := v_fouten || 'service_role mist ' || v_sig || '; '; end if;
+            if has_function_privilege('authenticated', v_sig, 'EXECUTE')    then v_fouten := v_fouten || 'authenticated mag nog ' || v_sig || '; '; end if;
+        end if;
+    end loop;
+
+    -- ── 5e. BA-S2 org-check als eerste regel; SECURITY DEFINER en search_path gebleven.
+    for r in
+        select k.sig, k.patroon, p.prosrc, p.prosecdef, p.proconfig
+          from (values
+              ('public.explode_event_to_inkooplijst(uuid, integer)',           '\mbegin\s+perform private\.vereis_org\(p_org_id\);'),
+              ('public.find_cheaper_substitutes_same_cut(uuid, bigint, integer)', '^\s*select private\.vereis_org\(p_org_id\);'),
+              ('public.get_latest_gerecht_cost_delta(uuid, uuid)',               '^\s*select private\.vereis_org\(p_org_id\);')
+          ) as k(sig, patroon)
+          left join pg_proc p on p.oid = to_regprocedure(k.sig)
+    loop
+        if r.prosrc is null then
+            v_fouten := v_fouten || r.sig || ' ontbreekt; ';
+        else
+            if r.prosrc !~ r.patroon then v_fouten := v_fouten || r.sig || ' begint niet met private.vereis_org(p_org_id); '; end if;
+            if not r.prosecdef then v_fouten := v_fouten || r.sig || ' is geen SECURITY DEFINER; '; end if;
+            if r.proconfig is distinct from array['search_path=public, pg_temp']::text[] then
+                v_fouten := v_fouten || r.sig || ' heeft search_path ' || coalesce(r.proconfig::text, 'geen') || '; ';
+            end if;
+        end if;
+    end loop;
+
+    -- ── 5f. Triage leeg: buiten triggerfuncties en de drie RLS-hulpfuncties mag
+    --        anon geen SECURITY DEFINER-functie in public uitvoeren. Een nieuwe
+    --        functie zonder `REVOKE ALL … FROM PUBLIC, anon` valt hier op.
+    select string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text) into v_lijst
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public'
+       and p.prosecdef
+       and p.prorettype <> 'trigger'::regtype
+       and p.proname not in ('user_org_ids', 'is_member_with_role', 'pi_bridge_org_id')
+       and not exists (select 1 from pg_depend d
+                        where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+       and has_function_privilege('anon', p.oid, 'EXECUTE');
+    if v_lijst is not null then v_fouten := v_fouten || 'anon mag nog SECURITY DEFINER-functies (triage): ' || v_lijst || '; '; end if;
+
     -- ── 6. In het echt: anon wordt geweigerd vóór de functie draait.
     foreach v_sig in array array['winkel_muteer_voorraad', 'winkel_bezetting_product', 'voorraad_overboeken',
                                  'productie_partij_afronden', 'partij_als_jsonb', 'increment_inventory_stock'] loop
@@ -183,6 +309,36 @@ begin
                 perform public.increment_inventory_stock(v_org, 0, 0, 'count');
             else
                 perform public.voorraad_overboeken(v_org, 0, gen_random_uuid(), 1);
+            end if;
+            raise exception 'anon_kwam_erdoor';
+        exception
+            when insufficient_privilege then
+                if sqlerrm not like 'permission denied for function%' then
+                    v_fouten := v_fouten || 'anon op ' || v_sig || ': verkeerde weigering (' || sqlerrm || '); ';
+                end if;
+            when others then
+                v_fouten := v_fouten || 'anon kwam langs de rechten van ' || v_sig || ' (' || sqlerrm || '); ';
+        end;
+    end loop;
+
+    -- ── 6b. BA-S2 in het echt: anon wordt geweigerd vóór de functie draait.
+    foreach v_sig in array array['find_cheaper_substitutes_same_cut', 'explode_event_to_inkooplijst', 'get_latest_gerecht_cost_delta',
+                                 'get_market_pulse', 'log_bon_action', 'kds_cleanup_expired'] loop
+        begin
+            perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+            perform set_config('role', 'anon', true);
+            if v_sig = 'find_cheaper_substitutes_same_cut' then
+                perform public.find_cheaper_substitutes_same_cut(v_org, 0, 3);
+            elsif v_sig = 'explode_event_to_inkooplijst' then
+                perform public.explode_event_to_inkooplijst(v_org, 0);
+            elsif v_sig = 'get_latest_gerecht_cost_delta' then
+                perform public.get_latest_gerecht_cost_delta(v_org, gen_random_uuid());
+            elsif v_sig = 'get_market_pulse' then
+                perform public.get_market_pulse(v_org);
+            elsif v_sig = 'log_bon_action' then
+                perform public.log_bon_action(0, 'functie_rechten_test');
+            else
+                perform public.kds_cleanup_expired();
             end if;
             raise exception 'anon_kwam_erdoor';
         exception
@@ -236,6 +392,41 @@ begin
             exception when insufficient_privilege then null;
             end;
 
+            -- BA-S2: de eigen organisatie mag (geen fout, ook zonder gegevens) ...
+            perform public.find_cheaper_substitutes_same_cut(v_org, 0, 3);
+            perform public.explode_event_to_inkooplijst(v_org, 0);
+            perform public.get_latest_gerecht_cost_delta(v_org, gen_random_uuid());
+
+            -- ... een vreemde niet, en dan weigert vereis_org (niet de rechten).
+            foreach v_sig in array array['find_cheaper_substitutes_same_cut', 'explode_event_to_inkooplijst', 'get_latest_gerecht_cost_delta'] loop
+                begin
+                    if v_sig = 'find_cheaper_substitutes_same_cut' then
+                        perform public.find_cheaper_substitutes_same_cut(v_ander, 0, 3);
+                    elsif v_sig = 'explode_event_to_inkooplijst' then
+                        perform public.explode_event_to_inkooplijst(v_ander, 0);
+                    else
+                        perform public.get_latest_gerecht_cost_delta(v_ander, gen_random_uuid());
+                    end if;
+                    v_fouten := v_fouten || v_sig || ' liet een vreemde organisatie door; ';
+                exception when insufficient_privilege then
+                    if sqlerrm <> 'geen toegang tot deze organisatie' then
+                        v_fouten := v_fouten || v_sig || ' met vreemde organisatie: verkeerde weigering (' || sqlerrm || '); ';
+                    end if;
+                end;
+            end loop;
+
+            begin
+                perform public.kds_cleanup_expired();
+                v_fouten := v_fouten || 'authenticated kon kds_cleanup_expired aanroepen; ';
+            exception when insufficient_privilege then null;
+            end;
+
+            begin
+                perform public.increment_share_access(0);
+                v_fouten := v_fouten || 'authenticated kon increment_share_access aanroepen; ';
+            exception when insufficient_privilege then null;
+            end;
+
             raise exception 'terug_naar_postgres';
         exception when others then
             if sqlerrm <> 'terug_naar_postgres' then
@@ -282,5 +473,5 @@ begin
     perform set_config('request.jwt.claims', '', true);
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: % winkel_/voorraad_-functies, geen enkele voor anon (ook productie_partij_afronden, partij_als_jsonb en increment_inventory_stock niet); gebruikersclient-functies voor authenticated, betaal- en plaatsfuncties en partij_als_jsonb alleen service_role; standaardrechten zonder anon; anon in het echt geweigerd; lid van e2e mag winkel_bezetting_product; vereis_org klopt op alle paden — alles teruggedraaid', v_aantal;
+    raise exception 'GESLAAGD: % winkel_/voorraad_-functies, geen enkele voor anon (ook productie_partij_afronden, partij_als_jsonb en increment_inventory_stock niet); gebruikersclient-functies voor authenticated, betaal- en plaatsfuncties en partij_als_jsonb alleen service_role; standaardrechten zonder anon; anon in het echt geweigerd; lid van e2e mag winkel_bezetting_product; vereis_org klopt op alle paden; BA-S2: % van de 16 functies aanwezig, geen voor anon, org-check in de drie p_org_id-functies (eigen organisatie ja, vreemde nee), triage leeg op triggers en de drie RLS-hulpfuncties na — alles teruggedraaid', v_aantal, v_ba_s2;
 end $$;
