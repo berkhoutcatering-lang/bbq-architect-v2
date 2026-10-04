@@ -109,9 +109,14 @@ BEGIN
       FROM public.winkel_wegzet_taken t
      WHERE t.organization_id = p_org;
 
+    -- Te controleren: fout en conflict, en wat al meer dan 10 minuten wacht
+    -- (zoals het scherm in BA, bijvoorbeeld een tegenbon zonder zijn bon;
+    -- review M2 klein 5).
     SELECT count(*) INTO v_tc
       FROM public.toonbank_journaal j
-     WHERE j.organization_id = p_org AND j.apparaat_id = p_apparaat_id AND j.verwerk_status IN ('fout', 'conflict');
+     WHERE j.organization_id = p_org AND j.apparaat_id = p_apparaat_id
+       AND (j.verwerk_status IN ('fout', 'conflict')
+            OR (j.verwerk_status = 'wacht' AND j.ontvangen_at < now() - INTERVAL '10 minutes'));
 
     SELECT max((j.payload->>'bon_volgnummer')::BIGINT) INTO v_bon
       FROM public.toonbank_journaal j

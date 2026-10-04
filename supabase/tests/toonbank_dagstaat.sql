@@ -130,8 +130,9 @@ begin
     values (v_org, 'TEST dagbier ' || v_sfx, 'bier', 'stuk', 1, 21) returning id into v_bier;
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, btw_pct)
     values (v_org, 'TEST dagworst ' || v_sfx, 'worst', 'stuk', 1, 9) returning id into v_worst;
-    perform public.winkel_muteer_voorraad(v_org, v_bier, 'telling', 50);
-    perform public.winkel_muteer_voorraad(v_org, v_worst, 'telling', 50);
+    -- Geteld vóór de bonnen (een bon van vóór de laatste telling boekt niets: review M2 klein 3).
+    perform public.winkel_muteer_voorraad(v_org, v_bier, 'telling', 50, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
+    perform public.winkel_muteer_voorraad(v_org, v_worst, 'telling', 50, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
 
     -- Een webshoporder met een open rest van 450, die aan de Toonbank betaald wordt.
     insert into public.winkel_artikelen (organization_id, slug, naam, actief) values (v_org, 'test-dag-' || v_sfx, 'TEST pakket', true) returning id into v_art;

@@ -43,6 +43,8 @@ const VOORRAAD_LABEL: Record<string, string> = {
     geboekt: 'afgeboekt',
     tekort_gecorrigeerd: 'tekort gecorrigeerd',
     niet_bijgehouden: 'niet bijgehouden',
+    /* Review M2 klein 3: vóór de laatste telling verkocht; zat al in de telling, niet afgeboekt. */
+    voor_telling: 'al in de telling',
     nvt: '',
 };
 

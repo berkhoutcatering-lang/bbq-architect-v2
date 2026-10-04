@@ -91,6 +91,18 @@ declare
     v_b9        uuid := gen_random_uuid();
     v_b11       uuid := gen_random_uuid();
     v_b11b      uuid := gen_random_uuid();
+    v_t4        uuid := gen_random_uuid();
+    v_t5        uuid := gen_random_uuid();
+    v_t6        uuid := gen_random_uuid();
+    v_b16       uuid := gen_random_uuid();
+    v_b17       uuid := gen_random_uuid();
+    v_b18       uuid := gen_random_uuid();
+    v_b19       uuid := gen_random_uuid();
+    v_b20       uuid := gen_random_uuid();
+    v_b21       uuid := gen_random_uuid();
+    v_vo5       uuid := gen_random_uuid();
+    v_s3        uuid;
+    v_a_alc     uuid;
     v_b12       uuid := gen_random_uuid();
     v_b13       uuid := gen_random_uuid();
     v_b14       uuid := gen_random_uuid();
@@ -132,10 +144,12 @@ begin
     values (v_org, 'TEST amandelen ' || v_sfx, 'amandelen', 'stuk', 1, 9) returning id into v_amandel;
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, btw_pct)
     values (v_org, 'TEST nog niet geteld ' || v_sfx, 'overig', 'stuk', 1, 9) returning id into v_nieuw;
-    perform public.winkel_muteer_voorraad(v_org, v_bier, 'telling', 6);
-    perform public.winkel_muteer_voorraad(v_org, v_worst, 'telling', 10);
-    perform public.winkel_muteer_voorraad(v_org, v_kaas, 'telling', 5);
-    perform public.winkel_muteer_voorraad(v_org, v_amandel, 'telling', 1);
+    -- Geteld op 1 maart, vóór de bonnen van 6 maart (een bon van vóór de laatste
+    -- telling boekt niets meer: review M2 klein 3, §8c).
+    perform public.winkel_muteer_voorraad(v_org, v_bier, 'telling', 6, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
+    perform public.winkel_muteer_voorraad(v_org, v_worst, 'telling', 10, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
+    perform public.winkel_muteer_voorraad(v_org, v_kaas, 'telling', 5, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
+    perform public.winkel_muteer_voorraad(v_org, v_amandel, 'telling', 1, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
 
     -- ── 1. Een gewone bon: 2 × bier → één verkoop_kassa −2 met de tijd van de bon.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
@@ -219,10 +233,10 @@ begin
         v_fouten := v_fouten || 'niet bijgehouden: ' || row_to_json(v_j)::text || '; ';
     end if;
 
-    -- ── 5. Tegenbon → retour; goederen_terug false → geen voorraad.
+    -- ── 5. Tegenbon → retour (goederen_terug true); goederen_terug false → geen voorraad.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
     v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t1, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), jsonb_build_array(
-        pg_temp.tb_regel(1, 'TEST bier', -1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"verwijst_naar_regelnr": 1}'::jsonb),
+        pg_temp.tb_regel(1, 'TEST bier', -1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"verwijst_naar_regelnr": 1, "goederen_terug": true}'::jsonb),
         pg_temp.tb_regel(2, 'TEST bier', -1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"verwijst_naar_regelnr": 1, "goederen_terug": false}'::jsonb)),
         jsonb_build_object('verwijst_naar_bon_id', v_b1, 'reden', 'verkeerd aangeslagen')));
     select * into v_bon from public.toonbank_bonnen where id = v_t1;
@@ -241,7 +255,7 @@ begin
 
     -- ── 6. Een tegenbon van een andere tablet die er eerder is dan zijn bon: wacht, daarna verwerkt.
     v_j := pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_bon('tegenbon', v_t2, 1, v_code2 || '-000001', jsonb_build_array(
-        pg_temp.tb_regel(1, 'TEST worst', -1, 600, 9, jsonb_build_array(pg_temp.ond(v_worst, 1)), '{"verwijst_naar_regelnr": 1}'::jsonb)),
+        pg_temp.tb_regel(1, 'TEST worst', -1, 600, 9, jsonb_build_array(pg_temp.ond(v_worst, 1)), '{"verwijst_naar_regelnr": 1, "goederen_terug": true}'::jsonb)),
         jsonb_build_object('verwijst_naar_bon_id', v_b6, 'reden', 'teruggebracht', 'kanaal', 'event')));
     if v_j.verwerk_status <> 'wacht' or v_j.fout_code <> 'wacht_op_bon' or exists (select 1 from public.toonbank_bonnen where id = v_t2) then
         v_fouten := v_fouten || 'tegenbon zonder bon wacht niet: ' || row_to_json(v_j)::text || '; ';
@@ -259,7 +273,7 @@ begin
     v_vnr := v_vnr + 2; v_bnr := v_bnr + 2;
     perform public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(
         pg_temp.tb_bon('tegenbon', v_t3, v_vnr - 1, v_code || '-' || lpad((v_bnr - 1)::text, 6, '0'), jsonb_build_array(
-            pg_temp.tb_regel(1, 'TEST kaas', -1, 700, 9, jsonb_build_array(pg_temp.ond(v_kaas, 1)), '{"verwijst_naar_regelnr": 1}'::jsonb)),
+            pg_temp.tb_regel(1, 'TEST kaas', -1, 700, 9, jsonb_build_array(pg_temp.ond(v_kaas, 1)), '{"verwijst_naar_regelnr": 1, "goederen_terug": true}'::jsonb)),
             jsonb_build_object('verwijst_naar_bon_id', v_b7, 'reden', 'test')),
         pg_temp.tb_bon('bon', v_b7, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
             jsonb_build_array(pg_temp.tb_regel(1, 'TEST kaas', 1, 700, 9, jsonb_build_array(pg_temp.ond(v_kaas, 1)))))), '1.1.0');
@@ -304,6 +318,95 @@ begin
     if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'geannuleerd_betaald'
        or (select count(*) from public.winkel_voorraad_mutaties where winkel_product_id = v_bier) <> v_n then
         v_fouten := v_fouten || 'geannuleerde bon met betaling: ' || row_to_json(v_j)::text || '; ';
+    end if;
+
+    -- ── 8b. Review M2 klein 5: tegenbonnen die niet kloppen. Nooit geweigerd, wel Te controleren.
+    -- Op de geannuleerde bon van §8: daar ging niets de deur uit, dus niets teruggeboekt.
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    select count(*) into v_n from public.winkel_voorraad_mutaties where winkel_product_id = v_bier;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t4, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), jsonb_build_array(
+        pg_temp.tb_regel(1, 'TEST bier', -1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"verwijst_naar_regelnr": 1, "goederen_terug": true}'::jsonb)),
+        jsonb_build_object('verwijst_naar_bon_id', v_b11, 'reden', 'test')));
+    if v_j.verwerk_status <> 'conflict' or not (v_j.resultaat->'controles' @> '[{"code": "tegenbon_op_geannuleerd"}]'::jsonb)
+       or (select count(*) from public.winkel_voorraad_mutaties where winkel_product_id = v_bier) <> v_n
+       or (select voorraad_status from public.toonbank_bon_regels where bon_id = v_t4 and regelnr = 1) <> 'nvt' then
+        v_fouten := v_fouten || 'tegenbon op een geannuleerde bon: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Meer terug dan verkocht (bon 2 regel 2: 2 × duo worst verkocht, 3 terug): geboekt, maar Te controleren.
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t5, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), jsonb_build_array(
+        pg_temp.tb_regel(1, 'TEST duo worst', -3, 500, 9, jsonb_build_array(pg_temp.ond(v_worst, 1), pg_temp.ond(v_worst, 1)), '{"verwijst_naar_regelnr": 2, "goederen_terug": true}'::jsonb)),
+        jsonb_build_object('verwijst_naar_bon_id', v_b2, 'reden', 'test')));
+    if v_j.verwerk_status <> 'conflict' or not (v_j.resultaat->'controles' @> '[{"code": "tegenbon_te_veel"}]'::jsonb)
+       or not exists (select 1 from public.winkel_voorraad_mutaties where idempotency_key = format('tb:%s:1:%s:retour', v_t5, v_worst) and hoeveelheid = 6) then
+        v_fouten := v_fouten || 'tegenbon meer terug dan verkocht: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Zonder goederen_terug: niet raden, dus niets teruggeboekt en Te controleren.
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t6, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), jsonb_build_array(
+        pg_temp.tb_regel(1, 'TEST bier', -1, 395, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"verwijst_naar_regelnr": 1}'::jsonb)),
+        jsonb_build_object('verwijst_naar_bon_id', v_b8, 'reden', 'test')));
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'goederen_terug_onbekend'
+       or exists (select 1 from public.winkel_voorraad_mutaties where idempotency_key like 'tb:' || v_t6 || ':%') then
+        v_fouten := v_fouten || 'tegenbon zonder goederen_terug: ' || row_to_json(v_j)::text || '; ';
+    end if;
+
+    -- ── 8c. Review M2 klein 3: een bon van vóór de laatste telling (late sync) boekt niets: de
+    --    telling heeft hem al meegenomen. Een bon van ná de telling wel.
+    perform public.winkel_muteer_voorraad(v_org, v_kaas, 'telling', 4, p_gebeurd_at => '2026-03-06T12:00:00+01:00');
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b16, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST kaas', 1, 700, 9, jsonb_build_array(pg_temp.ond(v_kaas, 1))))));
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'bon_voor_telling'
+       or exists (select 1 from public.winkel_voorraad_mutaties where idempotency_key like 'tb:' || v_b16 || ':%')
+       or (select voorraad_status from public.toonbank_bon_regels where bon_id = v_b16 and regelnr = 1) <> 'voor_telling'
+       or (select voorraad from public.winkel_producten where id = v_kaas) <> 4 then
+        v_fouten := v_fouten || 'bon van vóór de telling: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b17, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST kaas', 1, 700, 9, jsonb_build_array(pg_temp.ond(v_kaas, 1)))),
+        '{"moment": "2026-03-06T12:30:00+01:00"}'::jsonb));
+    if v_j.verwerk_status <> 'verwerkt' or (select voorraad from public.winkel_producten where id = v_kaas) <> 3 then
+        v_fouten := v_fouten || 'bon van ná de telling: ' || row_to_json(v_j)::text || '; ';
+    end if;
+
+    -- ── 8d. Review M2 klein 10: de alcoholregels. Minstens 75% van de gewone prijs, geen open
+    --    prijs op alcohol, en alleen als alcohol op de Toonbank aan staat.
+    insert into public.winkel_artikelen (organization_id, slug, naam, prijs_cents, btw_pct, actief, kanalen)
+    values (v_org, 'test-bb-alc-' || v_sfx, 'TEST Speciaalbier', 400, 21, true, array['toonbank']) returning id into v_a_alc;
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b18, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST Speciaalbier', 1, 290, 21, jsonb_build_array(pg_temp.ond(v_nieuw, 1)),
+                                           jsonb_build_object('artikel_id', v_a_alc, 'alcohol', true))),
+        '{"leeftijd": {"uitkomst": "vastgesteld", "at": "2026-03-06T11:11:40+01:00"}}'::jsonb));
+    if v_j.verwerk_status <> 'conflict' or not (v_j.resultaat->'controles' @> '[{"code": "alcohol_prijs"}]'::jsonb) then
+        v_fouten := v_fouten || 'alcohol onder 75%: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b19, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST Speciaalbier', 1, 300, 21, jsonb_build_array(pg_temp.ond(v_nieuw, 1)),
+                                           jsonb_build_object('artikel_id', v_a_alc, 'alcohol', true))),
+        '{"leeftijd": {"uitkomst": "vastgesteld", "at": "2026-03-06T11:11:40+01:00"}}'::jsonb));
+    if v_j.verwerk_status <> 'verwerkt' then
+        v_fouten := v_fouten || 'alcohol op precies 75%: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b20, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST open prijs', 1, 100, 21, jsonb_build_array(pg_temp.ond(v_nieuw, 1)),
+                                           '{"alcohol": true, "prijs_bron": "open_prijs", "open_prijs_groep": "Bier"}'::jsonb)),
+        '{"leeftijd": {"uitkomst": "vastgesteld", "at": "2026-03-06T11:11:40+01:00"}}'::jsonb));
+    if v_j.verwerk_status <> 'conflict' or not (v_j.resultaat->'controles' @> '[{"code": "alcohol_prijs"}]'::jsonb) then
+        v_fouten := v_fouten || 'alcohol met open prijs: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    update public.winkel_instellingen set toonbank_alcohol_toegestaan = false where organization_id = v_org;
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b21, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+        jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 1, 345, 21, jsonb_build_array(pg_temp.ond(v_nieuw, 1)), '{"alcohol": true}'::jsonb)),
+        '{"leeftijd": {"uitkomst": "vastgesteld", "at": "2026-03-06T11:11:40+01:00"}}'::jsonb));
+    update public.winkel_instellingen set toonbank_alcohol_toegestaan = true where organization_id = v_org;
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'alcohol_niet_toegestaan' then
+        v_fouten := v_fouten || 'alcohol terwijl het uit staat: ' || row_to_json(v_j)::text || '; ';
     end if;
 
     -- ── 9. Wat niet klopt wordt conflict, maar de bon en de voorraad zijn geboekt.
@@ -395,7 +498,7 @@ begin
     -- ── 13. vrij_overschreden: goedkeuring, hergebruik, offline, en wie komt tekort (nieuwste order eerst).
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, btw_pct, alcohol)
     values (v_org, 'TEST Naober vrij ' || v_sfx, 'bier', 'stuk', 1, 345, 21, true) returning id into v_naober;
-    perform public.winkel_muteer_voorraad(v_org, v_naober, 'telling', 6);
+    perform public.winkel_muteer_voorraad(v_org, v_naober, 'telling', 6, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
     insert into public.winkel_artikelen (organization_id, slug, naam, prijs_cents, btw_pct, actief, kanalen)
     values (v_org, 'test-bb-naober-' || v_sfx, 'TEST Naober', 345, 21, true, array['webshop', 'toonbank']) returning id into v_a_naober;
     insert into public.winkel_artikel_slots (organization_id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id)
@@ -418,9 +521,15 @@ begin
     v_o2 := v_o.id;
     -- Aan de toonbank 3 verkocht terwijl alles gereserveerd was: ligt er 3, gereserveerd 6, vrij −3.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_bn, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_bn, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
         jsonb_build_array(pg_temp.tb_regel(1, 'TEST Naober', 3, 345, 21, jsonb_build_array(pg_temp.ond(v_naober, 1)), '{"alcohol": true}'::jsonb)),
         '{"leeftijd": {"uitkomst": "vastgesteld", "at": "2026-03-06T11:11:40+01:00"}}'::jsonb));
+    -- Review M2 klein 4 (§4.2 stap 9): de bon zelf zegt het al, ook zonder melding vrij_overschreden.
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'order_komt_tekort'
+       or jsonb_array_length(v_j.resultaat->'orders_tekort') <> 2
+       or (v_j.resultaat->'orders_tekort'->0->>'order_id')::bigint <> v_o2 or (v_j.resultaat->'orders_tekort'->0->>'product_id')::uuid <> v_naober then
+        v_fouten := v_fouten || 'bon onder vrij zonder order_komt_tekort: ' || row_to_json(v_j)::text || '; ';
+    end if;
     insert into public.toonbank_sessies (organization_id, apparaat_id, medewerker_id, token_hash, rol, doel, geldig_tot)
     values (v_org, v_app, v_eig, encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex'), 'eigenaar', 'vrij_overschrijden', now() + interval '60 seconds')
     returning id into v_s1;
@@ -430,7 +539,7 @@ begin
 
     v_vnr := v_vnr + 1;
     v_j := pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo1, 'volgnummer', v_vnr,
-        'moment', '2026-03-06T11:12:08+01:00', 'medewerker_id', v_mw, 'bon_id', v_bn, 'regelnr', 1, 'product_id', v_naober,
+        'moment', now(), 'medewerker_id', v_mw, 'bon_id', v_bn, 'regelnr', 1, 'product_id', v_naober,
         'vrij_volgens_tablet', 0, 'verkocht', 3, 'boven_vrij', 3, 'voorraad_versie', 1, 'reden', 'klant stond te wachten',
         'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s1)));
     if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'order_komt_tekort'
@@ -443,7 +552,7 @@ begin
     -- Dezelfde goedkeuring voor een andere melding: ongeldig.
     v_vnr := v_vnr + 1;
     v_j := pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo2, 'volgnummer', v_vnr,
-        'moment', '2026-03-06T11:13:08+01:00', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'moment', now(), 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
         'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'nog een',
         'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s1)));
     if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'goedkeuring_ongeldig' then
@@ -452,7 +561,7 @@ begin
     -- Offline: ter goedkeuring.
     v_vnr := v_vnr + 1;
     v_j := pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo3, 'volgnummer', v_vnr,
-        'moment', '2026-03-06T11:14:08+01:00', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'moment', now(), 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
         'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'geen internet',
         'modus', 'offline', 'eigenaar_medewerker_id', null, 'goedkeuring_ids', '[]'::jsonb));
     if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'goedkeuring_nodig' then
@@ -461,11 +570,25 @@ begin
     -- Een goede goedkeuring op een product zonder tekort: verwerkt.
     v_vnr := v_vnr + 1;
     v_j := pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo4, 'volgnummer', v_vnr,
-        'moment', '2026-03-06T11:15:08+01:00', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'moment', now(), 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
         'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'laatste',
         'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s2)));
     if v_j.verwerk_status <> 'verwerkt' or (select gebruikt_gebeurtenis_id from public.toonbank_sessies where id = v_s2) <> v_vo4 then
         v_fouten := v_fouten || 'goede goedkeuring: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Review M2 klein 9: een ongebruikte goedkeuring telt niet voor een verkoop een uur eerder
+    -- (buiten aanmaken − 5 min … verlopen + 5 min).
+    insert into public.toonbank_sessies (organization_id, apparaat_id, medewerker_id, token_hash, rol, doel, geldig_tot)
+    values (v_org, v_app, v_eig, encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex'), 'eigenaar', 'vrij_overschrijden', now() + interval '60 seconds')
+    returning id into v_s3;
+    v_vnr := v_vnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo5, 'volgnummer', v_vnr,
+        'moment', now() - interval '1 hour', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'oude goedkeuring',
+        'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s3)));
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'goedkeuring_ongeldig' or v_j.fout_melding not like '%buiten het tijdvenster%'
+       or (select gebruikt_gebeurtenis_id from public.toonbank_sessies where id = v_s3) is not null then
+        v_fouten := v_fouten || 'goedkeuring buiten het tijdvenster: ' || row_to_json(v_j)::text || '; ';
     end if;
 
     -- ── 14. Rechten op de tabellen.
@@ -476,5 +599,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd (kern-vorm: regels, geen betaling, totaal 0) = verwerkt en boekt niets, geannuleerd met betaling = geannuleerd_betaald; totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
+    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd (kern-vorm: regels, geen betaling, totaal 0) = verwerkt en boekt niets, geannuleerd met betaling = geannuleerd_betaald; tegenbon op geannuleerd / meer terug dan verkocht / zonder goederen_terug = Te controleren (zonder goederen_terug en op geannuleerd niets teruggeboekt); bon van vóór de laatste telling boekt niets (voor_telling), erna wel; alcohol onder 75%% / open prijs / terwijl uit = Te controleren, precies 75%% niet; bon onder vrij = order_komt_tekort (nieuwste eerst); goedkeuring buiten het tijdvenster ongeldig; totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
 end $$;

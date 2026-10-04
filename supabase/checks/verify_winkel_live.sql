@@ -208,6 +208,7 @@ functies(signatuur, migratie) AS (VALUES
     ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_vergrendel_wachtrij(uuid, uuid)',         '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
     ('private.toonbank_melding_mislukt(bigint, text, text)',     '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
+    ('private.toonbank_orders_tekort(uuid, uuid)',               '20261007120000_toonbank_bonnen (BA-9, review M2 klein 4)'),
     ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)',
                                                                  '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
@@ -329,6 +330,11 @@ proef AS (
            EXISTS (SELECT 1 FROM pg_constraint
                     WHERE conrelid = to_regclass('public.winkel_voorraad_mutaties') AND conname = 'winkel_voorraad_mutaties_type_check'
                       AND pg_get_constraintdef(oid) LIKE '%tekort_correctie%')
+    UNION ALL
+    SELECT 10, 'constraint', 'voorraad_melding_staat_soort_check kent voorraad_tellen ("Tel {product}")', '20261007120000_toonbank_bonnen (BA-9, review M2 klein 4)',
+           EXISTS (SELECT 1 FROM pg_constraint
+                    WHERE conrelid = to_regclass('public.voorraad_melding_staat') AND conname = 'voorraad_melding_staat_soort_check'
+                      AND pg_get_constraintdef(oid) LIKE '%voorraad_tellen%')
     UNION ALL
     SELECT 11, 'fix', 'logboekviews rekenen met COALESCE(gebeurd_at, created_at)', '20261007120000_toonbank_bonnen (BA-9)',
            COALESCE(pg_get_viewdef(to_regclass('public.voorraad_logboek')) LIKE '%COALESCE(m.gebeurd_at, m.created_at)%'

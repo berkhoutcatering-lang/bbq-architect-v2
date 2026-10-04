@@ -6,8 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Slot } from '@/lib/winkel/rekenen';
 import {
-    artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, verschil, winkelProductMeldingen,
-    type Melding, type WinkelProduct,
+    artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tekortenSindsTelling, tellenMeldingen, verschil, winkelProductMeldingen,
+    type Melding, type TelMutatie, type WinkelProduct,
 } from './meldingRegels';
 
 const slot = (id: string, artikel_id: string, naam: string, hoeveelheid: number, product: string | null): Slot =>
@@ -117,5 +117,32 @@ describe('één melding per keer dat hij eronder zakt', () => {
     it('alleen bekeken items verdwijnen uit de staat', () => {
         const aan = [{ bron: 'winkel' as const, item_id: 'p-andere', soort: 'voorraad_laag' as const }];
         expect(verschil(aan, [], (m) => m.item_id === 'p-bier').weg).toHaveLength(0);
+    });
+});
+
+describe('Tel {product} na een tekort aan de Toonbank (contract §4.2 stap 8, review M2)', () => {
+    const mut = (product: string, type: string, hoeveelheid: number, at: string): TelMutatie =>
+        ({ winkel_product_id: product, type, hoeveelheid, created_at: at });
+
+    it('een tekortcorrectie na de laatste telling: "Tel Bier", met wat er rechtgezet is', () => {
+        const m = tellenMeldingen([prod('p-bier', 'Bier', 0)], [
+            mut('p-bier', 'telling', 6, '2027-03-06T08:00:00Z'),
+            mut('p-bier', 'tekort_correctie', 2, '2027-03-06T11:00:00Z'),
+            mut('p-bier', 'tekort_correctie', 1, '2027-03-06T12:00:00Z'),
+        ]);
+        expect(m).toHaveLength(1);
+        expect(m[0]).toMatchObject({ bron: 'winkel', item_id: 'p-bier', soort: 'voorraad_tellen', titel: 'Tel Bier' });
+        expect(m[0].metadata).toMatchObject({ tekort: 3 });
+    });
+    it('geteld na het tekort: geen melding meer; niet bijgehouden of niet actief ook niet', () => {
+        const muts = [
+            mut('p-bier', 'tekort_correctie', 2, '2027-03-06T11:00:00Z'),
+            mut('p-bier', 'telling', 4, '2027-03-06T13:00:00Z'),
+        ];
+        expect(tellenMeldingen([prod('p-bier', 'Bier', 4)], muts)).toHaveLength(0);
+        expect(tekortenSindsTelling(muts).size).toBe(0);
+        const tekort = [mut('p-x', 'tekort_correctie', 1, '2027-03-06T11:00:00Z')];
+        expect(tellenMeldingen([prod('p-x', 'X', null)], tekort)).toHaveLength(0);
+        expect(tellenMeldingen([{ ...prod('p-x', 'X', 0), actief: false }], tekort)).toHaveLength(0);
     });
 });

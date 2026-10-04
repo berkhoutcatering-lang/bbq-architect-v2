@@ -101,7 +101,7 @@ BEGIN
     FOREACH v_sig IN ARRAY ARRAY['public.toonbank_journaal', 'public.toonbank_apparaten', 'public.toonbank_sessies',
                                  'public.winkel_voorraad_mutaties', 'public.winkel_producten', 'public.winkel_artikelen',
                                  'public.winkel_orders', 'public.personeel', 'public.organization_members',
-                                 'public.voorraad_logboek', 'public.voorraad_afwijkingen_maand'] LOOP
+                                 'public.voorraad_logboek', 'public.voorraad_afwijkingen_maand', 'public.voorraad_melding_staat'] LOOP
         IF to_regclass(v_sig) IS NULL THEN
             v_ontbreekt := v_ontbreekt || E'\n  tabel/view ' || v_sig;
         END IF;
@@ -330,7 +330,7 @@ CREATE TABLE public.toonbank_bon_regels (
     contant_ontvangen_cents  INTEGER,
     wisselgeld_cents         INTEGER,
     -- NULL alleen tijdens het boeken (stap 4); daarna altijd gezet.
-    voorraad_status          TEXT        CHECK (voorraad_status IS NULL OR voorraad_status IN ('geboekt', 'niet_bijgehouden', 'tekort_gecorrigeerd', 'nvt')),
+    voorraad_status          TEXT        CHECK (voorraad_status IS NULL OR voorraad_status IN ('geboekt', 'niet_bijgehouden', 'tekort_gecorrigeerd', 'voor_telling', 'nvt')),
     verwijst_naar_regel_id   BIGINT      REFERENCES public.toonbank_bon_regels(id) ON DELETE RESTRICT,
     verwijst_naar_regelnr    INTEGER,
     goederen_terug           BOOLEAN,
@@ -339,7 +339,7 @@ CREATE TABLE public.toonbank_bon_regels (
 COMMENT ON TABLE public.toonbank_bon_regels IS
     'Regels van een Toonbank-bon (contract §1.4): verkoop, statiegeld, order_rest en betaling. Nooit wijzigen of verwijderen; alleen voorraad_status wordt bij het boeken gezet.';
 COMMENT ON COLUMN public.toonbank_bon_regels.voorraad_status IS
-    'geboekt | niet_bijgehouden (product nog niet geteld) | tekort_gecorrigeerd (er lag minder dan verkocht) | nvt (geen voorraad: statiegeld, order_rest, betaling, open prijs, geannuleerd).';
+    'geboekt | niet_bijgehouden (product nog niet geteld) | tekort_gecorrigeerd (er lag minder dan verkocht) | voor_telling (gebeurd vóór de laatste telling van het product: zat al in de telling, niet nog eens geboekt; review M2 klein 3) | nvt (geen voorraad: statiegeld, order_rest, betaling, open prijs, geannuleerd, tegenbon zonder goederen terug).';
 
 CREATE INDEX toonbank_bon_regels_org_idx ON public.toonbank_bon_regels (organization_id);
 CREATE INDEX toonbank_bon_regels_order_idx ON public.toonbank_bon_regels (order_id) WHERE order_id IS NOT NULL;
@@ -421,6 +421,24 @@ ALTER TABLE public.winkel_voorraad_mutaties ADD CONSTRAINT winkel_voorraad_mutat
 -- De redencheck hoeft niet te veranderen: voor dit type is de reden leeg.
 ALTER TABLE public.winkel_voorraad_mutaties ADD CONSTRAINT winkel_mutatie_tekort_check
     CHECK (type <> 'tekort_correctie' OR hoeveelheid > 0);
+
+-- ── 6b. De melding "Tel {product}" (contract §4.2 stap 8, review M2 klein 4) ─
+-- Na een tekortcorrectie, tot er weer geteld is (src/lib/voorraad/meldingRegels.ts,
+-- tellenMeldingen). De staat kent de soort voorraad_tellen erbij.
+DO $$
+DECLARE
+    v_naam TEXT;
+BEGIN
+    FOR v_naam IN
+        SELECT conname FROM pg_constraint
+         WHERE conrelid = 'public.voorraad_melding_staat'::REGCLASS AND contype = 'c'
+           AND pg_get_constraintdef(oid) LIKE '%voorraad_tekort_vooruit%'
+    LOOP
+        EXECUTE format('ALTER TABLE public.voorraad_melding_staat DROP CONSTRAINT %I', v_naam);
+    END LOOP;
+END $$;
+ALTER TABLE public.voorraad_melding_staat ADD CONSTRAINT voorraad_melding_staat_soort_check
+    CHECK (soort IN ('voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen'));
 
 
 -- ── 7. winkel_muteer_voorraad, opnieuw ──────────────────────────────────────
@@ -989,7 +1007,12 @@ DECLARE
     v_sommen     RECORD;
     v_btw        JSONB;
     v_uitkomst   TEXT;
-    c_rang       CONSTANT JSONB := '{"nvt": 1, "niet_bijgehouden": 2, "geboekt": 3, "tekort_gecorrigeerd": 4}'::JSONB;
+    c_rang       CONSTANT JSONB := '{"nvt": 1, "niet_bijgehouden": 2, "geboekt": 3, "voor_telling": 4, "tekort_gecorrigeerd": 5}'::JSONB;
+    v_verkocht   UUID[] := '{}';
+    v_pid        UUID;
+    v_rr         RECORD;
+    v_tekorten   JSONB;
+    v_orders     JSONB := '[]'::JSONB;
 BEGIN
     SELECT * INTO v_j FROM public.toonbank_journaal WHERE id = p_journaal_id;
     IF NOT FOUND THEN
@@ -1180,9 +1203,18 @@ BEGIN
                 v_nieuw := 'nvt';
                 v_controles := v_controles || jsonb_build_object('code', 'product_onbekend',
                     'melding', format('Regel %s: product %s bestaat niet (meer) in BBQ Architect; niets afgeboekt.', v_rij.regelnr, v_rij.product_id));
-            ELSIF v_rij.aantal > 0 THEN
+            ELSIF v_rij.aantal < 0 AND (COALESCE(v_orig.status, '') = 'geannuleerd' OR v_rij.goederen_terug IS NOT TRUE) THEN
+                -- Tegenbon zonder goederen terug in het schap (false), op een geannuleerde bon
+                -- (er ging niets de deur uit), of zonder goederen_terug (review M2 klein 5:
+                -- nooit raden, dus geen retour en Te controleren): geen voorraad.
+                v_nieuw := 'nvt';
+                IF COALESCE(v_orig.status, '') <> 'geannuleerd' AND v_rij.goederen_terug IS NULL THEN
+                    v_controles := v_controles || jsonb_build_object('code', 'goederen_terug_onbekend', 'melding',
+                        format('Regel %s: de tegenbon zegt niet of %s terug in het schap ligt; niets teruggeboekt. Tel het product.', v_rij.regelnr, v_rij.naam));
+                END IF;
+            ELSE
                 -- 4.1 Al geboekt? Door naar het volgende product.
-                v_sleutel := format('tb:%s:%s:%s:verkoop', v_bon_id, v_rij.regelnr, v_rij.product_id);
+                v_sleutel := format('tb:%s:%s:%s:%s', v_bon_id, v_rij.regelnr, v_rij.product_id, CASE WHEN v_rij.aantal > 0 THEN 'verkoop' ELSE 'retour' END);
                 IF EXISTS (SELECT 1 FROM public.winkel_voorraad_mutaties WHERE organization_id = v_org AND idempotency_key = v_sleutel) THEN
                     v_nieuw := 'geboekt';
                 ELSE
@@ -1190,6 +1222,27 @@ BEGIN
                     IF v_voorraad IS NULL THEN
                         -- 4.2 Niet bijgehouden: de bon mislukt er nooit door.
                         v_nieuw := 'niet_bijgehouden';
+                    ELSIF EXISTS (SELECT 1 FROM public.winkel_voorraad_mutaties t
+                                   WHERE t.organization_id = v_org AND t.winkel_product_id = v_rij.product_id AND t.type = 'telling'
+                                     AND COALESCE(t.gebeurd_at, t.created_at) > v_tijd) THEN
+                        -- Review M2 klein 3: gebeurd vóór de laatste telling van dit product (een
+                        -- late sync). Die telling heeft de verkoop of het retour al meegenomen;
+                        -- nog eens boeken telt dubbel. Niets boeken, wel Te controleren.
+                        v_nieuw := 'voor_telling';
+                        v_controles := v_controles || jsonb_build_object('code', 'bon_voor_telling', 'melding',
+                            format('Regel %s: %s is na deze bon (%s) nog geteld; die telling heeft hem al meegenomen, dus niets %s. Klopt de telling?',
+                                   v_rij.regelnr, v_rij.naam, to_char(v_tijd AT TIME ZONE 'Europe/Amsterdam', 'DD-MM-YYYY HH24:MI'),
+                                   CASE WHEN v_rij.aantal > 0 THEN 'afgeboekt' ELSE 'teruggeboekt' END));
+                    ELSIF v_rij.aantal < 0 THEN
+                        -- Tegenbon (negatief aantal), goederen terug in het schap: retour.
+                        v_m := public.winkel_muteer_voorraad(
+                            v_org, v_rij.product_id, 'retour', v_n,
+                            p_notitie => format('Tegenbon %s r%s', v_bonnummer, v_rij.regelnr),
+                            p_idempotency_key => v_sleutel,
+                            p_gebeurd_at => v_tijd, p_toonbank_bon_regel_id => v_rij.regel_id);
+                        v_boekingen := v_boekingen || jsonb_build_object('regelnr', v_rij.regelnr, 'product_id', v_rij.product_id,
+                            'type', 'retour', 'hoeveelheid', v_n, 'voorraad', v_m->'voorraad');
+                        v_nieuw := 'geboekt';
                     ELSE
                         -- 4.3 en 4.4 Het tekort eerst rechtzetten.
                         v_tekort := GREATEST(0, v_n - v_voorraad);
@@ -1211,29 +1264,7 @@ BEGIN
                         v_boekingen := v_boekingen || jsonb_build_object('regelnr', v_rij.regelnr, 'product_id', v_rij.product_id,
                             'type', 'verkoop_kassa', 'hoeveelheid', -v_n, 'voorraad', v_m->'voorraad');
                         v_nieuw := CASE WHEN v_tekort > 0 THEN 'tekort_gecorrigeerd' ELSE 'geboekt' END;
-                    END IF;
-                END IF;
-            ELSIF v_rij.goederen_terug IS FALSE THEN
-                -- Tegenbon zonder goederen terug in het schap: geen voorraad.
-                v_nieuw := 'nvt';
-            ELSE
-                -- Tegenbon (negatief aantal): retour.
-                v_sleutel := format('tb:%s:%s:%s:retour', v_bon_id, v_rij.regelnr, v_rij.product_id);
-                IF EXISTS (SELECT 1 FROM public.winkel_voorraad_mutaties WHERE organization_id = v_org AND idempotency_key = v_sleutel) THEN
-                    v_nieuw := 'geboekt';
-                ELSE
-                    SELECT voorraad INTO v_voorraad FROM public.winkel_producten WHERE id = v_rij.product_id;
-                    IF v_voorraad IS NULL THEN
-                        v_nieuw := 'niet_bijgehouden';
-                    ELSE
-                        v_m := public.winkel_muteer_voorraad(
-                            v_org, v_rij.product_id, 'retour', v_n,
-                            p_notitie => format('Tegenbon %s r%s', v_bonnummer, v_rij.regelnr),
-                            p_idempotency_key => v_sleutel,
-                            p_gebeurd_at => v_tijd, p_toonbank_bon_regel_id => v_rij.regel_id);
-                        v_boekingen := v_boekingen || jsonb_build_object('regelnr', v_rij.regelnr, 'product_id', v_rij.product_id,
-                            'type', 'retour', 'hoeveelheid', v_n, 'voorraad', v_m->'voorraad');
-                        v_nieuw := 'geboekt';
+                        v_verkocht := array_append(v_verkocht, v_rij.product_id);
                     END IF;
                 END IF;
             END IF;
@@ -1290,6 +1321,80 @@ BEGIN
         v_controles := v_controles || jsonb_build_object('code', 'leeftijd_geweigerd', 'melding', 'Leeftijd geweigerd, maar er staat toch alcohol op de bon.');
     END IF;
 
+    -- Review M2 klein 10: de alcoholregels (M6). Alcohol mag alleen als het in
+    -- Instellingen → Toonbank aan staat, en een alcoholregel is minstens 75%
+    -- van de gewone prijs (catalogusprijs × aantal); een open prijs op alcohol
+    -- kan niet. Zoals controleerBon en alcoholPrijsToegestaan in kern.
+    IF v_status = 'afgerond' AND v_soort = 'verkoop' AND v_alcohol THEN
+        IF NOT COALESCE((SELECT i.toonbank_alcohol_toegestaan FROM public.winkel_instellingen i WHERE i.organization_id = v_org), false) THEN
+            v_controles := v_controles || jsonb_build_object('code', 'alcohol_niet_toegestaan', 'melding',
+                'Alcohol verkocht terwijl alcohol op de Toonbank uit staat (Instellingen → Toonbank).');
+        END IF;
+        FOR v_rr IN
+            SELECT private.tb_int(e->'regelnr') AS regelnr, e->>'naam' AS naam, e->>'prijs_bron' AS bron,
+                   private.tb_int(e->'bedrag_cents') AS bedrag, private.tb_int(e->'aantal') AS aantal, a.prijs_cents
+              FROM jsonb_array_elements(v_p->'regels') e
+              LEFT JOIN public.winkel_artikelen a ON a.id = private.tb_uuid(e->>'artikel_id') AND a.organization_id = v_org
+             WHERE e->>'soort' = 'verkoop' AND (e->>'alcohol')::BOOLEAN AND private.tb_int(e->'aantal') > 0
+             ORDER BY 1
+        LOOP
+            IF v_rr.bron = 'open_prijs' THEN
+                v_controles := v_controles || jsonb_build_object('code', 'alcohol_prijs', 'melding',
+                    format('Regel %s (%s): alcohol met een open prijs; dan is de 25%%-regel niet te controleren.', v_rr.regelnr, v_rr.naam));
+            ELSIF v_rr.prijs_cents IS NOT NULL AND v_rr.bedrag * 100 < v_rr.prijs_cents::BIGINT * v_rr.aantal * 75 THEN
+                v_controles := v_controles || jsonb_build_object('code', 'alcohol_prijs', 'melding',
+                    format('Regel %s (%s): %s ct, minder dan 75%% van de gewone prijs (%s × %s ct): op alcohol hooguit 25%% korting.',
+                           v_rr.regelnr, v_rr.naam, v_rr.bedrag, v_rr.aantal, v_rr.prijs_cents));
+            END IF;
+        END LOOP;
+    END IF;
+
+    -- Review M2 klein 5: een tegenbon op een geannuleerde bon, of meer terug dan verkocht.
+    IF v_soort = 'tegenbon' AND v_status = 'afgerond' THEN
+        IF v_orig.status = 'geannuleerd' THEN
+            v_controles := v_controles || jsonb_build_object('code', 'tegenbon_op_geannuleerd', 'melding',
+                format('Tegenbon op %s, een geannuleerde bon: daar is niets verkocht. Niets teruggeboekt.', v_orig.bonnummer));
+        END IF;
+        FOR v_rr IN
+            SELECT o.regelnr, o.naam, o.aantal AS verkocht, sum(-t.aantal) AS terug
+              FROM public.toonbank_bon_regels o
+              JOIN public.toonbank_bon_regels t ON t.verwijst_naar_regel_id = o.id AND t.soort = 'verkoop'
+              JOIN public.toonbank_bonnen tb ON tb.id = t.bon_id AND tb.status = 'afgerond'
+             WHERE o.bon_id = v_orig.id AND o.soort = 'verkoop'
+             GROUP BY o.regelnr, o.naam, o.aantal
+            HAVING sum(-t.aantal) > o.aantal
+             ORDER BY o.regelnr
+        LOOP
+            v_controles := v_controles || jsonb_build_object('code', 'tegenbon_te_veel', 'melding',
+                format('Regel %s van %s (%s): %s verkocht, met de tegenbonnen in totaal %s terug.',
+                       v_rr.regelnr, v_orig.bonnummer, v_rr.naam, trim_scale(v_rr.verkocht), trim_scale(v_rr.terug)));
+        END LOOP;
+        IF (SELECT COALESCE(sum(-tb.totaal_cents), 0) FROM public.toonbank_bonnen tb
+             WHERE tb.verwijst_naar_bon_id = v_orig.id AND tb.status = 'afgerond') > GREATEST(v_orig.totaal_cents, 0) THEN
+            v_controles := v_controles || jsonb_build_object('code', 'tegenbon_te_veel', 'melding',
+                format('Op %s is met de tegenbonnen meer terugbetaald dan de bon was (%s ct).', v_orig.bonnummer, v_orig.totaal_cents));
+        END IF;
+    END IF;
+
+    -- Review M2 klein 4 (contract §4.2 stap 9): bracht deze bon vrij onder nul,
+    -- dan komt een betaalde webshoporder tekort (nieuwste order eerst). Niet als
+    -- er al een melding vrij_overschreden voor deze bon en dit product is: die
+    -- meldt het zelf.
+    FOREACH v_pid IN ARRAY ARRAY(SELECT DISTINCT x FROM unnest(v_verkocht) x ORDER BY 1) LOOP
+        CONTINUE WHEN EXISTS (SELECT 1 FROM public.toonbank_journaal jv
+                               WHERE jv.organization_id = v_org AND jv.soort = 'vrij_overschreden'
+                                 AND jv.payload->>'bon_id' = v_bon_id::TEXT AND jv.payload->>'product_id' = v_pid::TEXT);
+        v_tekorten := private.toonbank_orders_tekort(v_org, v_pid);
+        IF jsonb_array_length(v_tekorten) > 0 THEN
+            v_orders := v_orders || (SELECT jsonb_agg(e || jsonb_build_object('product_id', v_pid)) FROM jsonb_array_elements(v_tekorten) e);
+        END IF;
+    END LOOP;
+    IF jsonb_array_length(v_orders) > 0 THEN
+        v_controles := v_controles || jsonb_build_object('code', 'order_komt_tekort', 'melding',
+            (SELECT 'Na deze bon is er minder dan gereserveerd. Order komt tekort: '
+                    || string_agg(format('%s komt %s tekort', o->>'nummer', o->>'tekort'), ', ') FROM jsonb_array_elements(v_orders) o) || '.');
+    END IF;
+
     -- 7. De journaalregel: verwerkt, of conflict als er iets te controleren is.
     v_uitkomst := CASE WHEN jsonb_array_length(v_controles) = 0 THEN 'verwerkt' ELSE 'conflict' END;
     UPDATE public.toonbank_journaal
@@ -1298,24 +1403,64 @@ BEGIN
            fout_code = CASE WHEN v_uitkomst = 'conflict' THEN v_controles->0->>'code' END,
            fout_melding = CASE WHEN v_uitkomst = 'conflict' THEN left((SELECT string_agg(c->>'melding', ' ') FROM jsonb_array_elements(v_controles) c), 1000) END,
            verwerkt_at = now(),
-           resultaat = jsonb_build_object('bon_id', v_bon_id, 'bonnummer', v_bonnummer, 'boekingen', v_boekingen, 'controles', v_controles)
+           resultaat = jsonb_build_object('bon_id', v_bon_id, 'bonnummer', v_bonnummer, 'boekingen', v_boekingen, 'controles', v_controles,
+                                          'orders_tekort', v_orders)
      WHERE id = p_journaal_id;
 
     RETURN jsonb_build_object('uitkomst', v_uitkomst, 'bon_id', v_bon_id, 'bonnummer', v_bonnummer,
-                              'boekingen', v_boekingen, 'controles', v_controles);
+                              'boekingen', v_boekingen, 'controles', v_controles, 'orders_tekort', v_orders);
 END $$;
 COMMENT ON FUNCTION public.toonbank_boek_bon(BIGINT) IS
-    'BA-9: één journaalregel (bon of tegenbon) → toonbank_bonnen, toonbank_bon_regels en de voorraad, in de volgorde van contract §4.2 (producten in id-volgorde, sleutels tb:{bon}:{regelnr}:{product}:verkoop|tekort|retour, tekort_correctie vóór verkoop_kassa, NULL-voorraad = niet_bijgehouden). Nooit een weigering: wat niet klopt wordt conflict. Alleen service_role.';
+    'BA-9: één journaalregel (bon of tegenbon) → toonbank_bonnen, toonbank_bon_regels en de voorraad, in de volgorde van contract §4.2 (producten in id-volgorde, sleutels tb:{bon}:{regelnr}:{product}:verkoop|tekort|retour, tekort_correctie vóór verkoop_kassa, NULL-voorraad = niet_bijgehouden, vóór de laatste telling = voor_telling zonder boeking). Nooit een weigering: wat niet klopt wordt conflict (ook alcoholregels, tegenbon te veel of op een geannuleerde bon, goederen_terug onbekend, en een webshoporder die tekortkomt). Alleen service_role.';
 REVOKE ALL ON FUNCTION public.toonbank_boek_bon(BIGINT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.toonbank_boek_bon(BIGINT) TO service_role;
 
 
+-- ── 12b. Wie komt tekort (contract §1.9, §4.2 stap 9) ───────────────────────
+-- Is vrij voor dit product onder nul, dan valt het tekort eerst op de nieuwste
+-- betaalde order (hoogste order_id), tot haar hele aantal, dan de order
+-- daarvoor (tekortVerdeling in kern). Geeft [{order_id, nummer, tekort}];
+-- leeg als vrij niet onder nul is. Gebruikt door toonbank_boek_bon (na een
+-- gewone bon, review M2 klein 4) en vrij_overschreden.
+CREATE OR REPLACE FUNCTION private.toonbank_orders_tekort(p_org UUID, p_product UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_vrij    NUMERIC;
+    v_rest    NUMERIC;
+    v_deel    NUMERIC;
+    v_res     RECORD;
+    v_orders  JSONB := '[]'::JSONB;
+BEGIN
+    SELECT vp.vrij INTO v_vrij FROM public.winkel_vrij_producten(p_org) vp WHERE vp.product_id = p_product;
+    IF v_vrij IS NULL OR v_vrij >= 0 THEN
+        RETURN v_orders;
+    END IF;
+    v_rest := -v_vrij;
+    FOR v_res IN SELECT r.order_id, r.nummer, r.aantal FROM public.winkel_reserveringen(p_org, p_product) r
+                  WHERE r.aantal > 0 ORDER BY r.order_id DESC LOOP
+        EXIT WHEN v_rest <= 0;
+        v_deel := LEAST(v_rest, v_res.aantal);
+        v_orders := v_orders || jsonb_build_object('order_id', v_res.order_id, 'nummer', v_res.nummer, 'tekort', round(v_deel, 3));
+        v_rest := v_rest - v_deel;
+    END LOOP;
+    RETURN v_orders;
+END $$;
+REVOKE ALL ON FUNCTION private.toonbank_orders_tekort(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+
 -- ── 13. vrij_overschreden ───────────────────────────────────────────────────
 -- Online: elke goedkeuring moet bestaan, van deze tablet en deze eigenaar
--- zijn, en nog niet voor een andere melding gebruikt; dan wordt hij aan
--- deze melding gekoppeld. Offline: ter goedkeuring door de eigenaar. Daarna:
--- is vrij onder nul, welke orders komen tekort (nieuwste order eerst,
--- contract §1.9 en §4.2 stap 9). Alles wat aandacht vraagt → conflict.
+-- zijn, nog niet voor een andere melding gebruikt, en horen bij het moment
+-- van de verkoop (review M2 klein 9: de verkoop valt tussen het aanmaken en
+-- het verlopen van de goedkeuring, met 5 minuten speling voor de klok van de
+-- tablet); dan wordt hij aan deze melding gekoppeld. Offline: ter
+-- goedkeuring door de eigenaar. Daarna: is vrij onder nul, welke orders
+-- komen tekort (private.toonbank_orders_tekort). Alles wat aandacht vraagt
+-- → conflict.
 CREATE OR REPLACE FUNCTION private.toonbank_verwerk_vrij_overschreden(p_journaal_id BIGINT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1331,10 +1476,9 @@ DECLARE
     v_eigenaar   UUID;
     v_ids        UUID[];
     v_ok         INTEGER;
+    v_buiten     INTEGER;
+    v_tijd       TIMESTAMPTZ;
     v_vrij       NUMERIC;
-    v_rest       NUMERIC;
-    v_deel       NUMERIC;
-    v_res        RECORD;
     v_orders     JSONB := '[]'::JSONB;
     v_controles  JSONB := '[]'::JSONB;
     v_uitkomst   TEXT;
@@ -1343,6 +1487,8 @@ BEGIN
     v_org := v_j.organization_id;
     PERFORM private.vereis_org(v_org);
     v_p := v_j.payload;
+    -- Het moment van de verkoop, begrensd op ontvangen (punt 8).
+    v_tijd := LEAST(v_j.apparaat_tijd, v_j.ontvangen_at);
 
     v_product := private.tb_uuid(v_p->>'product_id');
     v_modus := v_p->>'modus';
@@ -1361,7 +1507,9 @@ BEGIN
         IF v_eigenaar IS NULL OR cardinality(v_ids) = 0 THEN
             v_controles := v_controles || jsonb_build_object('code', 'goedkeuring_ontbreekt', 'melding', 'Online boven vrij verkocht zonder eigenaar of goedkeuring.');
         ELSE
-            SELECT count(*) INTO v_ok
+            SELECT count(*) FILTER (WHERE v_tijd BETWEEN s.aangemaakt_at - INTERVAL '5 minutes' AND s.geldig_tot + INTERVAL '5 minutes'),
+                   count(*) FILTER (WHERE v_tijd IS NULL OR v_tijd NOT BETWEEN s.aangemaakt_at - INTERVAL '5 minutes' AND s.geldig_tot + INTERVAL '5 minutes')
+              INTO v_ok, v_buiten
               FROM public.toonbank_sessies s
               JOIN public.personeel pe ON pe.id = s.medewerker_id
              WHERE s.id = ANY (v_ids)
@@ -1370,7 +1518,9 @@ BEGIN
                AND (s.gebruikt_gebeurtenis_id IS NULL OR s.gebruikt_gebeurtenis_id = v_j.gebeurtenis_id);
             IF v_ok <> cardinality(v_ids) THEN
                 v_controles := v_controles || jsonb_build_object('code', 'goedkeuring_ongeldig',
-                    'melding', format('%s van de %s goedkeuringen kloppen niet (onbekend, andere tablet of eigenaar, of al gebruikt).', cardinality(v_ids) - v_ok, cardinality(v_ids)));
+                    'melding', format('%s van de %s goedkeuringen kloppen niet (onbekend, andere tablet of eigenaar, al gebruikt, of niet rond het moment van de verkoop%s).',
+                                      cardinality(v_ids) - v_ok, cardinality(v_ids),
+                                      CASE WHEN v_buiten > 0 THEN format(': %s buiten het tijdvenster', v_buiten) ELSE '' END));
             ELSE
                 UPDATE public.toonbank_sessies SET gebruikt_gebeurtenis_id = v_j.gebeurtenis_id
                  WHERE id = ANY (v_ids) AND gebruikt_gebeurtenis_id IS NULL;
@@ -1383,19 +1533,10 @@ BEGIN
 
     -- Wie komt tekort: de nieuwste order eerst, tot haar hele aantal.
     SELECT vp.vrij INTO v_vrij FROM public.winkel_vrij_producten(v_org) vp WHERE vp.product_id = v_product;
-    IF v_vrij IS NOT NULL AND v_vrij < 0 THEN
-        v_rest := -v_vrij;
-        FOR v_res IN SELECT r.order_id, r.nummer, r.aantal FROM public.winkel_reserveringen(v_org, v_product) r
-                      WHERE r.aantal > 0 ORDER BY r.order_id DESC LOOP
-            EXIT WHEN v_rest <= 0;
-            v_deel := LEAST(v_rest, v_res.aantal);
-            v_orders := v_orders || jsonb_build_object('order_id', v_res.order_id, 'nummer', v_res.nummer, 'tekort', round(v_deel, 3));
-            v_rest := v_rest - v_deel;
-        END LOOP;
-        IF jsonb_array_length(v_orders) > 0 THEN
-            v_controles := v_controles || jsonb_build_object('code', 'order_komt_tekort', 'melding',
-                (SELECT 'Order komt tekort: ' || string_agg(format('%s komt %s tekort', o->>'nummer', o->>'tekort'), ', ') FROM jsonb_array_elements(v_orders) o) || '.');
-        END IF;
+    v_orders := private.toonbank_orders_tekort(v_org, v_product);
+    IF jsonb_array_length(v_orders) > 0 THEN
+        v_controles := v_controles || jsonb_build_object('code', 'order_komt_tekort', 'melding',
+            (SELECT 'Order komt tekort: ' || string_agg(format('%s komt %s tekort', o->>'nummer', o->>'tekort'), ', ') FROM jsonb_array_elements(v_orders) o) || '.');
     END IF;
 
     v_uitkomst := CASE WHEN jsonb_array_length(v_controles) = 0 THEN 'verwerkt' ELSE 'conflict' END;
@@ -1781,7 +1922,8 @@ BEGIN
         'private.toonbank_btw_uit_incl(bigint, integer)', 'private.toonbank_bon_fouten(jsonb)',
         'private.toonbank_controleer_order_rest(uuid, uuid)', 'private.toonbank_verwerk_vrij_overschreden(bigint)',
         'private.toonbank_verwerk_melding(bigint, boolean)', 'private.toonbank_bon_vast()',
-        'private.toonbank_vergrendel_wachtrij(uuid, uuid)', 'private.toonbank_melding_mislukt(bigint, text, text)'
+        'private.toonbank_vergrendel_wachtrij(uuid, uuid)', 'private.toonbank_melding_mislukt(bigint, text, text)',
+        'private.toonbank_orders_tekort(uuid, uuid)'
     ] LOOP
         IF has_function_privilege('anon', v_sig, 'EXECUTE') OR has_function_privilege('authenticated', v_sig, 'EXECUTE')
            OR has_function_privilege('service_role', v_sig, 'EXECUTE') THEN
@@ -1814,6 +1956,12 @@ BEGIN
             v_fouten := v_fouten || E'\n  de vast-triggers op ' || v_t || ' ontbreken';
         END IF;
     END LOOP;
+
+    -- De meldingstaat kent "Tel {product}" (review M2 klein 4).
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.voorraad_melding_staat'::REGCLASS
+                     AND conname = 'voorraad_melding_staat_soort_check' AND pg_get_constraintdef(oid) LIKE '%voorraad_tellen%') THEN
+        v_fouten := v_fouten || E'\n  voorraad_melding_staat kent de soort voorraad_tellen niet';
+    END IF;
 
     -- Het logboek kent tekort_correctie; de views rekenen met gebeurd_at.
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.winkel_voorraad_mutaties'::REGCLASS

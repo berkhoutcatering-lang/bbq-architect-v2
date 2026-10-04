@@ -81,7 +81,8 @@ begin
     v_code := v_r->>'code';
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, btw_pct)
     values (v_org, 'TEST journaalbier ' || v_sfx, 'bier', 'stuk', 1, 21) returning id into v_prod;
-    perform public.winkel_muteer_voorraad(v_org, v_prod, 'telling', 10);
+    -- Geteld vóór de bonnen (een bon van vóór de laatste telling boekt niets: review M2 klein 3).
+    perform public.winkel_muteer_voorraad(v_org, v_prod, 'telling', 10, p_gebeurd_at => '2026-03-01T08:00:00+01:00');
     v_onderdeel := jsonb_build_array(jsonb_build_object('product_id', v_prod, 'hoeveelheid', 1, 'eenheid', 'stuk'));
 
     -- ── 1. Opslaan: een bon (1) en inloggen (2) zijn nieuw en wachten; ongewijzigd bewaard.
@@ -230,6 +231,17 @@ begin
     if (public.toonbank_status(v_org, v_app)->>'te_controleren')::int <> v_n or v_n < 5 then
         v_fouten := v_fouten || format('te_controleren %s, verwacht %s; ', public.toonbank_status(v_org, v_app)->>'te_controleren', v_n);
     end if;
+    -- Review M2 klein 5: wat al meer dan 10 minuten wacht (een tegenbon zonder zijn bon) telt ook mee,
+    -- zoals het scherm Te controleren in BA.
+    insert into public.toonbank_journaal (organization_id, apparaat_id, gebeurtenis_id, volgnummer, soort, payload, apparaat_tijd, ontvangen_at, fout_code)
+    values (v_org, v_app, gen_random_uuid(), null, 'tegenbon', '{"soort": "tegenbon"}', now() - interval '11 minutes', now() - interval '11 minutes', 'wacht_op_bon')
+    returning id into v_id;
+    if (public.toonbank_status(v_org, v_app)->>'te_controleren')::int <> v_n + 1 then
+        v_fouten := v_fouten || 'een melding die al 11 minuten wacht telt niet mee in te_controleren; ';
+    end if;
+    perform public.toonbank_journaal_afhandelen(v_org, v_id, 'opgelost', 'test: oude wachtende tegenbon');
+    -- Weer de pinpoging van §7 (v_id), voor het afhandelen hieronder.
+    select id into v_id from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g13;
     begin
         perform public.toonbank_journaal_afhandelen(v_org, v_id, 'opgelost', '  ');
         v_fouten := v_fouten || 'afgehandeld zonder reden; ';

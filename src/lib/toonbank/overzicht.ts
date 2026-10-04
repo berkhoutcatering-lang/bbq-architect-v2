@@ -116,6 +116,17 @@ export const CONTROLE_LABEL: Record<string, string> = {
     goedkeuring_nodig: 'Offline boven vrij: goedkeuren',
     order_komt_tekort: 'Webshoporder komt tekort',
     dagstaat_verschil: 'Dagstaat wijkt af van de bonnen',
+    /* Review M2 (klein 3, 5 en 10). */
+    bon_voor_telling: 'Bon van vóór de laatste telling',
+    goederen_terug_onbekend: 'Tegenbon: terug in het schap?',
+    tegenbon_op_geannuleerd: 'Tegenbon op een geannuleerde bon',
+    tegenbon_te_veel: 'Meer terug dan verkocht',
+    alcohol_niet_toegestaan: 'Alcohol terwijl het uit staat',
+    alcohol_prijs: 'Alcohol onder 75% van de prijs',
+    /* Tijdelijke databasefouten (review M2 B1): blijven op wacht en worden opnieuw verwerkt. */
+    '40P01': 'Tijdelijk: deadlock, wordt opnieuw verwerkt',
+    '40001': 'Tijdelijk: gelijktijdige wijziging, wordt opnieuw verwerkt',
+    '55P03': 'Tijdelijk: bezet, wordt opnieuw verwerkt',
 };
 
 export function controleLabel(code: string | null | undefined): string {
