@@ -111,8 +111,8 @@ begin
     foreach v_sig in array array[
         'public.winkel_bezetting_product(uuid, bigint)',
         'public.winkel_zet_klaargezet(uuid, bigint, boolean)',
-        -- BA-10 (20261007130000): + leeftijd, medewerker en bon; boek_rest met p_org
-        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)',
+        -- BA-10 (20261007130000): + leeftijd, medewerker, bon en leeftijd_at; boek_rest met p_org
+        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)',
         'public.winkel_boek_rest(uuid, bigint, text, uuid)',
         'public.winkel_dozen_voor_regel(uuid, bigint, text[])',
         -- BA-9 (20261007120000): + p_gebeurd_at en p_toonbank_bon_regel_id

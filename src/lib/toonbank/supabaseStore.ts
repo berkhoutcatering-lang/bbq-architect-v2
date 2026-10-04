@@ -241,6 +241,7 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
                 p_org: v.orgId, p_apparaat_id: v.apparaatId, p_soort: v.soort, p_order_id: v.orderId, p_code: v.code,
                 p_gebeurtenis_id: v.gebeurtenisId, p_moment: v.moment, p_medewerker_id: v.medewerkerId, p_bon_id: v.bonId,
                 p_rest_methode: v.restMethode, p_rest_bedrag_cents: v.restBedragCents, p_leeftijd: v.leeftijd, p_contract_versie: v.contractVersie,
+                p_leeftijd_at: v.leeftijdAt,
             });
             if (error) throw new OpslagFout('toonbank_ophaal_vraag', error);
             return data as OphaalVraagRuw;

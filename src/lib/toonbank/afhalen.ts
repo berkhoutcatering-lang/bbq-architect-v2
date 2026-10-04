@@ -58,7 +58,7 @@ export async function ophaalVraag(
         orderId: doel.soort === 'order' ? doel.orderId : null, code: doel.soort === 'doos' ? doel.code : null,
         gebeurtenisId: verzoek.gebeurtenis_id, moment: verzoek.moment, medewerkerId: ctx.medewerkerId,
         bonId: verzoek.bon_id, restMethode: verzoek.rest?.methode ?? null, restBedragCents: verzoek.rest?.bedrag_cents ?? null,
-        leeftijd: verzoek.leeftijd?.uitkomst ?? null, contractVersie: ctx.contract?.slice(0, 20) ?? null,
+        leeftijd: verzoek.leeftijd?.uitkomst ?? null, leeftijdAt: verzoek.leeftijd?.at ?? null, contractVersie: ctx.contract?.slice(0, 20) ?? null,
     });
 
     const verwachtSoort = doel.soort === 'order' ? 'ophalen' : 'doos_ophalen';

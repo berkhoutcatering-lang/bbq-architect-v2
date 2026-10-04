@@ -213,7 +213,10 @@ CREATE FUNCTION public.winkel_doos_ophalen(
     p_rest_methode   TEXT DEFAULT NULL,
     p_leeftijd       TEXT DEFAULT NULL,
     p_medewerker_id  UUID DEFAULT NULL,
-    p_bon_id         UUID DEFAULT NULL
+    p_bon_id         UUID DEFAULT NULL,
+    -- Review M2 (klein 11): wanneer de leeftijd aan de balie is vastgesteld of
+    -- geweigerd (leeftijd.at van de tablet); nooit later dan nu. Leeg = nu.
+    p_leeftijd_at    TIMESTAMPTZ DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -222,6 +225,7 @@ AS $$
 DECLARE
     v_uid       UUID := auth.uid();
     v_nu        TIMESTAMPTZ := now();
+    v_leeftijd_at TIMESTAMPTZ := LEAST(COALESCE(p_leeftijd_at, now()), now());
     v_order_id  BIGINT;
     v_regel_id  BIGINT;
     v_doos      public.winkel_dozen%ROWTYPE;
@@ -277,8 +281,8 @@ BEGIN
     END IF;
     IF p_leeftijd = 'geweigerd' THEN
         -- Alleen vastleggen, zoals winkel_order_ophalen: geen voorraad, geen rest, niets mee.
-        UPDATE public.winkel_orders SET leeftijd_geweigerd_at = v_nu, leeftijd_geweigerd_door = v_uid WHERE id = v_order.id;
-        RETURN v_basis || jsonb_build_object('uitkomst', 'geweigerd', 'geweigerd_at', v_nu);
+        UPDATE public.winkel_orders SET leeftijd_geweigerd_at = v_leeftijd_at, leeftijd_geweigerd_door = v_uid WHERE id = v_order.id;
+        RETURN v_basis || jsonb_build_object('uitkomst', 'geweigerd', 'geweigerd_at', v_leeftijd_at);
     END IF;
     IF v_rest_open AND p_rest_methode IS NULL THEN
         RETURN v_basis || jsonb_build_object('uitkomst', 'rest_nodig', 'reeds_cents', v_order.nu_te_betalen_cents);
@@ -313,7 +317,7 @@ BEGIN
      WHERE id = v_doos.id;
 
     IF COALESCE(v_regel.alcohol, false) AND p_leeftijd = 'vastgesteld' THEN
-        UPDATE public.winkel_order_regels SET leeftijd_vastgesteld_at = COALESCE(leeftijd_vastgesteld_at, v_nu) WHERE id = v_regel.id;
+        UPDATE public.winkel_order_regels SET leeftijd_vastgesteld_at = COALESCE(leeftijd_vastgesteld_at, v_leeftijd_at) WHERE id = v_regel.id;
     END IF;
     IF NOT EXISTS (SELECT 1 FROM public.winkel_dozen WHERE order_regel_id = v_regel.id AND opgehaald_at IS NULL) THEN
         UPDATE public.winkel_order_regels
@@ -333,10 +337,10 @@ BEGIN
         'nog_open', v_open, 'regels_zonder_etiket', v_zonder, 'rest_geboekt', v_rest,
         'leeftijd', CASE WHEN COALESCE(v_regel.alcohol, false) THEN p_leeftijd END, 'boekingen', v_boekingen);
 END $$;
-COMMENT ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID) IS
+COMMENT ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID, TIMESTAMPTZ) IS
     'Een doos meegeven (S7, BA-10): betaald, al opgehaald, 18+ (leeftijd_nodig/geweigerd), rest; pakt de regel in als dat nog niet gebeurd was (te_weinig_voorraad = niets geboekt), boekt de rest (met de bon) en zet de doos op opgehaald, met de medewerker. Lockvolgorde order → regel → doos → producten.';
-REVOKE ALL ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID) TO authenticated, service_role;
+REVOKE ALL ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID, TIMESTAMPTZ) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.winkel_doos_ophalen(UUID, TEXT, TEXT, TEXT, UUID, UUID, TIMESTAMPTZ) TO authenticated, service_role;
 
 
 -- ── 4. order_rest op een bon kent nu rest_bon_id ────────────────────────────
@@ -387,13 +391,16 @@ CREATE OR REPLACE FUNCTION public.toonbank_ophaal_vraag(
     p_rest_methode       TEXT DEFAULT NULL,
     p_rest_bedrag_cents  INTEGER DEFAULT NULL,
     p_leeftijd           TEXT DEFAULT NULL,
-    p_contract_versie    TEXT DEFAULT NULL
+    p_contract_versie    TEXT DEFAULT NULL,
+    -- Review M2 (klein 11): leeftijd.at van de tablet (begrensd op nu).
+    p_leeftijd_at        TIMESTAMPTZ DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
+    v_leeftijd_at TIMESTAMPTZ := LEAST(COALESCE(p_leeftijd_at, now()), now());
     v_oud       public.toonbank_journaal%ROWTYPE;
     v_soort     TEXT;
     v_order_id  BIGINT;
@@ -432,6 +439,7 @@ BEGIN
     v_payload := jsonb_build_object(
         'order_id', p_order_id, 'code', CASE WHEN p_soort = 'doos' THEN left(btrim(COALESCE(p_code, '')), 200) END,
         'bon_id', p_bon_id, 'medewerker_id', p_medewerker_id, 'moment', p_moment, 'leeftijd', p_leeftijd,
+        'leeftijd_at', CASE WHEN p_leeftijd IS NOT NULL THEN p_leeftijd_at END,
         'rest', CASE WHEN p_rest_methode IS NOT NULL THEN jsonb_build_object('methode', p_rest_methode, 'bedrag_cents', p_rest_bedrag_cents) END);
 
     -- 2. De order vergrendelen (eerst in de lockvolgorde) en het restbedrag vergelijken (review M7).
@@ -462,8 +470,21 @@ BEGIN
         IF v_res->>'uitkomst' = 'opgehaald' AND v_res->>'rest_geboekt' IS NOT NULL THEN
             UPDATE public.winkel_orders SET rest_bon_id = p_bon_id WHERE id = p_order_id AND organization_id = p_org;
         END IF;
+        -- Review M2 (klein 11): winkel_order_ophalen (BA-2) legt now() vast; hier
+        -- de tijd van de tablet (leeftijd.at, begrensd op nu). Alleen wat in deze
+        -- transactie net is gezet (= now()); een eerdere vaststelling blijft.
+        IF p_leeftijd = 'vastgesteld' AND v_res->>'uitkomst' = 'opgehaald' THEN
+            UPDATE public.winkel_order_regels
+               SET leeftijd_vastgesteld_at = v_leeftijd_at
+             WHERE order_id = p_order_id AND organization_id = p_org AND alcohol AND leeftijd_vastgesteld_at = now();
+        ELSIF p_leeftijd = 'geweigerd' AND v_res->>'uitkomst' = 'geweigerd' THEN
+            UPDATE public.winkel_orders
+               SET leeftijd_geweigerd_at = v_leeftijd_at
+             WHERE id = p_order_id AND organization_id = p_org AND leeftijd_geweigerd_at = now();
+            v_res := v_res || jsonb_build_object('geweigerd_at', v_leeftijd_at);
+        END IF;
     ELSE
-        v_res := public.winkel_doos_ophalen(p_org, p_code, v_methode, p_leeftijd, p_medewerker_id, p_bon_id);
+        v_res := public.winkel_doos_ophalen(p_org, p_code, v_methode, p_leeftijd, p_medewerker_id, p_bon_id, v_leeftijd_at);
     END IF;
     v_res := jsonb_build_object('ok', true) || v_res || jsonb_build_object('rest_dubbel', v_dubbel);
 
@@ -497,10 +518,10 @@ BEGIN
     END IF;
     RETURN jsonb_build_object('journaal', 'nieuw', 'soort', v_soort, 'payload', v_payload, 'resultaat', v_res);
 END $$;
-COMMENT ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT) IS
+COMMENT ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT, TIMESTAMPTZ) IS
     'POST orders/{order_id}/ophalen en POST dozen/{code}/ophalen (BA-10): winkel_order_ophalen of winkel_doos_ophalen met bron toonbank en de medewerker, restbedrag vooraf vergeleken (M7), rest_bon_id, verzoek en uitkomst in het journaal; idempotent op gebeurtenis_id. Alleen service_role.';
-REVOKE ALL ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT) TO service_role;
+REVOKE ALL ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT, TIMESTAMPTZ) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.toonbank_ophaal_vraag(UUID, UUID, TEXT, BIGINT, TEXT, UUID, TIMESTAMPTZ, UUID, UUID, TEXT, INTEGER, TEXT, TEXT, TIMESTAMPTZ) TO service_role;
 
 
 -- ── 6. toonbank_dagstaten ───────────────────────────────────────────────────
@@ -1126,7 +1147,7 @@ DECLARE
 BEGIN
     IF (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname = 'winkel_doos_ophalen') <> 1
-       OR to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)') IS NULL THEN
+       OR to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)') IS NULL THEN
         v_fouten := v_fouten || E'\n  winkel_doos_ophalen: niet precies de nieuwe versie';
     END IF;
     -- De nieuwe versie plus tijdelijk de oude handtekening (review M2 K6), niets anders.
@@ -1140,13 +1161,13 @@ BEGIN
           OR pg_get_functiondef('public.winkel_boek_rest(bigint, text)'::REGPROCEDURE) NOT LIKE '%winkel_boek_rest(v_org, p_order_id, p_methode%' THEN
         v_fouten := v_fouten || E'\n  de oude winkel_boek_rest is niet de INVOKER-doorgeefluik naar de nieuwe, of anon mag hem';
     END IF;
-    IF pg_get_functiondef('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)'::REGPROCEDURE)
+    IF pg_get_functiondef('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)'::REGPROCEDURE)
        NOT LIKE '%FROM public.winkel_orders%FOR NO KEY UPDATE%FROM public.winkel_order_regels%FOR UPDATE%FROM public.winkel_dozen%FOR UPDATE%' THEN
         v_fouten := v_fouten || E'\n  winkel_doos_ophalen houdt de lockvolgorde order → regel → doos niet aan';
     END IF;
 
     FOREACH v_sig IN ARRAY ARRAY[
-        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)',
+        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)',
         'public.winkel_boek_rest(uuid, bigint, text, uuid)',
         'public.toonbank_dagstaat_narekenen(uuid, uuid)',
         'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)'
@@ -1159,7 +1180,7 @@ BEGIN
         v_fouten := v_fouten || E'\n  toonbank_dagstaat_narekenen zonder Admin-controle of met aangevuld (review M2 K5)';
     END IF;
     FOREACH v_sig IN ARRAY ARRAY[
-        'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
+        'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)',
         'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
         'public.toonbank_dagstaat_overzicht(uuid, uuid, date)',
         'public.toonbank_verwerk_wachtrij(uuid, uuid)'
@@ -1170,9 +1191,9 @@ BEGIN
         IF NOT has_function_privilege('service_role', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  service_role mist ' || v_sig; END IF;
     END LOOP;
     FOREACH v_sig IN ARRAY ARRAY[
-        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)',
+        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)',
         'public.winkel_boek_rest(uuid, bigint, text, uuid)',
-        'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
+        'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)',
         'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
         'public.toonbank_dagstaat_narekenen(uuid, uuid)',
         'public.toonbank_dagstaat_overzicht(uuid, uuid, date)',

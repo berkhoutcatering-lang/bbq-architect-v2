@@ -217,6 +217,8 @@ export interface OphaalVraag {
     restMethode: 'pin' | 'contant' | null;
     restBedragCents: number | null;
     leeftijd: 'vastgesteld' | 'geweigerd' | null;
+    /** leeftijd.at van de tablet; de database begrenst hem op nu (review M2, klein 11). */
+    leeftijdAt: string | null;
     contractVersie: string | null;
 }
 

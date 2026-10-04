@@ -29,6 +29,7 @@ declare
     v_a_web     uuid;
     v_a_leeg    uuid;
     v_a_geenprijs uuid;
+    v_a_zonderslot uuid;
     v_moment    uuid;
     v_dag       date := (now() at time zone 'Europe/Amsterdam')::date + 2;
     v_o         public.winkel_orders%rowtype;
@@ -78,6 +79,9 @@ begin
     values (v_org, 'test-tb-leeg-' || v_sfx, 'TEST leeg slot', 500, 9, true, array['toonbank']) returning id into v_a_leeg;
     insert into public.winkel_artikelen (organization_id, slug, naam, prijs_cents, btw_pct, actief, kanalen)
     values (v_org, 'test-tb-geenprijs-' || v_sfx, 'TEST prijs volgt', null, 9, true, array['toonbank']) returning id into v_a_geenprijs;
+    -- Review M2 (klein 2): een toonbankartikel zonder enig slot boekt geen voorraad af; niet in de catalogus.
+    insert into public.winkel_artikelen (organization_id, slug, naam, prijs_cents, btw_pct, actief, kanalen)
+    values (v_org, 'test-tb-zonderslot-' || v_sfx, 'TEST zonder slot', 500, 9, true, array['toonbank']) returning id into v_a_zonderslot;
 
     insert into public.winkel_artikel_slots (organization_id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id) values
         (v_org, v_a_los, 0, 'bier', 'Naober', 1, 'stuk', 'stuk', v_naober),
@@ -94,8 +98,8 @@ begin
         v_fouten := v_fouten || 'catalogus versie/volledig: ' || (v_cat->>'versie') || '; ';
     end if;
     select count(*) into v_n from jsonb_array_elements(v_cat->'artikelen') e
-     where (e->>'artikel_id')::uuid in (v_a_web, v_a_leeg, v_a_geenprijs);
-    if v_n <> 0 then v_fouten := v_fouten || 'webshop-artikel, leeg slot of zonder prijs staat in de catalogus; '; end if;
+     where (e->>'artikel_id')::uuid in (v_a_web, v_a_leeg, v_a_geenprijs, v_a_zonderslot);
+    if v_n <> 0 then v_fouten := v_fouten || 'webshop-artikel, leeg slot, zonder prijs of zonder slot staat in de catalogus; '; end if;
 
     select e into v_art from jsonb_array_elements(v_cat->'artikelen') e where (e->>'artikel_id')::uuid = v_a_los;
     if v_art is null then
@@ -285,5 +289,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: catalogus alleen toonbank-artikelen met prijs en zonder leeg slot, groep-slug, pakket-btw-verdeling 1035/600, EAN → één-slot-artikel, statiegeld 15; vrij 6/5/1 met reserveringen zonder contactgegevens; afhaallijst A en C (niet B) met doos; apart = −4 met journaal, herhaling = zelfde antwoord zonder boeking, al_apart, ongedaan +4 met reden, WV010/WV006/P0002 vastgelegd als niet_nodig zonder boeking; scan EAN/doos/onbekend — alles teruggedraaid';
+    raise exception 'GESLAAGD: catalogus alleen toonbank-artikelen met prijs, met minstens één slot en zonder leeg slot, groep-slug, pakket-btw-verdeling 1035/600, EAN → één-slot-artikel, statiegeld 15; vrij 6/5/1 met reserveringen zonder contactgegevens; afhaallijst A en C (niet B) met doos; apart = −4 met journaal, herhaling = zelfde antwoord zonder boeking, al_apart, ongedaan +4 met reden, WV010/WV006/P0002 vastgelegd als niet_nodig zonder boeking; scan EAN/doos/onbekend — alles teruggedraaid';
 end $$;

@@ -338,6 +338,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             if (oud) return { journaal: 'bestond', soort: oud.soort ?? soort, payload: oud.payload, resultaat: oud.resultaat } satisfies OphaalVraagRuw;
             const payload: Record<string, unknown> = {
                 order_id: v.orderId, code: v.code, bon_id: v.bonId, medewerker_id: v.medewerkerId, moment: v.moment, leeftijd: v.leeftijd,
+                leeftijd_at: v.leeftijd ? v.leeftijdAt : null,
                 rest: v.restMethode ? { methode: v.restMethode, bedrag_cents: v.restBedragCents } : null,
             };
             g.ophaalUitgevoerd += 1;

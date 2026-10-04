@@ -145,11 +145,14 @@ begin
         v_fouten := v_fouten || 'A zonder leeftijd: ' || v_r::text || '; ';
     end if;
     -- Alles klopt: opgehaald, rest geboekt met de bon, regels via de toonbank met de medewerker.
-    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_a, null, gen_random_uuid(), now(), v_mw, v_b1, 'pin', 1130, 'vastgesteld', '1.1.0');
+    -- Review M2 (klein 11): de leeftijd is op de tablet 2 minuten geleden vastgesteld (leeftijd.at).
+    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_a, null, gen_random_uuid(), now(), v_mw, v_b1, 'pin', 1130, 'vastgesteld', '1.1.0',
+                                        now() - interval '2 minutes');
     if v_r->'resultaat'->>'uitkomst' <> 'opgehaald' or v_r->'resultaat'->>'rest_geboekt' <> 'pin' or (v_r->'resultaat'->>'rest_dubbel')::boolean
        or not exists (select 1 from public.winkel_orders where id = v_a and rest_betaald_at is not null and rest_betaalmethode = 'pin' and rest_bon_id = v_b1)
-       or not exists (select 1 from public.winkel_order_regels where order_id = v_a and opgehaald_bron = 'toonbank' and opgehaald_medewerker_id = v_mw and leeftijd_vastgesteld_at is not null) then
-        v_fouten := v_fouten || 'A opgehaald: ' || v_r::text || '; ';
+       or not exists (select 1 from public.winkel_order_regels where order_id = v_a and opgehaald_bron = 'toonbank' and opgehaald_medewerker_id = v_mw
+                                                                 and leeftijd_vastgesteld_at = now() - interval '2 minutes') then
+        v_fouten := v_fouten || 'A opgehaald (leeftijd op de tijd van de tablet): ' || v_r::text || '; ';
     end if;
     -- De bon met de rest komt daarna: geen conflict, en geen omzet (de omzet hoort bij de order).
     v_vnr := v_vnr + 1;
@@ -222,16 +225,20 @@ begin
     -- Rechtstreeks (BA, scanDoos) net zo.
     if public.winkel_doos_ophalen(v_org, v_doos_e)->>'uitkomst' <> 'leeftijd_nodig' then v_fouten := v_fouten || 'scanDoos zonder leeftijd; '; end if;
     -- Geweigerd: alleen vastgelegd.
-    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'doos', null, v_doos_e, gen_random_uuid(), now(), v_mw, null, null, null, 'geweigerd');
-    if v_r->'resultaat'->>'uitkomst' <> 'geweigerd' or (select leeftijd_geweigerd_at from public.winkel_orders where id = v_e) is null
+    -- Klein 11: op de tijd van de tablet (5 minuten geleden), niet now().
+    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'doos', null, v_doos_e, gen_random_uuid(), now(), v_mw, null, null, null, 'geweigerd',
+                                        p_leeftijd_at => now() - interval '5 minutes');
+    if v_r->'resultaat'->>'uitkomst' <> 'geweigerd' or (select leeftijd_geweigerd_at from public.winkel_orders where id = v_e) <> now() - interval '5 minutes'
        or (select opgehaald_at from public.winkel_dozen where code = v_doos_e) is not null then
         v_fouten := v_fouten || 'doos E geweigerd: ' || v_r::text || '; ';
     end if;
-    -- Vastgesteld: opgehaald, ingepakt (afgeboekt), met de medewerker.
-    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'doos', null, upper(v_doos_e), gen_random_uuid(), now(), v_mw, null, null, null, 'vastgesteld');
+    -- Vastgesteld: opgehaald, ingepakt (afgeboekt), met de medewerker. Een tabletklok in de
+    -- toekomst wordt begrensd op nu (klein 11).
+    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'doos', null, upper(v_doos_e), gen_random_uuid(), now(), v_mw, null, null, null, 'vastgesteld',
+                                        p_leeftijd_at => now() + interval '1 day');
     if v_r->'resultaat'->>'uitkomst' <> 'opgehaald' or (v_r->'resultaat'->>'nog_open')::int <> 0
        or not exists (select 1 from public.winkel_dozen where code = v_doos_e and opgehaald_at is not null and opgehaald_medewerker_id = v_mw)
-       or not exists (select 1 from public.winkel_order_regels where order_id = v_e and opgehaald_at is not null and opgehaald_bron = 'toonbank' and leeftijd_vastgesteld_at is not null)
+       or not exists (select 1 from public.winkel_order_regels where order_id = v_e and opgehaald_at is not null and opgehaald_bron = 'toonbank' and leeftijd_vastgesteld_at = now())
        or not exists (select 1 from public.winkel_voorraad_mutaties where order_id = v_e and type = 'verkoop_online' and hoeveelheid = -4) then
         v_fouten := v_fouten || 'doos E opgehaald: ' || v_r::text || '; ';
     end if;
@@ -274,10 +281,10 @@ begin
         v_fouten := v_fouten || 'soort pakket toegestaan; ';
     exception when invalid_parameter_value then null;
     end;
-    if has_function_privilege('anon', 'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)', 'EXECUTE')
+    if has_function_privilege('anon', 'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)', 'EXECUTE')
        or has_function_privilege('anon', 'public.winkel_boek_rest(uuid, bigint, text, uuid)', 'EXECUTE')
-       or has_function_privilege('authenticated', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)', 'EXECUTE')
-       or not has_function_privilege('service_role', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)', 'EXECUTE')
+       or has_function_privilege('authenticated', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)', 'EXECUTE')
+       or not has_function_privilege('service_role', 'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)', 'EXECUTE')
        or to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)') is not null
        -- De oude winkel_boek_rest bestaat tijdelijk nog (review M2 K6), niet voor anon.
        or to_regprocedure('public.winkel_boek_rest(bigint, text)') is null
@@ -286,5 +293,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie, ook via de tijdelijke oude handtekening; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
+    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie, ook via de tijdelijke oude handtekening; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker; leeftijd op de tijd van de tablet (order en doos), een klok in de toekomst begrensd op nu, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
 end $$;

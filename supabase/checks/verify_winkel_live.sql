@@ -162,7 +162,7 @@ functies(signatuur, migratie) AS (VALUES
     ('public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
                                                                  '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
     ('public.winkel_dozen_voor_regel(uuid, bigint, text[])',     '20260928130000_geschenkpakketten_dozen'),
-    ('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)', '20260928130000_geschenkpakketten_dozen + 20261007130000 (BA-10)'),
+    ('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)', '20260928130000_geschenkpakketten_dozen + 20261007130000 (BA-10)'),
     ('public.voorraad_invoer_op_slot()',                         '20260928140000_voorraad_invoer'),
     ('public.voorraad_invoer_boeken(uuid, uuid)',                '20260928140000_voorraad_invoer + 20260928140100'),
     ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)'),
@@ -208,7 +208,7 @@ functies(signatuur, migratie) AS (VALUES
     ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_vergrendel_wachtrij(uuid, uuid)',         '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
     ('private.toonbank_melding_mislukt(bigint, text, text)',     '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
-    ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
+    ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text, timestamp with time zone)',
                                                                  '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_narekenen(uuid, uuid)',           '20261007130000_toonbank_afhalen_dagstaten (BA-10, review M2 K5)'),
@@ -360,11 +360,11 @@ proef AS (
     UNION ALL
     SELECT 11, 'fix', 'lockvolgorde: winkel_doos_ophalen vergrendelt eerst de order (FOR NO KEY UPDATE)',
            '20261005120100_winkel_lockvolgorde (BA-2)',
-           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%FOR NO KEY UPDATE%', false)
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)')) LIKE '%FOR NO KEY UPDATE%', false)
     UNION ALL
     SELECT 11, 'fix', 'doos ophalen: leeftijd_nodig bij alcohol zonder vaststelling',
            '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
-           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%leeftijd_nodig%', false)
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)')) LIKE '%leeftijd_nodig%', false)
     UNION ALL
     SELECT 11, 'fix', 'personeel.kds_pin_hash niet leesbaar voor anon en authenticated (review M2 K4)',
            '20261006130000_toonbank_apparaten (BA-7a)',

@@ -216,6 +216,9 @@ BEGIN
            AND 'toonbank' = ANY (a.kanalen)
            AND a.prijs_cents IS NOT NULL
            AND NOT EXISTS (SELECT 1 FROM public.winkel_artikel_slots s WHERE s.artikel_id = a.id AND s.standaard_product_id IS NULL)
+           -- Review M2 (klein 2): zonder enig slot boekt een verkoop geen voorraad af
+           -- (contract §1.4: elk toonbankartikel heeft minstens één slot).
+           AND EXISTS (SELECT 1 FROM public.winkel_artikel_slots s WHERE s.artikel_id = a.id)
     ),
     sl AS (
         SELECT s.id, s.artikel_id, s.volgorde, s.standaard_product_id AS pid, s.hoeveelheid, s.eenheid
