@@ -1,0 +1,131 @@
+/**
+ * De echte opslag van de Toonbank-API: Supabase met de service-role client.
+ *
+ * Service_role gaat langs RLS. Daarom filtert elke query hier zelf op
+ * organization_id (die van de apparaatsleutel), en lopen schrijfacties die
+ * atomair moeten zijn via de databasefuncties uit
+ * 20261006130000_toonbank_apparaten (koppelen, inlogteller, apparaat gezien).
+ * Gooit bij een databasefout: de route maakt er 500 serverfout van; een getal
+ * of uitkomst wordt nooit geraden.
+ */
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { createServiceSupabase } from '@/lib/supabase-server';
+import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, ToonbankStore } from './store';
+
+const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
+const SESSIE_KOLOMMEN = 'id, organization_id, apparaat_id, medewerker_id, rol, doel, geldig_tot, beeindigd_at';
+
+export class OpslagFout extends Error {
+    constructor(waar: string, public readonly oorzaak: { code?: string | null; message?: string } | null) {
+        super(`${waar}: ${oorzaak?.message ?? 'onbekende fout'}`);
+        this.name = 'OpslagFout';
+    }
+}
+
+function naarApparaat(r: Record<string, unknown>): Apparaat {
+    return {
+        id: String(r.id),
+        organization_id: String(r.organization_id),
+        naam: String(r.naam),
+        code: String(r.code),
+        locatie: r.locatie === 'event' ? 'event' : 'winkel',
+        ingetrokken_at: (r.ingetrokken_at as string | null) ?? null,
+        hoogste_volgnummer_gemeld: Number(r.hoogste_volgnummer_gemeld ?? 0),
+        bevestigd_tot_volgnummer: Number(r.bevestigd_tot_volgnummer ?? 0),
+    };
+}
+
+export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStore {
+    const sb = client ?? createServiceSupabase();
+
+    return {
+        async koppelKandidaten() {
+            const { data, error } = await sb.rpc('toonbank_koppel_kandidaten');
+            if (error) throw new OpslagFout('toonbank_koppel_kandidaten', error);
+            return ((data ?? []) as Record<string, unknown>[]).map((r): KoppelKandidaat => ({
+                apparaat_id: String(r.apparaat_id),
+                organization_id: String(r.organization_id),
+                koppelcode_hash: String(r.koppelcode_hash),
+            }));
+        },
+
+        async koppelMislukt() {
+            const { data, error } = await sb.rpc('toonbank_koppel_mislukt');
+            if (error) throw new OpslagFout('toonbank_koppel_mislukt', error);
+            return Number(data ?? 0);
+        },
+
+        async koppelAf(apparaatId, sleutelHash, sleutelPrefix) {
+            const { data, error } = await sb.rpc('toonbank_koppel_af', { p_apparaat_id: apparaatId, p_sleutel_hash: sleutelHash, p_sleutel_prefix: sleutelPrefix });
+            if (error) throw new OpslagFout('toonbank_koppel_af', error);
+            if (!data) return null;
+            const r = data as Record<string, unknown>;
+            return { apparaat_id: String(r.apparaat_id), organization_id: String(r.organization_id), code: String(r.code), naam: String(r.naam) } satisfies Koppeling;
+        },
+
+        async apparaatOpSleutel(sleutelHash) {
+            const { data, error } = await sb.from('toonbank_apparaten').select(APPARAAT_KOLOMMEN).eq('sleutel_hash', sleutelHash).maybeSingle();
+            if (error) throw new OpslagFout('toonbank_apparaten', error);
+            return data ? naarApparaat(data as Record<string, unknown>) : null;
+        },
+
+        async medewerkers(orgId) {
+            const { data, error } = await sb.from('personeel')
+                .select('id, naam, toonbank_rol')
+                .eq('organization_id', orgId)
+                .eq('actief', true)
+                .not('toonbank_rol', 'is', null)
+                .order('naam');
+            if (error) throw new OpslagFout('personeel', error);
+            return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+                id: String(r.id),
+                naam: String(r.naam),
+                toonbank_rol: r.toonbank_rol === 'eigenaar' ? 'eigenaar' as const : 'medewerker' as const,
+            }));
+        },
+
+        async medewerker(orgId, id) {
+            const { data, error } = await sb.from('personeel')
+                .select('id, organization_id, naam, actief, toonbank_rol, kds_pin_hash, kds_pin_lockout_until')
+                .eq('organization_id', orgId)
+                .eq('id', id)
+                .maybeSingle();
+            if (error) throw new OpslagFout('personeel', error);
+            if (!data) return null;
+            const r = data as Record<string, unknown>;
+            return {
+                id: String(r.id),
+                organization_id: String(r.organization_id),
+                naam: String(r.naam),
+                actief: !!r.actief,
+                toonbank_rol: r.toonbank_rol === 'eigenaar' || r.toonbank_rol === 'medewerker' ? r.toonbank_rol : null,
+                kds_pin_hash: (r.kds_pin_hash as string | null) ?? null,
+                kds_pin_lockout_until: (r.kds_pin_lockout_until as string | null) ?? null,
+            } satisfies Medewerker;
+        },
+
+        async inlogcodeMislukt(orgId, medewerkerId, apparaatId) {
+            const { data, error } = await sb.rpc('toonbank_inlogcode_mislukt', { p_org: orgId, p_medewerker_id: medewerkerId, p_apparaat_id: apparaatId });
+            if (error) throw new OpslagFout('toonbank_inlogcode_mislukt', error);
+            const r = (data ?? {}) as Record<string, unknown>;
+            return { mislukt: Number(r.mislukt ?? 0), over: Number(r.over ?? 0), geblokkeerd_tot: (r.geblokkeerd_tot as string | null) ?? null } satisfies InlogTeller;
+        },
+
+        async maakSessie(s) {
+            const { data, error } = await sb.from('toonbank_sessies').insert(s).select('id').single();
+            if (error || !data) throw new OpslagFout('toonbank_sessies', error);
+            return { id: String((data as { id: string }).id) };
+        },
+
+        async sessieOpToken(orgId, apparaatId, tokenHash) {
+            const { data, error } = await sb.from('toonbank_sessies')
+                .select(SESSIE_KOLOMMEN)
+                .eq('organization_id', orgId)
+                .eq('apparaat_id', apparaatId)
+                .eq('token_hash', tokenHash)
+                .maybeSingle();
+            if (error) throw new OpslagFout('toonbank_sessies', error);
+            return (data as Sessie | null) ?? null;
+        },
+    };
+}

@@ -16,7 +16,8 @@
 --  (20261005130000 en 20261005130100); de wegzet-objecten (view, kolom, twee
 --  functies) tot BA-6 (20261005140000); de catalogus voor de Toonbank
 --  (statiegeld, kanalen, unieke EAN, catalogusteller) tot BA-4a
---  (20261006120000).
+--  (20261006120000); de toonbank-tabellen, -functies en de
+--  journaaltriggers tot BA-7a (20261006130000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -38,7 +39,10 @@ tabellen(naam, migratie) AS (VALUES
     ('voorraad_invoer_regels',         '20260928140000_voorraad_invoer'),
     ('voorraad_invoer_koppelingen',    '20260928140000_voorraad_invoer'),
     ('winkel_voorraad_versie',         '20261005130000_winkel_vrij (BA-5)'),
-    ('winkel_catalogus_versie',        '20261006120000_toonbank_catalogus (BA-4a)')
+    ('winkel_catalogus_versie',        '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('toonbank_apparaten',             '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_sessies',               '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_journaal',              '20261006130000_toonbank_apparaten (BA-7a)')
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
@@ -104,7 +108,8 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_artikelen',      'kanalen',                 '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikelen',      'toonbank_groep',          '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikelen',      'toonbank_volgorde',       '20261006120000_toonbank_catalogus (BA-4a)'),
-    ('winkel_artikelen',      'toonbank_favoriet',       '20261006120000_toonbank_catalogus (BA-4a)')
+    ('winkel_artikelen',      'toonbank_favoriet',       '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('personeel',             'toonbank_rol',            '20261006130000_toonbank_apparaten (BA-7a)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -150,7 +155,16 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_voorraad_stand(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
     ('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',       '20261005140000_winkel_wegzetten (BA-6)'),
     ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)'),
-    ('private.winkel_catalogus_versie_omhoog()',                 '20261006120000_toonbank_catalogus (BA-4a)')
+    ('private.winkel_catalogus_versie_omhoog()',                 '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('private.toonbank_journaal_alleen_toevoegen()',             '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_apparaat_nieuw(uuid, text, text, text, uuid)', '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_apparaat_koppelcode(uuid, uuid, text)',    '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_apparaat_intrekken(uuid, uuid, text, uuid)', '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_koppel_kandidaten()',                      '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_koppel_mislukt()',                         '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_koppel_af(uuid, text, text)',              '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_inlogcode_mislukt(uuid, uuid, uuid)',      '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)', '20261006130000_toonbank_apparaten (BA-7a)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
@@ -180,7 +194,9 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_artikelen',      'trg_winkel_cv_artikel',              '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_producten',      'trg_winkel_cv_product_erbij',        '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_producten',      'trg_winkel_cv_product',              '20261006120000_toonbank_catalogus (BA-4a)'),
-    ('winkel_artikel_slots',  'trg_winkel_cv_slots',                '20261006120000_toonbank_catalogus (BA-4a)')
+    ('winkel_artikel_slots',  'trg_winkel_cv_slots',                '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('toonbank_journaal',     'trg_toonbank_journaal_alleen_toevoegen', '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_journaal',     'trg_toonbank_journaal_geen_truncate',    '20261006130000_toonbank_apparaten (BA-7a)')
 ),
 indexen(naam, migratie) AS (VALUES
     ('winkel_orders_sleutel_idx',     '20260913120000_winkel_kassa'),
