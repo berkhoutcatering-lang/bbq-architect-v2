@@ -29,9 +29,12 @@
 --  de organisatie is dan nog onbekend. De API haalt de open codes op
 --  (toonbank_koppel_kandidaten), controleert ze met scrypt en maakt het af
 --  met toonbank_koppel_af (alleen als de code nog open is: geen race). Een
---  foute code telt mee bij álle open codes (toonbank_koppel_mislukt): na 5
---  foute pogingen vervalt een code. Zo houdt de database de 5 pogingen bij,
---  niet het geheugen van één serverinstantie.
+--  foute code wordt per bron (SHA-256 van het IP-adres) bijgehouden: 5 per
+--  15 minuten, daarna 429 (toonbank_koppel_geblokkeerd). Die 5 tellen mee
+--  bij álle open codes (toonbank_koppel_mislukt); na 25 vervalt een code
+--  (review M2 klein 7: eerst blokkeerden 5 verzoeken het koppelen voor
+--  iedereen). Zo houdt de database de pogingen bij, niet het geheugen van één
+--  serverinstantie.
 --
 --  Inlogcode fout (toonbank_inlogcode_mislukt): telt de mislukte pogingen
 --  van deze persoon sinds zijn laatste Toonbank-sessie in de laatste 10
@@ -246,7 +249,7 @@ COMMENT ON TABLE public.toonbank_apparaten IS
     'Gekoppelde Toonbank-tablets (contract toonbank/v1 §1.1). Nooit verwijderen, alleen intrekken: bonnen en dagstaten verwijzen ernaar. Sleutel en koppelcode alleen als hash.';
 COMMENT ON COLUMN public.toonbank_apparaten.sleutel_hash IS 'SHA-256 (hex) van de apparaatsleutel tb_…; de sleutel zelf wordt nergens bewaard.';
 COMMENT ON COLUMN public.toonbank_apparaten.koppelcode_hash IS 'scrypt-hash (deviceAuth.hashPin) van de koppelcode van 6 cijfers; leeg buiten het koppelen.';
-COMMENT ON COLUMN public.toonbank_apparaten.koppelpogingen IS 'Foute koppelpogingen sinds deze code; bij 5 vervalt de code (toonbank_koppel_mislukt).';
+COMMENT ON COLUMN public.toonbank_apparaten.koppelpogingen IS 'Foute koppelpogingen sinds deze code (hooguit 5 per bron per 15 minuten); bij 25 vervalt de code (toonbank_koppel_mislukt).';
 
 CREATE INDEX IF NOT EXISTS toonbank_apparaten_org_idx ON public.toonbank_apparaten (organization_id);
 CREATE INDEX IF NOT EXISTS toonbank_apparaten_koppel_idx ON public.toonbank_apparaten (koppelcode_geldig_tot) WHERE koppelcode_hash IS NOT NULL;
@@ -549,6 +552,25 @@ GRANT EXECUTE ON FUNCTION public.toonbank_apparaat_intrekken(UUID, UUID, TEXT, U
 -- ── 6. Koppelen (alleen service_role: de Toonbank-API) ──────────────────────
 -- SECURITY INVOKER: draait met de rechten van service_role. Geen p_org: bij
 -- het koppelen is de organisatie nog niet bekend; de code bepaalt hem.
+--
+-- Review M2 (klein 7): eerst telde elke foute code mee bij álle open codes
+-- van alle organisaties, en na 5 verviel een code: vijf verzoeken blokkeerden
+-- het koppelen voor iedereen. Nu per bron (SHA-256 van het IP-adres, nooit
+-- het adres zelf): een bron mag 5 foute codes per 15 minuten, daarna 429
+-- (toonbank_koppel_geblokkeerd). Alleen die 5 tellen mee bij de open codes;
+-- een code vervalt pas na 25 foute pogingen, dus van minstens 5 bronnen. Wie
+-- raadt, heeft zo hooguit 25 kansen op 1.000.000 per code.
+CREATE TABLE IF NOT EXISTS public.toonbank_koppel_pogingen (
+    id    BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    bron  TEXT        NOT NULL CHECK (bron ~ '^[0-9a-f]{64}$'),
+    at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE public.toonbank_koppel_pogingen IS
+    'Foute koppelcodes per bron (SHA-256 van het IP-adres), voor de grens van 5 per 15 minuten (review M2 klein 7). Ouder dan een dag wordt opgeruimd. Alleen service_role.';
+CREATE INDEX IF NOT EXISTS toonbank_koppel_pogingen_bron_idx ON public.toonbank_koppel_pogingen (bron, at DESC);
+ALTER TABLE public.toonbank_koppel_pogingen ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.toonbank_koppel_pogingen FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT, DELETE ON TABLE public.toonbank_koppel_pogingen TO service_role;
 
 -- De open koppelcodes (hooguit een handvol tegelijk).
 CREATE OR REPLACE FUNCTION public.toonbank_koppel_kandidaten()
@@ -562,7 +584,7 @@ AS $$
       FROM public.toonbank_apparaten a
      WHERE a.koppelcode_hash IS NOT NULL
        AND a.koppelcode_geldig_tot > now()
-       AND a.koppelpogingen < 5
+       AND a.koppelpogingen < 25
        AND a.ingetrokken_at IS NULL
      ORDER BY a.koppelcode_geldig_tot
      LIMIT 50;
@@ -572,35 +594,63 @@ COMMENT ON FUNCTION public.toonbank_koppel_kandidaten() IS
 REVOKE ALL ON FUNCTION public.toonbank_koppel_kandidaten() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.toonbank_koppel_kandidaten() TO service_role;
 
--- Een foute code: telt mee bij álle open codes; bij 5 vervalt een code.
--- Geeft het aantal codes dat daardoor verviel.
-CREATE OR REPLACE FUNCTION public.toonbank_koppel_mislukt()
+-- Mag deze bron nog een code proberen? Nee na 5 foute codes in 15 minuten.
+CREATE OR REPLACE FUNCTION public.toonbank_koppel_geblokkeerd(p_bron TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+    SELECT (SELECT count(*) FROM public.toonbank_koppel_pogingen p
+             WHERE p.bron = p_bron AND p.at > now() - INTERVAL '15 minutes') >= 5;
+$$;
+COMMENT ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) IS
+    'Review M2 klein 7: 5 foute koppelcodes van deze bron (SHA-256 van het IP-adres) in 15 minuten → true (de API antwoordt 429). Alleen service_role.';
+REVOKE ALL ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) TO service_role;
+
+-- Een foute code: vastleggen bij de bron; telt (alleen binnen de 5 van die
+-- bron) mee bij álle open codes; bij 25 vervalt een code. Geeft het aantal
+-- codes dat daardoor verviel.
+CREATE OR REPLACE FUNCTION public.toonbank_koppel_mislukt(p_bron TEXT DEFAULT NULL)
 RETURNS INTEGER
 LANGUAGE plpgsql
 SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-    v_n INTEGER;
+    v_n     INTEGER;
+    v_bron  INTEGER := 1;
 BEGIN
-    UPDATE public.toonbank_apparaten a
-       SET koppelpogingen = a.koppelpogingen + 1
-     WHERE a.koppelcode_hash IS NOT NULL
-       AND a.koppelcode_geldig_tot > now()
-       AND a.ingetrokken_at IS NULL;
+    DELETE FROM public.toonbank_koppel_pogingen WHERE at < now() - INTERVAL '1 day';
+    IF p_bron IS NOT NULL THEN
+        INSERT INTO public.toonbank_koppel_pogingen (bron) VALUES (p_bron);
+        SELECT count(*) INTO v_bron FROM public.toonbank_koppel_pogingen p
+         WHERE p.bron = p_bron AND p.at > now() - INTERVAL '15 minutes';
+    END IF;
+
+    -- Een bron telt hooguit 5 keer mee: één adres kan het koppelen niet voor iedereen blokkeren.
+    IF v_bron <= 5 THEN
+        UPDATE public.toonbank_apparaten a
+           SET koppelpogingen = a.koppelpogingen + 1
+         WHERE a.koppelcode_hash IS NOT NULL
+           AND a.koppelcode_geldig_tot > now()
+           AND a.ingetrokken_at IS NULL;
+    END IF;
 
     UPDATE public.toonbank_apparaten a
        SET koppelcode_hash = NULL,
            koppelcode_geldig_tot = NULL
      WHERE a.koppelcode_hash IS NOT NULL
-       AND a.koppelpogingen >= 5;
+       AND a.koppelpogingen >= 25;
     GET DIAGNOSTICS v_n = ROW_COUNT;
     RETURN v_n;
 END $$;
-COMMENT ON FUNCTION public.toonbank_koppel_mislukt() IS
-    'Foute koppelcode: +1 poging bij alle open codes, na 5 vervalt een code. Alleen service_role.';
-REVOKE ALL ON FUNCTION public.toonbank_koppel_mislukt() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.toonbank_koppel_mislukt() TO service_role;
+COMMENT ON FUNCTION public.toonbank_koppel_mislukt(TEXT) IS
+    'Foute koppelcode (review M2 klein 7): vastgelegd bij de bron; de eerste 5 per bron per 15 minuten tellen +1 bij alle open codes, na 25 vervalt een code. Alleen service_role.';
+REVOKE ALL ON FUNCTION public.toonbank_koppel_mislukt(TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.toonbank_koppel_mislukt(TEXT) TO service_role;
 
 -- De code klopte (scrypt in de API): sleutel vastleggen, code wissen. Alleen
 -- als de code nog open is; anders NULL (een tweede tablet was net eerder).
@@ -630,7 +680,7 @@ BEGIN
      WHERE a.id = p_apparaat_id
        AND a.koppelcode_hash IS NOT NULL
        AND a.koppelcode_geldig_tot > now()
-       AND a.koppelpogingen < 5
+       AND a.koppelpogingen < 25
        AND a.ingetrokken_at IS NULL
     RETURNING * INTO v_rij;
     IF NOT FOUND THEN
@@ -802,7 +852,8 @@ BEGIN
     -- Alleen service_role.
     FOREACH v_sig IN ARRAY ARRAY[
         'public.toonbank_koppel_kandidaten()',
-        'public.toonbank_koppel_mislukt()',
+        'public.toonbank_koppel_mislukt(text)',
+        'public.toonbank_koppel_geblokkeerd(text)',
         'public.toonbank_koppel_af(uuid, text, text)',
         'public.toonbank_inlogcode_mislukt(uuid, uuid, uuid)',
         'public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)'
@@ -820,6 +871,14 @@ BEGIN
             v_fouten := v_fouten || E'\n  zonder vereis_org: ' || v_sig;
         END IF;
     END LOOP;
+
+    -- Review M2 klein 7: de koppelpogingen per bron alleen voor service_role.
+    IF NOT (SELECT c.relrowsecurity FROM pg_class c WHERE c.oid = 'public.toonbank_koppel_pogingen'::REGCLASS)
+       OR has_table_privilege('anon', 'public.toonbank_koppel_pogingen', 'SELECT')
+       OR has_table_privilege('authenticated', 'public.toonbank_koppel_pogingen', 'SELECT')
+       OR NOT has_table_privilege('service_role', 'public.toonbank_koppel_pogingen', 'INSERT') THEN
+        v_fouten := v_fouten || E'\n  rechten of RLS op toonbank_koppel_pogingen kloppen niet';
+    END IF;
 
     -- Tabellen: RLS aan, niets voor anon, sessies niet voor authenticated.
     FOREACH v_t IN ARRAY ARRAY['public.toonbank_apparaten', 'public.toonbank_sessies', 'public.toonbank_journaal'] LOOP

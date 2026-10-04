@@ -18,7 +18,7 @@ import MetallicCard from '@/components/MetallicCard';
 import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
 import {
-    achterstand, resterendeTijd, STATUS_TEKST, tabletStatus, toonKoppelcode, zwakkeInlogcode,
+    achterstand, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON, resterendeTijd, STATUS_TEKST, tabletStatus, toonKoppelcode, zwakkeInlogcode,
     type NieuweKoppelcode, type TabletRij,
 } from '@/lib/toonbank/beheer';
 import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetToonbankInstellingen, zetToonbankRol } from '../actions';
@@ -128,7 +128,7 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instelli
                     {resterend ? (
                         <>
                             <p className="text-[40px] font-semibold tracking-[0.15em] text-[var(--text)] tabular-nums" aria-live="polite">{toonKoppelcode(code.koppelcode)}</p>
-                            <p className="text-[13px] text-[var(--muted)]">Tik deze code in op de tablet bij “Koppelen”. Nog {resterend} geldig; na 5 foute pogingen vervalt hij. Daarna zie je hem hier niet meer terug.</p>
+                            <p className="text-[13px] text-[var(--muted)]">Tik deze code in op de tablet bij “Koppelen”. Nog {resterend} geldig; na {KOPPEL_MAX_POGINGEN} foute pogingen vervalt hij (één apparaat mag er hooguit {KOPPEL_POGINGEN_PER_BRON} per kwartier doen). Daarna zie je hem hier niet meer terug.</p>
                         </>
                     ) : (
                         <p className="text-[14px] text-[var(--text)]">Deze code is verlopen. Vraag een nieuwe aan bij de tablet hieronder.</p>

@@ -252,8 +252,13 @@ export class OngeldigeMelding extends Error {
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
-    /** Een foute code: telt bij alle open codes. Geeft hoeveel codes daardoor vervielen. */
-    koppelMislukt(): Promise<number>;
+    /**
+     * Een foute code van deze bron (SHA-256 van het IP-adres): de eerste 5 per 15 minuten tellen bij
+     * alle open codes, na 25 vervalt een code. Geeft hoeveel codes daardoor vervielen.
+     */
+    koppelMislukt(bron: string | null): Promise<number>;
+    /** Heeft deze bron al 5 foute codes in 15 minuten? Dan 429 zonder te proberen (review M2 klein 7). */
+    koppelGeblokkeerd(bron: string): Promise<boolean>;
     /** null = de code was net niet meer open (verlopen, gebruikt, ingetrokken). */
     koppelAf(apparaatId: string, sleutelHash: string, sleutelPrefix: string): Promise<Koppeling | null>;
 

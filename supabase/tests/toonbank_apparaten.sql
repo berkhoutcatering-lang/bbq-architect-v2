@@ -68,16 +68,31 @@ begin
     exception when invalid_parameter_value then null;
     end;
 
-    -- ── 2. Koppelen: kandidaten, 5 foute pogingen, afronden, race.
+    -- ── 2. Koppelen: kandidaten, foute pogingen per bron (review M2 klein 7), afronden, race.
+    --    Eén bron (adres A): 5 foute codes, daarna geblokkeerd; meer van A telt niet mee.
+    --    De codes blijven open: vijf verzoeken blokkeren het koppelen niet meer voor iedereen.
     select count(*) into v_n from public.toonbank_koppel_kandidaten() k where k.apparaat_id in (v_a1, v_a2, v_ax);
     if v_n <> 3 then v_fouten := v_fouten || v_n || ' open koppelcodes i.p.v. 3; '; end if;
-    for i in 1..4 loop perform public.toonbank_koppel_mislukt(); end loop;
+    if public.toonbank_koppel_geblokkeerd(encode(sha256(convert_to('adres A ' || v_suffix, 'UTF8')), 'hex')) then
+        v_fouten := v_fouten || 'een nieuwe bron is al geblokkeerd; ';
+    end if;
+    for i in 1..8 loop perform public.toonbank_koppel_mislukt(encode(sha256(convert_to('adres A ' || v_suffix, 'UTF8')), 'hex')); end loop;
     select count(*) into v_n from public.toonbank_koppel_kandidaten() k where k.apparaat_id in (v_a1, v_a2, v_ax);
-    if v_n <> 3 then v_fouten := v_fouten || 'na 4 foute pogingen al codes vervallen; '; end if;
-    v_n := public.toonbank_koppel_mislukt();
-    if v_n < 3 then v_fouten := v_fouten || 'de 5e foute poging liet ' || v_n || ' codes vervallen i.p.v. alle; '; end if;
+    if v_n <> 3 or (select koppelpogingen from public.toonbank_apparaten where id = v_a1) <> 5 then
+        v_fouten := v_fouten || 'één bron liet codes vervallen of telde meer dan 5 keer mee; ';
+    end if;
+    if not public.toonbank_koppel_geblokkeerd(encode(sha256(convert_to('adres A ' || v_suffix, 'UTF8')), 'hex')) then
+        v_fouten := v_fouten || 'bron A niet geblokkeerd na 5 foute codes; ';
+    end if;
+    -- Vier andere bronnen erbij (samen 25): dan vervalt een code.
+    for b in 1..4 loop
+        for i in 1..5 loop
+            v_n := public.toonbank_koppel_mislukt(encode(sha256(convert_to('adres ' || b || ' ' || v_suffix, 'UTF8')), 'hex'));
+        end loop;
+    end loop;
+    if v_n < 3 then v_fouten := v_fouten || 'de 25e foute poging liet ' || v_n || ' codes vervallen i.p.v. alle; '; end if;
     select count(*) into v_n from public.toonbank_koppel_kandidaten() k where k.apparaat_id in (v_a1, v_a2, v_ax);
-    if v_n <> 0 then v_fouten := v_fouten || 'na 5 foute pogingen nog open codes; '; end if;
+    if v_n <> 0 then v_fouten := v_fouten || 'na 25 foute pogingen van 5 bronnen nog open codes; '; end if;
     if public.toonbank_koppel_af(v_a1, v_sleutel, 'tb_abcdef…') is not null then
         v_fouten := v_fouten || 'koppelen met een vervallen code lukte; ';
     end if;
@@ -401,5 +416,5 @@ begin
     end;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, 5 foute pogingen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; nieuwe inlogcode/rol weg/niet actief stopt open sessies, een andere kolom niet; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets; een Medewerker maakt, koppelt of trekt geen tablet in, leest kds_pin_hash niet en zet geen rol, inlogcode of blokkade (ook niet bij een nieuwe rij), gewone kolommen wel; een Admin wel — alles teruggedraaid', v_code1, v_code2;
+    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, één bron hooguit 5 foute pogingen (daarna geblokkeerd, telt niet meer mee), 25 van 5 bronnen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; nieuwe inlogcode/rol weg/niet actief stopt open sessies, een andere kolom niet; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets; een Medewerker maakt, koppelt of trekt geen tablet in, leest kds_pin_hash niet en zet geen rol, inlogcode of blokkade (ook niet bij een nieuwe rij), gewone kolommen wel; een Admin wel — alles teruggedraaid', v_code1, v_code2;
 end $$;

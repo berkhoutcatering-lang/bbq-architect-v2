@@ -1,6 +1,7 @@
 /**
  * De koppelcode van de Toonbank (BA-7a): 6 cijfers, 5 minuten geldig, hooguit
- * 5 foute pogingen. Contract: datacontract-toonbank-v1.md §3.3 (POST koppelen).
+ * 5 foute pogingen per bron en 25 in totaal (review M2 klein 7). Contract:
+ * datacontract-toonbank-v1.md §3.3 (POST koppelen).
  *
  *   - Maken: crypto.randomInt (uniform, geen Math.random).
  *   - Bewaren: alleen de scrypt-hash (deviceAuth.hashPin), in
@@ -16,7 +17,8 @@ import { randomInt } from 'node:crypto';
 import { hashPin, verifyPin } from '@/lib/prep/deviceAuth';
 
 export const KOPPELCODE_MINUTEN = 5;
-export const KOPPEL_MAX_POGINGEN = 5;
+/* De grenzen (5 per bron per 15 minuten, 25 per code; review M2 klein 7) staan in beheer.ts (puur, ook voor het scherm). */
+export { KOPPEL_BRON_MINUTEN, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON } from './beheer';
 export const KOPPELCODE_VORM = /^\d{6}$/;
 
 /** Een nieuwe koppelcode, bijvoorbeeld "042917" (voorloopnullen tellen mee). */

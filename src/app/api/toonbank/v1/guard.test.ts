@@ -185,10 +185,24 @@ describe('POST koppelen', () => {
         await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' } }), geen), 403, 'koppelcode_ongeldig');
     });
 
-    it('foute code: 403 koppelcode_ongeldig (nooit 401); na 5 fouten vervalt de code', async () => {
+    it('foute code: 403 koppelcode_ongeldig (nooit 401); één bron mag 5 keer, daarna 429 en de code blijft open (review M2 klein 7)', async () => {
         for (let i = 0; i < 5; i++) {
+            await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' }, ip: '172.16.0.5' }), geen), 403, 'koppelcode_ongeldig');
+        }
+        const f = await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' }, ip: '172.16.0.5' }), geen), 429, 'te_snel');
+        expect(f.details.retry_after).toBe(15 * 60);
+        /* Dezelfde bron ook met de goede code geblokkeerd; een andere bron koppelt gewoon. */
+        await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' }, ip: '172.16.0.5' }), geen), 429, 'te_snel');
+        expect(store.g.apparaten.find((a) => a.id === NIEUW)!.koppelpogingen).toBe(5);
+        expect((await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' } }), geen)).status).toBe(200);
+    });
+
+    it('een code vervalt pas na 25 foute pogingen (van verschillende bronnen)', async () => {
+        for (let i = 0; i < 24; i++) {
             await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' } }), geen), 403, 'koppelcode_ongeldig');
         }
+        expect(store.g.apparaten.find((a) => a.id === NIEUW)!.koppelcode_hash).not.toBeNull();
+        await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' } }), geen), 403, 'koppelcode_ongeldig');
         await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' } }), geen), 403, 'koppelcode_ongeldig');
         expect(store.g.apparaten.find((a) => a.id === NIEUW)!.koppelcode_hash).toBeNull();
     });

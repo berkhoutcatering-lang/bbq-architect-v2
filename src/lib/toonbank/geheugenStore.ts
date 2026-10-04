@@ -1,11 +1,13 @@
 /**
  * De Toonbank-opslag in het geheugen, voor de tests van de logica en de
  * routes. Doet wat de databasefuncties doen (20261006130000_toonbank_
- * apparaten), zonder database: koppelen met 5 pogingen, de inlogteller met
- * blokkade, sessies op hash. supabase/tests/toonbank_apparaten.sql bewaakt
- * dat de echte functies hetzelfde zeggen.
+ * apparaten), zonder database: koppelen met 5 pogingen per bron en 25 per
+ * code, de inlogteller met blokkade, sessies op hash.
+ * supabase/tests/toonbank_apparaten.sql bewaakt dat de echte functies
+ * hetzelfde zeggen.
  */
 import { randomUUID } from 'node:crypto';
+import { KOPPEL_BRON_MINUTEN, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON } from './koppelcode';
 import {
     OngeldigeMelding,
     type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
@@ -49,6 +51,8 @@ export interface ToonbankGeheugen {
     sessies: GeheugenSessie[];
     /** Foute inlogcodes: tijdstip per medewerker. */
     mislukt: { medewerker_id: string; at: string }[];
+    /** Foute koppelcodes per bron (review M2 klein 7), zoals toonbank_koppel_pogingen. */
+    koppelFouten: { bron: string; at: number }[];
     /** De klok van de opslag (de database bepaalt now()). */
     nu: Date;
     /** Wat toonbank_status per organisatie zou uitrekenen (versies, badge, instellingen). */
@@ -108,6 +112,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         medewerkers: start.medewerkers ?? [],
         sessies: start.sessies ?? [],
         mislukt: start.mislukt ?? [],
+        koppelFouten: start.koppelFouten ?? [],
         nu: start.nu ?? new Date(),
         stand: start.stand ?? {},
         catalogus: start.catalogus ?? {},
@@ -128,7 +133,8 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
-        a.koppelcode_hash != null && a.koppelcode_geldig_tot != null && new Date(a.koppelcode_geldig_tot).getTime() > nu() && a.koppelpogingen < 5 && !a.ingetrokken_at;
+        a.koppelcode_hash != null && a.koppelcode_geldig_tot != null && new Date(a.koppelcode_geldig_tot).getTime() > nu() && a.koppelpogingen < KOPPEL_MAX_POGINGEN && !a.ingetrokken_at;
+    const foutenVanBron = (bron: string) => g.koppelFouten.filter((f) => f.bron === bron && f.at > nu() - KOPPEL_BRON_MINUTEN * 60_000).length;
     const zonderHashes = (a: GeheugenApparaat): Apparaat => ({
         id: a.id, organization_id: a.organization_id, naam: a.naam, code: a.code, locatie: a.locatie,
         ingetrokken_at: a.ingetrokken_at, hoogste_volgnummer_gemeld: a.hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer: a.bevestigd_tot_volgnummer,
@@ -141,11 +147,21 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             return g.apparaten.filter(open).map((a): KoppelKandidaat => ({ apparaat_id: a.id, organization_id: a.organization_id, koppelcode_hash: a.koppelcode_hash! }));
         },
 
-        async koppelMislukt() {
+        async koppelGeblokkeerd(bron) {
+            return foutenVanBron(bron) >= KOPPEL_POGINGEN_PER_BRON;
+        },
+
+        async koppelMislukt(bron) {
+            /* Zoals toonbank_koppel_mislukt: een bron telt hooguit 5 keer mee bij de open codes. */
+            let telt = true;
+            if (bron) {
+                g.koppelFouten.push({ bron, at: nu() });
+                telt = foutenVanBron(bron) <= KOPPEL_POGINGEN_PER_BRON;
+            }
             let vervallen = 0;
             for (const a of g.apparaten) {
-                if (a.koppelcode_hash && a.koppelcode_geldig_tot && new Date(a.koppelcode_geldig_tot).getTime() > nu() && !a.ingetrokken_at) a.koppelpogingen += 1;
-                if (a.koppelcode_hash && a.koppelpogingen >= 5) {
+                if (telt && a.koppelcode_hash && a.koppelcode_geldig_tot && new Date(a.koppelcode_geldig_tot).getTime() > nu() && !a.ingetrokken_at) a.koppelpogingen += 1;
+                if (a.koppelcode_hash && a.koppelpogingen >= KOPPEL_MAX_POGINGEN) {
                     a.koppelcode_hash = null;
                     a.koppelcode_geldig_tot = null;
                     vervallen += 1;

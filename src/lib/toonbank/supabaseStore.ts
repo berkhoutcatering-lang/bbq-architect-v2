@@ -53,10 +53,16 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             }));
         },
 
-        async koppelMislukt() {
-            const { data, error } = await sb.rpc('toonbank_koppel_mislukt');
+        async koppelMislukt(bron) {
+            const { data, error } = await sb.rpc('toonbank_koppel_mislukt', { p_bron: bron });
             if (error) throw new OpslagFout('toonbank_koppel_mislukt', error);
             return Number(data ?? 0);
+        },
+
+        async koppelGeblokkeerd(bron) {
+            const { data, error } = await sb.rpc('toonbank_koppel_geblokkeerd', { p_bron: bron });
+            if (error) throw new OpslagFout('toonbank_koppel_geblokkeerd', error);
+            return data === true;
         },
 
         async koppelAf(apparaatId, sleutelHash, sleutelPrefix) {

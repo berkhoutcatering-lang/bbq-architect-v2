@@ -34,9 +34,19 @@ export interface TabletRij {
 
 export type TabletStatus = 'ingetrokken' | 'wacht_op_koppelen' | 'code_verlopen' | 'gekoppeld' | 'nooit_gekoppeld';
 
+/**
+ * Review M2 (klein 7): een foute koppelcode telde mee bij álle open codes, en na 5 verviel een
+ * code: vijf verzoeken blokkeerden het koppelen voor iedereen. Nu per bron (SHA-256 van het
+ * IP-adres): hooguit 5 foute codes per 15 minuten (daarna 429), en een code vervalt pas na 25
+ * foute pogingen, dus van minstens 5 bronnen. Zie toonbank_koppel_mislukt en _geblokkeerd.
+ */
+export const KOPPEL_POGINGEN_PER_BRON = 5;
+export const KOPPEL_BRON_MINUTEN = 15;
+export const KOPPEL_MAX_POGINGEN = 25;
+
 export function tabletStatus(t: Pick<TabletRij, 'ingetrokken_at' | 'gekoppeld_at' | 'koppelcode_geldig_tot' | 'koppelpogingen'>, nu: Date = new Date()): TabletStatus {
     if (t.ingetrokken_at) return 'ingetrokken';
-    const codeOpen = t.koppelcode_geldig_tot != null && new Date(t.koppelcode_geldig_tot).getTime() > nu.getTime() && t.koppelpogingen < 5;
+    const codeOpen = t.koppelcode_geldig_tot != null && new Date(t.koppelcode_geldig_tot).getTime() > nu.getTime() && t.koppelpogingen < KOPPEL_MAX_POGINGEN;
     if (codeOpen) return 'wacht_op_koppelen';
     if (t.gekoppeld_at) return 'gekoppeld';
     return t.koppelcode_geldig_tot != null ? 'code_verlopen' : 'nooit_gekoppeld';

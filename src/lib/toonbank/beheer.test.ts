@@ -13,8 +13,9 @@ describe('tabletStatus', () => {
         expect(tabletStatus({ ...basis, koppelcode_geldig_tot: over(120) }, NU)).toBe('wacht_op_koppelen');
         expect(tabletStatus({ ...basis, gekoppeld_at: over(-600), koppelcode_geldig_tot: over(120) }, NU)).toBe('wacht_op_koppelen');
     });
-    it('5 foute pogingen of verlopen: niet meer open', () => {
-        expect(tabletStatus({ ...basis, koppelcode_geldig_tot: over(120), koppelpogingen: 5 }, NU)).toBe('code_verlopen');
+    it('25 foute pogingen of verlopen: niet meer open (review M2 klein 7: 5 per bron, 25 per code)', () => {
+        expect(tabletStatus({ ...basis, koppelcode_geldig_tot: over(120), koppelpogingen: 24 }, NU)).toBe('wacht_op_koppelen');
+        expect(tabletStatus({ ...basis, koppelcode_geldig_tot: over(120), koppelpogingen: 25 }, NU)).toBe('code_verlopen');
         expect(tabletStatus({ ...basis, koppelcode_geldig_tot: over(-1) }, NU)).toBe('code_verlopen');
         expect(tabletStatus({ ...basis, gekoppeld_at: over(-600), koppelcode_geldig_tot: over(-1) }, NU)).toBe('gekoppeld');
         expect(tabletStatus(basis, NU)).toBe('nooit_gekoppeld');

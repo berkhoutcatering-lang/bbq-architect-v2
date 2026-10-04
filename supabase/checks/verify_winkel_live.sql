@@ -52,6 +52,7 @@ tabellen(naam, migratie) AS (VALUES
     ('toonbank_apparaten',             '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_sessies',               '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_journaal',              '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_koppel_pogingen',       '20261006130000_toonbank_apparaten (BA-7a, review M2 klein 7)'),
     ('toonbank_bonnen',                '20261007120000_toonbank_bonnen (BA-9)'),
     ('toonbank_bon_regels',            '20261007120000_toonbank_bonnen (BA-9)'),
     ('toonbank_dagstaten',             '20261007130000_toonbank_afhalen_dagstaten (BA-10)')
@@ -186,7 +187,8 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_apparaat_koppelcode(uuid, uuid, text)',    '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_apparaat_intrekken(uuid, uuid, text, uuid)', '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_koppel_kandidaten()',                      '20261006130000_toonbank_apparaten (BA-7a)'),
-    ('public.toonbank_koppel_mislukt()',                         '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_koppel_mislukt(text)',                     '20261006130000_toonbank_apparaten (BA-7a, review M2 klein 7)'),
+    ('public.toonbank_koppel_geblokkeerd(text)',                 '20261006130000_toonbank_apparaten (BA-7a, review M2 klein 7)'),
     ('public.toonbank_koppel_af(uuid, text, text)',              '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_inlogcode_mislukt(uuid, uuid, uuid)',      '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)', '20261006130000_toonbank_apparaten (BA-7a)'),
