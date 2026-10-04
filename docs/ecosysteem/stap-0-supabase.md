@@ -17,6 +17,8 @@ dev-database.
 | `supabase/checks/verify_anon_rechten.sql` | wie mag welke functie uitvoeren, standaardrechten, triagelijst | live en dev (alleen lezen) |
 | `supabase/checks/verify_ophaallek.sql` | regels die opgehaald zijn maar nooit ingepakt | live (alleen lezen) |
 | `supabase/migrations/20261003150000_winkel_functies_niet_voor_anon.sql` | de fix BA-S | eerst dev, daarna live met go |
+| `supabase/migrations/20261004120000_functies_niet_voor_anon_2.sql` | de fix BA-S2 (rest van de triagelijst) | eerst dev, daarna live met go |
+| `supabase/checks/herstel_ba_s2.sql` | BA-S2 helemaal terugdraaien (opent het lek weer) | alleen in nood, met go |
 | `supabase/tests/seed_vier_naober.sql` | organisatie `e2e-hop-en-bites`, Naober geteld op 6, artikel `roeg-naober` | alleen dev |
 | `supabase/tests/functie_rechten.sql` | bewijs dat BA-S werkt | alleen dev |
 | `npm run dev:branch` | BA lokaal tegen dev; weigert als de URL naar live wijst | lokaal |
@@ -145,6 +147,39 @@ Editor van het dashboard. Het zijn allemaal losse SELECT's.
    terug aan `authenticated`, nooit aan anon:
    `GRANT EXECUTE ON FUNCTION public.<functie>(<argumenttypes>) TO authenticated;`
 
+### 5. BA-S2: de rest van de triagelijst (branch `fix/ba-s2-functierechten`)
+
+**Wat de fix doet** (`supabase/migrations/20261004120000_functies_niet_voor_anon_2.sql`):
+- Na BA-S mocht anon op live nog 36 SECURITY DEFINER-functies uitvoeren. Daarvan
+  gaan er 16 dicht. De 17 triggerfuncties blijven (niet los aan te roepen), en
+  de drie RLS-hulpfuncties `user_org_ids`, `is_member_with_role` en
+  `pi_bridge_org_id` ook: policies roepen ze aan als anon. Die krijgen een eigen fix.
+- Wat BA met de ingelogde gebruiker aanroept, blijft voor `authenticated`; de cron,
+  de deellink-teller en functies zonder aanroeper alleen voor `service_role`. Per
+  functie staat de aanroeper in de migratie.
+- `explode_event_to_inkooplijst`, `find_cheaper_substitutes_same_cut` en
+  `get_latest_gerecht_cost_delta` gaven gegevens van elke organisatie. Ze beginnen
+  nu met `private.vereis_org(p_org_id)`; de rest is letterlijk de live-definitie.
+- De pre-flight weigert als een van die drie definities op live anders is dan op
+  4 oktober, of als een policy, view of andere functie de dichtgaande functies
+  gebruikt.
+
+**Stappen:**
+1. **Dev:** migratie toepassen, dan `supabase/tests/functie_rechten.sql` ("GESLAAGD: …",
+   met "BA-S2: … van de 16 functies") en `verify_anon_rechten.sql`: in deel 0 geven
+   regel 2 en 4 een 0, en deel 4 staat overal op OK.
+2. **Go, en dan live:** hetzelfde bestand via `apply_migration`.
+3. **Na live:** `verify_anon_rechten.sql` deel 0: "BA-S2-functies die anon mag
+   uitvoeren" 0, en in deel 3 alleen nog triggerfuncties en de drie RLS-hulpfuncties.
+   Smoketest:
+   - `/gerechten/<id>`: de kostprijskop met sparkline;
+   - de substitutielade bij een ingrediënt (regels-tab);
+   - `/financien`: de marktpuls-widget;
+   - `/archief`: een bon ontgrendelen (Admin) en de Activiteit-tab;
+   - een deellink `/share/<token>` openen.
+4. **Noodherstel:** liever één functie terug aan `authenticated`. Alles terug kan met
+   `supabase/checks/herstel_ba_s2.sql` (opent het lek weer; alleen met go).
+
 ---
 
 ## Goed om te weten
@@ -153,10 +188,12 @@ Editor van het dashboard. Het zijn allemaal losse SELECT's.
   expliciete grants nodig.
   - Postgres geeft PUBLIC standaard EXECUTE op elke nieuwe functie. Dat haalt BA-S
     niet weg: het haalt alleen de eigen grant van anon weg.
-  - `functie_rechten.sql` vangt het op voor `winkel_*` en `voorraad_*`.
+  - `functie_rechten.sql` vangt het op voor `winkel_*` en `voorraad_*`, en sinds
+    BA-S2 voor elke SECURITY DEFINER-functie in public die geen trigger- of
+    RLS-hulpfunctie is.
 - **Geen bewijs op live:** het bewijs dat de fix werkt, leveren we op dev. Op live
   kijken we alleen met `verify_anon_rechten.sql`.
 - **Open na vandaag:**
-  - de triagelijst (deel 3);
+  - de triagelijst (deel 3): na BA-S2 alleen nog de drie RLS-hulpfuncties;
   - per regel van het ophaallek een keuze, voor BA-2;
   - BA-1 (eerst #241, dan `feat/winkelvoorraad`; nooit #240 los).
