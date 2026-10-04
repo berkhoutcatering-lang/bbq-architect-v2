@@ -80,6 +80,29 @@ export interface Sessie {
     beeindigd_at: string | null;
 }
 
+/** Wat toonbank_status teruggeeft (alles van GET status behalve contract). */
+export interface StatusBron {
+    servertijd: string;
+    apparaat: { apparaat_id: string; code: string; naam: string };
+    catalogus_versie: number;
+    voorraad_versie: number;
+    vrij_verloopt_at: string | null;
+    afhaallijst_versie: number;
+    wegzetten_open: number;
+    wegzetten_binnen_24u: number;
+    hoogste_volgnummer_gemeld: number;
+    bevestigd_tot_volgnummer: number;
+    hoogste_bon_volgnummer: number;
+    instellingen: { alcohol_toegestaan: boolean; contant_aan: boolean; contant_limiet_cents: number; beschikbaar_grens: number };
+    te_controleren: number;
+}
+
+export interface ApparaatGezien {
+    volgnummer: number | null;
+    app_versie: string | null;
+    contract_versie: string | null;
+}
+
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
@@ -100,4 +123,8 @@ export interface ToonbankStore {
     maakSessie(s: NieuweSessie): Promise<{ id: string }>;
     /** Op SHA-256 van het token, alleen binnen deze organisatie en dit apparaat. */
     sessieOpToken(orgId: string, apparaatId: string, tokenHash: string): Promise<Sessie | null>;
+
+    /* ── Status (BA-7b) ── */
+    /** Legt "laatst gezien" en het hoogste volgnummer vast en geeft de stand (toonbank_status). */
+    status(orgId: string, apparaatId: string, gezien: ApparaatGezien): Promise<StatusBron>;
 }

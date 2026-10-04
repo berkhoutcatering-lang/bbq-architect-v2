@@ -119,6 +119,34 @@ export async function zetToonbankRol(input: unknown): Promise<ActionResult<{ ok:
 }
 
 /**
+ * De instellingen die de Toonbank via GET status krijgt (BA-7b): alcohol
+ * toegestaan, contant aan en de contantgrens (nooit boven € 3.000).
+ */
+export async function zetToonbankInstellingen(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({
+        alcohol_toegestaan: z.boolean(),
+        contant_aan: z.boolean(),
+        contant_limiet_cents: z.number().int().min(1, 'De contantgrens is meer dan € 0').max(300_000, 'Contant kan nooit vanaf € 3.000 (wet sinds 1 januari 2026)'),
+    }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await alsAdmin();
+    if (!s) return { error: 'Alleen een beheerder (Admin) kan dit wijzigen.' };
+
+    const { data, error } = await s.supabase.from('winkel_instellingen')
+        .update({
+            toonbank_alcohol_toegestaan: parsed.data.alcohol_toegestaan,
+            toonbank_contant_aan: parsed.data.contant_aan,
+            toonbank_contant_limiet_cents: parsed.data.contant_limiet_cents,
+        })
+        .eq('organization_id', s.orgId)
+        .select('organization_id');
+    if (error) return { error: error.message };
+    if (!data?.length) return { error: 'Er zijn nog geen winkelinstellingen; zet eerst de webshop op.' };
+    revalidatePath(PAD);
+    return { data: { ok: true } };
+}
+
+/**
  * De inlogcode zetten (4 tot 6 cijfers). Dit is dezelfde code als op de
  * keuken-tablet (personeel.kds_pin_hash): één code per persoon. Een nieuwe
  * code heft een blokkade op.

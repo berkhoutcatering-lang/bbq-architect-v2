@@ -21,7 +21,13 @@ import {
     achterstand, resterendeTijd, STATUS_TEKST, tabletStatus, toonKoppelcode, zwakkeInlogcode,
     type NieuweKoppelcode, type TabletRij,
 } from '@/lib/toonbank/beheer';
-import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetToonbankRol } from '../actions';
+import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetToonbankInstellingen, zetToonbankRol } from '../actions';
+
+export interface ToonbankInstellingen {
+    alcohol_toegestaan: boolean;
+    contant_aan: boolean;
+    contant_limiet_cents: number;
+}
 
 export interface MedewerkerRij {
     id: string;
@@ -38,7 +44,7 @@ function tijd(iso: string | null): string {
     return new Date(iso).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ToonbankBeheer({ tablets, medewerkers, isAdmin }: { tablets: TabletRij[]; medewerkers: MedewerkerRij[]; isAdmin: boolean }) {
+export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instellingen }: { tablets: TabletRij[]; medewerkers: MedewerkerRij[]; isAdmin: boolean; instellingen: ToonbankInstellingen | null }) {
     const router = useRouter();
     const showToast = useToast();
     const [naam, setNaam] = useState('');
@@ -198,6 +204,9 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin }: { tabl
                 })}
             </div>
 
+            {/* Wat de tablet via GET status krijgt. */}
+            {instellingen && <InstellingenKaart start={instellingen} isAdmin={isAdmin} na={() => router.refresh()} />}
+
             {/* Wie mag inloggen. */}
             <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Wie mag op de Toonbank</h3>
             <p className="text-[12px] text-[var(--muted)] mb-3">Een <b>eigenaar</b> mag ook verkopen boven “vrij” goedkeuren. De inlogcode (4 tot 6 cijfers) is dezelfde als op de keuken-tablet; je stelt hem alleen hier in, nooit op de tablet.</p>
@@ -206,6 +215,50 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin }: { tabl
                     {medewerkers.length === 0 && <li className="p-4 text-[13px] text-[var(--muted)]">Nog geen personeel. Voeg mensen toe onder Team.</li>}
                     {medewerkers.map((m) => <MedewerkerRegel key={m.id} m={m} isAdmin={isAdmin} na={() => router.refresh()} />)}
                 </ul>
+            </MetallicCard>
+        </>
+    );
+}
+
+function InstellingenKaart({ start, isAdmin, na }: { start: ToonbankInstellingen; isAdmin: boolean; na: () => void }) {
+    const showToast = useToast();
+    const [alcohol, setAlcohol] = useState(start.alcohol_toegestaan);
+    const [contant, setContant] = useState(start.contant_aan);
+    const [limiet, setLimiet] = useState(String(Math.round(start.contant_limiet_cents / 100)));
+    const [bezig, setBezig] = useState(false);
+
+    async function bewaar() {
+        const euro = Number(limiet.replace(',', '.'));
+        if (!(euro > 0) || euro > 3000) { showToast('De contantgrens ligt tussen € 0 en € 3.000.', 'error'); return; }
+        setBezig(true);
+        try {
+            const r = await zetToonbankInstellingen({ alcohol_toegestaan: alcohol, contant_aan: contant, contant_limiet_cents: Math.round(euro * 100) });
+            if ('error' in r) { showToast(r.error, 'error'); return; }
+            showToast('Toonbank-instellingen bewaard; de tablets krijgen ze binnen 30 seconden', 'success');
+            na();
+        } finally { setBezig(false); }
+    }
+
+    return (
+        <>
+            <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)] mb-3">Verkopen op de Toonbank</h3>
+            <MetallicCard className="p-4 mb-8" hover={false}>
+                <div className="flex flex-wrap items-end gap-4">
+                    <label className="flex items-center gap-2 text-[13px] text-[var(--text)]">
+                        <input type="checkbox" checked={alcohol} disabled={!isAdmin} onChange={(e) => setAlcohol(e.target.checked)} />
+                        Alcohol verkopen (pas aanzetten als de winkelstatus rond is)
+                    </label>
+                    <label className="flex items-center gap-2 text-[13px] text-[var(--text)]">
+                        <input type="checkbox" checked={contant} disabled={!isAdmin} onChange={(e) => setContant(e.target.checked)} />
+                        Contant aannemen
+                    </label>
+                    <div className="field" style={{ width: 160 }}>
+                        <label htmlFor="tb-limiet">Contant tot (€)</label>
+                        <input id="tb-limiet" inputMode="decimal" value={limiet} disabled={!isAdmin || !contant} onChange={(e) => setLimiet(e.target.value)} />
+                    </div>
+                    {isAdmin && <Button size="sm" loading={bezig} onClick={() => void bewaar()}>Bewaren</Button>}
+                </div>
+                <p className="text-[11px] text-[var(--muted)] mt-2">Contant kan nooit vanaf € 3.000 per bon (wet sinds 1 januari 2026); lager mag.</p>
             </MetallicCard>
         </>
     );

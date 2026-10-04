@@ -24,7 +24,7 @@ export default async function ToonbankInstellingenPage() {
     const orgId = (lid?.organization_id as string | undefined) ?? null;
     const isAdmin = lid?.role === 'Admin';
 
-    const [{ data: tablets }, { data: personeel }] = orgId
+    const [{ data: tablets }, { data: personeel }, { data: inst }] = orgId
         ? await Promise.all([
             supabase.from('toonbank_apparaten')
                 .select('id, naam, code, locatie, sleutel_prefix, gekoppeld_at, koppelcode_geldig_tot, koppelpogingen, laatst_gezien_at, app_versie, contract_versie, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer, ingetrokken_at, ingetrokken_reden')
@@ -34,8 +34,12 @@ export default async function ToonbankInstellingenPage() {
                 .select('id, naam, functie, actief, toonbank_rol, kds_pin_hash, kds_pin_lockout_until')
                 .eq('organization_id', orgId)
                 .order('naam'),
+            supabase.from('winkel_instellingen')
+                .select('toonbank_alcohol_toegestaan, toonbank_contant_aan, toonbank_contant_limiet_cents')
+                .eq('organization_id', orgId)
+                .maybeSingle(),
         ])
-        : [{ data: [] }, { data: [] }];
+        : [{ data: [] }, { data: [] }, { data: null }];
 
     const medewerkers: MedewerkerRij[] = (personeel ?? []).map((p) => ({
         id: p.id as string,
@@ -52,6 +56,11 @@ export default async function ToonbankInstellingenPage() {
             tablets={((tablets ?? []) as TabletRij[]).map((t) => ({ ...t, hoogste_volgnummer_gemeld: Number(t.hoogste_volgnummer_gemeld), bevestigd_tot_volgnummer: Number(t.bevestigd_tot_volgnummer) }))}
             medewerkers={medewerkers}
             isAdmin={isAdmin}
+            instellingen={inst ? {
+                alcohol_toegestaan: !!inst.toonbank_alcohol_toegestaan,
+                contant_aan: inst.toonbank_contant_aan !== false,
+                contant_limiet_cents: Number(inst.toonbank_contant_limiet_cents ?? 300000),
+            } : null}
         />
     );
 }

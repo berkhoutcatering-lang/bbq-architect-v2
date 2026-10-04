@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, ToonbankStore } from './store';
+import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, StatusBron, ToonbankStore } from './store';
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
 const SESSIE_KOLOMMEN = 'id, organization_id, apparaat_id, medewerker_id, rol, doel, geldig_tot, beeindigd_at';
@@ -127,5 +127,42 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error) throw new OpslagFout('toonbank_sessies', error);
             return (data as Sessie | null) ?? null;
         },
+
+        async status(orgId, apparaatId, gezien) {
+            const { data, error } = await sb.rpc('toonbank_status', {
+                p_org: orgId, p_apparaat_id: apparaatId, p_volgnummer: gezien.volgnummer,
+                p_app_versie: gezien.app_versie, p_contract_versie: gezien.contract_versie,
+            });
+            if (error) throw new OpslagFout('toonbank_status', error);
+            return naarStatus(data as Record<string, unknown>);
+        },
+    };
+}
+
+/** jsonb van toonbank_status → StatusBron; bigint/numeric kan als tekst komen, tijden als ISO met Z. */
+export function naarStatus(r: Record<string, unknown>): StatusBron {
+    const n = (v: unknown) => Number(v ?? 0);
+    const t = (v: unknown) => (v == null ? null : new Date(String(v)).toISOString());
+    const a = (r.apparaat ?? {}) as Record<string, unknown>;
+    const i = (r.instellingen ?? {}) as Record<string, unknown>;
+    return {
+        servertijd: t(r.servertijd) ?? new Date().toISOString(),
+        apparaat: { apparaat_id: String(a.apparaat_id), code: String(a.code), naam: String(a.naam) },
+        catalogus_versie: n(r.catalogus_versie),
+        voorraad_versie: n(r.voorraad_versie),
+        vrij_verloopt_at: t(r.vrij_verloopt_at),
+        afhaallijst_versie: n(r.afhaallijst_versie),
+        wegzetten_open: n(r.wegzetten_open),
+        wegzetten_binnen_24u: n(r.wegzetten_binnen_24u),
+        hoogste_volgnummer_gemeld: n(r.hoogste_volgnummer_gemeld),
+        bevestigd_tot_volgnummer: n(r.bevestigd_tot_volgnummer),
+        hoogste_bon_volgnummer: n(r.hoogste_bon_volgnummer),
+        instellingen: {
+            alcohol_toegestaan: i.alcohol_toegestaan === true,
+            contant_aan: i.contant_aan !== false,
+            contant_limiet_cents: Math.min(n(i.contant_limiet_cents) || 300_000, 300_000),
+            beschikbaar_grens: n(i.beschikbaar_grens) || 5,
+        },
+        te_controleren: n(r.te_controleren),
     };
 }

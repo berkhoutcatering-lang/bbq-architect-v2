@@ -17,7 +17,8 @@
 --  functies) tot BA-6 (20261005140000); de catalogus voor de Toonbank
 --  (statiegeld, kanalen, unieke EAN, catalogusteller) tot BA-4a
 --  (20261006120000); de toonbank-tabellen, -functies en de
---  journaaltriggers tot BA-7a (20261006130000).
+--  journaaltriggers tot BA-7a (20261006130000); de toonbank-instellingen en
+--  toonbank_status tot BA-7b (20261006140000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -109,7 +110,10 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_artikelen',      'toonbank_groep',          '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikelen',      'toonbank_volgorde',       '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikelen',      'toonbank_favoriet',       '20261006120000_toonbank_catalogus (BA-4a)'),
-    ('personeel',             'toonbank_rol',            '20261006130000_toonbank_apparaten (BA-7a)')
+    ('personeel',             'toonbank_rol',            '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('winkel_instellingen',   'toonbank_alcohol_toegestaan',   '20261006140000_toonbank_status (BA-7b)'),
+    ('winkel_instellingen',   'toonbank_contant_aan',          '20261006140000_toonbank_status (BA-7b)'),
+    ('winkel_instellingen',   'toonbank_contant_limiet_cents', '20261006140000_toonbank_status (BA-7b)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -164,7 +168,8 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_koppel_mislukt()',                         '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_koppel_af(uuid, text, text)',              '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_inlogcode_mislukt(uuid, uuid, uuid)',      '20261006130000_toonbank_apparaten (BA-7a)'),
-    ('public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)', '20261006130000_toonbank_apparaten (BA-7a)')
+    ('public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)', '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('public.toonbank_status(uuid, uuid, bigint, text, text)',   '20261006140000_toonbank_status (BA-7b)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),

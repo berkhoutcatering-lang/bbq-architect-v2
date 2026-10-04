@@ -6,7 +6,7 @@
  * dat de echte functies hetzelfde zeggen.
  */
 import { randomUUID } from 'node:crypto';
-import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, NieuweSessie, Sessie, ToonbankStore } from './store';
+import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, NieuweSessie, Sessie, StatusBron, ToonbankStore } from './store';
 
 export interface GeheugenApparaat extends Apparaat {
     sleutel_hash: string | null;
@@ -29,7 +29,21 @@ export interface ToonbankGeheugen {
     mislukt: { medewerker_id: string; at: string }[];
     /** De klok van de opslag (de database bepaalt now()). */
     nu: Date;
+    /** Wat toonbank_status per organisatie zou uitrekenen (versies, badge, instellingen). */
+    stand: Record<string, Omit<StatusBron, 'servertijd' | 'apparaat' | 'hoogste_volgnummer_gemeld' | 'bevestigd_tot_volgnummer'>>;
 }
+
+export const STANDAARD_STAND: ToonbankGeheugen['stand'][string] = {
+    catalogus_versie: 0,
+    voorraad_versie: 0,
+    vrij_verloopt_at: null,
+    afhaallijst_versie: 0,
+    wegzetten_open: 0,
+    wegzetten_binnen_24u: 0,
+    hoogste_bon_volgnummer: 0,
+    instellingen: { alcohol_toegestaan: false, contant_aan: true, contant_limiet_cents: 300_000, beschikbaar_grens: 5 },
+    te_controleren: 0,
+};
 
 export type ToonbankGeheugenStore = ToonbankStore & { g: ToonbankGeheugen };
 
@@ -40,6 +54,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         sessies: start.sessies ?? [],
         mislukt: start.mislukt ?? [],
         nu: start.nu ?? new Date(),
+        stand: start.stand ?? {},
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -124,6 +139,20 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             const { token_hash: _t, aangemaakt_at: _a, ...rest } = s;
             void _t; void _a;
             return rest;
+        },
+
+        async status(orgId, apparaatId, gezien) {
+            const a = g.apparaten.find((x) => x.id === apparaatId && x.organization_id === orgId && !x.ingetrokken_at);
+            if (!a) throw new Error('tablet niet gevonden of ingetrokken (P0002)');
+            a.hoogste_volgnummer_gemeld = Math.max(a.hoogste_volgnummer_gemeld, gezien.volgnummer ?? 0);
+            const stand = g.stand[orgId] ?? STANDAARD_STAND;
+            return {
+                ...stand,
+                servertijd: g.nu.toISOString(),
+                apparaat: { apparaat_id: a.id, code: a.code, naam: a.naam },
+                hoogste_volgnummer_gemeld: a.hoogste_volgnummer_gemeld,
+                bevestigd_tot_volgnummer: a.bevestigd_tot_volgnummer,
+            } satisfies StatusBron;
         },
     };
 }

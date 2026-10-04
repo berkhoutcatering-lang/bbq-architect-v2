@@ -140,6 +140,12 @@ begin
         execute 'update public.winkel_producten set statiegeld_cents = 15, ean = coalesce(ean, ''2000000000015'') where id = $1' using v_prod;
     end if;
 
+    -- ── BA-7b: op de dev-database mag de Toonbank alcohol verkopen (Naober is 18+).
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'winkel_instellingen' and column_name = 'toonbank_alcohol_toegestaan') then
+        execute 'update public.winkel_instellingen set toonbank_alcohol_toegestaan = true where organization_id = $1' using v_org;
+    end if;
+
     -- ── Precies één slot: 1 × Naober. Slots zijn het template; bestaande
     --    orders hebben hun eigen componenten en merken hier niets van.
     select count(*), bool_and(slot_type = 'bier' and hoeveelheid = 1 and eenheid = 'stuk' and per = 'stuk' and standaard_product_id = v_prod)

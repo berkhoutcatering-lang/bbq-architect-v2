@@ -1,0 +1,73 @@
+{
+  "meldingen": [
+    {
+      "soort": "vrij_overschreden",
+      "gebeurtenis_id": "5895162f-ecab-4e57-87d9-ea75d40b25b6",
+      "volgnummer": 1204,
+      "moment": "2027-03-06T11:40:10+01:00",
+      "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+      "bon_id": "cecaf1d1-ab74-4e05-8b92-efe57044e9f6",
+      "regelnr": 1,
+      "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4",
+      "vrij_volgens_tablet": 2,
+      "verkocht": 3,
+      "boven_vrij": 1,
+      "voorraad_versie": 1181,
+      "reden": "Webshopklant gebeld",
+      "modus": "online",
+      "eigenaar_medewerker_id": "bdd02dcd-b4ae-44dc-8b06-521b445655df",
+      "goedkeuring_ids": ["3c1f6a52-8d0e-4b8a-9f27-6e4d2b91c0a7"]
+    },
+    {
+      "soort": "pinpoging",
+      "gebeurtenis_id": "2f242cce-61a0-4b65-b11f-f391c4f38afd",
+      "volgnummer": 1205,
+      "moment": "2027-03-06T11:41:02+01:00",
+      "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+      "bon_id": "cecaf1d1-ab74-4e05-8b92-efe57044e9f6",
+      "bedrag_cents": 1035,
+      "uitkomst": "gelukt"
+    },
+    {
+      "soort": "bon",
+      "gebeurtenis_id": "cecaf1d1-ab74-4e05-8b92-efe57044e9f6",
+      "volgnummer": 1206,
+      "moment": "2027-03-06T11:41:15+01:00",
+      "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+      "bon_id": "cecaf1d1-ab74-4e05-8b92-efe57044e9f6",
+      "bonnummer": "T1-000413",
+      "bon_volgnummer": 413,
+      "status": "afgerond",
+      "kanaal": "winkel",
+      "catalogus_versie": 412,
+      "voorraad_versie": 1181,
+      "leeftijd": { "uitkomst": "vastgesteld", "at": "2027-03-06T11:39:30+01:00" },
+      "regels": [
+        {
+          "regelnr": 1,
+          "soort": "verkoop",
+          "artikel_id": "cdfad5ab-e04d-41d4-ba04-f34968b2125c",
+          "naam": "Roeg × Brinx · Naober",
+          "aantal": 3,
+          "stuk_cents": 345,
+          "korting_cents": 0,
+          "bedrag_cents": 1035,
+          "btw": [{ "pct": 21, "incl_cents": 1035 }],
+          "alcohol": true,
+          "onderdelen": [{ "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4", "hoeveelheid": 1, "eenheid": "stuk" }],
+          "scan_code": "8103",
+          "prijs_bron": "catalogus"
+        },
+        {
+          "regelnr": 2,
+          "soort": "betaling",
+          "betaalmethode": "pin",
+          "betaal_bevestiging": "handmatig",
+          "bedrag_cents": 1035
+        }
+      ],
+      "totaal_cents": 1035,
+      "afronding_cents": 0
+    }
+  ]
+}
