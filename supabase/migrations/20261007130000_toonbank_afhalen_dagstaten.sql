@@ -731,11 +731,16 @@ BEGIN
      WHERE id = v_d.id;
 
     -- 4. Het journaal van de dagstaat: verschillen → conflict; weg → verwerkt.
+    --    Review M2 K5: kwam er na het afhandelen of goedkeuren nog een bon
+    --    binnen (p_aangevuld), dan gaat het journaal ook vanuit 'opgelost'
+    --    terug op conflict: de goedkeuring gold voor de oude cijfers.
     SELECT * INTO v_j FROM public.toonbank_journaal WHERE id = v_d.journaal_id;
-    IF jsonb_array_length(v_verschil) > 0 AND v_j.verwerk_status IN ('wacht', 'fout', 'verwerkt', 'conflict') AND v_status <> 'goedgekeurd' THEN
+    IF jsonb_array_length(v_verschil) > 0 AND v_status <> 'goedgekeurd'
+       AND (v_j.verwerk_status IN ('wacht', 'fout', 'verwerkt', 'conflict') OR (p_aangevuld AND v_j.verwerk_status = 'opgelost')) THEN
         UPDATE public.toonbank_journaal
            SET verwerk_status = 'conflict', fout_code = 'dagstaat_verschil', verwerkt_at = now(),
-               fout_melding = left('De dagstaat wijkt af van de bonnen: ' || (SELECT string_agg(format('%s (tablet %s, BBQ Architect %s)', e->>'veld', e->>'tablet_cents', e->>'ba_cents'), ', ') FROM jsonb_array_elements(v_verschil) e), 1000),
+               fout_melding = left(CASE WHEN v_j.verwerk_status = 'opgelost' THEN 'Na het afhandelen kwam er nog een bon binnen. ' ELSE '' END
+                                   || 'De dagstaat wijkt af van de bonnen: ' || (SELECT string_agg(format('%s (tablet %s, BBQ Architect %s)', e->>'veld', e->>'tablet_cents', e->>'ba_cents'), ', ') FROM jsonb_array_elements(v_verschil) e), 1000),
                resultaat = jsonb_build_object('dagstaat_id', v_d.id, 'status', v_status, 'verschillen', v_verschil)
          WHERE id = v_j.id;
     ELSIF jsonb_array_length(v_verschil) = 0 AND (v_j.verwerk_status IN ('wacht', 'fout') OR (v_j.verwerk_status = 'conflict' AND v_j.fout_code = 'dagstaat_verschil')) THEN
@@ -748,9 +753,29 @@ BEGIN
     RETURN jsonb_build_object('dagstaat_id', v_d.id, 'status', v_status, 'verschillen', v_verschil, 'nagerekend', v_na);
 END $$;
 COMMENT ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) IS
-    'BA-10: koppelt de bonnen van die tablet en dag aan de dagstaat en rekent na (bon-btw per tarief opgeteld, nooit opnieuw afgerond), met de verschillen met de tablet. Verschillen → Te controleren.';
-REVOKE ALL ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) TO authenticated, service_role;
+    'BA-10: koppelt de bonnen van die tablet (tussen openen en sluiten) aan de dagstaat en rekent na (bon-btw per tarief opgeteld, nooit opnieuw afgerond), met de verschillen met de tablet. Verschillen → Te controleren; p_aangevuld (een late bon) zet ook een opgelost journaal terug op conflict. Alleen service_role (de wachtrij); BA gebruikt toonbank_dagstaat_narekenen.';
+-- Review M2 K5: niet voor authenticated. Met p_aangevuld kon een gewoon lid
+-- een goedgekeurde dagstaat weer openzetten.
+REVOKE ALL ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) TO service_role;
+
+-- "Opnieuw narekenen" in BBQ Architect: alleen een Admin, en nooit als
+-- aangevuld (een goedgekeurde dagstaat blijft goedgekeurd). Review M2 K5.
+CREATE OR REPLACE FUNCTION public.toonbank_dagstaat_narekenen(p_org UUID, p_dagstaat_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    PERFORM private.vereis_org(p_org);
+    PERFORM private.toonbank_vereis_admin(p_org);
+    RETURN public.toonbank_dagstaat_herberekenen(p_org, p_dagstaat_id, false);
+END $$;
+COMMENT ON FUNCTION public.toonbank_dagstaat_narekenen(UUID, UUID) IS
+    'Review M2 K5: Dagstaten → "Opnieuw narekenen". Alleen een Admin; toonbank_dagstaat_herberekenen met p_aangevuld = false.';
+REVOKE ALL ON FUNCTION public.toonbank_dagstaat_narekenen(UUID, UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.toonbank_dagstaat_narekenen(UUID, UUID) TO authenticated, service_role;
 
 
 -- ── 8. Een dagstaat-melding verwerken ───────────────────────────────────────
@@ -1087,15 +1112,19 @@ BEGIN
     FOREACH v_sig IN ARRAY ARRAY[
         'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)',
         'public.winkel_boek_rest(uuid, bigint, text, uuid)',
-        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
+        'public.toonbank_dagstaat_narekenen(uuid, uuid)',
         'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)'
     ] LOOP
         IF has_function_privilege('anon', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  anon mag ' || v_sig; END IF;
         IF NOT has_function_privilege('authenticated', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  authenticated mist ' || v_sig; END IF;
         IF NOT has_function_privilege('service_role', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  service_role mist ' || v_sig; END IF;
     END LOOP;
+    IF pg_get_functiondef('public.toonbank_dagstaat_narekenen(uuid, uuid)'::REGPROCEDURE) NOT LIKE '%toonbank_vereis_admin(p_org)%herberekenen(p_org, p_dagstaat_id, false)%' THEN
+        v_fouten := v_fouten || E'\n  toonbank_dagstaat_narekenen zonder Admin-controle of met aangevuld (review M2 K5)';
+    END IF;
     FOREACH v_sig IN ARRAY ARRAY[
         'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
+        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
         'public.toonbank_dagstaat_overzicht(uuid, uuid, date)',
         'public.toonbank_verwerk_wachtrij(uuid, uuid)'
     ] LOOP
@@ -1109,6 +1138,7 @@ BEGIN
         'public.winkel_boek_rest(uuid, bigint, text, uuid)',
         'public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
         'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
+        'public.toonbank_dagstaat_narekenen(uuid, uuid)',
         'public.toonbank_dagstaat_overzicht(uuid, uuid, date)',
         'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)',
         'public.toonbank_verwerk_wachtrij(uuid, uuid)'

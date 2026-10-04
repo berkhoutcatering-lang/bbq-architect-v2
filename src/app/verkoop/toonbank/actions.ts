@@ -64,14 +64,18 @@ export async function keurDagstaatGoed(input: unknown): Promise<ActionResult<{ s
     return { data: { status: String((data as { status?: string } | null)?.status ?? 'goedgekeurd') } };
 }
 
-/** Dagstaten: opnieuw narekenen uit de bonnen (bijvoorbeeld na het afhandelen van een bon). */
+/**
+ * Dagstaten: opnieuw narekenen uit de bonnen (bijvoorbeeld na het afhandelen van een bon).
+ * Alleen een Admin (review M2 K5); toonbank_dagstaat_narekenen controleert dat ook en rekent
+ * nooit als "aangevuld", zodat een goedgekeurde dagstaat goedgekeurd blijft.
+ */
 export async function rekenDagstaatNa(input: unknown): Promise<ActionResult<{ status: string; verschillen: number }>> {
     const parsed = z.object({ dagstaatId: z.string().uuid() }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
-    const s = await toonbankLid();
-    if (!s.user || !s.orgId) return { error: 'unauthorized' };
-    const { data, error } = await s.supabase.rpc('toonbank_dagstaat_herberekenen', { p_org: s.orgId, p_dagstaat_id: parsed.data.dagstaatId });
-    if (error) return { error: error.message };
+    const s = await alsAdmin();
+    if (!s) return { error: 'Alleen een beheerder (Admin) rekent een dagstaat na.' };
+    const { data, error } = await s.supabase.rpc('toonbank_dagstaat_narekenen', { p_org: s.orgId, p_dagstaat_id: parsed.data.dagstaatId });
+    if (error) return { error: error.code === '42501' ? 'Alleen een beheerder (Admin) rekent een dagstaat na.' : error.message };
     const r = (data ?? {}) as { status?: string; verschillen?: unknown[] };
     revalidatePath('/verkoop/toonbank', 'layout');
     return { data: { status: String(r.status ?? ''), verschillen: (r.verschillen ?? []).length } };

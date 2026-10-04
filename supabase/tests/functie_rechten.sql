@@ -135,8 +135,9 @@ begin
         'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)',
         -- BA-9 (20261007120000): Te controleren in BA
         'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)',
-        -- BA-10 (20261007130000): Dagstaten in BA
-        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)',
+        -- BA-10 (20261007130000): Dagstaten in BA. "Opnieuw narekenen" via de
+        -- Admin-wrapper; toonbank_dagstaat_herberekenen zelf alleen service_role (review M2 K5).
+        'public.toonbank_dagstaat_narekenen(uuid, uuid)',
         'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
@@ -175,7 +176,9 @@ begin
         'public.winkel_bezetting_moment(uuid, bigint)',
         'public.winkel_bezetting_voorraad(uuid, bigint)',
         'public.winkel_keuken_factor(text, text)',
-        'public.partij_als_jsonb(uuid, boolean)'
+        'public.partij_als_jsonb(uuid, boolean)',
+        -- Review M2 K5: met p_aangevuld kon een gewoon lid een goedgekeurde dagstaat openzetten.
+        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';

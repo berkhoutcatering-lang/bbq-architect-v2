@@ -208,6 +208,9 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
                                                                  '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
+    ('public.toonbank_dagstaat_narekenen(uuid, uuid)',           '20261007130000_toonbank_afhalen_dagstaten (BA-10, review M2 K5)'),
+    ('private.toonbank_bedrijfsdag(uuid, timestamp with time zone, timestamp with time zone)',
+                                                                 '20261007120000 + 20261007130000 (review M2 K3)'),
     ('public.toonbank_dagstaat_overzicht(uuid, uuid, date)',     '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('private.toonbank_verwerk_dagstaat(bigint)',                '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
@@ -365,6 +368,10 @@ proef AS (
                         WHERE a.attrelid = to_regclass('public.personeel') AND a.attnum > 0 AND NOT a.attisdropped
                           AND a.attname <> 'kds_pin_hash'
                           AND NOT has_column_privilege('authenticated', 'public.personeel', a.attname, 'SELECT'))
+    UNION ALL
+    SELECT 11, 'fix', 'toonbank_dagstaat_herberekenen niet voor authenticated (review M2 K5)',
+           '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
+           COALESCE(NOT has_function_privilege('authenticated', to_regprocedure('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)')::OID, 'EXECUTE'), false)
     UNION ALL
     SELECT 11, 'fix', 'Toonbank-beheer alleen door een Admin (review M2 K4)',
            '20261006130000_toonbank_apparaten (BA-7a)',

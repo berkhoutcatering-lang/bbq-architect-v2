@@ -114,7 +114,7 @@ export default async function DagstatenPagina() {
                                             {' · '}<span style={{ color: st.kleur }}>{st.tekst}</span>
                                         </p>
                                     </div>
-                                    <DagstaatActies dagstaatId={d.id} kanGoedkeuren={isAdmin && d.status !== 'goedgekeurd'} />
+                                    {isAdmin && <DagstaatActies dagstaatId={d.id} kanGoedkeuren={d.status !== 'goedgekeurd'} />}
                                 </div>
 
                                 <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>

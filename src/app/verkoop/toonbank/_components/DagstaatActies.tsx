@@ -6,7 +6,10 @@ import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
 import { keurDagstaatGoed, rekenDagstaatNa } from '../actions';
 
-/** Bij een dagstaat: opnieuw narekenen (iedereen) en goedkeuren (alleen een Admin, met reden). */
+/**
+ * Bij een dagstaat: opnieuw narekenen en goedkeuren (met reden). Alleen voor een Admin (review M2
+ * K5): de pagina toont dit blok niet aan andere leden, en de database controleert het ook.
+ */
 export default function DagstaatActies({ dagstaatId, kanGoedkeuren }: { dagstaatId: string; kanGoedkeuren: boolean }) {
     const router = useRouter();
     const showToast = useToast();

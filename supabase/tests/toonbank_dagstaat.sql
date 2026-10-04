@@ -107,6 +107,8 @@ declare
     v_d4       uuid := gen_random_uuid();
     v_d5       uuid := gen_random_uuid();
     v_k1       uuid := gen_random_uuid();
+    v_laat2    uuid := gen_random_uuid();
+    v_user     uuid := gen_random_uuid();
     v_getallen jsonb;
     v_j        public.toonbank_journaal%rowtype;
     v_d        public.toonbank_dagstaten%rowtype;
@@ -248,6 +250,47 @@ begin
         v_fouten := v_fouten || 'goedkeuren: ' || v_r::text || '; ';
     end if;
 
+    -- ── Review M2 K5. "Opnieuw narekenen" (Admin) laat een goedgekeurde dagstaat goedgekeurd.
+    v_r := public.toonbank_dagstaat_narekenen(v_org, v_d1);
+    if v_r->>'status' <> 'goedgekeurd' or (select status from public.toonbank_dagstaten where id = v_d1) <> 'goedgekeurd'
+       or (select verwerk_status from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_d1) <> 'opgelost' then
+        v_fouten := v_fouten || 'narekenen na goedkeuren: ' || v_r::text || '; ';
+    end if;
+    -- Een gewoon lid (Medewerker) kan niet narekenen en herberekenen (met aangevuld) helemaal niet.
+    insert into auth.users (id, aud, role, email) values (v_user, 'authenticated', 'authenticated', 'dagstaat-' || v_user || '@example.invalid');
+    insert into public.organization_members (organization_id, user_id, role, status) values (v_org, v_user, 'Medewerker', 'active');
+    begin
+        perform set_config('request.jwt.claims', json_build_object('sub', v_user, 'role', 'authenticated')::text, true);
+        perform set_config('role', 'authenticated', true);
+        begin
+            perform public.toonbank_dagstaat_herberekenen(v_org, v_d1, true);
+            v_fouten := v_fouten || 'Medewerker zet een goedgekeurde dagstaat open via herberekenen; ';
+        exception when insufficient_privilege then null;
+        end;
+        begin
+            perform public.toonbank_dagstaat_narekenen(v_org, v_d1);
+            v_fouten := v_fouten || 'Medewerker rekent een dagstaat na; ';
+        exception when insufficient_privilege then null;
+        end;
+        raise exception 'terug_naar_postgres';
+    exception when others then
+        if sqlerrm <> 'terug_naar_postgres' then v_fouten := v_fouten || 'als Medewerker: ' || sqlerrm || '; '; end if;
+    end;
+    if (select status from public.toonbank_dagstaten where id = v_d1) <> 'goedgekeurd' then
+        v_fouten := v_fouten || 'goedgekeurde dagstaat is door een Medewerker veranderd; ';
+    end if;
+    -- Een bon die ná de goedkeuring binnenkomt (gemaakt vóór het sluiten): aangevuld, en het
+    -- journaal gaat van opgelost terug naar conflict (Te controleren), want de goedkeuring gold
+    -- voor de oude cijfers.
+    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_laat2, 12, v_code || '-000010', '2026-03-06T17:58:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
+    select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_d1;
+    if (select status from public.toonbank_dagstaten where id = v_d1) <> 'aangevuld'
+       or (select dagstaat_id from public.toonbank_bonnen where id = v_laat2) is distinct from v_d1
+       or v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'dagstaat_verschil' or v_j.fout_melding not like 'Na het afhandelen kwam er nog een bon binnen.%' then
+        v_fouten := v_fouten || 'late bon na goedkeuren: ' || row_to_json(v_j)::text || '; ';
+    end if;
+
     -- ── Tablet 2 rekent zelf af en zegt btw 274 (opnieuw afgerond): verschil, te controleren.
     perform pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_bon('bon', v_x1, 1, v_code2 || '-000001', '2026-03-06T10:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)), pg_temp.tb_regel(2, 3, 395, 21, pg_temp.ond(v_bier)))));
@@ -352,10 +395,14 @@ begin
     if has_table_privilege('anon', 'public.toonbank_dagstaten', 'SELECT') or has_table_privilege('authenticated', 'public.toonbank_dagstaten', 'UPDATE')
        or has_function_privilege('authenticated', 'public.toonbank_dagstaat_overzicht(uuid, uuid, date)', 'EXECUTE')
        or has_function_privilege('anon', 'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)', 'EXECUTE')
-       or not has_function_privilege('authenticated', 'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)', 'EXECUTE') then
+       or not has_function_privilege('authenticated', 'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)', 'EXECUTE')
+       or has_function_privilege('authenticated', 'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', 'EXECUTE')
+       or not has_function_privilege('service_role', 'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', 'EXECUTE')
+       or has_function_privilege('anon', 'public.toonbank_dagstaat_narekenen(uuid, uuid)', 'EXECUTE')
+       or not has_function_privilege('authenticated', 'public.toonbank_dagstaat_narekenen(uuid, uuid)', 'EXECUTE') then
         v_fouten := v_fouten || 'rechten op de dagstaat kloppen niet; ';
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; evenement 18:00–01:00: bon van 00:30 op bedrijfsdag 6 maart (dag_openen) en in de dagstaat van 6 maart, zonder dag_openen de kalenderdag maar toch in de dagstaat; klok in 2030 begrensd op ontvangen; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
+    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; narekenen (Admin) laat goedgekeurd staan, een Medewerker kan niet narekenen of herberekenen; bon na goedkeuring → aangevuld en journaal van opgelost terug naar conflict; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; evenement 18:00–01:00: bon van 00:30 op bedrijfsdag 6 maart (dag_openen) en in de dagstaat van 6 maart, zonder dag_openen de kalenderdag maar toch in de dagstaat; klok in 2030 begrensd op ontvangen; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
 end $$;
