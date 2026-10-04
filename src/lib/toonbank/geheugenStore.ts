@@ -206,6 +206,9 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         async sessieOpToken(orgId, apparaatId, tokenHash) {
             const s = g.sessies.find((x) => x.organization_id === orgId && x.apparaat_id === apparaatId && x.token_hash === tokenHash);
             if (!s) return null;
+            /* Zoals de join in supabaseStore (review M2 K7): de persoon is nog actief en heeft nog een rol. */
+            const m = g.medewerkers.find((x) => x.id === s.medewerker_id && x.organization_id === orgId);
+            if (!m || !m.actief || !m.toonbank_rol) return null;
             const { token_hash: _t, aangemaakt_at: _a, ...rest } = s;
             void _t; void _a;
             return rest;

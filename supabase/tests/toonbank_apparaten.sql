@@ -156,6 +156,26 @@ begin
     exception when no_data_found then null;
     end;
 
+    -- ── 4b. Review M2 K7: een nieuwe inlogcode, rol weg of niet meer actief → open sessies stoppen.
+    --    Een andere kolom (notitie) laat de sessie lopen.
+    for i in 1..3 loop
+        insert into public.toonbank_sessies (organization_id, apparaat_id, medewerker_id, token_hash, rol, doel, geldig_tot)
+        values (v_org, v_a2, v_p_mw, encode(sha256(convert_to('k7-' || i || v_suffix, 'UTF8')), 'hex'), 'medewerker', 'dienst', now() + interval '12 hours');
+        update public.personeel set notitie = 'andere kolom ' || i where id = v_p_mw;
+        if not exists (select 1 from public.toonbank_sessies where medewerker_id = v_p_mw and beeindigd_at is null) then
+            v_fouten := v_fouten || 'sessie stopte bij een andere kolom; ';
+        end if;
+        case i
+            when 1 then update public.personeel set kds_pin_hash = v_hash where id = v_p_mw;
+            when 2 then update public.personeel set toonbank_rol = null where id = v_p_mw;
+            else        update public.personeel set actief = false where id = v_p_mw;
+        end case;
+        if exists (select 1 from public.toonbank_sessies where medewerker_id = v_p_mw and beeindigd_at is null) then
+            v_fouten := v_fouten || format('sessie loopt door na %s; ', case i when 1 then 'een nieuwe inlogcode' when 2 then 'rol weg' else 'niet meer actief' end);
+        end if;
+    end loop;
+    update public.personeel set toonbank_rol = 'medewerker', actief = true where id = v_p_mw;
+
     -- ── 5. Journaal: uniek, append-only.
     insert into public.toonbank_journaal (organization_id, apparaat_id, gebeurtenis_id, volgnummer, soort, contract_versie, payload, apparaat_tijd)
     values (v_org, v_a1, '11111111-1111-4111-8111-111111111111', 1, 'inloggen', '1.1.0', '{"soort":"inloggen"}', now())
@@ -320,7 +340,7 @@ begin
         exception when insufficient_privilege then null;
         end;
         begin
-            update public.personeel set kds_pin_hash = v_hash where id = v_p_mw;
+            update public.personeel set kds_pin_hash = repeat('c', 32) || ':' || repeat('d', 128) where id = v_p_mw;
             v_fouten := v_fouten || 'Medewerker zet een eigen inlogcode-hash; ';
         exception when insufficient_privilege then null;
         end;
@@ -381,5 +401,5 @@ begin
     end;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, 5 foute pogingen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets; een Medewerker maakt, koppelt of trekt geen tablet in, leest kds_pin_hash niet en zet geen rol, inlogcode of blokkade (ook niet bij een nieuwe rij), gewone kolommen wel; een Admin wel — alles teruggedraaid', v_code1, v_code2;
+    raise exception 'GESLAAGD: tablets % en % (andere org T1), koppelcode 5 min, 5 foute pogingen = code vervallen, koppelen één keer, sleutel uniek; rol kassier geweigerd, goedkeuring alleen door eigenaar; inlogteller 4 = nog niet, 5 = 5 min geblokkeerd; nieuwe inlogcode/rol weg/niet actief stopt open sessies, een andere kolom niet; journaal uniek op gebeurtenis (per org) en volgnummer, payload/soort/DELETE/TRUNCATE geweigerd (TB001), verwerking wel, organisatie met journaal niet te verwijderen; intrekken beëindigt sessies; volgnummer nooit omlaag; RLS: andere org ziet niets, geen hashes of sessies voor leden, anon niets; een Medewerker maakt, koppelt of trekt geen tablet in, leest kds_pin_hash niet en zet geen rol, inlogcode of blokkade (ook niet bij een nieuwe rij), gewone kolommen wel; een Admin wel — alles teruggedraaid', v_code1, v_code2;
 end $$;

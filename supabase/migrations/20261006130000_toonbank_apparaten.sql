@@ -293,6 +293,38 @@ ALTER TABLE public.toonbank_sessies ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.toonbank_sessies FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE ON TABLE public.toonbank_sessies TO service_role;
 
+-- ── 3b. Rol, inlogcode of actief anders: open sessies stoppen (review M2 K7)
+-- Een dienst duurt 12 uur. Gaat de rol op NULL, wordt iemand op niet-actief
+-- gezet of krijgt hij een nieuwe inlogcode, dan stoppen zijn open sessies
+-- meteen, langs welke weg de wijziging ook komt (Instellingen → Toonbank, het
+-- personeelsscherm, service_role). SECURITY DEFINER: de gebruikersclient mag
+-- zelf niet in toonbank_sessies schrijven. De Toonbank-API controleert bij
+-- elk verzoek bovendien dat de persoon actief is met een rol (sessieOpToken).
+CREATE OR REPLACE FUNCTION private.personeel_toonbank_sessies_stoppen()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    UPDATE public.toonbank_sessies
+       SET beeindigd_at = now()
+     WHERE medewerker_id = NEW.id AND beeindigd_at IS NULL;
+    RETURN NULL;
+END $$;
+COMMENT ON FUNCTION private.personeel_toonbank_sessies_stoppen() IS
+    'Review M2 K7: trigger op personeel. Andere toonbank_rol, kds_pin_hash of actief → alle open Toonbank-sessies van die persoon beëindigd.';
+REVOKE ALL ON FUNCTION private.personeel_toonbank_sessies_stoppen() FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS trg_personeel_toonbank_sessies_stoppen ON public.personeel;
+CREATE TRIGGER trg_personeel_toonbank_sessies_stoppen
+    AFTER UPDATE OF toonbank_rol, kds_pin_hash, actief ON public.personeel
+    FOR EACH ROW
+    WHEN (OLD.toonbank_rol IS DISTINCT FROM NEW.toonbank_rol
+          OR OLD.kds_pin_hash IS DISTINCT FROM NEW.kds_pin_hash
+          OR OLD.actief IS DISTINCT FROM NEW.actief)
+    EXECUTE FUNCTION private.personeel_toonbank_sessies_stoppen();
+
 
 -- ── 4. toonbank_journaal ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.toonbank_journaal (
@@ -743,9 +775,14 @@ BEGIN
             v_fouten := v_fouten || E'\n  beheer zonder Admin-controle (review M2 K4): ' || v_sig;
         END IF;
     END LOOP;
-    -- Review M2 K4: personeel bewaakt, de inlogcode-hash niet leesbaar.
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.personeel'::REGCLASS AND tgname = 'trg_personeel_toonbank_bewaken' AND NOT tgisinternal) THEN
-        v_fouten := v_fouten || E'\n  trigger trg_personeel_toonbank_bewaken ontbreekt';
+    -- Review M2 K4: personeel bewaakt, de inlogcode-hash niet leesbaar. K7: sessies stoppen.
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.personeel'::REGCLASS AND tgname = 'trg_personeel_toonbank_bewaken' AND NOT tgisinternal)
+       OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = 'public.personeel'::REGCLASS AND tgname = 'trg_personeel_toonbank_sessies_stoppen' AND NOT tgisinternal) THEN
+        v_fouten := v_fouten || E'\n  trigger trg_personeel_toonbank_bewaken of trg_personeel_toonbank_sessies_stoppen ontbreekt';
+    END IF;
+    IF has_function_privilege('authenticated', 'private.personeel_toonbank_sessies_stoppen()', 'EXECUTE')
+       OR has_function_privilege('service_role', 'private.personeel_toonbank_sessies_stoppen()', 'EXECUTE') THEN
+        v_fouten := v_fouten || E'\n  een rol mag private.personeel_toonbank_sessies_stoppen() los aanroepen';
     END IF;
     IF has_column_privilege('authenticated', 'public.personeel', 'kds_pin_hash', 'SELECT')
        OR has_column_privilege('anon', 'public.personeel', 'kds_pin_hash', 'SELECT') THEN

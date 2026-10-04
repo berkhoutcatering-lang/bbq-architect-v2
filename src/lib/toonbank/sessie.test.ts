@@ -129,4 +129,15 @@ describe('controleerSessie', () => {
         if (!r.ok || r.doel !== 'vrij_overschrijden') throw new Error('verwacht goedkeuring');
         expect(await controleerSessie(s, ctx, r.antwoord.eigenaar_token, s.g.nu)).toBeNull();
     });
+
+    it('een dienst stopt als de rol weg is of de persoon niet meer actief is (review M2 K7)', async () => {
+        for (const verander of [(m: Medewerker) => { m.toonbank_rol = null; }, (m: Medewerker) => { m.actief = false; }]) {
+            const s = store();
+            const r = await inloggen(s, ctx, { medewerker_id: JAN, inlogcode: '1234', doel: 'sessie' }, s.g.nu);
+            if (!r.ok || r.doel !== 'dienst') throw new Error('verwacht dienst');
+            expect((await controleerSessie(s, ctx, r.antwoord.sessie, s.g.nu))?.medewerker_id).toBe(JAN);
+            verander(s.g.medewerkers.find((m) => m.id === JAN)!);
+            expect(await controleerSessie(s, ctx, r.antwoord.sessie, s.g.nu)).toBeNull();
+        }
+    });
 });

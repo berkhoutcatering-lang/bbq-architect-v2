@@ -122,14 +122,22 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
         },
 
         async sessieOpToken(orgId, apparaatId, tokenHash) {
+            /* Review M2 K7: alleen zolang de persoon actief is en een Toonbank-rol heeft. Gaat de
+               rol op NULL of actief op false, dan werkt een lopende dienst van 12 uur niet meer
+               (de trigger op personeel beëindigt hem ook; dit is de tweede dam). */
             const { data, error } = await sb.from('toonbank_sessies')
-                .select(SESSIE_KOLOMMEN)
+                .select(`${SESSIE_KOLOMMEN}, personeel!inner(actief, toonbank_rol)`)
                 .eq('organization_id', orgId)
                 .eq('apparaat_id', apparaatId)
                 .eq('token_hash', tokenHash)
+                .eq('personeel.actief', true)
+                .not('personeel.toonbank_rol', 'is', null)
                 .maybeSingle();
             if (error) throw new OpslagFout('toonbank_sessies', error);
-            return (data as Sessie | null) ?? null;
+            if (!data) return null;
+            const { personeel: _p, ...sessie } = data as unknown as Sessie & { personeel: unknown };
+            void _p;
+            return sessie;
         },
 
         async status(orgId, apparaatId, gezien) {

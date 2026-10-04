@@ -123,8 +123,11 @@ export async function inloggen(store: ToonbankStore, ctx: InlogContext, v: Inlog
 
 /**
  * De sessie achter de header x-toonbank-medewerker, als die bij dit apparaat
- * hoort, een dienst is, niet beëindigd en nog geldig. Anders null: de route
- * antwoordt dan 403 medewerker_sessie_verlopen.
+ * hoort, een dienst is, niet beëindigd en nog geldig, en de persoon nog
+ * actief is met een Toonbank-rol (store.sessieOpToken, review M2 K7). Een
+ * nieuwe rol of inlogcode beëindigt de open sessies ook in de database
+ * (trigger op personeel). Anders null: de route antwoordt dan 403
+ * medewerker_sessie_verlopen.
  */
 export async function controleerSessie(store: ToonbankStore, ctx: InlogContext, token: string | null, nu: Date = new Date()): Promise<Sessie | null> {
     if (!token || !isSessieToken(token.trim())) return null;
