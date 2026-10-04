@@ -93,7 +93,7 @@ export function valideer<S extends z.ZodType>(schema: S, data: unknown): { ok: t
 
 /* ── ETag (catalogus, vrij) ───────────────────────────────────────────────── */
 
-export function etag(soort: string, versie: number): string {
+export function etag(soort: string, versie: number | string): string {
     return `W/"${soort}-${versie}"`;
 }
 

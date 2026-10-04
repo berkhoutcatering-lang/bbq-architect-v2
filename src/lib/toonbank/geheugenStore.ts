@@ -6,7 +6,10 @@
  * dat de echte functies hetzelfde zeggen.
  */
 import { randomUUID } from 'node:crypto';
-import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, NieuweSessie, Sessie, StatusBron, ToonbankStore } from './store';
+import type {
+    Apparaat, CatalogusRuw, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, NieuweSessie, Sessie, StatusBron, ToonbankStore,
+    WegzetTaakRij, WegzetVraag, WegzetVraagRuw,
+} from './store';
 
 export interface GeheugenApparaat extends Apparaat {
     sleutel_hash: string | null;
@@ -31,6 +34,18 @@ export interface ToonbankGeheugen {
     nu: Date;
     /** Wat toonbank_status per organisatie zou uitrekenen (versies, badge, instellingen). */
     stand: Record<string, Omit<StatusBron, 'servertijd' | 'apparaat' | 'hoogste_volgnummer_gemeld' | 'bevestigd_tot_volgnummer'>>;
+    /* BA-8: wat de databasefuncties per organisatie teruggeven (vooraf ingevuld door de test). */
+    catalogus: Record<string, CatalogusRuw>;
+    vrij: Record<string, { versie: number; volledig: boolean; vrij_verloopt_at: string | null; producten: unknown[] }>;
+    wegzetTaken: Record<string, WegzetTaakRij[]>;
+    afhaallijst: Record<string, Record<string, { versie: number; datum: string; orders: unknown[] }>>;
+    scan: Record<string, Record<string, Record<string, unknown>>>;
+    /** Wat winkel_zet_order_apart(_terug) zou geven: {ok: true, …} of {ok: false, sqlstate, …}. */
+    wegzetResultaat: (v: WegzetVraag) => Record<string, unknown>;
+    /** Het journaal van de vragen, op gebeurtenis_id (per organisatie). */
+    journaal: { organization_id: string; gebeurtenis_id: string; payload: Record<string, unknown>; resultaat: Record<string, unknown> }[];
+    /** Hoe vaak de vraag echt is uitgevoerd (niet uit het journaal). */
+    wegzetUitgevoerd: number;
 }
 
 export const STANDAARD_STAND: ToonbankGeheugen['stand'][string] = {
@@ -55,6 +70,14 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         mislukt: start.mislukt ?? [],
         nu: start.nu ?? new Date(),
         stand: start.stand ?? {},
+        catalogus: start.catalogus ?? {},
+        vrij: start.vrij ?? {},
+        wegzetTaken: start.wegzetTaken ?? {},
+        afhaallijst: start.afhaallijst ?? {},
+        scan: start.scan ?? {},
+        wegzetResultaat: start.wegzetResultaat ?? (() => ({ ok: false, sqlstate: 'P0002', melding: 'order niet in deze organisatie', detail: null })),
+        journaal: start.journaal ?? [],
+        wegzetUitgevoerd: 0,
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -153,6 +176,40 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
                 hoogste_volgnummer_gemeld: a.hoogste_volgnummer_gemeld,
                 bevestigd_tot_volgnummer: a.bevestigd_tot_volgnummer,
             } satisfies StatusBron;
+        },
+
+        async catalogusVersie(orgId) {
+            return g.catalogus[orgId]?.versie ?? 0;
+        },
+        async catalogus(orgId) {
+            return g.catalogus[orgId] ?? { versie: 0, volledig: true, artikelen: [], producten: [], codes: [], groepen: [] };
+        },
+        async voorraadStand(orgId) {
+            const s = g.stand[orgId] ?? STANDAARD_STAND;
+            return { versie: s.voorraad_versie, vrij_verloopt_at: s.vrij_verloopt_at };
+        },
+        async vrij(orgId) {
+            const s = g.stand[orgId] ?? STANDAARD_STAND;
+            return g.vrij[orgId] ?? { versie: s.voorraad_versie, volledig: true, vrij_verloopt_at: s.vrij_verloopt_at, producten: [] };
+        },
+        async wegzetTaken(orgId) {
+            return g.wegzetTaken[orgId] ?? [];
+        },
+        async wegzetVraag(v) {
+            const oud = g.journaal.find((j) => j.organization_id === v.orgId && j.gebeurtenis_id === v.gebeurtenisId);
+            if (oud) return { journaal: 'bestond', soort: 'wegzetten', payload: oud.payload, resultaat: oud.resultaat } satisfies WegzetVraagRuw;
+            const payload: Record<string, unknown> = { order_id: v.orderId, actie: v.actie, medewerker_id: v.medewerkerId, moment: v.moment };
+            if (v.reden) payload.reden = v.reden;
+            g.wegzetUitgevoerd += 1;
+            const resultaat = g.wegzetResultaat(v);
+            g.journaal.push({ organization_id: v.orgId, gebeurtenis_id: v.gebeurtenisId, payload, resultaat });
+            return { journaal: 'nieuw', soort: 'wegzetten', payload, resultaat } satisfies WegzetVraagRuw;
+        },
+        async afhaallijst(orgId, datum) {
+            return g.afhaallijst[orgId]?.[datum] ?? { versie: 0, datum, orders: [] };
+        },
+        async scan(orgId, code) {
+            return g.scan[orgId]?.[code] ?? { soort: 'onbekend', code };
         },
     };
 }

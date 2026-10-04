@@ -10,7 +10,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type { Apparaat, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, StatusBron, ToonbankStore } from './store';
+import type {
+    Apparaat, CatalogusRuw, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, StatusBron, ToonbankStore, WegzetTaakRij, WegzetVraagRuw,
+} from './store';
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
 const SESSIE_KOLOMMEN = 'id, organization_id, apparaat_id, medewerker_id, rol, doel, geldig_tot, beeindigd_at';
@@ -135,6 +137,63 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             });
             if (error) throw new OpslagFout('toonbank_status', error);
             return naarStatus(data as Record<string, unknown>);
+        },
+
+        async catalogusVersie(orgId) {
+            const { data, error } = await sb.from('winkel_catalogus_versie').select('versie').eq('organization_id', orgId).maybeSingle();
+            if (error) throw new OpslagFout('winkel_catalogus_versie', error);
+            return Number((data as { versie?: unknown } | null)?.versie ?? 0);
+        },
+
+        async catalogus(orgId) {
+            const { data, error } = await sb.rpc('toonbank_catalogus', { p_org: orgId });
+            if (error) throw new OpslagFout('toonbank_catalogus', error);
+            return data as CatalogusRuw;
+        },
+
+        async voorraadStand(orgId) {
+            const { data, error } = await sb.rpc('winkel_voorraad_stand', { p_org: orgId });
+            if (error) throw new OpslagFout('winkel_voorraad_stand', error);
+            const r = (data ?? {}) as Record<string, unknown>;
+            return { versie: Number(r.versie ?? 0), vrij_verloopt_at: (r.vrij_verloopt_at as string | null) ?? null };
+        },
+
+        async vrij(orgId) {
+            const { data, error } = await sb.rpc('toonbank_vrij', { p_org: orgId });
+            if (error) throw new OpslagFout('toonbank_vrij', error);
+            return data as { versie: number; volledig: boolean; vrij_verloopt_at: string | null; producten: unknown[] };
+        },
+
+        async wegzetTaken(orgId) {
+            const { data, error } = await sb.from('winkel_wegzet_taken')
+                .select('order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels')
+                .eq('organization_id', orgId)
+                .order('afhaalmoment', { ascending: true, nullsFirst: false })
+                .order('order_id');
+            if (error) throw new OpslagFout('winkel_wegzet_taken', error);
+            return (data ?? []) as WegzetTaakRij[];
+        },
+
+        async wegzetVraag(v) {
+            const { data, error } = await sb.rpc('toonbank_wegzet_vraag', {
+                p_org: v.orgId, p_apparaat_id: v.apparaatId, p_order_id: v.orderId, p_actie: v.actie,
+                p_gebeurtenis_id: v.gebeurtenisId, p_moment: v.moment, p_medewerker_id: v.medewerkerId,
+                p_contract_versie: v.contractVersie, p_reden: v.reden,
+            });
+            if (error) throw new OpslagFout('toonbank_wegzet_vraag', error);
+            return data as WegzetVraagRuw;
+        },
+
+        async afhaallijst(orgId, datum) {
+            const { data, error } = await sb.rpc('toonbank_afhaallijst', { p_org: orgId, p_datum: datum });
+            if (error) throw new OpslagFout('toonbank_afhaallijst', error);
+            return data as { versie: number; datum: string; orders: unknown[] };
+        },
+
+        async scan(orgId, code) {
+            const { data, error } = await sb.rpc('scan_resolve', { p_org: orgId, p_code: code });
+            if (error) throw new OpslagFout('scan_resolve', error);
+            return (data ?? { soort: 'onbekend', code }) as Record<string, unknown>;
         },
     };
 }

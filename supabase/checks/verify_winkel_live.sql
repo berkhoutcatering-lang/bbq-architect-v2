@@ -18,7 +18,8 @@
 --  (statiegeld, kanalen, unieke EAN, catalogusteller) tot BA-4a
 --  (20261006120000); de toonbank-tabellen, -functies en de
 --  journaaltriggers tot BA-7a (20261006130000); de toonbank-instellingen en
---  toonbank_status tot BA-7b (20261006140000).
+--  toonbank_status tot BA-7b (20261006140000); catalogus, vrij, wegzetten,
+--  afhaallijst en scan_resolve tot BA-8 (20261006150000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -169,7 +170,14 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_koppel_af(uuid, text, text)',              '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_inlogcode_mislukt(uuid, uuid, uuid)',      '20261006130000_toonbank_apparaten (BA-7a)'),
     ('public.toonbank_apparaat_gezien(uuid, uuid, bigint, text, text)', '20261006130000_toonbank_apparaten (BA-7a)'),
-    ('public.toonbank_status(uuid, uuid, bigint, text, text)',   '20261006140000_toonbank_status (BA-7b)')
+    ('public.toonbank_status(uuid, uuid, bigint, text, text)',   '20261006140000_toonbank_status (BA-7b)'),
+    ('public.toonbank_afhaallijst_versie(uuid)',                 '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.toonbank_catalogus(uuid)',                          '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.toonbank_vrij(uuid)',                               '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.toonbank_wegzet_vraag(uuid, uuid, bigint, text, uuid, timestamp with time zone, uuid, text, text)',
+                                                                 '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.toonbank_afhaallijst(uuid, date)',                  '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.scan_resolve(uuid, text)',                          '20261006150000_toonbank_vragen (BA-8)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),

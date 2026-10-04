@@ -103,6 +103,68 @@ export interface ApparaatGezien {
     contract_versie: string | null;
 }
 
+/* ── BA-8: wat de databasefuncties teruggeven ───────────────────────────── */
+
+/** Een artikel uit toonbank_catalogus, met de ruwe foto (de API maakt er een URL van). */
+export interface CatalogusArtikelRuw {
+    artikel_id: string;
+    naam: string;
+    prijs_cents: number;
+    btw_pct: number;
+    btw_verdeling: { pct: number; gewicht: number }[] | null;
+    alcohol: boolean;
+    groep: string | null;
+    volgorde: number;
+    favoriet: boolean;
+    /** winkel_producten.foto van het product bij een één-slot-artikel (winkel-fotos). */
+    foto: unknown;
+    /** winkel_producten.foto_url (oud veld), als terugval. */
+    foto_url_ruw: string | null;
+    onderdelen: { product_id: string; hoeveelheid: number; eenheid: string }[];
+    actief: boolean;
+    kanalen: string[];
+}
+
+export interface CatalogusRuw {
+    versie: number;
+    volledig: boolean;
+    artikelen: CatalogusArtikelRuw[];
+    producten: { product_id: string; naam: string; statiegeld_cents: number; voorraad_bijgehouden: boolean; alcohol: boolean }[];
+    codes: { code: string; soort: 'ean' | 'plu'; artikel_id: string }[];
+    groepen: { groep_id: string; naam: string; volgorde: number; open_prijs: boolean; btw_pct: number | null; alcohol: boolean }[];
+}
+
+/** Een rij uit de view winkel_wegzet_taken (BA-6). */
+export interface WegzetTaakRij {
+    order_id: number;
+    nummer: string;
+    naam: string | null;
+    afhaalmoment: string | null;
+    ophalen_binnen_24u: boolean;
+    regels: { regel_id: number; artikel: string; aantal: number; producten: { product_id: string | null; naam: string | null; hoeveelheid: number; eenheid: string | null }[] }[];
+}
+
+export interface WegzetVraag {
+    orgId: string;
+    apparaatId: string;
+    orderId: number;
+    actie: 'apart' | 'ongedaan';
+    gebeurtenisId: string;
+    moment: string;
+    medewerkerId: string;
+    contractVersie: string | null;
+    reden: string | null;
+}
+
+/** Wat toonbank_wegzet_vraag teruggeeft. */
+export interface WegzetVraagRuw {
+    journaal: 'nieuw' | 'bestond';
+    soort: string;
+    payload: Record<string, unknown>;
+    /** {ok: true, uitkomst, order_id, nummer, boekingen, apart_gezet_at?} of {ok: false, sqlstate, melding, detail}. */
+    resultaat: Record<string, unknown> | null;
+}
+
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
@@ -127,4 +189,18 @@ export interface ToonbankStore {
     /* ── Status (BA-7b) ── */
     /** Legt "laatst gezien" en het hoogste volgnummer vast en geeft de stand (toonbank_status). */
     status(orgId: string, apparaatId: string, gezien: ApparaatGezien): Promise<StatusBron>;
+
+    /* ── Vragen en lijsten (BA-8) ── */
+    catalogusVersie(orgId: string): Promise<number>;
+    catalogus(orgId: string): Promise<CatalogusRuw>;
+    /** winkel_voorraad_stand: de versie en het eerste moment waarop een reservering verloopt. */
+    voorraadStand(orgId: string): Promise<{ versie: number; vrij_verloopt_at: string | null }>;
+    /** toonbank_vrij: al in de vorm van het contract (VrijAntwoord). */
+    vrij(orgId: string): Promise<{ versie: number; volledig: boolean; vrij_verloopt_at: string | null; producten: unknown[] }>;
+    wegzetTaken(orgId: string): Promise<WegzetTaakRij[]>;
+    wegzetVraag(v: WegzetVraag): Promise<WegzetVraagRuw>;
+    /** toonbank_afhaallijst: al in de vorm van het contract (AfhaallijstAntwoord). */
+    afhaallijst(orgId: string, datum: string): Promise<{ versie: number; datum: string; orders: unknown[] }>;
+    /** scan_resolve: {soort, code, …}. */
+    scan(orgId: string, code: string): Promise<Record<string, unknown>>;
 }
