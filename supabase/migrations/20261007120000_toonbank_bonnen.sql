@@ -1215,12 +1215,20 @@ BEGIN
     v_controles := v_controles || private.toonbank_controleer_order_rest(v_org, v_bon_id);
 
     -- Controles op de bon zelf: geen weigering, wel "Te controleren".
-    IF v_sommen.betaald <> private.tb_int(v_p->'totaal_cents')
-       OR v_sommen.omzet + v_sommen.statiegeld + v_sommen.order_rest + COALESCE(private.tb_int(v_p->'afronding_cents'), 0) <> private.tb_int(v_p->'totaal_cents') THEN
+    -- Review M2 K1: de totaalcontrole alleen bij een afgeronde bon. Een
+    -- geannuleerde bon maakt kern (maakGeannuleerdeBon) mét de regels die er
+    -- nog op stonden, zonder betaling en met totaal 0; daar telt alleen dat er
+    -- niets betaald is.
+    IF v_status = 'afgerond'
+       AND (v_sommen.betaald <> private.tb_int(v_p->'totaal_cents')
+            OR v_sommen.omzet + v_sommen.statiegeld + v_sommen.order_rest + COALESCE(private.tb_int(v_p->'afronding_cents'), 0) <> private.tb_int(v_p->'totaal_cents')) THEN
         v_controles := v_controles || jsonb_build_object('code', 'totaal', 'melding',
             format('Het totaal klopt niet: betaald %s ct, regels %s ct + afronding %s ct, totaal %s ct.',
                    v_sommen.betaald, v_sommen.omzet + v_sommen.statiegeld + v_sommen.order_rest,
                    COALESCE(private.tb_int(v_p->'afronding_cents'), 0), private.tb_int(v_p->'totaal_cents')));
+    ELSIF v_status = 'geannuleerd' AND v_sommen.betaald <> 0 THEN
+        v_controles := v_controles || jsonb_build_object('code', 'geannuleerd_betaald', 'melding',
+            format('Geannuleerde bon met %s ct aan betalingen: is er toch afgerekend?', v_sommen.betaald));
     END IF;
     IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_p->'regels') e
                 WHERE e->>'soort' = 'verkoop'

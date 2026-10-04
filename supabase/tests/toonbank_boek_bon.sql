@@ -90,6 +90,7 @@ declare
     v_b8        uuid := gen_random_uuid();
     v_b9        uuid := gen_random_uuid();
     v_b11       uuid := gen_random_uuid();
+    v_b11b      uuid := gen_random_uuid();
     v_b12       uuid := gen_random_uuid();
     v_b13       uuid := gen_random_uuid();
     v_b14       uuid := gen_random_uuid();
@@ -280,17 +281,29 @@ begin
         v_fouten := v_fouten || 'btw-regel: ' || (select string_agg(btw::text, ' / ') from public.toonbank_bonnen where id in (v_b8, v_b9)) || '; ';
     end if;
 
-    -- ── 8. Een geannuleerde bon wordt bewaard, maar boekt niets.
+    -- ── 8. Een geannuleerde bon wordt bewaard, maar boekt niets. Precies zoals kern hem
+    --    maakt (maakGeannuleerdeBon): de regels die er nog op stonden, geen betaling,
+    --    totaal 0 (review M2 K1). Die hoort niet in Te controleren.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
     select count(*) into v_n from public.winkel_voorraad_mutaties where winkel_product_id = v_bier;
-    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b11, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
-        jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"alcohol": true}'::jsonb)),
-        '{"status": "geannuleerd"}'::jsonb));
-    if v_j.verwerk_status <> 'verwerkt' or (select status from public.toonbank_bonnen where id = v_b11) <> 'geannuleerd'
+    v_m := jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 1, 345, 21, jsonb_build_array(pg_temp.ond(v_bier, 1)), '{"alcohol": true}'::jsonb));
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b11, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), v_m,
+        jsonb_build_object('status', 'geannuleerd', 'regels', v_m, 'totaal_cents', 0, 'afronding_cents', 0, 'leeftijd', null)));
+    if v_j.verwerk_status <> 'verwerkt' or v_j.fout_code is not null
+       or (select status from public.toonbank_bonnen where id = v_b11) <> 'geannuleerd'
+       or (select count(*) from public.toonbank_bon_regels where bon_id = v_b11 and soort = 'betaling') <> 0
        or (select count(*) from public.winkel_voorraad_mutaties where winkel_product_id = v_bier) <> v_n
        or (select voorraad_status from public.toonbank_bon_regels where bon_id = v_b11 and regelnr = 1) <> 'nvt'
        or (select leeftijd_vastgesteld from public.toonbank_bonnen where id = v_b11) is not null then
-        v_fouten := v_fouten || 'geannuleerde bon: ' || row_to_json(v_j)::text || '; ';
+        v_fouten := v_fouten || 'geannuleerde bon (kern-vorm): ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Een geannuleerde bon waarop tóch betaald is: dat wel in Te controleren, en nog steeds niets geboekt.
+    v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_b11b, v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'), v_m,
+        '{"status": "geannuleerd"}'::jsonb));
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'geannuleerd_betaald'
+       or (select count(*) from public.winkel_voorraad_mutaties where winkel_product_id = v_bier) <> v_n then
+        v_fouten := v_fouten || 'geannuleerde bon met betaling: ' || row_to_json(v_j)::text || '; ';
     end if;
 
     -- ── 9. Wat niet klopt wordt conflict, maar de bon en de voorraad zijn geboekt.
@@ -463,5 +476,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd boekt niets; totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
+    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd (kern-vorm: regels, geen betaling, totaal 0) = verwerkt en boekt niets, geannuleerd met betaling = geannuleerd_betaald; totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
 end $$;

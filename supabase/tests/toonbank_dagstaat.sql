@@ -143,8 +143,13 @@ begin
     perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('tegenbon', v_t1, 6, v_code || '-000005', '2027-03-06T13:00:00+01:00', 'contant',
         jsonb_build_array(pg_temp.tb_regel(1, -1, 395, 21, pg_temp.ond(v_bier), '{"verwijst_naar_regelnr": 1}'::jsonb)),
         jsonb_build_object('verwijst_naar_bon_id', v_b1, 'reden', 'test')));
-    perform pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_g1, 7, v_code || '-000006', '2027-03-06T14:00:00+01:00', 'pin',
-        jsonb_build_array(pg_temp.tb_regel(1, 2, 1000, 21, pg_temp.ond(v_bier))), '{"status": "geannuleerd"}'::jsonb));
+    -- De geannuleerde bon zoals kern hem maakt (maakGeannuleerdeBon): regels, geen betaling, totaal 0.
+    v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_g1, 7, v_code || '-000006', '2027-03-06T14:00:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 2, 1000, 21, pg_temp.ond(v_bier))),
+        jsonb_build_object('status', 'geannuleerd', 'regels', jsonb_build_array(pg_temp.tb_regel(1, 2, 1000, 21, pg_temp.ond(v_bier))), 'totaal_cents', 0)));
+    if v_j.verwerk_status <> 'verwerkt' then
+        v_fouten := v_fouten || 'geannuleerde bon (kern-vorm) in Te controleren: ' || row_to_json(v_j)::text || '; ';
+    end if;
     v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_order, null, gen_random_uuid(), now(), v_mw, v_rb, 'pin', 450, null);
     if v_r->'resultaat'->>'uitkomst' <> 'opgehaald' then v_fouten := v_fouten || 'ophalen met rest: ' || v_r::text || '; '; end if;
     v_j := pg_temp.tb_stuur(v_org, v_app, pg_temp.tb_bon('bon', v_rb, 8, v_code || '-000007', '2027-03-06T16:32:00+01:00', 'pin',

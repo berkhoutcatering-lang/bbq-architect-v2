@@ -98,6 +98,7 @@ export const CONTROLE_LABEL: Record<string, string> = {
     contract_verouderd: 'Te oude Toonbank-app',
     wacht_op_bon: 'Tegenbon wacht op zijn bon',
     totaal: 'Totaal klopt niet',
+    geannuleerd_betaald: 'Geannuleerde bon met een betaling',
     btw_regel: 'Btw per regel klopt niet',
     contant_limiet: 'Contant boven € 3.000',
     bonnummer: 'Bonnummer past niet bij de tablet',
