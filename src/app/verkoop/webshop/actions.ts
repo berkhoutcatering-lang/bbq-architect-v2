@@ -407,6 +407,23 @@ export async function werkInstellingenBij(input: unknown): Promise<ActionResult<
     return { data: { ok: true } };
 }
 
+/**
+ * Kassakoppeling: een nieuwe sleutel. Alleen de hash wordt bewaard; de sleutel
+ * zelf zie je één keer om in de kassa te zetten. Een nieuwe sleutel maakt de
+ * oude ongeldig. Plan: docs/voorraad-bouwplan.md "Winkel bestellen", stap 6.
+ */
+export async function maakKassaSleutel(): Promise<ActionResult<{ sleutel: string }>> {
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { randomBytes, createHash } = await import('node:crypto');
+    const sleutel = `kassa_${randomBytes(24).toString('hex')}`;
+    const hash = createHash('sha256').update(sleutel).digest('hex');
+    const { error } = await s.supabase.from('winkel_instellingen').update({ kassa_sleutel: hash }).eq('organization_id', s.orgId);
+    if (error) return { error: error.message };
+    revalidatePath(PAD);
+    return { data: { sleutel } };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    4. Orders en vakjes
    ═══════════════════════════════════════════════════════════════════════════ */

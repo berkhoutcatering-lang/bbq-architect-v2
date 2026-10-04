@@ -143,7 +143,7 @@ export async function ontvangstVanBon(input: unknown): Promise<ActionResult<{ id
     return { data: { id: kop.id as string } };
 }
 
-/** Van een verstuurde inkooporder: elke regel met het bestelde aantal, naar de makerij. */
+/** Van een verstuurde inkooporder: elke regel met het open aantal, naar de makerij of (winkelregel) de winkel. */
 export async function ontvangstVanInkooporder(input: unknown): Promise<ActionResult<{ id: string }>> {
     const parsed = z.object({ orderId: z.string().uuid() }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
@@ -158,7 +158,7 @@ export async function ontvangstVanInkooporder(input: unknown): Promise<ActionRes
         .eq('id', parsed.data.orderId).eq('organization_id', s.orgId).maybeSingle();
     if (!order) return { error: 'Inkooporder niet gevonden' };
     const { data: lijnen } = await s.supabase.from('inkoop_order_lines')
-        .select('id, naam, inventory_id, qty_ordered, qty_received, unit, unit_price_eur, btw_pct')
+        .select('id, naam, inventory_id, winkel_product_id, qty_ordered, qty_received, unit, unit_price_eur, btw_pct')
         .eq('concept_order_id', parsed.data.orderId);
 
     const { data: kop, error } = await s.supabase.from('voorraad_invoer').insert({
@@ -176,7 +176,9 @@ export async function ontvangstVanInkooporder(input: unknown): Promise<ActionRes
             prijs_cents: l.unit_price_eur == null ? null : Math.round(Number(l.unit_price_eur) * 100),
             btw_pct: l.btw_pct != null && [0, 9, 21].includes(Number(l.btw_pct)) ? Number(l.btw_pct) : null,
             inkoop_order_line_id: l.id as string,
-            vast: { plek: 'makerij' as const, inventory_id: l.inventory_id == null ? null : Number(l.inventory_id), winkel_product_id: null, aantal: open },
+            vast: l.winkel_product_id
+                ? { plek: 'winkel' as const, inventory_id: null, winkel_product_id: l.winkel_product_id as string, aantal: open }
+                : { plek: 'makerij' as const, inventory_id: l.inventory_id == null ? null : Number(l.inventory_id), winkel_product_id: null, aantal: open },
         };
     }).filter((r) => r.aantal > 0);
     const fout = await voegRegelsToe(s, kop.id as string, order.leverancier_id as number | null, regels);

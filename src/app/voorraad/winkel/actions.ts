@@ -201,22 +201,35 @@ export async function legAfwijkingVast(input: unknown): Promise<ActionResult<{ v
 
 /* ── Drempel en bestelgegevens ────────────────────────────────────────────── */
 
-export async function zetDrempel(input: unknown): Promise<ActionResult<{ ok: true }>> {
+/**
+ * Bestelgegevens van een winkelproduct (docs/voorraad-bouwplan.md "Winkel
+ * bestellen"): minimum, aanvullen tot, besteleenheid (krat van 24, wiel kaas),
+ * prijs per besteleenheid, leverancier en EAN. Mathijs vult ze zelf in.
+ */
+export async function zetBestelgegevens(input: unknown): Promise<ActionResult<{ ok: true }>> {
     const parsed = z.object({
         productId: z.string().uuid(),
         /* Leeg = het voorstel (genoeg voor 5 pakketten). */
         drempel: z.number().min(0).nullable().default(null),
-        bestel_hoeveelheid: z.number().positive().nullable().default(null),
+        par_niveau: z.number().min(0).nullable().default(null),
+        bestel_hoeveelheid: z.number().positive('Een besteleenheid is meer dan 0').nullable().default(null),
+        bestel_eenheid_naam: z.string().trim().max(30).nullable().default(null),
+        bestel_prijs_cents: z.number().int().min(0).nullable().default(null),
+        leverancier_id: z.number().int().positive().nullable().default(null),
         ean: z.string().trim().regex(/^\d{8,14}$/, 'Een EAN is 8 tot 14 cijfers').nullable().default(null),
+    }).refine((d) => d.par_niveau == null || d.drempel == null || d.par_niveau > d.drempel, {
+        message: '"Aanvullen tot" moet hoger zijn dan het minimum',
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
     const { productId, ...velden } = parsed.data;
-    const { error } = await s.supabase.from('winkel_producten').update(velden).eq('id', productId).eq('organization_id', s.orgId);
+    const { error } = await s.supabase.from('winkel_producten').update({ ...velden, bestel_eenheid_naam: velden.bestel_eenheid_naam || null })
+        .eq('id', productId).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
     await evalueerWinkelMeldingen(s.orgId, [productId]);
     ververs();
+    revalidatePath('/inkoop');
     return { data: { ok: true } };
 }
 
@@ -268,7 +281,7 @@ export interface BelMelding {
     read_at: string | null;
 }
 
-const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit'];
+const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'kassa_onbekend'];
 
 /** De voorraadmeldingen: de ongelezen eerst, dan de laatste gelezen. */
 export async function laadBelMeldingen(): Promise<ActionResult<{ ongelezen: number; meldingen: BelMelding[] }>> {

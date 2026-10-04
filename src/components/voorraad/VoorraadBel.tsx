@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { AlertTriangle, Bell, CalendarClock, PackageX, TrendingDown } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarClock, PackageX, ScanBarcode, TrendingDown } from 'lucide-react';
 import { laadBelMeldingen, markeerGelezen, type BelMelding } from '@/app/voorraad/winkel/actions';
 
 const ICOON: Record<string, typeof Bell> = {
@@ -16,12 +16,14 @@ const ICOON: Record<string, typeof Bell> = {
     voorraad_op: PackageX,
     artikel_dicht: AlertTriangle,
     voorraad_tekort_vooruit: CalendarClock,
+    kassa_onbekend: ScanBarcode,
 };
 const KLEUR: Record<string, string> = {
     voorraad_laag: 'var(--brand-gold, #c4a35a)',
     voorraad_op: 'var(--red, #dc2626)',
     artikel_dicht: 'var(--red, #dc2626)',
     voorraad_tekort_vooruit: 'var(--brand-gold, #c4a35a)',
+    kassa_onbekend: 'var(--red, #dc2626)',
 };
 
 function wanneer(iso: string): string {

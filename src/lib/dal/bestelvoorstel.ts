@@ -30,6 +30,7 @@ import { pakVoorstel } from '../voorraadTelling';
 import { zoekKandidaten, searchTerms, leveranciersOpId } from '../ingredientMatchDb';
 import { pickBestMatch, lineCostCents, normalizeIngredientName, coverageOf, type CostCandidate } from '../recipeMatch';
 import type { VakjeFilter } from './vakje';
+import { laadWinkelBestelRegels, type WinkelBestelRegel } from './winkelBestelling';
 
 /** Het webshop-vakje waar deze lijst voor is (plan §4.5), of null voor de gewone lijst. */
 export interface VakjeInfo {
@@ -62,7 +63,16 @@ function netPak(size: number | null, unit: string | null): string {
 }
 
 export interface BestelvoorstelItem {
-  inventory_id: number;
+  /** Keukenregel: het voorraad-item. Winkelregel: null (zie winkel_product_id). */
+  inventory_id: number | null;
+  /** Waar het heen gaat bij ontvangst. */
+  plek: 'makerij' | 'winkel';
+  /** Winkelregel: het winkelproduct (docs/voorraad-bouwplan.md "Winkel bestellen"). */
+  winkel_product_id: string | null;
+  /** Winkelregel: "9 st. vrij · minimum 10 st. · aanvullen tot 30 st. → 21 st. nodig → 1 krat (24)". */
+  uitleg: string | null;
+  /** Winkelregel: btw van het product zelf; keuken leidt het af uit de categorie. */
+  btw_pct_vast: 0 | 9 | 21 | null;
   naam: string;
   qty: number; // = qty_ordered (backward-compat voor bestaande UI/PDF)
   qty_needed: number; // kaal tekort (na derving + onderweg)
@@ -206,6 +216,8 @@ export async function buildBestelvoorstel(
   // 1. Demand-snapshot (bevat al derving + par + in-flight in de shortfall).
   const demand = await getInventoryWithDemand(supabase, orgId, windowDays, { vakje });
   const shortItems = demand.rows.filter(function (r) { return r.shortfall > 0; });
+  /* Winkelproducten onder hun minimum — niet in een webshop-vakje ("bestel alleen dit"). */
+  const winkelRegels: WinkelBestelRegel[] = vakje ? [] : await laadWinkelBestelRegels(supabase, orgId).catch(function () { return []; });
   const demandMeta = {
     events_in_window_count: demand.events_in_window?.length ?? 0,
     has_menu_items: demand.rows.some(function (r) { return r.reserved_qty > 0; }),
@@ -221,7 +233,7 @@ export async function buildBestelvoorstel(
 
   const blocking = buildBlocking(demand.unmatched);
 
-  if (shortItems.length === 0) {
+  if (shortItems.length === 0 && winkelRegels.length === 0) {
     return {
       per_leverancier: [],
       winkel,
@@ -276,6 +288,7 @@ export async function buildBestelvoorstel(
   overrides.forEach(function (o) {
     if (o.override_leverancier_id) supplierIdsSet.add(o.override_leverancier_id);
   });
+  winkelRegels.forEach(function (w) { if (w.leverancier_id) supplierIdsSet.add(w.leverancier_id); });
   const supplierIds = Array.from(supplierIdsSet);
 
   type SupplierMeta = { naam: string; type: string; email: string | null; phone: string | null; lead_time_days: number | null };
@@ -448,6 +461,10 @@ export async function buildBestelvoorstel(
 
     const item: BestelvoorstelItem = {
       inventory_id: r.id,
+      plek: 'makerij',
+      winkel_product_id: null,
+      uitleg: null,
+      btw_pct_vast: null,
       naam: r.naam,
       qty: packed.qty_ordered,
       qty_needed: packed.qty_needed,
@@ -500,6 +517,57 @@ export async function buildBestelvoorstel(
     bucket.items.push(item);
     if (item.price_unknown) bucket.subtotal_incomplete = true;
     else bucket.subtotal_eur += estTotal;
+  });
+
+  // 5b. Winkelproducten onder hun minimum: in hetzelfde leveranciersblok.
+  winkelRegels.forEach(function (w) {
+    const prijs = w.prijs_per_eenheid_eur;
+    const item: BestelvoorstelItem = {
+      inventory_id: null,
+      plek: 'winkel',
+      winkel_product_id: w.winkel_product_id,
+      uitleg: w.uitleg,
+      btw_pct_vast: (w.btw_pct === 21 ? 21 : w.btw_pct === 0 ? 0 : 9),
+      naam: w.naam,
+      qty: w.besteld,
+      qty_needed: w.nodig,
+      qty_ordered: w.besteld,
+      packs: w.eenheden,
+      pack_label: w.eenheid_label,
+      pack_size: w.eenheden ? w.besteld / w.eenheden : null,
+      pack_unit: w.eenheden ? (w.eenheid === 'gram' ? 'g' : 'stuk') : null,
+      rounding_reason: w.zonder_besteleenheid ? 'no_pack' : 'ok',
+      supplier_product_id: null,
+      product_url: null,
+      unit: w.eenheid === 'gram' ? 'g' : 'stuk',
+      unit_price_eur: prijs,
+      price_source: prijs != null ? 'purchase_price' : 'unknown',
+      price_unknown: prijs == null,
+      est_total_eur: prijs != null ? Math.round(w.besteld * prijs * 100) / 100 : 0,
+      last_price_at: null,
+      events_count: 0,
+      events: [],
+      categorie: w.type,
+      override_applied: false,
+      original_qty: w.nodig,
+      reserved_qty: 0,
+      derving_pct: 0,
+      reserved_buffered_qty: 0,
+      par_level: w.aanvullen_tot,
+      target_qty: w.aanvullen_tot ?? w.minimum,
+      current_stock: w.beschikbaar,
+      in_flight_qty: w.onderweg,
+      winkel_product: null,
+      vaste_leverancier_naam: w.leverancier_id != null ? (suppliers[w.leverancier_id]?.naam ?? null) : null,
+    };
+    if (winkel && w.leverancier_id !== winkel.id) {
+      nietBijWinkel.push(item);
+      return;
+    }
+    const bucket = getBucket(w.leverancier_id);
+    bucket.items.push(item);
+    if (item.price_unknown) bucket.subtotal_incomplete = true;
+    else bucket.subtotal_eur += item.est_total_eur;
   });
 
   // Sorteer.

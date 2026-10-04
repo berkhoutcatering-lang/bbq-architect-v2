@@ -7,6 +7,7 @@
  */
 import type { Product, Slot } from '@/lib/winkel/rekenen';
 import { beperkendProduct, beschikbaar, geldendeDrempel, hoeveelheidKort, pakkettenTeMaken } from '@/lib/winkel/voorraad';
+import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
 export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit';
 export type Meldingbron = 'winkel' | 'keuken' | 'artikel';
@@ -26,7 +27,13 @@ export interface Melding {
     metadata: Record<string, unknown>;
 }
 
-export type WinkelProduct = Pick<Product, 'id' | 'naam' | 'eenheid' | 'voorraad' | 'voorraad_bezet' | 'actief'> & { drempel: number | null };
+export type WinkelProduct = Pick<Product, 'id' | 'naam' | 'eenheid' | 'voorraad' | 'voorraad_bezet' | 'actief'> & {
+    drempel: number | null;
+    /* Bestelgegevens (docs/voorraad-bouwplan.md "Winkel bestellen"); leeg = alleen de melding. */
+    par_niveau?: number | null;
+    bestel_hoeveelheid?: number | null;
+    bestel_eenheid_naam?: string | null;
+};
 export interface ArtikelKort { id: string; naam: string; actief: boolean }
 
 /** Wat er besteld staat en nog ingepakt moet worden, per product per ophaaldag. */
@@ -58,10 +65,17 @@ export function winkelProductMeldingen(producten: WinkelProduct[], slots: Slot[]
                 tekst: stand, link: WINKEL_LINK(p.id), metadata: meta,
             });
         } else if (drempel != null && b <= drempel) {
+            /* "Tijd om bij te bestellen" — met wat er op de bestellijst komt. */
+            const best = bestelVoorstel({
+                id: p.id, naam: p.naam, eenheid: p.eenheid, voorraad: p.voorraad, voorraad_bezet: p.voorraad_bezet,
+                minimum: drempel, par_niveau: p.par_niveau ?? null, bestel_hoeveelheid: p.bestel_hoeveelheid ?? null,
+                bestel_eenheid_naam: p.bestel_eenheid_naam ?? null, bestel_prijs_cents: null,
+            });
             uit.push({
                 bron: 'winkel', item_id: p.id, soort: 'voorraad_laag',
-                titel: `${p.naam} is bijna op: nog ${hoeveelheidKort(b, p.eenheid)}`,
-                tekst: `${stand} Grens: ${hoeveelheidKort(drempel, p.eenheid)}.`, link: WINKEL_LINK(p.id), metadata: meta,
+                titel: `Tijd om bij te bestellen: ${p.naam} — nog ${hoeveelheidKort(b, p.eenheid)}`,
+                tekst: `${stand} Minimum: ${hoeveelheidKort(drempel, p.eenheid)}.${best ? ` Op de bestellijst: ${best.eenheid_label ?? hoeveelheidKort(best.besteld, p.eenheid)}.` : ''}`,
+                link: best ? '/inkoop' : WINKEL_LINK(p.id), metadata: { ...meta, bestellen: best?.eenheid_label ?? null },
             });
         }
     }

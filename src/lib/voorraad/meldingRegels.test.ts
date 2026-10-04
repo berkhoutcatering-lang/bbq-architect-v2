@@ -28,8 +28,15 @@ describe('bijna op en op', () => {
         const m = winkelProductMeldingen([prod('p-bier', 'Bier', 40, 20)], slots, actief);
         expect(m).toHaveLength(1);
         expect(m[0].soort).toBe('voorraad_laag');
-        expect(m[0].titel).toBe('Bier is bijna op: nog 20 st.');
+        expect(m[0].titel).toBe('Tijd om bij te bestellen: Bier — nog 20 st.');
         expect(m[0].tekst).toContain('Er is 40 st., besteld en nog niet ingepakt 20 st.');
+    });
+    it('met besteleenheid: de melding zegt wat er op de bestellijst komt (voorbeeld Mathijs)', () => {
+        const p = { ...prod('p-bier', 'Bier', 9, 0, 10), par_niveau: 30, bestel_hoeveelheid: 24, bestel_eenheid_naam: 'krat' };
+        const m = winkelProductMeldingen([p], slots, actief);
+        expect(m[0].titel).toBe('Tijd om bij te bestellen: Bier — nog 9 st.');
+        expect(m[0].tekst).toContain('Op de bestellijst: 1 krat (24).');
+        expect(m[0].link).toBe('/inkoop');
     });
     it('een eigen drempel wint', () => {
         expect(winkelProductMeldingen([prod('p-bier', 'Bier', 40, 20, 10)], slots, actief)).toHaveLength(0);
