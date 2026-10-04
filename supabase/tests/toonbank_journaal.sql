@@ -62,6 +62,7 @@ declare
     v_g12       uuid := gen_random_uuid();
     v_g13       uuid := gen_random_uuid();
     v_g14       uuid := gen_random_uuid();
+    v_g15       uuid := gen_random_uuid();
     v_user      uuid := gen_random_uuid();
     v_r         jsonb;
     v_w         jsonb;
@@ -222,6 +223,15 @@ begin
        or (select fout_code from public.toonbank_journaal where id = v_id) <> 'schema' then
         v_fouten := v_fouten || 'markeer wacht → fout; ';
     end if;
+    -- Review M2 (klein 12): de strenge controle vóór het opslaan. Een melding die niet voldoet komt
+    -- meteen als fout (schema) in het journaal; nooit eerst even op wacht.
+    v_r := public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(pg_temp.tb_klein(v_g15, 50, 'pinpoging')), '1.1.0', false,
+                                            jsonb_build_object(v_g15::text, 'bon_id: ontbreekt'));
+    select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g15;
+    if v_r->'resultaten'->0->>'verwerking' <> 'fout' or v_j.verwerk_status <> 'fout' or v_j.fout_code <> 'schema'
+       or v_j.fout_melding <> 'bon_id: ontbreekt' or v_j.volgnummer <> 50 then
+        v_fouten := v_fouten || 'schemafout bij het opslaan: ' || row_to_json(v_j)::text || '; ';
+    end if;
     if public.toonbank_journaal_markeer(v_org, (select id from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g1), 'schema', 'x') <> 'verwerkt' then
         v_fouten := v_fouten || 'markeer veranderde een verwerkte melding; ';
     end if;
@@ -283,8 +293,8 @@ begin
     end;
 
     -- ── 10. Rechten.
-    if has_function_privilege('anon', 'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)', 'EXECUTE')
-       or has_function_privilege('authenticated', 'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)', 'EXECUTE')
+    if has_function_privilege('anon', 'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean, jsonb)', 'EXECUTE')
+       or has_function_privilege('authenticated', 'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean, jsonb)', 'EXECUTE')
        or has_function_privilege('authenticated', 'public.toonbank_verwerk_wachtrij(uuid, uuid)', 'EXECUTE')
        or has_function_privilege('authenticated', 'public.toonbank_boek_bon(bigint)', 'EXECUTE')
        or has_function_privilege('authenticated', 'public.toonbank_journaal_markeer(uuid, bigint, text, text)', 'EXECUTE')
@@ -360,5 +370,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: opslaan nieuw/bestond en ongewijzigd, bevestigd_tot zonder gat (2 → 5), gat_voor, dubbel volgnummer/rare soort/geen tijd toch bewaard als fout, kapotte envelop = 22023 zonder opslag; wachtrij: bon verwerkt (één mutatie, ook bij herhaling), kleine melding niet_nodig, kapotte bon fout zonder de volgende te blokkeren; contract_verouderd → na update verwerkt; markeer alleen wacht → fout; afhandelen opgelost met reden, opnieuw, kan_niet, alleen Admin; journaal append-only; 40P01/55P03/40001 blijven wacht (wachtrij en opnieuw), 22023 wordt fout, daarna één keer geboekt — alles teruggedraaid';
+    raise exception 'GESLAAGD: opslaan nieuw/bestond en ongewijzigd, bevestigd_tot zonder gat (2 → 5), gat_voor, dubbel volgnummer/rare soort/geen tijd toch bewaard als fout, kapotte envelop = 22023 zonder opslag; wachtrij: bon verwerkt (één mutatie, ook bij herhaling), kleine melding niet_nodig, kapotte bon fout zonder de volgende te blokkeren; contract_verouderd → na update verwerkt; markeer alleen wacht → fout; een schemafout van de API meteen fout bij het opslaan; afhandelen opgelost met reden, opnieuw, kan_niet, alleen Admin; journaal append-only; 40P01/55P03/40001 blijven wacht (wachtrij en opnieuw), 22023 wordt fout, daarna één keer geboekt — alles teruggedraaid';
 end $$;

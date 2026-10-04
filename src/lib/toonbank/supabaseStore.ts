@@ -211,6 +211,7 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             const { data, error } = await sb.rpc('toonbank_journaal_opslaan', {
                 p_org: o.orgId, p_apparaat: o.apparaatId, p_meldingen: o.meldingen,
                 p_contract_versie: o.contractVersie, p_contract_verouderd: o.verouderd,
+                p_schema_fouten: o.schemaFouten && Object.keys(o.schemaFouten).length ? o.schemaFouten : null,
             });
             if (error) {
                 if (error.code === '22023') {
@@ -223,16 +224,22 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             return naarJournaalOpslag(data as Record<string, unknown>);
         },
 
-        async journaalMarkeer(orgId, journaalId, code, melding) {
-            const { data, error } = await sb.rpc('toonbank_journaal_markeer', { p_org: orgId, p_journaal_id: journaalId, p_code: code, p_melding: melding });
-            if (error) throw new OpslagFout('toonbank_journaal_markeer', error);
-            return String(data ?? 'fout');
-        },
-
         async verwerkWachtrij(orgId, apparaatId) {
             const { data, error } = await sb.rpc('toonbank_verwerk_wachtrij', { p_org: orgId, p_apparaat: apparaatId });
             if (error) throw new OpslagFout('toonbank_verwerk_wachtrij', error);
             return naarVerwerkt((data as { verwerkt?: unknown } | null)?.verwerkt);
+        },
+
+        async wachtrijTeVerwerken(orgId, apparaatId) {
+            const { data, error } = await sb.from('toonbank_journaal')
+                .select('id')
+                .eq('organization_id', orgId)
+                .eq('apparaat_id', apparaatId)
+                .eq('verwerk_status', 'wacht')
+                .or('pogingen.eq.0,fout_code.in.(40P01,40001,55P03)')
+                .limit(1);
+            if (error) throw new OpslagFout('toonbank_journaal', error);
+            return (data ?? []).length > 0;
         },
 
         /* ── BA-10 ── */

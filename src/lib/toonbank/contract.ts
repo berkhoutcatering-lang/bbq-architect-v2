@@ -19,8 +19,12 @@ import { z } from 'zod';
 
 /** De versie die BBQ Architect spreekt. */
 export const CONTRACT_HUIDIG = '1.1.0';
-/** Een tablet met een lagere x-toonbank-contract krijgt 426 contract_verouderd. */
-export const CONTRACT_MINIMAAL = '1.0.0';
+/**
+ * Een tablet met een lagere x-toonbank-contract krijgt 426 contract_verouderd. 1.1.0: de
+ * Toonbank-app is vanaf het begin op 1.1.0 gebouwd (kern CONTRACT_VERSIE) en het voorbeeld
+ * status.json zegt minimaal 1.1.0; een 1.0.0-app bestaat niet (review M2, klein 12).
+ */
+export const CONTRACT_MINIMAAL = '1.1.0';
 
 export const HEADERS = {
     sleutel: 'x-toonbank-sleutel',

@@ -175,6 +175,11 @@ export interface JournaalOpslag {
     contractVersie: string | null;
     /** Te oude app (contract §6.6): wel opslaan, als fout contract_verouderd. */
     verouderd: boolean;
+    /**
+     * De strenge controle (zod) vóór het opslaan: gebeurtenis_id (kleine letters) → wat er niet klopt.
+     * Zo'n nieuwe melding komt meteen als fout (code schema) in het journaal (review M2, klein 12).
+     */
+    schemaFouten?: Record<string, string>;
 }
 
 export interface JournaalResultaat {
@@ -286,10 +291,13 @@ export interface ToonbankStore {
     /* ── Het journaal (BA-9) ── */
     /** toonbank_journaal_opslaan. Gooit OngeldigeMelding bij een kapotte envelop (niets opgeslagen). */
     journaalOpslaan(o: JournaalOpslag): Promise<JournaalOpslagRuw>;
-    /** toonbank_journaal_markeer: een melding op wacht die niet aan het contract voldoet → fout. Geeft de status. */
-    journaalMarkeer(orgId: string, journaalId: number, code: string, melding: string): Promise<string>;
     /** toonbank_verwerk_wachtrij: alles op wacht van deze tablet. */
     verwerkWachtrij(orgId: string, apparaatId: string): Promise<VerwerktRij[]>;
+    /**
+     * Wacht er iets van deze tablet dat nog niet (of alleen met een tijdelijke fout) is verwerkt?
+     * Dan verwerkt GET status de wachtrij (review M2, klein 1). Een tegenbon die op zijn bon wacht telt niet.
+     */
+    wachtrijTeVerwerken(orgId: string, apparaatId: string): Promise<boolean>;
 
     /* ── Ophalen en dagstaten (BA-10) ── */
     /** toonbank_ophaal_vraag: een order of doos meegeven, idempotent op gebeurtenis_id. */

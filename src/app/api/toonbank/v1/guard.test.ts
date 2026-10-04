@@ -116,9 +116,11 @@ async function verwachtFout(res: Response, status: number, code: string) {
 describe('guard', () => {
     it('geen of een te oude contractversie: 426 met minimaal en huidig', async () => {
         const f = await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: null }), geen), 426, 'contract_verouderd');
-        expect(f.details).toMatchObject({ minimaal: '1.0.0', huidig: '1.1.0' });
+        expect(f.details).toMatchObject({ minimaal: '1.1.0', huidig: '1.1.0' });
         await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '0.9.3' }), geen), 426, 'contract_verouderd');
-        expect((await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '1.0.0' }), geen)).status).toBe(200);
+        /* Review M2 (klein 12): minimaal 1.1.0, zoals het voorbeeld status.json. */
+        await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '1.0.0' }), geen), 426, 'contract_verouderd');
+        expect((await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '1.1.0' }), geen)).status).toBe(200);
     });
 
     it('sleutel: ontbreekt of onbekend = 401 sleutel_onbekend, ingetrokken = 401 sleutel_ingetrokken', async () => {
@@ -151,6 +153,11 @@ describe('guard', () => {
         await verwachtFout(await inloggenPOST(verzoek('inloggen', { sleutel: sleutelT1.sleutel, ruweBody: '{kapot' }), geen), 400, 'ongeldig_verzoek');
         const f = await verwachtFout(await inloggenPOST(verzoek('inloggen', { sleutel: sleutelT1.sleutel, body: { medewerker_id: JAN, inlogcode: '12', doel: 'sessie' } }), geen), 400, 'ongeldig_verzoek');
         expect(JSON.stringify(f.details)).toContain('inlogcode');
+    });
+
+    it('de sleutel vóór de body (review M2, klein 6): zonder geldige sleutel 401, ook bij een te grote of kapotte body', async () => {
+        await verwachtFout(await inloggenPOST(verzoek('inloggen', { sleutel: null, ruweBody: JSON.stringify({ x: 'a'.repeat(5000) }) }), geen), 401, 'sleutel_onbekend');
+        await verwachtFout(await inloggenPOST(verzoek('inloggen', { sleutel: genereerSleutel().sleutel, ruweBody: '{kapot' }), geen), 401, 'sleutel_onbekend');
     });
 
     it('snelheid per apparaat: 429 te_snel met Retry-After', async () => {
@@ -241,11 +248,11 @@ describe('POST inloggen', () => {
 });
 
 describe('GET status', () => {
-    it('volgens het contract, met huidig 1.1.0 en minimaal 1.0.0; het volgnummer gaat nooit omlaag', async () => {
+    it('volgens het contract, met huidig 1.1.0 en minimaal 1.1.0; het volgnummer gaat nooit omlaag', async () => {
         const res = await statusGET(verzoek('status?volgnummer=1202', { sleutel: sleutelT1.sleutel }), geen);
         expect(res.status).toBe(200);
         const s = StatusAntwoord.parse(await res.json());
-        expect(s.contract).toEqual({ huidig: '1.1.0', minimaal: '1.0.0' });
+        expect(s.contract).toEqual({ huidig: '1.1.0', minimaal: '1.1.0' });
         expect(s.apparaat).toEqual({ apparaat_id: T1, code: 'T1', naam: 'Toonbank T1' });
         expect(s).toMatchObject({ catalogus_versie: 412, voorraad_versie: 1181, wegzetten_open: 1, hoogste_volgnummer_gemeld: 1202, hoogste_bon_volgnummer: 411 });
         const s2 = StatusAntwoord.parse(await (await statusGET(verzoek('status?volgnummer=3', { sleutel: sleutelT1.sleutel }), geen)).json());

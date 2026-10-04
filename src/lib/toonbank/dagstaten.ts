@@ -11,7 +11,7 @@
  * GET dagstaat?datum: wat BBQ Architect van die dag van deze tablet kent.
  */
 import { CONTRACT_HUIDIG, CONTRACT_MINIMAAL, DAGSTAAT_STATUSSEN, DagstaatMelding, MeldingEnvelop, type DagstaatOverzicht, type DagstatenAntwoord } from './contract';
-import { slaMeldingenOp, verwerkNieuwe, type MeldingContext, type Ontvangst } from './bonnen';
+import { schemaFouten, slaMeldingenOp, verwerkWachtrij, type MeldingContext, type Ontvangst } from './bonnen';
 import type { ToonbankStore } from './store';
 import { gelukt, mislukt, type Uitkomst } from './uitkomst';
 
@@ -21,8 +21,9 @@ export async function ontvangDagstaat(store: ToonbankStore, ctx: MeldingContext,
         const punten = env.error.issues.slice(0, 5).map((i) => ({ pad: i.path.join('.'), melding: i.message }));
         return { uitkomst: mislukt('ongeldig_verzoek', 'De envelop van de dagstaat klopt niet (gebeurtenis_id, volgnummer, soort, moment).', { punten }), productIds: [] };
     }
-    /* Ongewijzigd opslaan: de body zoals de tablet hem stuurde. */
-    const opslag = await slaMeldingenOp(store, ctx, [body]);
+    /* Ongewijzigd opslaan: de body zoals de tablet hem stuurde. Streng (DagstaatMelding) al vóór het
+       opslaan: voldoet hij niet, dan komt hij meteen als fout (schema) in het journaal (review M2, klein 12). */
+    const opslag = await slaMeldingenOp(store, ctx, [body], schemaFouten([body], DagstaatMelding));
     if (!('body' in opslag)) return { uitkomst: opslag as Uitkomst<DagstatenAntwoord>, productIds: [] };
     if (ctx.verouderd) {
         return {
@@ -32,7 +33,7 @@ export async function ontvangDagstaat(store: ToonbankStore, ctx: MeldingContext,
             productIds: [],
         };
     }
-    const { productIds } = await verwerkNieuwe(store, ctx, [body], opslag.body, DagstaatMelding);
+    const { productIds } = await verwerkWachtrij(store, ctx);
     const r = opslag.body.resultaten[0]!;
     const stand = await store.dagstaatStand(ctx.orgId, env.data.gebeurtenis_id);
     const status = stand && (DAGSTAAT_STATUSSEN as readonly string[]).includes(stand.status) ? stand.status as DagstatenAntwoord['status'] : 'voorlopig';

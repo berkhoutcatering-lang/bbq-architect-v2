@@ -19,6 +19,7 @@ vi.mock('@/lib/toonbank/supabaseStore', () => ({ maakToonbankSupabaseStore: () =
 vi.mock('@/lib/toonbank/naAfloop', () => ({ naToonbankBoekingen: (orgId: string, productIds: string[]) => { houder.na.push({ orgId, productIds }); } }));
 
 import { POST as bonnenPOST } from './bonnen/route';
+import { GET as statusGET } from './status/route';
 
 const ORG = '00000000-0000-4000-8000-0000000000aa';
 const T1 = '00000000-0000-4000-8000-000000000001';
@@ -137,6 +138,27 @@ describe('POST bonnen', () => {
         expect(res.status).toBe(200);
         expect(BonnenAntwoord.parse(await res.json()).resultaten[0]!.verwerking).toBe('wacht');
         expect(store.g.meldingen).toHaveLength(1);
+    });
+
+    it('na een storing verwerkt de volgende statusvraag de wachtende bon alsnog (review M2, klein 1)', async () => {
+        const origineel = store.verwerkWachtrij;
+        store.verwerkWachtrij = async () => { throw new Error('storing'); };
+        const fouten = vi.spyOn(console, 'error').mockImplementation(() => {});
+        await bonnenPOST(verzoek({ meldingen: [voorbeeld('bon-los.json')] }), geen);
+        fouten.mockRestore();
+        expect(store.g.meldingen[0]!.verwerk_status).toBe('wacht');
+        store.verwerkWachtrij = origineel;
+        houder.na = [];
+        const statusVerzoek = () => new NextRequest('http://localhost:3000/api/toonbank/v1/status', {
+            headers: { 'x-forwarded-for': `10.2.1.${++ip % 250}`, 'x-toonbank-contract': '1.1.0', 'x-toonbank-sleutel': sleutel.sleutel },
+        });
+        expect((await statusGET(statusVerzoek(), geen)).status).toBe(200);
+        expect(store.g.meldingen[0]!.verwerk_status).toBe('verwerkt');
+        expect(houder.na).toContainEqual({ orgId: ORG, productIds: [NAOBER] });
+        /* Niets meer te doen: de volgende statusvraag draait de wachtrij niet opnieuw. */
+        const keer = store.g.wachtrijGedraaid;
+        expect((await statusGET(statusVerzoek(), geen)).status).toBe(200);
+        expect(store.g.wachtrijGedraaid).toBe(keer);
     });
 
     it('zonder sleutel 401; een medewerker is niet nodig (die staat per melding in de body)', async () => {

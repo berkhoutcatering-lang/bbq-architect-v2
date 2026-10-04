@@ -814,7 +814,12 @@ CREATE OR REPLACE FUNCTION public.toonbank_journaal_opslaan(
     p_apparaat            UUID,
     p_meldingen           JSONB,
     p_contract_versie     TEXT    DEFAULT NULL,
-    p_contract_verouderd  BOOLEAN DEFAULT false
+    p_contract_verouderd  BOOLEAN DEFAULT false,
+    -- Review M2 (klein 12): de strenge controle (zod, Melding) gebeurt in de
+    -- API vóór het opslaan. Wat niet voldoet: {gebeurtenis_id: melding}. Zo'n
+    -- nieuwe melding komt meteen als 'fout' (code schema) in het journaal; er
+    -- is geen moment waarop een gelijktijdig verzoek hem nog kan verwerken.
+    p_schema_fouten       JSONB   DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -912,6 +917,10 @@ BEGIN
             v_status := 'fout'; v_code := 'volgnummer_dubbel';
             v_melding := format('volgnummer %s is al gebruikt door een andere melding van deze tablet', v_nr);
         END IF;
+        IF v_status = 'wacht' AND jsonb_typeof(p_schema_fouten) = 'object' AND p_schema_fouten ? v_gid::TEXT THEN
+            v_status := 'fout'; v_code := 'schema';
+            v_melding := left(COALESCE(p_schema_fouten->>v_gid::TEXT, 'voldoet niet aan het contract'), 1000);
+        END IF;
         IF p_contract_verouderd THEN
             v_status := 'fout'; v_code := 'contract_verouderd';
             v_melding := format('gemaakt met een te oude Toonbank-app (contract %s); wordt verwerkt als de bijgewerkte app hem opnieuw stuurt',
@@ -958,10 +967,10 @@ BEGIN
 
     RETURN jsonb_build_object('resultaten', v_res, 'bevestigd_tot_volgnummer', v_bevestigd);
 END $$;
-COMMENT ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN) IS
+COMMENT ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN, JSONB) IS
     'POST bonnen/dagstaten (BA-9): meldingen ongewijzigd in het journaal (ON CONFLICT DO NOTHING), nieuw|bestond per melding, gat_voor bij een ontbrekend volgnummer, bevestigd_tot_volgnummer. Weigert nooit om de inhoud. Alleen service_role.';
-REVOKE ALL ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN) TO service_role;
+REVOKE ALL ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN, JSONB) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.toonbank_journaal_opslaan(UUID, UUID, JSONB, TEXT, BOOLEAN, JSONB) TO service_role;
 
 
 -- ── 12. toonbank_boek_bon ───────────────────────────────────────────────────
@@ -1892,7 +1901,7 @@ BEGIN
         IF NOT has_function_privilege('service_role', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  service_role mist ' || v_sig; END IF;
     END LOOP;
     FOREACH v_sig IN ARRAY ARRAY[
-        'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)',
+        'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean, jsonb)',
         'public.toonbank_boek_bon(bigint)',
         'public.toonbank_verwerk_wachtrij(uuid, uuid)',
         'public.toonbank_journaal_markeer(uuid, bigint, text, text)'
@@ -1903,7 +1912,7 @@ BEGIN
         IF NOT has_function_privilege('service_role', v_sig, 'EXECUTE') THEN v_fouten := v_fouten || E'\n  service_role mist ' || v_sig; END IF;
     END LOOP;
     FOREACH v_sig IN ARRAY ARRAY[
-        'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)',
+        'public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean, jsonb)',
         'public.toonbank_verwerk_wachtrij(uuid, uuid)',
         'public.toonbank_journaal_markeer(uuid, bigint, text, text)',
         'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)'

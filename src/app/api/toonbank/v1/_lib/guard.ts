@@ -12,11 +12,12 @@
  *      (POST bonnen, POST dagstaten): dan eerst sleutel en opslaan, en
  *      antwoordt de route zelf 426 (contract §6.6).
  *   3. Snelheid per IP (vóór de database): 429 te_snel + Retry-After.
- *   4. Body: hooguit maxBody bytes (413 te_groot); geen JSON: 400
- *      ongeldig_verzoek.
- *   5. x-toonbank-sleutel: onbekend → 401 sleutel_onbekend, ingetrokken →
+ *   4. x-toonbank-sleutel: onbekend → 401 sleutel_onbekend, ingetrokken →
  *      401 sleutel_ingetrokken. Daarna snelheid per apparaat (429).
  *      De organisatie komt ALLEEN uit de sleutel, nooit uit het verzoek.
+ *   5. Body: hooguit maxBody bytes (413 te_groot); geen JSON: 400
+ *      ongeldig_verzoek. Pas ná de sleutel (review M2, klein 6): zonder
+ *      geldige sleutel leest de server geen body van 1 MB.
  *   6. Optioneel x-toonbank-medewerker (een dienst van dit apparaat): anders
  *      403 medewerker_sessie_verlopen.
  *   7. De handler. Een onverwachte fout: 500 serverfout (zonder sleutel,
@@ -199,13 +200,6 @@ export function toonbankRoute<P extends Record<string, string> = Record<string, 
             const rlIp = checkRateLimit(`toonbank:${opties.naam}:ip:${ipVan(req)}`, opties.ipPerMinuut ?? IP_PER_MINUUT);
             if (!rlIp.allowed) return af(teSnel(rlIp.resetInSeconds));
 
-            let body: unknown = null;
-            if (req.method === 'POST') {
-                const b = await leesBody(req, opties.maxBody ?? STANDAARD_MAX_BODY);
-                if ('antwoord' in b) return af(b.antwoord);
-                body = b.body;
-            }
-
             const store = maakToonbankSupabaseStore();
             const nu = new Date();
             let apparaat: Apparaat | null = null;
@@ -219,6 +213,14 @@ export function toonbankRoute<P extends Record<string, string> = Record<string, 
                 }
                 const rl = checkRateLimit(`toonbank:apparaat:${apparaat.id}`, opties.apparaatPerMinuut ?? APPARAAT_PER_MINUUT);
                 if (!rl.allowed) return af(teSnel(rl.resetInSeconds));
+            }
+
+            /* De body pas na de sleutel (review M2, klein 6). */
+            let body: unknown = null;
+            if (req.method === 'POST') {
+                const b = await leesBody(req, opties.maxBody ?? STANDAARD_MAX_BODY);
+                if ('antwoord' in b) return af(b.antwoord);
+                body = b.body;
             }
 
             let sessie: Sessie | null = null;

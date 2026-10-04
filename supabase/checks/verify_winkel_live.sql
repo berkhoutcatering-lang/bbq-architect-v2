@@ -198,7 +198,7 @@ functies(signatuur, migratie) AS (VALUES
                                                                  '20261006150000_toonbank_vragen (BA-8)'),
     ('public.toonbank_afhaallijst(uuid, date)',                  '20261006150000_toonbank_vragen (BA-8)'),
     ('public.scan_resolve(uuid, text)',                          '20261006150000_toonbank_vragen (BA-8)'),
-    ('public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)', '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean, jsonb)', '20261007120000_toonbank_bonnen (BA-9)'),
     ('public.toonbank_boek_bon(bigint)',                         '20261007120000_toonbank_bonnen (BA-9)'),
     ('public.toonbank_verwerk_wachtrij(uuid, uuid)',             '20261007120000_toonbank_bonnen (BA-9)'),
     ('public.toonbank_journaal_markeer(uuid, bigint, text, text)', '20261007120000_toonbank_bonnen (BA-9)'),

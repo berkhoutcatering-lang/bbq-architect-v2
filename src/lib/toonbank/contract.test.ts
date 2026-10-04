@@ -66,8 +66,9 @@ describe('kassaPil zegt precies wat pil-gevallen.json zegt', () => {
 });
 
 describe('versies', () => {
-    it('huidig 1.1.0, minimaal 1.0.0', () => {
+    it('huidig 1.1.0, minimaal 1.1.0 (zoals het voorbeeld status.json; review M2 klein 12)', () => {
         expect(CONTRACT_HUIDIG).toBe('1.1.0');
+        expect(CONTRACT_MINIMAAL).toBe('1.1.0');
         expect(versieMinstens(CONTRACT_HUIDIG, CONTRACT_MINIMAAL)).toBe(true);
         expect(StatusAntwoord.shape.contract.parse({ huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL })).toBeTruthy();
     });

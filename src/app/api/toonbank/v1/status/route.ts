@@ -6,8 +6,15 @@
  * bevestigd_tot_volgnummer, hoogste_bon_volgnummer, instellingen,
  * te_controleren. Legt ook "laatst gezien", app- en contractversie en het
  * hoogste volgnummer vast (nooit omlaag).
+ *
+ * Review M2 (klein 1): staat er van deze tablet nog iets op wacht dat na een
+ * storing bij POST bonnen nooit verwerkt is (of alleen een tijdelijke fout
+ * had), dan verwerkt deze vraag de wachtrij eerst. Zo blijft een bon niet
+ * liggen tot de volgende verkoop. Een storing daarbij geeft gewoon de status.
  */
 import { NextResponse } from 'next/server';
+import { verwerkWachtendeMeldingen } from '@/lib/toonbank/bonnen';
+import { naToonbankBoekingen } from '@/lib/toonbank/naAfloop';
 import { statusAntwoord } from '@/lib/toonbank/status';
 import { foutAntwoord, optionsRoute, toonbankRoute } from '../_lib/guard';
 
@@ -23,7 +30,9 @@ export const GET = toonbankRoute({ naam: 'status' }, async ({ req, store, appara
         if (!/^\d{1,15}$/.test(ruw)) return foutAntwoord('ongeldig_verzoek', 'volgnummer is een geheel getal van 0 of meer.', { punten: [{ pad: 'volgnummer', melding: 'geheel getal' }] });
         volgnummer = Number(ruw);
     }
-    const antwoord = await statusAntwoord(store, { orgId: apparaat!.organization_id, apparaatId: apparaat!.id }, {
+    const ctx = { orgId: apparaat!.organization_id, apparaatId: apparaat!.id };
+    naToonbankBoekingen(ctx.orgId, await verwerkWachtendeMeldingen(store, ctx));
+    const antwoord = await statusAntwoord(store, ctx, {
         volgnummer, app_versie: app?.slice(0, 40) ?? null, contract_versie: contract?.slice(0, 20) ?? null,
     });
     return NextResponse.json(antwoord);

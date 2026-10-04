@@ -292,6 +292,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
                 if (!/^[a-z][a-z_]{1,40}$/.test(soort)) { soort = 'onbekend'; status = 'fout'; fout = 'soort_onbekend'; }
                 if (Number.isNaN(new Date(String(m.moment)).getTime())) { status = 'fout'; fout = fout ?? 'moment_ongeldig'; }
                 if (g.meldingen.some((x) => x.apparaat_id === o.apparaatId && x.volgnummer === nr)) { volgnummer = null; status = 'fout'; fout = 'volgnummer_dubbel'; }
+                if (status === 'wacht' && o.schemaFouten?.[gid] !== undefined) { status = 'fout'; fout = 'schema'; }
                 if (o.verouderd) { status = 'fout'; fout = 'contract_verouderd'; }
                 const rij: GeheugenMelding = {
                     id: g.meldingen.length + 1, organization_id: o.orgId, apparaat_id: o.apparaatId, gebeurtenis_id: gid, volgnummer, soort,
@@ -309,11 +310,9 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             return { resultaten, bevestigd_tot_volgnummer: bevestigd };
         },
 
-        async journaalMarkeer(orgId, journaalId, code) {
-            const m = g.meldingen.find((x) => x.id === journaalId && x.organization_id === orgId);
-            if (!m) throw new Error('melding niet gevonden');
-            if (m.verwerk_status === 'wacht') { m.verwerk_status = 'fout'; m.fout_code = code; }
-            return m.verwerk_status;
+        async wachtrijTeVerwerken(orgId, apparaatId) {
+            return g.meldingen.some((x) => x.organization_id === orgId && x.apparaat_id === apparaatId && x.verwerk_status === 'wacht'
+                && x.fout_code !== 'wacht_op_bon');
         },
 
         async verwerkWachtrij(orgId, apparaatId) {
