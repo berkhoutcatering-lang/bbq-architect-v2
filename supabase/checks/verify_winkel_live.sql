@@ -19,7 +19,10 @@
 --  (20261006120000); de toonbank-tabellen, -functies en de
 --  journaaltriggers tot BA-7a (20261006130000); de toonbank-instellingen en
 --  toonbank_status tot BA-7b (20261006140000); catalogus, vrij, wegzetten,
---  afhaallijst en scan_resolve tot BA-8 (20261006150000).
+--  afhaallijst en scan_resolve tot BA-8 (20261006150000); bonnen, bonregels,
+--  de journaalverwerking, tekort_correctie, gebeurd_at en de nieuwe
+--  winkel_muteer_voorraad (17 parameters; de oude met 15 bestaat dan niet
+--  meer) tot BA-9 (20261007120000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -44,7 +47,9 @@ tabellen(naam, migratie) AS (VALUES
     ('winkel_catalogus_versie',        '20261006120000_toonbank_catalogus (BA-4a)'),
     ('toonbank_apparaten',             '20261006130000_toonbank_apparaten (BA-7a)'),
     ('toonbank_sessies',               '20261006130000_toonbank_apparaten (BA-7a)'),
-    ('toonbank_journaal',              '20261006130000_toonbank_apparaten (BA-7a)')
+    ('toonbank_journaal',              '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_bonnen',                '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_bon_regels',            '20261007120000_toonbank_bonnen (BA-9)')
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
@@ -114,7 +119,9 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('personeel',             'toonbank_rol',            '20261006130000_toonbank_apparaten (BA-7a)'),
     ('winkel_instellingen',   'toonbank_alcohol_toegestaan',   '20261006140000_toonbank_status (BA-7b)'),
     ('winkel_instellingen',   'toonbank_contant_aan',          '20261006140000_toonbank_status (BA-7b)'),
-    ('winkel_instellingen',   'toonbank_contant_limiet_cents', '20261006140000_toonbank_status (BA-7b)')
+    ('winkel_instellingen',   'toonbank_contant_limiet_cents', '20261006140000_toonbank_status (BA-7b)'),
+    ('winkel_voorraad_mutaties', 'gebeurd_at',            '20261007120000_toonbank_bonnen (BA-9)'),
+    ('winkel_voorraad_mutaties', 'toonbank_bon_regel_id', '20261007120000_toonbank_bonnen (BA-9)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -137,8 +144,8 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_boek_rest(bigint, text)',                    '20260927120000_winkel_sinterklaas'),
     ('public.winkel_bezetting_product(uuid, bigint)',            '20260927120000_winkel_sinterklaas + 20260928120100'),
     ('public.winkel_voorraad_bewaken()',                         '20260928120000_winkelvoorraad_logboek'),
-    ('public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid)',
-                                                                 '20260928120000_winkelvoorraad_logboek'),
+    ('public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
+                                                                 '20260928120000_winkelvoorraad_logboek + 20261007120000 (BA-9)'),
     ('public.winkel_keuken_factor(text, text)',                  '20260928120000_winkelvoorraad_logboek'),
     ('public.voorraad_overboeken(uuid, integer, uuid, numeric, text, text, text)',
                                                                  '20260928120000_winkelvoorraad_logboek'),
@@ -177,7 +184,15 @@ functies(signatuur, migratie) AS (VALUES
     ('public.toonbank_wegzet_vraag(uuid, uuid, bigint, text, uuid, timestamp with time zone, uuid, text, text)',
                                                                  '20261006150000_toonbank_vragen (BA-8)'),
     ('public.toonbank_afhaallijst(uuid, date)',                  '20261006150000_toonbank_vragen (BA-8)'),
-    ('public.scan_resolve(uuid, text)',                          '20261006150000_toonbank_vragen (BA-8)')
+    ('public.scan_resolve(uuid, text)',                          '20261006150000_toonbank_vragen (BA-8)'),
+    ('public.toonbank_journaal_opslaan(uuid, uuid, jsonb, text, boolean)', '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_boek_bon(bigint)',                         '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_verwerk_wachtrij(uuid, uuid)',             '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_journaal_markeer(uuid, bigint, text, text)', '20261007120000_toonbank_bonnen (BA-9)'),
+    ('public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)', '20261007120000_toonbank_bonnen (BA-9)'),
+    ('private.toonbank_bon_vast()',                              '20261007120000_toonbank_bonnen (BA-9)'),
+    ('private.toonbank_verwerk_melding(bigint, boolean)',        '20261007120000_toonbank_bonnen (BA-9)'),
+    ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
@@ -209,7 +224,11 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_producten',      'trg_winkel_cv_product',              '20261006120000_toonbank_catalogus (BA-4a)'),
     ('winkel_artikel_slots',  'trg_winkel_cv_slots',                '20261006120000_toonbank_catalogus (BA-4a)'),
     ('toonbank_journaal',     'trg_toonbank_journaal_alleen_toevoegen', '20261006130000_toonbank_apparaten (BA-7a)'),
-    ('toonbank_journaal',     'trg_toonbank_journaal_geen_truncate',    '20261006130000_toonbank_apparaten (BA-7a)')
+    ('toonbank_journaal',     'trg_toonbank_journaal_geen_truncate',    '20261006130000_toonbank_apparaten (BA-7a)'),
+    ('toonbank_bonnen',       'trg_toonbank_bonnen_vast',               '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_bonnen',       'trg_toonbank_bonnen_geen_truncate',      '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_bon_regels',   'trg_toonbank_bon_regels_vast',           '20261007120000_toonbank_bonnen (BA-9)'),
+    ('toonbank_bon_regels',   'trg_toonbank_bon_regels_geen_truncate',  '20261007120000_toonbank_bonnen (BA-9)')
 ),
 indexen(naam, migratie) AS (VALUES
     ('winkel_orders_sleutel_idx',     '20260913120000_winkel_kassa'),
@@ -269,6 +288,15 @@ proef AS (
     SELECT 10, 'constraint', 'winkel_mutatie_reden_check op winkel_voorraad_mutaties', '20260928120000_winkelvoorraad_logboek',
            EXISTS (SELECT 1 FROM pg_constraint
                     WHERE conrelid = to_regclass('public.winkel_voorraad_mutaties') AND conname = 'winkel_mutatie_reden_check')
+    UNION ALL
+    SELECT 10, 'constraint', 'winkel_voorraad_mutaties_type_check kent tekort_correctie', '20261007120000_toonbank_bonnen (BA-9)',
+           EXISTS (SELECT 1 FROM pg_constraint
+                    WHERE conrelid = to_regclass('public.winkel_voorraad_mutaties') AND conname = 'winkel_voorraad_mutaties_type_check'
+                      AND pg_get_constraintdef(oid) LIKE '%tekort_correctie%')
+    UNION ALL
+    SELECT 11, 'fix', 'logboekviews rekenen met COALESCE(gebeurd_at, created_at)', '20261007120000_toonbank_bonnen (BA-9)',
+           COALESCE(pg_get_viewdef(to_regclass('public.voorraad_logboek')) LIKE '%COALESCE(m.gebeurd_at, m.created_at)%'
+                    AND pg_get_viewdef(to_regclass('public.voorraad_afwijkingen_maand')) LIKE '%gebeurd_at%', false)
     UNION ALL
     SELECT 10, 'constraint', 'winkel_artikelen_een_koppeling (gerecht óf inventory)', '20260925120000_winkel_vakjes',
            EXISTS (SELECT 1 FROM pg_constraint

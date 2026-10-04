@@ -559,6 +559,45 @@ export const Melding = z.discriminatedUnion('soort', [
 export const MAX_MELDINGEN_PER_VERZOEK = 50;
 export const BonnenVerzoek = z.object({ meldingen: z.array(Melding).min(1).max(MAX_MELDINGEN_PER_VERZOEK) });
 
+/** De soorten die via POST bonnen reizen (contract §1.2, plan v5 contractgat 5). */
+export const BONNEN_SOORTEN = ['bon', 'tegenbon', 'pinpoging', 'inloggen', 'uitloggen', 'vrij_overschreden', 'dag_openen'] as const;
+
+/**
+ * De soepele envelop waarmee BBQ Architect eerst opslaat (review M5, BA-9):
+ * alleen wat nodig is om een melding uniek in toonbank_journaal te zetten.
+ * Al het andere mag alles zijn; streng controleren (Melding, DagstaatMelding)
+ * gebeurt per melding bij het verwerken. Alleen als de envelop zelf niet
+ * klopt, antwoordt BBQ Architect 400 ongeldig_verzoek.
+ */
+export const MeldingEnvelop = z
+    .object({
+        gebeurtenis_id: Uuid,
+        volgnummer: Volgnummer,
+        soort: z.string().min(1),
+        /** Hier nog los: geen geldige tijd → toch opgeslagen, status fout. */
+        moment: z.string().min(1),
+    })
+    .loose();
+export type MeldingEnvelop = z.infer<typeof MeldingEnvelop>;
+
+/** POST bonnen zoals BBQ Architect hem eerst opslaat. Meer dan 50 = 413 te_groot. */
+export const BonnenEnvelop = z.object({ meldingen: z.array(MeldingEnvelop).min(1).max(MAX_MELDINGEN_PER_VERZOEK) }).loose();
+
+/** De verwerkstatus in toonbank_journaal (contract §1.2). De tablet bewaart hem alleen. */
+export const VERWERK_STATUSSEN = ['wacht', 'verwerkt', 'niet_nodig', 'fout', 'conflict', 'opgelost'] as const;
+export type VerwerkStatus = (typeof VERWERK_STATUSSEN)[number];
+
+export const BonnenAntwoord = z.object({
+    resultaten: z.array(z.object({
+        gebeurtenis_id: Uuid,
+        journaal: z.enum(['nieuw', 'bestond']),
+        /** Een van VERWERK_STATUSSEN; de tablet accepteert ook een andere tekst (review H2). */
+        verwerking: z.string().min(1),
+    })),
+    bevestigd_tot_volgnummer: z.int().nonnegative(),
+});
+export type BonnenAntwoord = z.infer<typeof BonnenAntwoord>;
+
 const OmzetPerTarief = z.object({ pct: BtwPct, incl_cents: Cents, grondslag_cents: Cents, btw_cents: Cents });
 
 export const DagstaatMelding = z
@@ -600,6 +639,53 @@ export const DagstaatMelding = z
         verzendbak_leeg: z.boolean(),
     })
     .refine((d) => d.dagstaat_id === d.gebeurtenis_id, { message: 'dagstaat_id is gelijk aan gebeurtenis_id', path: ['dagstaat_id'] });
+
+export const DAGSTAAT_STATUSSEN = ['voorlopig', 'definitief', 'aangevuld', 'goedgekeurd'] as const;
+
+/** Antwoord op POST dagstaten (BA-10). */
+export const DagstatenAntwoord = z.object({
+    dagstaat_id: Uuid,
+    journaal: z.enum(['nieuw', 'bestond']),
+    status: z.enum(DAGSTAAT_STATUSSEN),
+    verschillen: z.array(z.object({ veld: z.string().min(1), tablet_cents: Cents, ba_cents: Cents })),
+});
+export type DagstatenAntwoord = z.infer<typeof DagstatenAntwoord>;
+
+/** GET dagstaat?datum: wat BBQ Architect van die dag van dit apparaat kent (BA-10). */
+export const DagstaatOverzicht = z.object({
+    datum: Datum,
+    apparaat_code: ApparaatCode,
+    aantal_bonnen: z.int().nonnegative(),
+    hoogste_bonnummer: Bonnummer.nullable(),
+    omzet: z.array(z.object({ pct: BtwPct, incl_cents: Cents, btw_cents: Cents })),
+    pin_cents: Cents,
+    contant_cents: Cents,
+});
+export type DagstaatOverzicht = z.infer<typeof DagstaatOverzicht>;
+
+/* ═══ Ophalen (contract §3.3, BA-10) ═════════════════════════════════════ */
+
+/** De uitkomsten van winkel_order_ophalen (BA-2). Alleen bij "opgehaald" is de order meegegeven. */
+export const OPHAAL_UITKOMSTEN = ['onbekend', 'niet_betaald', 'al_opgehaald', 'rest_nodig', 'leeftijd_nodig', 'geweigerd', 'te_weinig_voorraad', 'opgehaald'] as const;
+export const OphaalUitkomst = z.enum(OPHAAL_UITKOMSTEN);
+export type OphaalUitkomst = z.infer<typeof OphaalUitkomst>;
+
+export const OrderOphalenAntwoord = z.object({
+    uitkomst: OphaalUitkomst,
+    order_id: OrderId.nullable(),
+    nummer: Ordernummer.nullable(),
+    /** Bij rest_nodig: wat er nog betaald moet worden. */
+    rest_cents: PositieveCents,
+    opgehaald_at: Moment.nullable(),
+});
+export type OrderOphalenAntwoord = z.infer<typeof OrderOphalenAntwoord>;
+
+export const DoosOphalenAntwoord = OrderOphalenAntwoord.extend({
+    code: z.string().min(1),
+    /** Hoeveel dozen van deze order nog niet zijn opgehaald. */
+    nog_open: z.int().nonnegative(),
+});
+export type DoosOphalenAntwoord = z.infer<typeof DoosOphalenAntwoord>;
 
 /* ═══ De voorbeeldberichten (contract/v1/voorbeelden) ════════════════════ */
 

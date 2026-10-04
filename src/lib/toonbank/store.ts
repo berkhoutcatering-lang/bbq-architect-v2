@@ -165,6 +165,51 @@ export interface WegzetVraagRuw {
     resultaat: Record<string, unknown> | null;
 }
 
+/* ── BA-9: het journaal (eerst opslaan, dan verwerken) ──────────────────── */
+
+export interface JournaalOpslag {
+    orgId: string;
+    apparaatId: string;
+    /** De meldingen zoals de tablet ze stuurde (de envelop is al gecontroleerd). */
+    meldingen: unknown[];
+    contractVersie: string | null;
+    /** Te oude app (contract §6.6): wel opslaan, als fout contract_verouderd. */
+    verouderd: boolean;
+}
+
+export interface JournaalResultaat {
+    gebeurtenis_id: string;
+    journaal: 'nieuw' | 'bestond';
+    journaal_id: number;
+    /** De verwerk_status op dit moment (wacht, verwerkt, niet_nodig, fout, conflict, opgelost). */
+    verwerking: string;
+    soort: string;
+}
+
+/** Wat toonbank_journaal_opslaan teruggeeft. */
+export interface JournaalOpslagRuw {
+    resultaten: JournaalResultaat[];
+    bevestigd_tot_volgnummer: number;
+}
+
+/** Eén verwerkte melding uit toonbank_verwerk_wachtrij. */
+export interface VerwerktRij {
+    journaal_id: number;
+    gebeurtenis_id: string;
+    soort: string;
+    status: string;
+    /** De producten waarvan de voorraad veranderde (voor de meldingen en het ververs-signaal). */
+    product_ids: string[];
+}
+
+/** De envelop van een melding klopt niet (de database zegt 22023): 400 ongeldig_verzoek. */
+export class OngeldigeMelding extends Error {
+    constructor(melding: string, public readonly index: number | null = null) {
+        super(melding);
+        this.name = 'OngeldigeMelding';
+    }
+}
+
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
@@ -203,4 +248,12 @@ export interface ToonbankStore {
     afhaallijst(orgId: string, datum: string): Promise<{ versie: number; datum: string; orders: unknown[] }>;
     /** scan_resolve: {soort, code, …}. */
     scan(orgId: string, code: string): Promise<Record<string, unknown>>;
+
+    /* ── Het journaal (BA-9) ── */
+    /** toonbank_journaal_opslaan. Gooit OngeldigeMelding bij een kapotte envelop (niets opgeslagen). */
+    journaalOpslaan(o: JournaalOpslag): Promise<JournaalOpslagRuw>;
+    /** toonbank_journaal_markeer: een melding op wacht die niet aan het contract voldoet → fout. Geeft de status. */
+    journaalMarkeer(orgId: string, journaalId: number, code: string, melding: string): Promise<string>;
+    /** toonbank_verwerk_wachtrij: alles op wacht van deze tablet. */
+    verwerkWachtrij(orgId: string, apparaatId: string): Promise<VerwerktRij[]>;
 }

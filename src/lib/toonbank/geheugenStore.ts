@@ -6,10 +6,28 @@
  * dat de echte functies hetzelfde zeggen.
  */
 import { randomUUID } from 'node:crypto';
-import type {
-    Apparaat, CatalogusRuw, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, NieuweSessie, Sessie, StatusBron, ToonbankStore,
-    WegzetTaakRij, WegzetVraag, WegzetVraagRuw,
+import {
+    OngeldigeMelding,
+    type Apparaat, type CatalogusRuw, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type NieuweSessie, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraag, type WegzetVraagRuw,
 } from './store';
+
+/** Een melding in het journaal (BA-9), zoals toonbank_journaal hem bewaart. */
+export interface GeheugenMelding {
+    id: number;
+    organization_id: string;
+    apparaat_id: string;
+    gebeurtenis_id: string;
+    volgnummer: number | null;
+    soort: string;
+    payload: Record<string, unknown>;
+    verwerk_status: string;
+    fout_code: string | null;
+    fout_melding: string | null;
+    gat_voor: boolean;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface GeheugenApparaat extends Apparaat {
     sleutel_hash: string | null;
@@ -46,6 +64,19 @@ export interface ToonbankGeheugen {
     journaal: { organization_id: string; gebeurtenis_id: string; payload: Record<string, unknown>; resultaat: Record<string, unknown> }[];
     /** Hoe vaak de vraag echt is uitgevoerd (niet uit het journaal). */
     wegzetUitgevoerd: number;
+    /* BA-9: de meldingen in het journaal en wat verwerken ervan maakt. */
+    meldingen: GeheugenMelding[];
+    /** Wat toonbank_verwerk_wachtrij met één melding doet (standaard: bon → verwerkt, kleine melding → niet_nodig). */
+    verwerkMelding: (m: GeheugenMelding) => { status: string; product_ids?: string[]; fout_code?: string };
+    /** Hoe vaak de wachtrij gedraaid heeft. */
+    wachtrijGedraaid: number;
+}
+
+export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
+    if (m.soort === 'bon' || m.soort === 'tegenbon' || m.soort === 'vrij_overschreden') return { status: 'verwerkt' };
+    if (['pinpoging', 'inloggen', 'uitloggen', 'dag_openen'].includes(m.soort)) return { status: 'niet_nodig' };
+    if (m.soort === 'dagstaat') return { status: 'verwerkt' };
+    return { status: 'fout', fout_code: 'ongeldig' };
 }
 
 export const STANDAARD_STAND: ToonbankGeheugen['stand'][string] = {
@@ -78,6 +109,9 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         wegzetResultaat: start.wegzetResultaat ?? (() => ({ ok: false, sqlstate: 'P0002', melding: 'order niet in deze organisatie', detail: null })),
         journaal: start.journaal ?? [],
         wegzetUitgevoerd: 0,
+        meldingen: start.meldingen ?? [],
+        verwerkMelding: start.verwerkMelding ?? standaardVerwerking,
+        wachtrijGedraaid: 0,
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -210,6 +244,75 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         },
         async scan(orgId, code) {
             return g.scan[orgId]?.[code] ?? { soort: 'onbekend', code };
+        },
+
+        /* ── BA-9: zoals toonbank_journaal_opslaan / _markeer / toonbank_verwerk_wachtrij ── */
+        async journaalOpslaan(o) {
+            const a = g.apparaten.find((x) => x.id === o.apparaatId && x.organization_id === o.orgId && !x.ingetrokken_at);
+            if (!a) throw new Error('tablet niet gevonden of ingetrokken (P0002)');
+            const lijst = o.meldingen as Record<string, unknown>[];
+            lijst.forEach((m, i) => {
+                const ok = m && typeof m === 'object' && UUID_RE.test(String(m.gebeurtenis_id ?? '')) && Number.isInteger(m.volgnummer) && Number(m.volgnummer) > 0
+                    && typeof m.soort === 'string' && m.soort.trim() !== '' && typeof m.moment === 'string' && m.moment !== '';
+                if (!ok) throw new OngeldigeMelding(`melding ${i + 1}: de envelop klopt niet`, i);
+            });
+            const resultaten: JournaalResultaat[] = [];
+            let hoogste = 0;
+            for (const m of [...lijst].sort((x, y) => Number(x.volgnummer) - Number(y.volgnummer))) {
+                const gid = String(m.gebeurtenis_id).toLowerCase();
+                const nr = Number(m.volgnummer);
+                const oud = g.meldingen.find((x) => x.organization_id === o.orgId && x.gebeurtenis_id === gid);
+                if (oud) {
+                    if (oud.verwerk_status === 'fout' && oud.fout_code === 'contract_verouderd' && !o.verouderd) {
+                        oud.verwerk_status = 'wacht'; oud.fout_code = null; oud.fout_melding = null;
+                    }
+                    resultaten.push({ gebeurtenis_id: gid, journaal: 'bestond', journaal_id: oud.id, verwerking: oud.verwerk_status, soort: oud.soort });
+                    continue;
+                }
+                let soort = String(m.soort).trim().toLowerCase();
+                let status = 'wacht';
+                let fout: string | null = null;
+                let volgnummer: number | null = nr;
+                if (!/^[a-z][a-z_]{1,40}$/.test(soort)) { soort = 'onbekend'; status = 'fout'; fout = 'soort_onbekend'; }
+                if (Number.isNaN(new Date(String(m.moment)).getTime())) { status = 'fout'; fout = fout ?? 'moment_ongeldig'; }
+                if (g.meldingen.some((x) => x.apparaat_id === o.apparaatId && x.volgnummer === nr)) { volgnummer = null; status = 'fout'; fout = 'volgnummer_dubbel'; }
+                if (o.verouderd) { status = 'fout'; fout = 'contract_verouderd'; }
+                const rij: GeheugenMelding = {
+                    id: g.meldingen.length + 1, organization_id: o.orgId, apparaat_id: o.apparaatId, gebeurtenis_id: gid, volgnummer, soort,
+                    payload: m, verwerk_status: status, fout_code: fout, fout_melding: fout,
+                    gat_voor: volgnummer !== null && volgnummer > 1 && !g.meldingen.some((x) => x.apparaat_id === o.apparaatId && x.volgnummer === volgnummer - 1),
+                };
+                g.meldingen.push(rij);
+                resultaten.push({ gebeurtenis_id: gid, journaal: 'nieuw', journaal_id: rij.id, verwerking: status, soort });
+                hoogste = Math.max(hoogste, nr);
+            }
+            let bevestigd = a.bevestigd_tot_volgnummer;
+            while (g.meldingen.some((x) => x.apparaat_id === o.apparaatId && x.volgnummer === bevestigd + 1)) bevestigd += 1;
+            a.bevestigd_tot_volgnummer = bevestigd;
+            a.hoogste_volgnummer_gemeld = Math.max(a.hoogste_volgnummer_gemeld, hoogste);
+            return { resultaten, bevestigd_tot_volgnummer: bevestigd };
+        },
+
+        async journaalMarkeer(orgId, journaalId, code) {
+            const m = g.meldingen.find((x) => x.id === journaalId && x.organization_id === orgId);
+            if (!m) throw new Error('melding niet gevonden');
+            if (m.verwerk_status === 'wacht') { m.verwerk_status = 'fout'; m.fout_code = code; }
+            return m.verwerk_status;
+        },
+
+        async verwerkWachtrij(orgId, apparaatId) {
+            g.wachtrijGedraaid += 1;
+            const uit: VerwerktRij[] = [];
+            const wacht = g.meldingen
+                .filter((x) => x.organization_id === orgId && x.apparaat_id === apparaatId && x.verwerk_status === 'wacht')
+                .sort((x, y) => (x.volgnummer ?? Infinity) - (y.volgnummer ?? Infinity) || x.id - y.id);
+            for (const m of wacht) {
+                const r = g.verwerkMelding(m);
+                m.verwerk_status = r.status;
+                m.fout_code = r.fout_code ?? null;
+                uit.push({ journaal_id: m.id, gebeurtenis_id: m.gebeurtenis_id, soort: m.soort, status: r.status, product_ids: r.product_ids ?? [] });
+            }
+            return uit;
         },
     };
 }

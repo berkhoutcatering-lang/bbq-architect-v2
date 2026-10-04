@@ -10,8 +10,10 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type {
-    Apparaat, CatalogusRuw, InlogTeller, KoppelKandidaat, Koppeling, Medewerker, Sessie, StatusBron, ToonbankStore, WegzetTaakRij, WegzetVraagRuw,
+import {
+    OngeldigeMelding,
+    type Apparaat, type CatalogusRuw, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
 } from './store';
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
@@ -195,7 +197,61 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error) throw new OpslagFout('scan_resolve', error);
             return (data ?? { soort: 'onbekend', code }) as Record<string, unknown>;
         },
+
+        /* ── BA-9 ── */
+        async journaalOpslaan(o) {
+            const { data, error } = await sb.rpc('toonbank_journaal_opslaan', {
+                p_org: o.orgId, p_apparaat: o.apparaatId, p_meldingen: o.meldingen,
+                p_contract_versie: o.contractVersie, p_contract_verouderd: o.verouderd,
+            });
+            if (error) {
+                if (error.code === '22023') {
+                    let index: number | null = null;
+                    try { index = Number((JSON.parse(error.details ?? '{}') as { index?: unknown }).index ?? NaN); } catch { /* geen details */ }
+                    throw new OngeldigeMelding(error.message, Number.isInteger(index) ? index : null);
+                }
+                throw new OpslagFout('toonbank_journaal_opslaan', error);
+            }
+            return naarJournaalOpslag(data as Record<string, unknown>);
+        },
+
+        async journaalMarkeer(orgId, journaalId, code, melding) {
+            const { data, error } = await sb.rpc('toonbank_journaal_markeer', { p_org: orgId, p_journaal_id: journaalId, p_code: code, p_melding: melding });
+            if (error) throw new OpslagFout('toonbank_journaal_markeer', error);
+            return String(data ?? 'fout');
+        },
+
+        async verwerkWachtrij(orgId, apparaatId) {
+            const { data, error } = await sb.rpc('toonbank_verwerk_wachtrij', { p_org: orgId, p_apparaat: apparaatId });
+            if (error) throw new OpslagFout('toonbank_verwerk_wachtrij', error);
+            return naarVerwerkt((data as { verwerkt?: unknown } | null)?.verwerkt);
+        },
     };
+}
+
+/** jsonb van toonbank_journaal_opslaan → JournaalOpslagRuw (bigint kan als tekst komen). */
+export function naarJournaalOpslag(r: Record<string, unknown>): JournaalOpslagRuw {
+    return {
+        resultaten: ((r.resultaten as Record<string, unknown>[] | null) ?? []).map((x) => ({
+            gebeurtenis_id: String(x.gebeurtenis_id),
+            journaal: x.journaal === 'bestond' ? 'bestond' as const : 'nieuw' as const,
+            journaal_id: Number(x.journaal_id),
+            verwerking: String(x.verwerking ?? 'wacht'),
+            soort: String(x.soort ?? ''),
+        })),
+        bevestigd_tot_volgnummer: Number(r.bevestigd_tot_volgnummer ?? 0),
+    };
+}
+
+/** De lijst uit toonbank_verwerk_wachtrij → VerwerktRij[]. */
+export function naarVerwerkt(lijst: unknown): VerwerktRij[] {
+    return ((lijst as Record<string, unknown>[] | null) ?? []).map((x) => ({
+        journaal_id: Number(x.journaal_id),
+        gebeurtenis_id: String(x.gebeurtenis_id),
+        soort: String(x.soort ?? ''),
+        status: String(x.status ?? 'wacht'),
+        product_ids: ((x.product_ids as unknown[] | null) ?? []).map(String),
+    }));
 }
 
 /** jsonb van toonbank_status → StatusBron; bigint/numeric kan als tekst komen, tijden als ISO met Z. */

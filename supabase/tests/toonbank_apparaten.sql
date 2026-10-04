@@ -198,9 +198,11 @@ begin
     exception when sqlstate 'TB001' then null;
     end;
     begin
-        execute 'truncate public.toonbank_journaal';
+        -- CASCADE: sinds BA-9 verwijzen de bonnen naar het journaal; ook dan
+        -- houdt een trigger het tegen (TB001 journaal, TB002 bonnen).
+        execute 'truncate public.toonbank_journaal cascade';
         v_fouten := v_fouten || 'journaal te legen met TRUNCATE; ';
-    exception when sqlstate 'TB001' then null;
+    exception when sqlstate 'TB001' or sqlstate 'TB002' then null;
     end;
     begin
         delete from public.organizations where id = v_ander;

@@ -8,7 +8,9 @@
  *      ETag en Retry-After zijn leesbaar voor de tablet. Een ander domein
  *      krijgt 403 geen_recht. Zonder Origin-header (geen browser) geen CORS.
  *   2. x-toonbank-contract lager dan CONTRACT_MINIMAAL (of leeg): 426
- *      contract_verouderd met {minimaal, huidig}.
+ *      contract_verouderd met {minimaal, huidig}. Behalve bij bewaarVerouderd
+ *      (POST bonnen, POST dagstaten): dan eerst sleutel en opslaan, en
+ *      antwoordt de route zelf 426 (contract §6.6).
  *   3. Snelheid per IP (vóór de database): 429 te_snel + Retry-After.
  *   4. Body: hooguit maxBody bytes (413 te_groot); geen JSON: 400
  *      ongeldig_verzoek.
@@ -145,6 +147,8 @@ export interface ToonbankContext<P> {
     body: unknown;
     contract: string | null;
     app: string | null;
+    /** Alleen bij bewaarVerouderd: de app is te oud; opslaan als fout en dan 426 (contract §6.6). */
+    verouderd: boolean;
 }
 
 export interface RouteOpties {
@@ -157,6 +161,12 @@ export interface RouteOpties {
     maxBody?: number;
     ipPerMinuut?: number;
     apparaatPerMinuut?: number;
+    /**
+     * POST bonnen en POST dagstaten (contract §6.6): een te oude app krijgt
+     * pas 426 nadat de meldingen zijn opgeslagen, zodat er niets kwijtraakt.
+     * De route krijgt verouderd = true en antwoordt zelf 426.
+     */
+    bewaarVerouderd?: boolean;
 }
 
 type RouteHandler<P> = (req: NextRequest, ctx: { params: Promise<P> }) => Promise<Response>;
@@ -179,7 +189,8 @@ export function toonbankRoute<P extends Record<string, string> = Record<string, 
             }
 
             const contract = req.headers.get(HEADERS.contract);
-            if (!versieMinstens(contract, CONTRACT_MINIMAAL)) {
+            const verouderd = !versieMinstens(contract, CONTRACT_MINIMAAL);
+            if (verouderd && !opties.bewaarVerouderd) {
                 return af(foutAntwoord('contract_verouderd', 'Deze Toonbank-app is te oud voor BBQ Architect. Werk de app bij.', {
                     minimaal: CONTRACT_MINIMAAL, huidig: CONTRACT_HUIDIG, ontvangen: contract,
                 }));
@@ -220,7 +231,7 @@ export function toonbankRoute<P extends Record<string, string> = Record<string, 
             const params = (routeCtx?.params ? await routeCtx.params : {}) as P;
             return af(await handler({
                 req, params, store, nu, apparaat, orgId: apparaat?.organization_id ?? null, sessie, body,
-                contract, app: req.headers.get(HEADERS.app),
+                contract, app: req.headers.get(HEADERS.app), verouderd,
             }));
         } catch (e) {
             console.error(`[toonbank ${opties.naam}]`, e instanceof Error ? e.message : String(e));

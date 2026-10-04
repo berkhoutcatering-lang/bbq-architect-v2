@@ -114,7 +114,8 @@ begin
         'public.winkel_doos_ophalen(uuid, text, text)',
         'public.winkel_boek_rest(bigint, text)',
         'public.winkel_dozen_voor_regel(uuid, bigint, text[])',
-        'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid)',
+        -- BA-9 (20261007120000): + p_gebeurd_at en p_toonbank_bon_regel_id
+        'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
         'public.voorraad_overboeken(uuid, integer, uuid, numeric, text, text, text)',
         'public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
         'public.voorraad_invoer_boeken(uuid, uuid)',
@@ -130,7 +131,9 @@ begin
         'public.winkel_voorraad_stand(uuid)',
         -- BA-6 (20261005140000): paneel Apart zetten, straks de Toonbank via service_role
         'public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',
-        'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)'
+        'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)',
+        -- BA-9 (20261007120000): Te controleren in BA
+        'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
