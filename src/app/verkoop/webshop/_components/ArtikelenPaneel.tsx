@@ -15,6 +15,7 @@ import { leesEuro, toonEuro, type ArtikelRij, type ProductRij, type SlotRij } fr
 import { koppelArtikel, koppelronde, maakArtikel, maakVoorraadItem, vraagKoppelVoorstel, werkArtikelBij, zetArtikelActief, zetSlots } from '../actions';
 import { PRODUCT_TYPES, ProductDrawer, hoeveelheidTekst, type ProductType } from './ProductenPaneel';
 import { btwVerdeling, inkoopwaardeCenten, winkelwaardeCenten, type Component, type Product } from '@/lib/winkel/rekenen';
+import { normaliseerKanalen, toonbankGroepen, type Kanaal } from '@/lib/winkel/toonbankVelden';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 export interface GerechtKeuze { id: string; naam: string }
@@ -104,7 +105,7 @@ export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, produc
                 {zichtbaar.length === 0 && <div className="ws-leeg" style={{ padding: 24, textAlign: 'center' }}>{artikelen.length === 0 ? 'Nog geen artikelen. Zet je eerste artikel op met de slug van de website.' : 'Niets in deze selectie.'}</div>}
                 {zichtbaar.map((a) => (
                     <div key={a.id} className="ws-tabel-rij ws-artikelen-grid" onClick={() => setOpenId(a.id)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') setOpenId(a.id); }}>
-                        <span style={{ fontSize: 14, fontWeight: 500 }}>{a.naam}{!a.publiek && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · niet publiek</span>}</span>
+                        <span style={{ fontSize: 14, fontWeight: 500 }}>{a.naam}{!a.publiek && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · niet publiek</span>}{a.kanalen?.includes('toonbank') && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · toonbank{a.toonbank_groep ? ` (${a.toonbank_groep})` : ''}</span>}</span>
                         <span style={{ fontSize: 13 }}>
                             {a.prijs_cents == null ? <span style={{ color: 'var(--muted-weak)' }}>prijs volgt</span> : <><span className="ws-mono">€ {toonEuro(a.prijs_cents)}</span> <span style={{ color: 'var(--muted)' }}>{a.eenheid.replace(/^per persoon$/, 'p.p.')}</span></>}
                             {!verkoopbaarMetSlots(a.id, slots) && <div style={{ fontSize: 11, color: 'var(--ws-warn)' }}>slot leeg · niet verkoopbaar</div>}
@@ -122,7 +123,7 @@ export default function ArtikelenPaneel({ artikelen, gerechten, voorraad, produc
             </div>
 
             {open && (
-                <ArtikelDrawer artikel={open === 'nieuw' ? null : open} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={open === 'nieuw' ? [] : slotsVanArtikel(open.id, slots)} onClose={() => setOpenId(null)} herlaad={herlaad} melding={melding} />
+                <ArtikelDrawer artikel={open === 'nieuw' ? null : open} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={open === 'nieuw' ? [] : slotsVanArtikel(open.id, slots)} groepen={toonbankGroepen(artikelen)} onClose={() => setOpenId(null)} herlaad={herlaad} melding={melding} />
             )}
         </>
     );
@@ -159,6 +160,8 @@ interface Form {
     segment: ArtikelRij['segment']; alcohol: boolean; schaal_verdeling: boolean; btw21: string; verpakking_klein: string; verpakking_groot: string;
     /* BA-6. */
     afhandeling: 'inpakken' | 'wegzetten';
+    /* BA-4a: kanalen en de knop op de Toonbank. */
+    kanalen: Kanaal[]; toonbank_groep: string; toonbank_volgorde: string; toonbank_favoriet: boolean;
 }
 
 /** Een slot in het formulier: alles als tekst, pas bij opslaan getallen. */
@@ -180,10 +183,12 @@ function vanArtikel(a: ArtikelRij | null): Form {
         btw21: a?.btw_verdeling?.['21'] == null ? '' : String(a.btw_verdeling['21']),
         verpakking_klein: toonEuro(a?.verpakking_klein_cents), verpakking_groot: toonEuro(a?.verpakking_groot_cents),
         afhandeling: a?.afhandeling ?? 'inpakken',
+        kanalen: a ? normaliseerKanalen(a.kanalen ?? ['webshop']) : ['webshop'], toonbank_groep: a?.toonbank_groep ?? '',
+        toonbank_volgorde: String(a?.toonbank_volgorde ?? 0), toonbank_favoriet: a?.toonbank_favoriet ?? false,
     };
 }
 
-function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose, herlaad, melding }: { artikel: ArtikelRij | null; gerechten: GerechtKeuze[]; voorraad: VoorraadKeuze[]; producten: ProductRij[]; slots: SlotRij[]; onClose: () => void; herlaad: () => Promise<void>; melding: Melding }) {
+function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, groepen, onClose, herlaad, melding }: { artikel: ArtikelRij | null; gerechten: GerechtKeuze[]; voorraad: VoorraadKeuze[]; producten: ProductRij[]; slots: SlotRij[]; groepen: string[]; onClose: () => void; herlaad: () => Promise<void>; melding: Melding }) {
     const [f, setF] = useState<Form>(() => vanArtikel(artikel));
     const [slotForms, setSlotForms] = useState<SlotForm[]>(() => slots.map(vanSlot));
     const [slotsGewijzigd, setSlotsGewijzigd] = useState(false);
@@ -215,6 +220,8 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose
         if (prijs === undefined || verpKlein === undefined || verpGroot === undefined) { melding('Dat is geen geldig bedrag.', 'error'); return; }
         const btw21 = f.btw21.trim() === '' ? null : Number(f.btw21.replace(',', '.'));
         if (btw21 != null && !(btw21 >= 0 && btw21 <= 100)) { melding('De btw-verdeling is een percentage tussen 0 en 100.', 'error'); return; }
+        const tbVolgorde = f.toonbank_volgorde.trim() === '' ? 0 : Number(f.toonbank_volgorde);
+        if (!Number.isInteger(tbVolgorde) || Math.abs(tbVolgorde) > 9999) { melding('Volgorde op de Toonbank: een heel getal.', 'error'); return; }
         const velden = {
             naam: f.naam, eenheid: f.eenheid, telt: f.telt, prijs_cents: prijs, btw_pct: f.btw_pct,
             minimum: Number(f.minimum) || 1, maximum: n(f.maximum), verzendbaar: f.verzendbaar, gekoeld: f.gekoeld,
@@ -225,6 +232,7 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose
             btw_verdeling: btw21 == null ? null : { '21': btw21, '9': Math.round((100 - btw21) * 100) / 100 },
             verpakking_klein_cents: verpKlein, verpakking_groot_cents: verpGroot,
             afhandeling: f.afhandeling,
+            kanalen: f.kanalen, toonbank_groep: f.toonbank_groep.trim() || null, toonbank_volgorde: tbVolgorde, toonbank_favoriet: f.toonbank_favoriet,
         };
         /* Slots: alles als getal, elke regel een naam en een hoeveelheid. */
         const slotInvoer = slotForms.map((sl) => ({ id: sl.id, slot_type: sl.slot_type, naam: sl.naam.trim(), hoeveelheid: Number(sl.hoeveelheid.replace(',', '.')), eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id }));
@@ -321,6 +329,29 @@ function ArtikelDrawer({ artikel, gerechten, voorraad, producten, slots, onClose
                             <button type="button" className="ws-chip" aria-pressed={f.alcohol} onClick={() => zet('alcohol', !f.alcohol)}><Wine size={14} />Bevat alcohol</button>
                         </div><div className="field-hint">Op order, mail en etiket. Volgt ook uit een product in een slot.</div></div>
                     </div>
+                </section>
+
+                <div className="ws-lijn" />
+
+                <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div className="ws-eyebrow">Toonbank</div>
+                    <div className="field"><label>Verkocht via</label><div className="ws-chips">
+                        {(['webshop', 'toonbank'] as const).map((k) => {
+                            const aan = f.kanalen.includes(k);
+                            return <button key={k} type="button" className="ws-chip" aria-pressed={aan} onClick={() => zet('kanalen', normaliseerKanalen(aan ? f.kanalen.filter((x) => x !== k) : [...f.kanalen, k]))}><Check size={14} />{k === 'webshop' ? 'Webshop' : 'Toonbank (winkel)'}</button>;
+                        })}
+                    </div><div className="field-hint">Toonbank = te koop aan de toonbank in de winkel. De webshop kijkt nu nog alleen naar Actief en Publiek.</div></div>
+                    {f.kanalen.includes('toonbank') && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div className="field"><label>Groep op de Toonbank</label><input list="toonbank-groepen" value={f.toonbank_groep} onChange={(e) => zet('toonbank_groep', e.target.value)} placeholder="Bier, Wijn, Worst" maxLength={40} />
+                                <datalist id="toonbank-groepen">{groepen.map((g) => <option key={g} value={g} />)}</datalist>
+                                <div className="field-hint">De knop op het verkoopscherm. Leeg = zonder groep.</div></div>
+                            <div className="field"><label>Volgorde</label><input inputMode="numeric" value={f.toonbank_volgorde} onChange={(e) => zet('toonbank_volgorde', e.target.value)} /><div className="field-hint">Binnen de groep; laag eerst</div></div>
+                            <div className="ws-chips" style={{ gridColumn: '1 / -1' }}>
+                                <button type="button" className="ws-chip" aria-pressed={f.toonbank_favoriet} onClick={() => zet('toonbank_favoriet', !f.toonbank_favoriet)}><Check size={14} />Vaste favoriet bovenaan</button>
+                            </div>
+                        </div>
+                    )}
                 </section>
 
                 <div className="ws-lijn" />

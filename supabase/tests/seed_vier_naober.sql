@@ -20,7 +20,10 @@
 --   - artikel roeg-naober (345 ct, btw 21, alcohol, actief, publiek, met
 --     afhaalmoment) met één slot: 1 × Naober. Afhandeling 'wegzetten'
 --     (losse winkelwaar, BA-6) zodra die kolom bestaat
---     (migratie 20261005140000_winkel_wegzetten).
+--     (migratie 20261005140000_winkel_wegzetten). Op de Toonbank (kanalen
+--     webshop en toonbank, groep Bier, favoriet) met 15 ct statiegeld en
+--     test-EAN 2000000000015 (winkelcode, GS1-prefix 20) zodra die kolommen
+--     bestaan (migratie 20261006120000_toonbank_catalogus).
 -- Geen personen, geen e-mailadressen, geen sleutels.
 --
 -- Guard: weigert als er winkelartikelen of events van een andere organisatie
@@ -127,6 +130,14 @@ begin
     if exists (select 1 from information_schema.columns
                 where table_schema = 'public' and table_name = 'winkel_artikelen' and column_name = 'afhandeling') then
         execute 'update public.winkel_artikelen set afhandeling = ''wegzetten'' where id = $1' using v_art;
+    end if;
+
+    -- ── BA-4a: Naober staat ook op de Toonbank (groep Bier, favoriet), met
+    --    15 ct statiegeld en een test-EAN. Alleen als de migratie er al op staat.
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'winkel_artikelen' and column_name = 'kanalen') then
+        execute 'update public.winkel_artikelen set kanalen = array[''webshop'', ''toonbank''], toonbank_groep = ''Bier'', toonbank_volgorde = 1, toonbank_favoriet = true where id = $1' using v_art;
+        execute 'update public.winkel_producten set statiegeld_cents = 15, ean = coalesce(ean, ''2000000000015'') where id = $1' using v_prod;
     end if;
 
     -- ── Precies één slot: 1 × Naober. Slots zijn het template; bestaande

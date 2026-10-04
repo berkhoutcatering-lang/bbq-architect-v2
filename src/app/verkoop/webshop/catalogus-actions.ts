@@ -26,6 +26,7 @@ import {
     type ProductRij,
 } from '@/lib/winkel/productsoorten';
 import { controleerTekst, siteUrl, type TekstcontroleUitkomst } from '@/lib/winkel/tekstcontrole';
+import { eanFoutMelding } from '@/lib/winkel/toonbankVelden';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -112,7 +113,7 @@ export async function nieuwPaginaProduct(input: unknown): Promise<ActionResult<{
         eenheid: 'stuk', prijs_per: 1, btw_pct: alcohol ? 21 : 9,
         pagina_status: 'concept', actief: true,
     }).select('id').single();
-    if (error || !p) return { error: error?.message ?? 'Aanmaken mislukt' };
+    if (error || !p) return { error: eanFoutMelding(error) ?? error?.message ?? 'Aanmaken mislukt' };
 
     const { data: a, error: aFout } = await s.supabase.from('winkel_artikelen').insert({
         organization_id: s.orgId, slug, naam, eenheid: soort === 'wijn' ? 'per fles' : 'per stuk', telt: 'stuks',
@@ -180,7 +181,7 @@ export async function bewaarPagina(input: unknown): Promise<ActionResult<{ sein:
         winkelprijs_incl_cents: v.prijs_cents, btw_pct: alcohol ? 21 : 9,
         ...(v.bronnen ? { bronnen: v.bronnen } : {}),
     }).eq('id', v.id).eq('organization_id', s.orgId);
-    if (error) return { error: error.code === 'WC003' ? 'Online alleen drank onder de 15 %.' : error.message };
+    if (error) return { error: error.code === 'WC003' ? 'Online alleen drank onder de 15 %.' : eanFoutMelding(error) ?? error.message };
 
     /* Het artikel van de losse verkoop volgt: naam, adres, prijs, 18+. Te koop zodra er een prijs is. */
     const { error: aFout } = await s.supabase.from('winkel_artikelen').update({

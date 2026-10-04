@@ -174,12 +174,15 @@ export default function ProductenPaneel({ producten, slots, artikelen, component
 interface Form {
     naam: string; type: ProductType; omschrijving: string; eenheid: 'stuk' | 'gram'; prijs_per: string;
     winkel: string; inkoop: string; btw_pct: 0 | 9 | 21; herkomst: ProductRij['herkomst']; alcohol: boolean; tip: boolean; actief: boolean;
+    /* BA-4a: voor de Toonbank. */
+    statiegeld: string; ean: string;
 }
 function vanProduct(p: ProductRij | null): Form {
     return {
         naam: p?.naam ?? '', type: (p?.type as ProductType) ?? 'bier', omschrijving: p?.omschrijving ?? '', eenheid: p?.eenheid ?? 'stuk', prijs_per: String(p?.prijs_per ?? 1),
         winkel: toonEuro(p?.winkelprijs_incl_cents), inkoop: toonEuro(p?.inkoop_excl_cents), btw_pct: (p?.btw_pct as 0 | 9 | 21) ?? 9, herkomst: p?.herkomst ?? null,
         alcohol: p?.alcohol ?? false, tip: p?.hop_and_bites_tip ?? false, actief: p?.actief ?? true,
+        statiegeld: p?.statiegeld_cents ? toonEuro(p.statiegeld_cents) : '', ean: p?.ean ?? '',
     };
 }
 
@@ -199,9 +202,14 @@ export function ProductDrawer({ product, onClose, herlaad, melding, onAangemaakt
         if (winkel === undefined || inkoop === undefined) { melding('Dat is geen geldig bedrag.', 'error'); return; }
         const prijsPer = Number(f.prijs_per.replace(',', '.'));
         if (!(prijsPer > 0)) { melding('Prijs per: een getal groter dan 0 (1 stuk, 100 gram).', 'error'); return; }
+        const statiegeld = leesEuro(f.statiegeld);
+        if (statiegeld === undefined) { melding('Statiegeld: dat is geen geldig bedrag.', 'error'); return; }
+        const ean = f.ean.trim();
+        if (ean && !/^\d{8,14}$/.test(ean)) { melding('Een streepjescode is 8 tot 14 cijfers.', 'error'); return; }
         const velden = {
             naam: f.naam, type: f.type, omschrijving: f.omschrijving.trim() || null, eenheid: f.eenheid, prijs_per: prijsPer,
             winkelprijs_incl_cents: winkel, inkoop_excl_cents: inkoop, btw_pct: f.btw_pct, herkomst: f.herkomst, alcohol: f.alcohol, hop_and_bites_tip: f.tip, actief: f.actief,
+            statiegeld_cents: statiegeld ?? 0, ean: ean || null,
         };
         setBezig(true);
         try {
@@ -239,6 +247,8 @@ export function ProductDrawer({ product, onClose, herlaad, melding, onAangemaakt
                     <div className="field"><label>Voorraad</label>
                         <div style={{ fontSize: 14, padding: '8px 0' }}>{product?.voorraad == null ? <span style={{ color: 'var(--muted)' }}>niet bijgehouden</span> : <span className="ws-mono">{hoeveelheidTekst(product.voorraad, product.eenheid)}</span>}</div>
                         <div className="field-hint">Verandert alleen via tellen, ontvangst of overboeken: {product ? <a href={`/voorraad/winkel?product=${product.id}`} style={{ color: 'var(--brand)' }}>open in Winkelvoorraad</a> : 'na het aanmaken in Winkelvoorraad'}.</div></div>
+                    <div className="field"><label>Statiegeld per stuk</label><input inputMode="decimal" value={f.statiegeld} onChange={(e) => zet('statiegeld', e.target.value)} placeholder="0,15" /><div className="field-hint">Buiten de btw. Leeg = geen. De Toonbank zet het per stuk op de bon.</div></div>
+                    <div className="field"><label>Streepjescode (EAN)</label><input inputMode="numeric" value={f.ean} onChange={(e) => zet('ean', e.target.value.replace(/\D/g, ''))} placeholder="8 tot 14 cijfers" /><div className="field-hint">Voor de scanner van de Toonbank. Eén product per code.</div></div>
                 </div>
                 <div className="field"><label>Herkomst</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {HERKOMST.map((h) => <button key={h.key} type="button" className="ws-pil" aria-pressed={f.herkomst === h.key} onClick={() => zet('herkomst', f.herkomst === h.key ? null : h.key)}>{h.label}</button>)}

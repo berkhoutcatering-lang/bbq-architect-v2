@@ -14,7 +14,9 @@
 --  ophaalkolommen en winkel_order_ophalen(_terug) tot BA-2 (20261005120000);
 --  de vrij-objecten (teller, vier functies, triggers, grens) tot BA-5
 --  (20261005130000 en 20261005130100); de wegzet-objecten (view, kolom, twee
---  functies) tot BA-6 (20261005140000).
+--  functies) tot BA-6 (20261005140000); de catalogus voor de Toonbank
+--  (statiegeld, kanalen, unieke EAN, catalogusteller) tot BA-4a
+--  (20261006120000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -35,7 +37,8 @@ tabellen(naam, migratie) AS (VALUES
     ('voorraad_invoer',                '20260928140000_voorraad_invoer'),
     ('voorraad_invoer_regels',         '20260928140000_voorraad_invoer'),
     ('voorraad_invoer_koppelingen',    '20260928140000_voorraad_invoer'),
-    ('winkel_voorraad_versie',         '20261005130000_winkel_vrij (BA-5)')
+    ('winkel_voorraad_versie',         '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_catalogus_versie',        '20261006120000_toonbank_catalogus (BA-4a)')
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
@@ -96,7 +99,12 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_orders',         'leeftijd_geweigerd_at',   '20261005120000_winkel_order_ophalen (BA-2)'),
     ('winkel_orders',         'leeftijd_geweigerd_door', '20261005120000_winkel_order_ophalen (BA-2)'),
     ('winkel_instellingen',   'beschikbaar_grens',       '20261005130100_winkel_beschikbaar_grens (BA-5)'),
-    ('winkel_artikelen',      'afhandeling',             '20261005140000_winkel_wegzetten (BA-6)')
+    ('winkel_artikelen',      'afhandeling',             '20261005140000_winkel_wegzetten (BA-6)'),
+    ('winkel_producten',      'statiegeld_cents',        '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikelen',      'kanalen',                 '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikelen',      'toonbank_groep',          '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikelen',      'toonbank_volgorde',       '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikelen',      'toonbank_favoriet',       '20261006120000_toonbank_catalogus (BA-4a)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -141,7 +149,8 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_reserveringen(uuid, uuid)',                  '20261005130000_winkel_vrij (BA-5)'),
     ('public.winkel_voorraad_stand(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
     ('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',       '20261005140000_winkel_wegzetten (BA-6)'),
-    ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)')
+    ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)'),
+    ('private.winkel_catalogus_versie_omhoog()',                 '20261006120000_toonbank_catalogus (BA-4a)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
@@ -166,13 +175,19 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_artikelen',      'trg_winkel_vv_artikel_erbij',        '20261005130000_winkel_vrij (BA-5)'),
     ('winkel_producten',      'trg_winkel_vv_product_erbij',        '20261005130000_winkel_vrij (BA-5)'),
     ('winkel_producten',      'trg_winkel_vv_product',              '20261005130000_winkel_vrij (BA-5)'),
-    ('winkel_instellingen',   'trg_winkel_vv_grens',                '20261005130100_winkel_beschikbaar_grens (BA-5)')
+    ('winkel_instellingen',   'trg_winkel_vv_grens',                '20261005130100_winkel_beschikbaar_grens (BA-5)'),
+    ('winkel_artikelen',      'trg_winkel_cv_artikel_erbij',        '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikelen',      'trg_winkel_cv_artikel',              '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_producten',      'trg_winkel_cv_product_erbij',        '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_producten',      'trg_winkel_cv_product',              '20261006120000_toonbank_catalogus (BA-4a)'),
+    ('winkel_artikel_slots',  'trg_winkel_cv_slots',                '20261006120000_toonbank_catalogus (BA-4a)')
 ),
 indexen(naam, migratie) AS (VALUES
     ('winkel_orders_sleutel_idx',     '20260913120000_winkel_kassa'),
     ('events_winkel_moment_uniek',    '20260925120000_winkel_vakjes'),
     ('winkel_mutaties_sleutel_uidx',  '20260928120000_winkelvoorraad_logboek'),
-    ('stock_movements_sleutel_uidx',  '20260928120200_winkelvoorraad_meldingen_afwijkingen')
+    ('stock_movements_sleutel_uidx',  '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
+    ('winkel_producten_ean_uniek',    '20261006120000_toonbank_catalogus (BA-4a)')
 ),
 proef AS (
     SELECT 1 AS nr, 'tabel' AS soort, 'public.' || t.naam AS naam, t.migratie,

@@ -26,6 +26,7 @@ import { codeUitScan } from '@/lib/winkel/productie';
 import { ophaalMelding, terugMelding, type Melding, type OphaalUitkomst, type TerugUitkomst } from '@/lib/winkel/ophalen';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import { verversNaAfloop } from '@/lib/website/verversSignaal';
+import { EanSchema, StatiegeldSchema, ToonbankArtikelVelden, eanFoutMelding } from '@/lib/winkel/toonbankVelden';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -86,6 +87,8 @@ const ArtikelVelden = z.object({
     verpakking_groot_cents: z.number().int().min(0).nullable().default(null),
     /* BA-6: inpakken in de makerij, of wegzetten uit het schap (losse winkelwaar). */
     afhandeling: z.enum(['inpakken', 'wegzetten']).default('inpakken'),
+    /* BA-4a: kanalen en de knop op de Toonbank. */
+    ...ToonbankArtikelVelden.shape,
 });
 type ArtikelVelden = z.infer<typeof ArtikelVelden>;
 
@@ -118,6 +121,7 @@ function artikelRij(a: ArtikelVelden) {
         btw_verdeling: a.btw_verdeling && Object.keys(a.btw_verdeling).length ? a.btw_verdeling : null,
         verpakking_klein_cents: a.verpakking_klein_cents, verpakking_groot_cents: a.verpakking_groot_cents,
         afhandeling: a.afhandeling,
+        kanalen: a.kanalen, toonbank_groep: a.toonbank_groep, toonbank_volgorde: a.toonbank_volgorde, toonbank_favoriet: a.toonbank_favoriet,
     };
 }
 
@@ -696,6 +700,9 @@ const ProductVelden = z.object({
     /* De voorraad staat hier bewust niet: die verandert alleen via het
        logboek (tellen, ontvangst, overboeken, afwijking) in /voorraad/winkel. */
     actief: z.boolean().default(true),
+    /* BA-4a: statiegeld per stuk (buiten de btw) en de streepjescode, uniek per organisatie. */
+    statiegeld_cents: StatiegeldSchema.default(0),
+    ean: EanSchema.default(null),
 });
 
 export async function maakProduct(input: unknown): Promise<ActionResult<{ id: string }>> {
@@ -704,7 +711,7 @@ export async function maakProduct(input: unknown): Promise<ActionResult<{ id: st
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
     const { data, error } = await s.supabase.from('winkel_producten').insert({ organization_id: s.orgId, ...parsed.data }).select('id').single();
-    if (error) return { error: error.message };
+    if (error) return { error: eanFoutMelding(error) ?? error.message };
     revalidatePath(PAD);
     return { data: { id: data.id as string } };
 }
@@ -716,7 +723,7 @@ export async function werkProductBij(input: unknown): Promise<ActionResult<{ ok:
     if (!s) return { error: 'unauthorized' };
     const { id, ...velden } = parsed.data;
     const { error } = await s.supabase.from('winkel_producten').update(velden).eq('id', id).eq('organization_id', s.orgId);
-    if (error) return { error: error.message };
+    if (error) return { error: eanFoutMelding(error) ?? error.message };
     revalidatePath(PAD);
     return { data: { ok: true } };
 }
