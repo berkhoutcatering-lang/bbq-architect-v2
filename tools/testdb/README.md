@@ -24,6 +24,7 @@ npm --prefix tools/testdb install
 | `npm --prefix tools/testdb run seed` | Draait `supabase/tests/seed_vier_naober.sql` (organisatie e2e-hop-en-bites). |
 | `npm --prefix tools/testdb run test` | Draait elke `supabase/tests/*.sql` (behalve de seed) en meldt per bestand GESLAAGD of FOUT met de melding. `-- winkel_vrij` draait alleen die. |
 | `npm --prefix tools/testdb run proef` | Draait de objectproef `supabase/checks/verify_winkel_live.sql`. Met `-- --vergelijk=<bestand>` legt hij de uitkomst naast een uitvoer van live (`supabase db query -o table`) en toont alleen de verschillen. |
+| `npm --prefix tools/testdb run proef:twee-tablets` | Twee tablets verwerken tegelijk hun wachtrij met producten in gekruiste volgorde (review M2, B1). Geslaagd = alle zes de bonnen `verwerkt`, geen deadlock. Zet data in de e2e-organisatie: draai hem ná `test`. |
 | `npm --prefix tools/testdb run sql -- <bestand.sql>` | Draait een willekeurig SQL-bestand en toont de uitkomst. |
 | `npm --prefix tools/testdb run api` | De api-stand: PostgREST plus een voordeur op `/rest/v1`, zodat BBQ Architect lokaal tegen deze database draait. Zie hieronder. |
 | `npm --prefix tools/testdb run api:proef` | Start de api-stand, controleert sleutels, rechten, `/auth/v1` en CORS, en stopt weer. |
@@ -32,6 +33,7 @@ De gewone ronde na een wijziging aan een migratie of test:
 
 ```sh
 npm --prefix tools/testdb run opnieuw && npm --prefix tools/testdb run seed && npm --prefix tools/testdb run test
+npm --prefix tools/testdb run proef && npm --prefix tools/testdb run proef:twee-tablets
 ```
 
 Verbinden met een eigen client: `postgresql://postgres:postgres@127.0.0.1:54329/postgres`

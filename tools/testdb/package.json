@@ -12,6 +12,7 @@
     "seed": "node sql-bestand.mjs @/supabase/tests/seed_vier_naober.sql",
     "test": "node test.mjs",
     "proef": "node sql-bestand.mjs @/supabase/checks/verify_winkel_live.sql",
+    "proef:twee-tablets": "node twee-tablets.mjs",
     "sql": "node sql-bestand.mjs",
     "api": "node api.mjs",
     "api:proef": "node api.mjs --proef"

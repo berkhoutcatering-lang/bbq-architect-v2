@@ -17,6 +17,10 @@
 --        deeltransactie (BEGIN … EXCEPTION … END). Een fout zet alleen die
 --        melding op 'fout' en de wachtrij gaat door: één rare bon blokkeert
 --        nooit de rest. Eén verwerker tegelijk per tablet (advisory lock).
+--        Review M2 B1: eerst alle producten van alle wachtende bonnen in één
+--        statement vergrendelen (id-volgorde), zodat twee tablets elkaar
+--        niet vastzetten; een tijdelijke fout (40P01, 40001, 55P03) laat de
+--        melding op 'wacht' (pogingen + 1) in plaats van 'fout'.
 --    toonbank_boek_bon(p_journaal_id)
 --        Eén bon of tegenbon, precies in de volgorde van contract §4.2:
 --          1. het tekortslot aan (app.winkel_tekort);
@@ -63,7 +67,8 @@
 --
 --  Lockvolgorde (20261005120100): een bon raakt geen order; hij vergrendelt
 --  de producten in id-volgorde, schrijft het logboek, en zet pas aan het
---  eind zijn journaalregel bij. De voorraadteller gaat bij het committen
+--  eind zijn journaalregel bij. In de wachtrij zijn de producten van de hele
+--  batch al vooraf vergrendeld, in één statement (review M2 B1). De voorraadteller gaat bij het committen
 --  (deferred trigger, BA-5). Het journaal wordt nooit vooraf vergrendeld:
 --  dubbel verwerken wordt tegengehouden door de primaire sleutel van de bon
 --  en de unieke voorraadsleutels.
@@ -1415,10 +1420,75 @@ END $$;
 REVOKE ALL ON FUNCTION private.toonbank_verwerk_melding(BIGINT, BOOLEAN) FROM PUBLIC, anon, authenticated, service_role;
 
 
+-- ── 14b. De wachtrij: eerst alle producten, en tijdelijke fouten ────────────
+-- Review M2 B1 (deadlock tussen tablets). De wachtrij verwerkt tot 200
+-- meldingen in één transactie; de productlocks van bon 1 blijven staan
+-- terwijl bon 2 lockt. De id-volgorde per bon is dan niet genoeg: tablet A
+-- (P2, dan P1) en tablet B (P1, dan P2) zetten elkaar vast. Daarom vóór de
+-- lus alle producten van álle wachtende bonnen en tegenbonnen van deze
+-- tablet in één statement vergrendelen, in id-volgorde (zoals
+-- winkel_controleer_capaciteit). Daarna vraagt de lus geen nieuwe
+-- productlock meer aan; een tweede tablet wacht dan netjes tot de eerste
+-- klaar is. Een onbekend product (geen rij) vergrendelt niets.
+CREATE OR REPLACE FUNCTION private.toonbank_vergrendel_wachtrij(p_org UUID, p_apparaat UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    PERFORM 1
+      FROM public.winkel_producten p
+     WHERE p.organization_id = p_org
+       AND p.id IN (SELECT private.tb_uuid(o->>'product_id')
+                      FROM public.toonbank_journaal j
+                     CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(j.payload->'regels') = 'array' THEN j.payload->'regels' ELSE '[]'::JSONB END) r
+                     CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(r->'onderdelen') = 'array' THEN r->'onderdelen' ELSE '[]'::JSONB END) o
+                     WHERE j.organization_id = p_org AND j.apparaat_id = p_apparaat
+                       AND j.verwerk_status = 'wacht' AND j.soort IN ('bon', 'tegenbon'))
+     ORDER BY p.id
+       FOR UPDATE OF p;
+END $$;
+COMMENT ON FUNCTION private.toonbank_vergrendel_wachtrij(UUID, UUID) IS
+    'Review M2 B1: vergrendelt in één statement, in id-volgorde, alle producten van alle wachtende bonnen en tegenbonnen van één tablet. Aan het begin van de wachtrij, na de advisory lock.';
+REVOKE ALL ON FUNCTION private.toonbank_vergrendel_wachtrij(UUID, UUID) FROM PUBLIC, anon, authenticated, service_role;
+
+-- Een melding die bij het verwerken een fout gaf. Een tijdelijke fout
+-- (40P01 deadlock, 40001 serialisatie, 55P03 lock niet te krijgen) is geen
+-- fout in de melding: die blijft op 'wacht' met een poging erbij en wordt de
+-- volgende keer gewoon verwerkt. Al het andere wordt 'fout' (Te controleren).
+-- Geeft de nieuwe status.
+CREATE OR REPLACE FUNCTION private.toonbank_melding_mislukt(p_journaal_id BIGINT, p_state TEXT, p_melding TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tijdelijk CONSTANT BOOLEAN := COALESCE(p_state IN ('40P01', '40001', '55P03'), false);
+BEGIN
+    UPDATE public.toonbank_journaal
+       SET verwerk_status = CASE WHEN v_tijdelijk THEN 'wacht' ELSE 'fout' END,
+           pogingen = pogingen + 1,
+           fout_code = CASE WHEN v_tijdelijk THEN p_state
+                            WHEN p_state = '22023' THEN 'ongeldig'
+                            WHEN p_state = '23505' THEN 'dubbel'
+                            ELSE p_state END,
+           fout_melding = left(CASE WHEN v_tijdelijk THEN format('Tijdelijk (%s), wordt opnieuw verwerkt: ', p_state) ELSE '' END
+                               || COALESCE(p_melding, ''), 1000),
+           verwerkt_at = CASE WHEN v_tijdelijk THEN verwerkt_at ELSE now() END
+     WHERE id = p_journaal_id;
+    RETURN CASE WHEN v_tijdelijk THEN 'wacht' ELSE 'fout' END;
+END $$;
+COMMENT ON FUNCTION private.toonbank_melding_mislukt(BIGINT, TEXT, TEXT) IS
+    'Review M2 B1: een verwerkfout vastleggen. 40P01, 40001 en 55P03 blijven op wacht (pogingen + 1); al het andere wordt fout (22023 ongeldig, 23505 dubbel, anders de SQLSTATE).';
+REVOKE ALL ON FUNCTION private.toonbank_melding_mislukt(BIGINT, TEXT, TEXT) FROM PUBLIC, anon, authenticated, service_role;
+
+
 -- ── 15. toonbank_verwerk_wachtrij ───────────────────────────────────────────
 -- Alles op 'wacht' van deze tablet, op volgnummer, hooguit 200 per keer.
--- Elke melding in een eigen deeltransactie: een fout zet alleen die melding
--- op 'fout' (met de melding van de database) en de rest gaat door.
+-- Eerst de producten van alle wachtende bonnen in één keer vergrendelen
+-- (§14b, review M2 B1). Elke melding in een eigen deeltransactie: een fout
+-- zet alleen die melding op 'fout' (met de melding van de database) en de
+-- rest gaat door; een tijdelijke fout laat hem op 'wacht'.
 -- Geeft {verwerkt: [{journaal_id, gebeurtenis_id, soort, status, product_ids}]}.
 CREATE OR REPLACE FUNCTION public.toonbank_verwerk_wachtrij(p_org UUID, p_apparaat UUID)
 RETURNS JSONB
@@ -1445,6 +1515,8 @@ BEGIN
 
     -- Eén verwerker tegelijk per tablet (vóór elke andere lock).
     PERFORM pg_advisory_xact_lock(hashtextextended('toonbank_wachtrij:' || p_apparaat::TEXT, 0));
+    -- Dan alle producten van alle wachtende bonnen, in één keer, in id-volgorde (B1).
+    PERFORM private.toonbank_vergrendel_wachtrij(p_org, p_apparaat);
 
     -- Ronde 1: alles op wacht, op volgnummer. Ronde 2: alleen wat in ronde 1
     -- bleef wachten (een tegenbon waarvan de bon later in dezelfde batch zat),
@@ -1462,12 +1534,7 @@ BEGIN
                 v_r := private.toonbank_verwerk_melding(v_rij.id);
             EXCEPTION WHEN OTHERS THEN
                 GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
-                UPDATE public.toonbank_journaal
-                   SET verwerk_status = 'fout', pogingen = pogingen + 1,
-                       fout_code = CASE v_state WHEN '22023' THEN 'ongeldig' WHEN '23505' THEN 'dubbel' ELSE v_state END,
-                       fout_melding = left(v_msg, 1000), verwerkt_at = now()
-                 WHERE id = v_rij.id;
-                v_r := jsonb_build_object('uitkomst', 'fout', 'sqlstate', v_state);
+                v_r := jsonb_build_object('uitkomst', private.toonbank_melding_mislukt(v_rij.id, v_state, v_msg), 'sqlstate', v_state);
             END;
             SELECT verwerk_status INTO v_status FROM public.toonbank_journaal WHERE id = v_rij.id;
             IF v_status = 'wacht' THEN
@@ -1484,7 +1551,7 @@ BEGIN
     RETURN jsonb_build_object('verwerkt', COALESCE((SELECT jsonb_agg(e.value ORDER BY e.key::BIGINT) FROM jsonb_each(v_uit) e), '[]'::JSONB));
 END $$;
 COMMENT ON FUNCTION public.toonbank_verwerk_wachtrij(UUID, UUID) IS
-    'BA-9: verwerkt de meldingen op wacht van één tablet, op volgnummer, elk in een eigen deeltransactie (fout → fout, de rest gaat door). Alleen service_role.';
+    'BA-9: verwerkt de meldingen op wacht van één tablet, op volgnummer, elk in een eigen deeltransactie (fout → fout, de rest gaat door; 40P01/40001/55P03 → blijft wacht). Vergrendelt eerst alle producten van de wachtende bonnen in id-volgorde (review M2 B1). Alleen service_role.';
 REVOKE ALL ON FUNCTION public.toonbank_verwerk_wachtrij(UUID, UUID) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.toonbank_verwerk_wachtrij(UUID, UUID) TO service_role;
 
@@ -1525,7 +1592,9 @@ GRANT EXECUTE ON FUNCTION public.toonbank_journaal_markeer(UUID, BIGINT, TEXT, T
 
 -- ── 17. toonbank_journaal_afhandelen (BA: Te controleren) ───────────────────
 -- p_actie 'opnieuw'   een melding op fout of wacht nu (opnieuw) verwerken;
---                     lukt het niet, dan weer 'fout' met de nieuwe melding.
+--                     lukt het niet, dan weer 'fout' met de nieuwe melding,
+--                     of 'wacht' bij een tijdelijke fout (40P01, 40001,
+--                     55P03; review M2 B1).
 -- p_actie 'opgelost'  een fout, conflict of wachtende melding met de hand
 --                     afgehandeld, met een reden (verplicht).
 -- Alleen een Admin van de organisatie (of service_role). Geeft
@@ -1588,13 +1657,9 @@ BEGIN
     BEGIN
         v_r := private.toonbank_verwerk_melding(v_j.id, true);
     EXCEPTION WHEN OTHERS THEN
+        -- Tijdelijk (40P01, 40001, 55P03): terug op wacht, de wachtrij pakt hem op (B1).
         GET STACKED DIAGNOSTICS v_state = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
-        UPDATE public.toonbank_journaal
-           SET verwerk_status = 'fout', pogingen = pogingen + 1,
-               fout_code = CASE v_state WHEN '22023' THEN 'ongeldig' WHEN '23505' THEN 'dubbel' ELSE v_state END,
-               fout_melding = left(v_msg, 1000), verwerkt_at = now()
-         WHERE id = v_j.id;
-        v_r := jsonb_build_object('uitkomst', 'fout', 'sqlstate', v_state);
+        v_r := jsonb_build_object('uitkomst', private.toonbank_melding_mislukt(v_j.id, v_state, v_msg), 'sqlstate', v_state);
     END;
     RETURN jsonb_build_object('journaal_id', v_j.id,
                               'status', (SELECT verwerk_status FROM public.toonbank_journaal WHERE id = v_j.id),
@@ -1666,13 +1731,21 @@ BEGIN
         'private.tb_uuid(text)', 'private.tb_int(jsonb)', 'private.tb_getal(jsonb)', 'private.tb_tijd(text)',
         'private.toonbank_btw_uit_incl(bigint, integer)', 'private.toonbank_bon_fouten(jsonb)',
         'private.toonbank_controleer_order_rest(uuid, uuid)', 'private.toonbank_verwerk_vrij_overschreden(bigint)',
-        'private.toonbank_verwerk_melding(bigint, boolean)', 'private.toonbank_bon_vast()'
+        'private.toonbank_verwerk_melding(bigint, boolean)', 'private.toonbank_bon_vast()',
+        'private.toonbank_vergrendel_wachtrij(uuid, uuid)', 'private.toonbank_melding_mislukt(bigint, text, text)'
     ] LOOP
         IF has_function_privilege('anon', v_sig, 'EXECUTE') OR has_function_privilege('authenticated', v_sig, 'EXECUTE')
            OR has_function_privilege('service_role', v_sig, 'EXECUTE') THEN
             v_fouten := v_fouten || E'\n  een rol mag de interne functie ' || v_sig;
         END IF;
     END LOOP;
+
+    -- B1: de wachtrij vergrendelt eerst alle producten; tijdelijke fouten blijven wacht.
+    IF pg_get_functiondef('public.toonbank_verwerk_wachtrij(uuid, uuid)'::REGPROCEDURE)
+           NOT LIKE '%pg_advisory_xact_lock%toonbank_vergrendel_wachtrij%toonbank_melding_mislukt%'
+       OR pg_get_functiondef('public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)'::REGPROCEDURE) NOT LIKE '%toonbank_melding_mislukt%' THEN
+        v_fouten := v_fouten || E'\n  de wachtrij vergrendelt niet eerst alle producten, of een tijdelijke fout wordt fout';
+    END IF;
 
     -- Tabellen: RLS, alleen lezen, append-only.
     FOREACH v_t IN ARRAY ARRAY['public.toonbank_bonnen', 'public.toonbank_bon_regels'] LOOP

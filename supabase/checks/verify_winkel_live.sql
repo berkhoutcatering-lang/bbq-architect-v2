@@ -200,6 +200,8 @@ functies(signatuur, migratie) AS (VALUES
     ('private.toonbank_bon_vast()',                              '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_verwerk_melding(bigint, boolean)',        '20261007120000_toonbank_bonnen (BA-9)'),
     ('private.toonbank_btw_uit_incl(bigint, integer)',           '20261007120000_toonbank_bonnen (BA-9)'),
+    ('private.toonbank_vergrendel_wachtrij(uuid, uuid)',         '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
+    ('private.toonbank_melding_mislukt(bigint, text, text)',     '20261007120000_toonbank_bonnen (BA-9, review M2 B1)'),
     ('public.toonbank_ophaal_vraag(uuid, uuid, text, bigint, text, uuid, timestamp with time zone, uuid, uuid, text, integer, text, text)',
                                                                  '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
     ('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)', '20261007130000_toonbank_afhalen_dagstaten (BA-10)'),
@@ -345,6 +347,10 @@ proef AS (
     SELECT 11, 'fix', 'doos ophalen: leeftijd_nodig bij alcohol zonder vaststelling',
            '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
            COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid)')) LIKE '%leeftijd_nodig%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'wachtrij: eerst alle producten vergrendelen, tijdelijke fout blijft wacht (review M2 B1)',
+           '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.toonbank_verwerk_wachtrij(uuid, uuid)')) LIKE '%toonbank_vergrendel_wachtrij%toonbank_melding_mislukt%', false)
     UNION ALL
     SELECT 11, 'fix', 'wegzetten: WV010 is een eigen SQLSTATE (niet P0001)',
            '20261005140000_winkel_wegzetten (BA-6)',

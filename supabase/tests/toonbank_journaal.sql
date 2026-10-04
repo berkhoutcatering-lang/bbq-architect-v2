@@ -61,6 +61,7 @@ declare
     v_g11       uuid := gen_random_uuid();
     v_g12       uuid := gen_random_uuid();
     v_g13       uuid := gen_random_uuid();
+    v_g14       uuid := gen_random_uuid();
     v_user      uuid := gen_random_uuid();
     v_r         jsonb;
     v_w         jsonb;
@@ -296,6 +297,56 @@ begin
         if sqlerrm <> 'terug_naar_postgres' then v_fouten := v_fouten || 'als medewerker: ' || sqlerrm || '; '; end if;
     end;
 
+    -- ── 11. Tijdelijke fouten (review M2 B1): 40P01, 40001 en 55P03 blijven op wacht.
+    --    Een trigger op toonbank_bonnen (alleen in deze transactie) bootst de fout na
+    --    bij het boeken van precies deze bon; de echte deadlock tussen twee tablets
+    --    staat in tools/testdb/twee-tablets.mjs.
+    execute $f$
+        create function public.tb_test_tijdelijk() returns trigger language plpgsql as $t$
+        begin
+            raise exception 'nagebootst' using errcode = current_setting('tb_test.sqlstate');
+        end $t$
+    $f$;
+    execute format('create trigger tb_test_tijdelijk before insert on public.toonbank_bonnen for each row when (new.bonnummer = %L) execute function public.tb_test_tijdelijk()',
+                   v_code || '-000003');
+    perform set_config('tb_test.sqlstate', '40P01', true);
+    perform public.toonbank_journaal_opslaan(v_org, v_app, jsonb_build_array(
+        pg_temp.tb_bon(v_g14, 13, v_code || '-000003', jsonb_build_array(pg_temp.tb_regel(1, 'TEST bier', 1, 300, 21, v_onderdeel)))), '1.1.0');
+    perform public.toonbank_verwerk_wachtrij(v_org, v_app);
+    select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_g14;
+    if v_j.verwerk_status <> 'wacht' or v_j.pogingen <> 1 or v_j.fout_code <> '40P01' or v_j.fout_melding not like 'Tijdelijk (40P01)%'
+       or exists (select 1 from public.toonbank_bonnen where id = v_g14) then
+        v_fouten := v_fouten || 'deadlock in de wachtrij werd geen wacht: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- "Opnieuw verwerken" in BA met een lock-timeout: ook wacht, niet fout.
+    perform set_config('tb_test.sqlstate', '55P03', true);
+    v_r := public.toonbank_journaal_afhandelen(v_org, v_j.id, 'opnieuw');
+    select * into v_j from public.toonbank_journaal where id = v_j.id;
+    if v_r->>'status' <> 'wacht' or v_j.verwerk_status <> 'wacht' or v_j.pogingen <> 2 or v_j.fout_code <> '55P03' then
+        v_fouten := v_fouten || 'lock-timeout bij opnieuw werd geen wacht: ' || v_r::text || '; ';
+    end if;
+    perform set_config('tb_test.sqlstate', '40001', true);
+    perform public.toonbank_verwerk_wachtrij(v_org, v_app);
+    if (select verwerk_status || '/' || pogingen || '/' || fout_code from public.toonbank_journaal where id = v_j.id) <> 'wacht/3/40001' then
+        v_fouten := v_fouten || 'serialisatiefout werd geen wacht; ';
+    end if;
+    -- Een echte fout in de melding blijft wel fout.
+    perform set_config('tb_test.sqlstate', '22023', true);
+    perform public.toonbank_verwerk_wachtrij(v_org, v_app);
+    if (select verwerk_status || '/' || fout_code from public.toonbank_journaal where id = v_j.id) <> 'fout/ongeldig' then
+        v_fouten := v_fouten || 'een 22023 werd geen fout; ';
+    end if;
+    -- De oorzaak weg: opnieuw verwerken boekt de bon één keer, zonder foutcode.
+    execute 'drop trigger tb_test_tijdelijk on public.toonbank_bonnen';
+    v_r := public.toonbank_journaal_afhandelen(v_org, v_j.id, 'opnieuw');
+    select * into v_j from public.toonbank_journaal where id = v_j.id;
+    select count(*) into v_n from public.winkel_voorraad_mutaties m
+      join public.toonbank_bon_regels r on r.id = m.toonbank_bon_regel_id
+     where r.bon_id = v_g14 and m.type = 'verkoop_kassa';
+    if v_j.verwerk_status <> 'verwerkt' or v_j.fout_code is not null or v_j.fout_melding is not null or v_n <> 1 then
+        v_fouten := v_fouten || format('na de tijdelijke fouten: %s, %s verkoopmutaties; ', row_to_json(v_j), v_n);
+    end if;
+
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: opslaan nieuw/bestond en ongewijzigd, bevestigd_tot zonder gat (2 → 5), gat_voor, dubbel volgnummer/rare soort/geen tijd toch bewaard als fout, kapotte envelop = 22023 zonder opslag; wachtrij: bon verwerkt (één mutatie, ook bij herhaling), kleine melding niet_nodig, kapotte bon fout zonder de volgende te blokkeren; contract_verouderd → na update verwerkt; markeer alleen wacht → fout; afhandelen opgelost met reden, opnieuw, kan_niet, alleen Admin; journaal append-only — alles teruggedraaid';
+    raise exception 'GESLAAGD: opslaan nieuw/bestond en ongewijzigd, bevestigd_tot zonder gat (2 → 5), gat_voor, dubbel volgnummer/rare soort/geen tijd toch bewaard als fout, kapotte envelop = 22023 zonder opslag; wachtrij: bon verwerkt (één mutatie, ook bij herhaling), kleine melding niet_nodig, kapotte bon fout zonder de volgende te blokkeren; contract_verouderd → na update verwerkt; markeer alleen wacht → fout; afhandelen opgelost met reden, opnieuw, kan_niet, alleen Admin; journaal append-only; 40P01/55P03/40001 blijven wacht (wachtrij en opnieuw), 22023 wordt fout, daarna één keer geboekt — alles teruggedraaid';
 end $$;
