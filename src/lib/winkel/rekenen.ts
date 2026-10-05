@@ -435,7 +435,9 @@ export function berekenOfferte(
     const opId = new Map(bron.momenten.map((m) => [m.id, m]));
     const producten = new Map((bron.producten ?? []).map((p) => [p.id, p]));
 
-    if (!bron.instellingen.kassa_open) {
+    /* kassa_open gaat over online afrekenen. Wie bij het afhalen betaalt,
+       loopt niet via de kassa. */
+    if (!bron.instellingen.kassa_open && betaalwijze !== 'bij_afhalen') {
         return { ok: false, soort: 'niet-beschikbaar', melding: 'Online afrekenen is op dit moment niet beschikbaar.' };
     }
     if (!mand.regels.length) return { ok: false, soort: 'validatie', fouten: ['Je mand is leeg.'] };
@@ -613,6 +615,9 @@ export function berekenOfferte(
         if (leverwijze === 'verzenden') return { ok: false, soort: 'validatie', fouten: ['Reserveren kan alleen bij afhalen in de winkel.'] };
         reserveringCenten = Math.min(bedrag, totaalCenten);
         nuTeBetalenCenten = reserveringCenten;
+    } else if (betaalwijze === 'bij_afhalen') {
+        if (leverwijze === 'verzenden') return { ok: false, soort: 'validatie', fouten: ['Betalen bij het afhalen kan alleen bij afhalen in de winkel.'] };
+        nuTeBetalenCenten = 0;
     } else if (betaalwijze !== 'volledig') {
         return { ok: false, soort: 'validatie', fouten: ['Onbekende betaalwijze.'] };
     }

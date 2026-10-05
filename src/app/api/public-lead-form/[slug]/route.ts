@@ -10,13 +10,24 @@
  * GET  → publiek-veilige settings (bedrijfsnaam + thema) om het formulier te stylen.
  * POST → maakt een lead (source='public_form') + mailt bevestiging (klant) en
  *        notificatie (operator = settings.email).
+ *
+ * Kerst-Box (oktober 2026, online betalen uit): een lead met event_type
+ * "Kerst-Box" wordt meteen een winkel-order met betaalwijze 'bij_afhalen'
+ * (src/lib/winkel/kerst.ts). De klant krijgt de Kerst-bevestiging in plaats
+ * van de cateringmail; Mathijs krijgt alleen een mail als het omzetten
+ * mislukt — de bestelling staat dan als lead in Verkoop → Kerst.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { checkRateLimit } from '@/lib/rateLimit';
-import { mailLeadBevestiging, mailLeadNotificatie } from '@/lib/serverMail';
+import { mailLeadBevestiging, mailLeadNotificatie, sendServerMail } from '@/lib/serverMail';
+import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { basisUit } from '@/lib/winkel/context';
+import { kerstTotaalCenten, leesKerstLead, plaatsKerstBestelling, type KerstAanvraag } from '@/lib/winkel/kerst';
+import { afhaaldagVoluit, euroKerst, stuurKerstBevestiging, stuurKerstMail, voornaamVan } from '@/lib/winkel/kerstMail';
+import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 
 /* Publiek-veilige settings-subset voor het formulier (géén interne velden). */
 async function resolveTenant(slug: string) {
@@ -78,6 +89,8 @@ const LeadSchema = z.object({
   gdpr_consent: z.literal(true, { message: 'Ga akkoord met de privacy-voorwaarden' }),
   /* Honeypot — bot vult dit, mens niet (CSS-hidden in het formulier). */
   website: z.string().max(0).optional(),
+  /* Kerst-Box: de bestelling gestructureerd naast de bon (kerst.ts leest hem). */
+  bestelling: z.unknown().optional(),
 });
 
 export async function POST(
@@ -146,6 +159,12 @@ export async function POST(
     return NextResponse.json({ error: 'Aanvraag kon niet worden opgeslagen — probeer later opnieuw.' }, { status: 500 });
   }
 
+  const kerst = leesKerstLead({ event_type: d.event_type, event_datum: d.event_datum, gasten: d.gasten, bericht: d.bericht, bestelling: d.bestelling });
+  if (kerst) {
+    await verwerkKerst(req, t, lead.id, { naam: d.naam, email: d.email, telefoon: empty(d.telefoon) }, kerst);
+    return NextResponse.json({ success: true });
+  }
+
   /* E-mails best-effort: een mislukte mail mag de aanvraag niet laten falen
      (de lead staat al veilig in de pijplijn). */
   const bedrijfsnaam = t.settings?.bedrijfsnaam || 'Catering';
@@ -173,4 +192,88 @@ export async function POST(
   }
 
   return NextResponse.json({ success: true });
+}
+
+type TenantRes = NonNullable<Awaited<ReturnType<typeof resolveTenant>>>;
+
+/**
+ * De lead staat er al. Nu de order, en de bevestiging aan de klant — die is
+ * beloofd ("je krijgt meteen een bevestiging"), dus hij gaat ook als het
+ * omzetten mislukt, met het bedrag uit de prijzen van de webshop. Gooit nooit.
+ */
+async function verwerkKerst(
+  req: NextRequest,
+  t: TenantRes,
+  leadId: number,
+  contact: { naam: string; email: string; telefoon: string | null },
+  a: KerstAanvraag,
+) {
+  const store = maakSupabaseStore(t.supabase);
+  try {
+    const tenant = await store.laadTenant(t.org.slug);
+    if (!tenant) throw new Error('tenant niet gevonden');
+    const uit = await plaatsKerstBestelling(
+      { store, mail: stuurKerstBevestiging, naPlaatsen: (orgId) => evalueerWinkelMeldingen(orgId) },
+      tenant,
+      { id: leadId, ...contact },
+      a,
+    );
+    if (uit.ok) {
+      await t.supabase.from('leads').update({ status: 'gewonnen', omzet_fout: null }).eq('id', leadId);
+      return;
+    }
+    await naMislukken(req, t, leadId, contact, a, uit.ok === false ? uit.reden : 'onbekend', store);
+  } catch (e) {
+    await naMislukken(req, t, leadId, contact, a, e instanceof Error ? e.message : 'onbekende fout', store);
+  }
+}
+
+async function naMislukken(
+  req: NextRequest,
+  t: TenantRes,
+  leadId: number,
+  contact: { naam: string; email: string; telefoon: string | null },
+  a: KerstAanvraag,
+  reden: string,
+  store: ReturnType<typeof maakSupabaseStore>,
+) {
+  console.warn('[public-lead-form] Kerst-Box niet omgezet, lead', leadId, ':', reden);
+  try {
+    await t.supabase.from('leads').update({ omzet_fout: reden }).eq('id', leadId);
+  } catch { /* kolom ontbreekt nog (migratie niet toegepast): de lead staat er wel */ }
+
+  let totaal = 0;
+  try {
+    totaal = kerstTotaalCenten(a, await store.laadArtikelen(t.org.id));
+  } catch {
+    totaal = kerstTotaalCenten(a, []);
+  }
+  const velden = { voornaam: voornaamVan(contact.naam), nummer: `A-${leadId}`, personen: a.personen, vegetarisch: a.vegetarisch, bier: a.bier, wijn: a.wijn, afhaaldag: a.afhaaldag, totaalCenten: totaal };
+  const klant = await stuurKerstMail('ontvangen', contact.email, velden, t.settings?.email ?? null).catch(() => ({ success: false }));
+
+  /* Mathijs moet dit weten: de klant denkt dat het vaststaat. */
+  if (t.settings?.email) {
+    const link = `${basisUit(req)}/verkoop/kerst`;
+    const regels = [
+      `${contact.naam} bestelde een Kerst-Box, maar die kon niet automatisch in de productie.`,
+      '',
+      `Reden: ${reden}`,
+      '',
+      `Personen: ${a.personen}${a.vegetarisch ? ` (waarvan vegetarisch ${a.vegetarisch})` : ''}${a.onzeker ? ' — nog niet zeker' : ''}`,
+      ...(a.bier ? [`Bierproeverij: ${a.bier}`] : []),
+      ...(a.wijn ? [`Wijnproeverij: ${a.wijn}`] : []),
+      `Afhalen: ${afhaaldagVoluit(a.afhaaldag)}`,
+      `Totaal: ${euroKerst(totaal)}, betalen bij afhalen`,
+      `Contact: ${contact.email}${contact.telefoon ? ` · ${contact.telefoon}` : ''}`,
+      '',
+      `De klant ${klant.success ? 'heeft de bevestiging gekregen' : 'heeft GEEN bevestiging gekregen (mail mislukt)'}.`,
+      `Los het op en zet hem om in Verkoop → Kerst: ${link}`,
+    ];
+    await sendServerMail({
+      to: t.settings.email,
+      subject: `Kerst-Box-bestelling van ${contact.naam} staat nog niet in de productie`,
+      text: regels.join('\n'),
+      html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5">${regels.map((r) => (r ? r.replace(/&/g, '&amp;').replace(/</g, '&lt;') : '<br>')).join('<br>')}</div>`,
+    }).catch(() => undefined);
+  }
 }
