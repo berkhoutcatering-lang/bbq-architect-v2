@@ -112,12 +112,13 @@ export async function laadDag(
            Bewust niet "onbevestigd": `confirmed_by_user_id` wordt nergens
            gevuld (0 van 165 op 8 sep 2026), dus dat zou elke registratie ooit
            als open tonen — en een teller die altijd hoog staat wordt genegeerd.
-           De statussen die er zijn: ok, warn, danger. */
+           De statussen die er zijn: ok, warn, danger, afwijking — en
+           afwijking is de ernstigste (src/lib/dal/haccp.ts), dus die telt zeker mee. */
         supabase
             .from('haccp_records')
             .select('id', { count: 'exact', head: true })
             .eq('organization_id', orgId)
-            .in('status', ['warn', 'danger'])
+            .in('status', ['warn', 'danger', 'afwijking'])
             .gte('created_at', dagvenster(nu).van),
     ]);
 
