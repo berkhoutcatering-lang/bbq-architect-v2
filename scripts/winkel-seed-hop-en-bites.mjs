@@ -51,8 +51,8 @@ const artikelen = [
     vast({ slug: 'borrel-journey', naam: 'Borrel Journey', eenheid: 'per persoon', telt: 'personen', prijs_cents: 1495, btw_pct: 9, minimum: 8, maximum: 80, verzendbaar: false, gekoeld: true, moment_soort: 'moment', moment_groep: 'agenda', capaciteit_soort: 'regel', actief: true }),
     vast({ slug: 'hop-en-bites-plank', naam: 'Hop & Bites plank', eenheid: 'per persoon', telt: 'personen', btw_pct: 9, minimum: 8, maximum: 80, verzendbaar: false, gekoeld: true, moment_soort: 'moment', moment_groep: 'agenda', capaciteit_soort: 'regel' }),
     // Kerst-Box: twee varianten, zelfde prijs; vegetarisch niet publiek (menu nog geheim)
-    vast({ slug: 'kerst-box', naam: 'Kerst-Box', eenheid: 'per persoon', telt: 'personen', prijs_cents: 2350, btw_pct: 9, minimum: 2, maximum: null, verzendbaar: false, gekoeld: true, moment_soort: 'dag', moment_groep: 'kerst-box', afhaalmoment_tekst: 'Afhalen op 23 of 24 december', capaciteit_soort: 'dozen', doos_klein_max: 3, doos_groot: 5, actief: true, publiek: true }),
-    vast({ slug: 'kerst-box-vegetarisch', naam: 'Kerst-Box vegetarisch', eenheid: 'per persoon', telt: 'personen', prijs_cents: 2350, btw_pct: 9, minimum: 2, maximum: null, verzendbaar: false, gekoeld: true, moment_soort: 'dag', moment_groep: 'kerst-box', afhaalmoment_tekst: 'Afhalen op 23 of 24 december', capaciteit_soort: 'dozen', doos_klein_max: 3, doos_groot: 5, actief: true, publiek: false }),
+    vast({ slug: 'kerst-box', naam: 'Kerst-Box', eenheid: 'per persoon', telt: 'personen', prijs_cents: 2350, btw_pct: 9, minimum: 2, maximum: null, verzendbaar: false, gekoeld: true, moment_soort: 'dag', moment_groep: 'kerst-box', afhaalmoment_tekst: 'Afhalen op 23, 24, 25 of 26 december', capaciteit_soort: 'dozen', doos_klein_max: 3, doos_groot: 5, actief: true, publiek: true }),
+    vast({ slug: 'kerst-box-vegetarisch', naam: 'Kerst-Box vegetarisch', eenheid: 'per persoon', telt: 'personen', prijs_cents: 2350, btw_pct: 9, minimum: 2, maximum: null, verzendbaar: false, gekoeld: true, moment_soort: 'dag', moment_groep: 'kerst-box', afhaalmoment_tekst: 'Afhalen op 23, 24, 25 of 26 december', capaciteit_soort: 'dozen', doos_klein_max: 3, doos_groot: 5, actief: true, publiek: false }),
     // Losse producten en geschenken: prijs volgt
     vast({ slug: 'bbq-amandelen', naam: 'BBQ-amandelen', eenheid: 'per zak', telt: 'stuks', btw_pct: 9, minimum: 1, maximum: 20, verzendbaar: true, gekoeld: false, moment_soort: 'geen', capaciteit_soort: 'aantal' }),
     vast({ slug: 'barbecuesaus', naam: 'Barbecuesaus', eenheid: 'per fles', telt: 'stuks', btw_pct: 9, minimum: 1, maximum: 20, verzendbaar: true, gekoeld: false, moment_soort: 'geen', capaciteit_soort: 'aantal' }),
@@ -85,16 +85,18 @@ for (const a of artikelen) {
     }
 }
 
-/* Afhaaldagen Kerst-Box: 23 en 24 december, geen tijdvak. Groep 'kerst-box'
-   wordt door beide varianten gedeeld (dagen én capaciteit). */
-const { data: dagen } = await sb.from('winkel_momenten').select('id').eq('organization_id', o).eq('groep', 'kerst-box');
-if (!dagen?.length) {
-    const { error } = await sb.from('winkel_momenten').insert([
-        { organization_id: o, groep: 'kerst-box', datum: '2026-12-23', van: null, tot: null, capaciteit: 25, actief: true },
-        { organization_id: o, groep: 'kerst-box', datum: '2026-12-24', van: null, tot: null, capaciteit: 25, actief: true },
-    ]);
+/* Afhaaldagen Kerst-Box: 23 t/m 26 december (besluit 5 oktober 2026), geen
+   tijdvak. Groep 'kerst-box' wordt door alle Kerst-artikelen gedeeld (dagen én
+   capaciteit). Een bestaande dag blijft zoals hij is; alleen ontbrekende dagen
+   komen erbij, zonder grens (capaciteit null = onbeperkt). De Kerst-omzetting
+   maakt een ontbrekende dag ook zelf aan (src/lib/winkel/kerst.ts). */
+const { data: dagen } = await sb.from('winkel_momenten').select('datum').eq('organization_id', o).eq('groep', 'kerst-box');
+const bekendeDagen = new Set((dagen ?? []).map((d) => d.datum));
+const nieuweDagen = ['2026-12-23', '2026-12-24', '2026-12-25', '2026-12-26'].filter((d) => !bekendeDagen.has(d));
+if (nieuweDagen.length) {
+    const { error } = await sb.from('winkel_momenten').insert(nieuweDagen.map((datum) => ({ organization_id: o, groep: 'kerst-box', datum, van: null, tot: null, capaciteit: null, actief: true })));
     if (error) throw error;
-    console.log('afhaaldagen Kerst-Box aangemaakt: 23 en 24 december, 25 dozen per dag');
+    console.log('afhaaldagen Kerst-Box aangemaakt:', nieuweDagen.join(', '));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
