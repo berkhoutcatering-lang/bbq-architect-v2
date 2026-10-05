@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Apparaat, Taak, TaakStatus, DuurBron } from './types';
 import { actieveDuurMin, passieveDuurMin } from './duur';
 import { kiesApparaat, bepaalFlessenhals, vraagPerApparaat, type ApparaatMetKundes } from './estafette';
+import { amsterdamNaarIso, datumAmsterdam, plusDagen, uurAmsterdam } from './tijdzone';
 
 export interface DagInvoer {
     taken: Taak[];
@@ -24,12 +25,10 @@ export interface DagInvoer {
 export function dagvenster(nu: Date): { van: string; tot: string } {
     /* De dag draait om 04:00, niet om middernacht: wie om half twee 's nachts
        nog een brisket opzet is met de vorige dag bezig. */
-    const start = new Date(nu);
-    if (start.getHours() < 4) start.setDate(start.getDate() - 1);
-    start.setHours(4, 0, 0, 0);
-    const eind = new Date(start);
-    eind.setDate(eind.getDate() + 1);
-    return { van: start.toISOString(), tot: eind.toISOString() };
+    /* Altijd op Nederlandse tijd — de server draait in UTC. */
+    const ms = nu.getTime();
+    const dag = uurAmsterdam(ms) < 4 ? plusDagen(datumAmsterdam(ms), -1) : datumAmsterdam(ms);
+    return { van: amsterdamNaarIso(dag, '04:00'), tot: amsterdamNaarIso(plusDagen(dag, 1), '04:00') };
 }
 
 interface TaakRij {
@@ -145,7 +144,8 @@ export async function laadDag(
             .in('id', eventIds);
         for (const e of (data ?? []) as Array<{ id: number; date: string | null; start_time: string | null }>) {
             if (!e.date) continue;
-            uitlevering[e.id] = new Date(`${e.date}T${e.start_time ?? '16:00'}`).toISOString();
+            /* Datum + tijd uit het event zijn Nederlandse wandkloktijd. */
+            uitlevering[e.id] = amsterdamNaarIso(e.date, e.start_time ?? '16:00');
         }
     }
 

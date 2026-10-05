@@ -25,6 +25,7 @@
 
 import type { Taak } from './types';
 import { vrijeRuimteMin, formatKort } from './duur';
+import { uurAmsterdam } from './tijdzone';
 
 export interface Suggestie {
     taakId: number;
@@ -148,6 +149,6 @@ function opStart(a: Taak, b: Taak): number {
 }
 
 function binnenWerkdag(ms: number, werkdag: { vanUur: number; totUur: number }): boolean {
-    const uur = new Date(ms).getHours();
+    const uur = uurAmsterdam(ms);
     return uur >= werkdag.vanUur && uur < werkdag.totUur;
 }

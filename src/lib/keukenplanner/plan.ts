@@ -13,6 +13,7 @@ import { terugrekenen, marge, type TerugrekenInvoer } from './terugrekenen';
 import { vulGaten } from './gatenvullen';
 import { verdeelOverApparaten, botsingMelding, type BezettingsTaak } from './bezetting';
 import type { CapaciteitsProbleem } from './batchen';
+import { klokAmsterdam } from './tijdzone';
 
 export interface PlanInvoer extends TerugrekenInvoer {
     /** Openstaande HACCP-registraties, voor de statusbalk. */
@@ -301,9 +302,9 @@ export function herplanMelding(opties: {
     };
 }
 
+/* Op de server is "lokaal" UTC; het wandscherm toont Nederlandse tijd. */
 function klok(ms: number): string {
-    const d = new Date(ms);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return klokAmsterdam(ms);
 }
 
 export { vrijeRuimteMin };

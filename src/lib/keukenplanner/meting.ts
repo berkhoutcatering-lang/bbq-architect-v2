@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { lopendePeriodeId } from './meethistorie';
+import { uurAmsterdam } from './tijdzone';
 
 export interface MetingTaak {
     id: number;
@@ -109,7 +110,7 @@ async function voegToe(
             hoeveelheid,
             eenheid: taak.target_unit ?? null,
             stuk_gewicht_kg: taak.stuk_gewicht_kg ?? null,
-            tijdstip_van_dag: new Date().getHours(),
+            tijdstip_van_dag: uurAmsterdam(Date.now()),
             onderbroken,
             bron: 'gemeten',
         });

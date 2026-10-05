@@ -159,7 +159,7 @@ describe('bouwScherm — de tijdlijn', () => {
     it('zet tijdkritisch werk op een vaste klok en schuifbaar werk op een duur', () => {
         const taken = [
             taak({ id: 1, titel: 'Nu bezig', status: 'in_progress' }),
-            taak({ id: 2, titel: 'Yoder aan', geplandOp: '2026-09-12T11:30:00', apparaat: yoder, tempDoelC: 110 }),
+            taak({ id: 2, titel: 'Yoder aan', geplandOp: '2026-09-12T11:30:00+02:00', apparaat: yoder, tempDoelC: 110 }), // Nederlandse zomertijd
             taak({ id: 3, titel: 'Mayo mengen', actiefMin: 20 }),
         ];
         const s = bouwScherm({ ...basis, taken });
