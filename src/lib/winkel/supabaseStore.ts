@@ -71,13 +71,18 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
 
     return {
         async laadTenant(slug) {
-            const { data: org } = await sb.from('organizations').select('id, slug').eq('slug', slug).maybeSingle();
+            /* Een fout (geen verbinding, time-out) is geen onbekende winkel: gooien,
+               zodat de route 503 geeft en het in het log staat, in plaats van een
+               stille 404 "Onbekende winkel" (keten-run 4, M5 na de reviews). */
+            const { data: org, error: e0 } = await sb.from('organizations').select('id, slug').eq('slug', slug).maybeSingle();
+            if (e0) throw new Error(`organisatie lezen faalde: ${e0.code ?? ''} ${e0.message}`);
             if (!org) return null;
-            const { data: s } = await sb
+            const { data: s, error: e1 } = await sb
                 .from('settings')
                 .select('bedrijfsnaam, ondertitel, email, telefoon, brand_primary')
                 .eq('organization_id', org.id)
                 .maybeSingle();
+            if (e1) throw new Error(`settings lezen faalde: ${e1.code ?? ''} ${e1.message}`);
             return {
                 orgId: org.id,
                 slug: org.slug,
