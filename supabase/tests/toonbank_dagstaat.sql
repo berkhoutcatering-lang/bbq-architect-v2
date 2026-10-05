@@ -104,7 +104,13 @@ declare
     v_c2       uuid := gen_random_uuid();
     v_c3       uuid := gen_random_uuid();
     v_c4       uuid := gen_random_uuid();
+    v_c5       uuid := gen_random_uuid();
     v_d4       uuid := gen_random_uuid();
+    v_app6     uuid;
+    v_code6    text;
+    v_e1       uuid := gen_random_uuid();
+    v_e2       uuid := gen_random_uuid();
+    v_d6       uuid := gen_random_uuid();
     v_d5       uuid := gen_random_uuid();
     v_k1       uuid := gen_random_uuid();
     v_laat2    uuid := gen_random_uuid();
@@ -292,6 +298,32 @@ begin
         v_fouten := v_fouten || 'late bon na goedkeuren: ' || row_to_json(v_j)::text || '; ';
     end if;
 
+    -- ── Hercontrole M2, K5-rand: een goedgekeurde dagstaat en dan een late bon zónder verschil.
+    --    Tablet 6 sloot de dag met 2 bonnen, waarvan er 1 nog in de verzendbak zat: verschil, Te
+    --    controleren, de beheerder keurt goed ("komt nog"). Dan komt die bon binnen: de cijfers
+    --    kloppen nu precies. De dagstaat blijft goedgekeurd (niet 'aangevuld' bij een opgelost
+    --    journaal), het journaal blijft opgelost en de bon hangt aan de dagstaat.
+    v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 6 ' || v_sfx, 'winkel', v_hash);
+    v_app6 := (v_r->>'apparaat_id')::uuid; v_code6 := v_r->>'code';
+    perform pg_temp.tb_stuur(v_org, v_app6, pg_temp.tb_bon('bon', v_e1, 1, v_code6 || '-000001', '2026-03-06T10:00:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
+    v_j := pg_temp.tb_stuur(v_org, v_app6, pg_temp.tb_dagstaat(v_d6, 2, 1, v_code6 || '-000001', v_code6 || '-000002', jsonb_build_object(
+        'aantal_bonnen', 2, 'omzet', jsonb_build_array(jsonb_build_object('pct', 21, 'incl_cents', 790, 'grondslag_cents', 652, 'btw_cents', 138)),
+        'pin_toonbank_cents', 790, 'pin_mypos_app_cents', 790, 'verzendbak_leeg', false)));
+    if v_j.verwerk_status <> 'conflict' or (select status from public.toonbank_dagstaten where id = v_d6) <> 'voorlopig' then
+        v_fouten := v_fouten || 'K5-rand opzet (verschil verwacht): ' || row_to_json(v_j)::text || '; ';
+    end if;
+    perform public.toonbank_dagstaat_goedkeuren(v_org, v_d6, 'bon 2 zat nog in de verzendbak');
+    perform pg_temp.tb_stuur(v_org, v_app6, pg_temp.tb_bon('bon', v_e2, 3, v_code6 || '-000002', '2026-03-06T17:30:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)))));
+    select * into v_d from public.toonbank_dagstaten where id = v_d6;
+    select * into v_j from public.toonbank_journaal where organization_id = v_org and gebeurtenis_id = v_d6;
+    if v_d.status <> 'goedgekeurd' or v_d.verschillen <> '[]'::jsonb or (v_d.nagerekend->>'aantal_bonnen')::int <> 2
+       or (select dagstaat_id from public.toonbank_bonnen where id = v_e2) is distinct from v_d6
+       or v_j.verwerk_status <> 'opgelost' or v_d.goedkeur_reden <> 'bon 2 zat nog in de verzendbak' then
+        v_fouten := v_fouten || 'K5-rand: late bon zonder verschil na goedkeuren: ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
+    end if;
+
     -- ── Tablet 2 rekent zelf af en zegt btw 274 (opnieuw afgerond): verschil, te controleren.
     perform pg_temp.tb_stuur(v_org, v_app2, pg_temp.tb_bon('bon', v_x1, 1, v_code2 || '-000001', '2026-03-06T10:00:00+01:00', 'pin',
         jsonb_build_array(pg_temp.tb_regel(1, 1, 395, 21, pg_temp.ond(v_bier)), pg_temp.tb_regel(2, 3, 395, 21, pg_temp.ond(v_bier)))));
@@ -352,6 +384,23 @@ begin
         v_fouten := v_fouten || 'na middernacht: bon 00:30 op ' || coalesce((select bedrijfsdag::text from public.toonbank_bonnen where id = v_c2), '?')
                     || ', dagstaat ' || row_to_json(v_d)::text || ' / ' || row_to_json(v_j)::text || '; ';
     end if;
+    -- Hercontrole M2, N1 (de Toonbank opent na middernacht pas een nieuwe dag als de vorige is
+    -- afgesloten): na de dagstaat van 01:00 opent tablet 4 de dag van 7 maart om 01:05 en verkoopt
+    -- om 01:10. Die bon hoort bij 7 maart, niet bij de (gesloten) dagstaat van 6 maart; de dag van
+    -- 6 maart blijft 2 bonnen zonder verschil.
+    perform pg_temp.tb_stuur(v_org, v_app4, jsonb_build_object('soort', 'dag_openen', 'gebeurtenis_id', gen_random_uuid(), 'volgnummer', 5,
+        'moment', '2026-03-07T01:05:00+01:00', 'medewerker_id', v_mw, 'bedrijfsdag', '2026-03-07', 'contant_begin_cents', 0));
+    perform pg_temp.tb_stuur(v_org, v_app4, pg_temp.tb_bon('bon', v_c5, 6, v_code4 || '-000003', '2026-03-07T01:10:00+01:00', 'pin',
+        jsonb_build_array(pg_temp.tb_regel(1, 1, 345, 21, pg_temp.ond(v_bier)))));
+    select * into v_d from public.toonbank_dagstaten where id = v_d4;
+    if (select bedrijfsdag from public.toonbank_bonnen where id = v_c5) <> '2026-03-07'
+       or (select dagstaat_id from public.toonbank_bonnen where id = v_c5) is not null
+       or v_d.status <> 'definitief' or v_d.verschillen <> '[]'::jsonb
+       or (public.toonbank_dagstaat_overzicht(v_org, v_app4, '2026-03-06')->>'aantal_bonnen')::int <> 2
+       or (public.toonbank_dagstaat_overzicht(v_org, v_app4, '2026-03-07')->>'aantal_bonnen')::int <> 1 then
+        v_fouten := v_fouten || 'N1: nieuwe dag na de dagstaat van 01:00: bon 01:10 op '
+                    || coalesce((select bedrijfsdag::text from public.toonbank_bonnen where id = v_c5), '?') || ', dagstaat ' || row_to_json(v_d)::text || '; ';
+    end if;
     -- Zonder dag_openen (zoals in de review, V4): de bon van 00:30 krijgt de kalenderdag, maar valt
     -- toch in de dagstaat waarvan openen en sluiten hem dekken.
     v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST dagstaat 5 ' || v_sfx, 'event', v_hash);
@@ -405,5 +454,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; narekenen (Admin) laat goedgekeurd staan, een Medewerker kan niet narekenen of herberekenen; bon na goedkeuring → aangevuld en journaal van opgelost terug naar conflict; tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; evenement 18:00–01:00: bon van 00:30 op bedrijfsdag 6 maart (dag_openen) en in de dagstaat van 6 maart, zonder dag_openen de kalenderdag maar toch in de dagstaat; klok in 2030 begrensd op ontvangen; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
+    raise exception 'GESLAAGD: herberekende dagstaat = som van de bonnen (21%%: 1580 met btw 275 = 69 + 69 + 206 − 69, niet 274; 9%%: 595/49), netto met tegenbon, zonder geannuleerde; rest via bon 450 alleen als order_rest en pin, nooit als omzet; wisselgeld uit dag_openen; definitief zonder verschillen; GET dagstaat; late bon → aangevuld met verschil en te controleren, bon na sluiten niet; goedkeuren met reden → opgelost; narekenen (Admin) laat goedgekeurd staan, een Medewerker kan niet narekenen of herberekenen; bon na goedkeuring → aangevuld en journaal van opgelost terug naar conflict, zonder verschil blijft hij goedgekeurd en opgelost (K5-rand); tablet die 275 zegt bij een bon van 274 → verschil omzet_21_btw; tegenbon met statiegeld = tegenbonnen_cents −720 zoals kern, geen verschil; evenement 18:00–01:00: bon van 00:30 op bedrijfsdag 6 maart (dag_openen) en in de dagstaat van 6 maart, zonder dag_openen de kalenderdag maar toch in de dagstaat; na de dagstaat van 01:00 een nieuwe dag: bon 01:10 op 7 maart en niet in de dagstaat van 6 maart (N1); klok in 2030 begrensd op ontvangen; dubbel = bestond; dagstaat vast (TB003) — alles teruggedraaid';
 end $$;

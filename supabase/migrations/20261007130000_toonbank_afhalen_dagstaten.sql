@@ -773,7 +773,13 @@ BEGIN
                WHERE w.tablet <> w.ba
           ) x), '[]'::JSONB);
 
-    v_status := CASE WHEN v_d.status = 'goedgekeurd' AND NOT p_aangevuld THEN 'goedgekeurd'
+    -- Een goedgekeurde dagstaat blijft goedgekeurd, ook als er een late bon
+    -- binnenkomt die geen verschil (meer) geeft: er is dan niets meer goed te
+    -- keuren, en het journaal blijft 'opgelost'. Hercontrole M2, K5-rand: eerst
+    -- werd hij 'aangevuld' (oranje in Dagstaten) bij een opgelost journaal,
+    -- terwijl er niets te doen was. Met een verschil: aangevuld en weer Te
+    -- controleren (K5, hieronder).
+    v_status := CASE WHEN v_d.status = 'goedgekeurd' AND (NOT p_aangevuld OR jsonb_array_length(v_verschil) = 0) THEN 'goedgekeurd'
                      WHEN p_aangevuld OR v_d.status = 'aangevuld' THEN 'aangevuld'
                      WHEN v_d.verzendbak_leeg THEN 'definitief'
                      ELSE 'voorlopig' END;
@@ -804,7 +810,7 @@ BEGIN
     RETURN jsonb_build_object('dagstaat_id', v_d.id, 'status', v_status, 'verschillen', v_verschil, 'nagerekend', v_na);
 END $$;
 COMMENT ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) IS
-    'BA-10: koppelt de bonnen van die tablet (tussen openen en sluiten) aan de dagstaat en rekent na (bon-btw per tarief opgeteld, nooit opnieuw afgerond), met de verschillen met de tablet. Verschillen → Te controleren; p_aangevuld (een late bon) zet ook een opgelost journaal terug op conflict. Alleen service_role (de wachtrij); BA gebruikt toonbank_dagstaat_narekenen.';
+    'BA-10: koppelt de bonnen van die tablet (tussen openen en sluiten) aan de dagstaat en rekent na (bon-btw per tarief opgeteld, nooit opnieuw afgerond), met de verschillen met de tablet. Verschillen → Te controleren; p_aangevuld (een late bon) zet ook een opgelost journaal terug op conflict; zonder verschil blijft een goedgekeurde dagstaat goedgekeurd. Alleen service_role (de wachtrij); BA gebruikt toonbank_dagstaat_narekenen.';
 -- Review M2 K5: niet voor authenticated. Met p_aangevuld kon een gewoon lid
 -- een goedgekeurde dagstaat weer openzetten.
 REVOKE ALL ON FUNCTION public.toonbank_dagstaat_herberekenen(UUID, UUID, BOOLEAN) FROM PUBLIC, anon, authenticated;
