@@ -7,6 +7,8 @@ import { resizeImage } from '@/lib/utils';
 import { RGS_CATERING_CATEGORIES } from '@/lib/rgsCategories';
 import { resolveBtwPct } from '@/lib/btw-rules';
 import AiBadge from '@/components/ai/AiBadge';
+import Link from 'next/link';
+import { ontvangstVanBon } from '@/app/voorraad/ontvangst/actions';
 
 /**
  * BonAddSheet
@@ -18,7 +20,10 @@ import AiBadge from '@/components/ai/AiBadge';
  *  2. AI-call /api/boekhouder/bon-extract levert preview + voorraad-suggesties
  *  3. Cateraar bevestigt per regel of het ook in voorraad moet ("hey dit is
  *     ook voor voorraad bedoeld?")
- *  4. Commit via /api/boekhouder/bon-commit → bon + stock_movements + price_history
+ *  4. Commit via /api/boekhouder/bon-commit → de bon voor de boekhouding.
+ *     De regels die ook voor voorraad zijn, gaan NIET meer direct de voorraad
+ *     in: ze worden een concept in het controlescherm /voorraad/ontvangst/[id]
+ *     (W2b, besluit Mathijs 26 sep: ook de keuken eerst controleren).
  *
  * Geen DB-writes voor commit-fase. Hard rules:
  *  - User confirmt per item de qty toe te voegen aan voorraad
@@ -74,7 +79,7 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
   const [choices, setChoices] = useState<ItemChoice[]>([]);
   const [datumOverride, setDatumOverride] = useState<string>('');
   const [rgsOverride, setRgsOverride] = useState<string>('');
-  const [result, setResult] = useState<{ bon_id: number; stock_movements: number; inventory_created: number } | null>(null);
+  const [result, setResult] = useState<{ bon_id: number; stock_movements: number; inventory_created: number; ontvangst_id: string | null } | null>(null);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -188,9 +193,10 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
           unit: it.inventory_naam ? '' : it.eenheid, // bestaand item gebruikt z'n eigen unit
           unit_price: it.prijs_per_eenheid,
           btw_pct: it.btw_pct,
-          add_to_inventory: choices[i]?.add || false,
+          /* Voorraad loopt via het controlescherm, niet meer direct (W2b). */
+          add_to_inventory: false,
           inventory_id: it.inventory_id || null,
-          create_new_inventory: choices[i]?.create_new || false,
+          create_new_inventory: false,
         })),
       };
       const r = await fetch('/api/boekhouder/bon-commit', {
@@ -205,10 +211,23 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
         setPhase('error');
         return;
       }
+      /* De regels die ook voor voorraad zijn: een concept om te controleren. */
+      let ontvangstId: string | null = null;
+      const voorVoorraad = items.filter((_, i) => choices[i]?.add || choices[i]?.create_new);
+      if (voorVoorraad.length) {
+        const o = await ontvangstVanBon({
+          bron: 'foto', bon_id: j.bon_id, image_hash: null,
+          leverancier_id: null, leverancier_naam: preview.leverancier_naam || null, factuurnummer: null,
+          datum: datumOverride || preview.datum || null, totaal_eur: preview.totaal_bedrag || null,
+          items: voorVoorraad.map((it) => ({ naam: it.naam, aantal: it.aantal, unit: it.eenheid || null, prijs: it.prijs_per_eenheid, btw_pct: it.btw_pct })),
+        });
+        if ('data' in o) ontvangstId = o.data.id;
+      }
       setResult({
         bon_id: j.bon_id,
         stock_movements: j.stock_movements_created,
         inventory_created: j.inventory_items_created,
+        ontvangst_id: ontvangstId,
       });
       setPhase('done');
       if (onCommitted) onCommitted(j.bon_id, j.stock_movements_created);
@@ -438,6 +457,12 @@ export default function BonAddSheet({ onClose, onCommitted }: BonAddSheetProps) 
               {result.stock_movements > 0 && <> {result.stock_movements} voorraad-mutatie{result.stock_movements === 1 ? '' : 's'} verwerkt.</>}
               {result.inventory_created > 0 && <> {result.inventory_created} nieuw voorraad-item aangemaakt.</>}
             </p>
+            {result.ontvangst_id && (
+              <p>
+                De voorraad-regels staan klaar om te controleren.{' '}
+                <Link href={`/voorraad/ontvangst/${result.ontvangst_id}`} style={{ color: 'var(--brand)' }}>Controleer en boek</Link>
+              </p>
+            )}
             <button type="button" className="bh-btn-primary" onClick={onClose}>
               Sluiten
             </button>

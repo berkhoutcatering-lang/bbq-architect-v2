@@ -9,17 +9,20 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type { Artikel, MomentRij } from './rekenen';
+import type { Artikel, MomentRij, Product, Slot } from './rekenen';
 import { vandaagISO } from './rekenen';
-import type { Bronnen, EventVakje, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, RegelOpEvent, Tenant, WinkelStore } from './store';
+import type { Bronnen, ComponentRij, EventVakje, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, RegelOpEvent, Tenant, WinkelStore } from './store';
 
-const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, btw_cents, reservering_tot, terug_url, betaalpoging, mypos_order_id, mypos_trnref, betaald_cents, betaald_at, betaalmethode, refund_status, refund_fout, mail_status, mail_fout, created_at, wensen, wensen_bron, plaatsing_status, plaatsing_fout, plaatsing_at';
-const ARTIKEL_KOLOMMEN = 'id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek, gerecht_id, inventory_id, inkoop_per_stuk, dieet';
-const REGEL_KOLOMMEN = 'id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, btw_pct, moment_id, eenheden, voorraad_eenheden, afhaalmoment_tekst, klaar_op, event_id, klaargezet_at';
+const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, btw_cents, reservering_tot, terug_url, betaalpoging, mypos_order_id, mypos_trnref, betaald_cents, betaald_at, betaalmethode, refund_status, refund_fout, mail_status, mail_fout, created_at, wensen, wensen_bron, plaatsing_status, plaatsing_fout, plaatsing_at, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode';
+const ARTIKEL_KOLOMMEN = 'id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek, gerecht_id, inventory_id, inkoop_per_stuk, dieet, segment, vast, alcohol, schaal_verdeling, btw_verdeling, verpakking_klein_cents, verpakking_groot_cents';
+const REGEL_KOLOMMEN = 'id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, btw_pct, moment_id, eenheden, voorraad_eenheden, afhaalmoment_tekst, klaar_op, event_id, klaargezet_at, btw_cents, alcohol';
+const PRODUCT_KOLOMMEN = 'id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief';
+const SLOT_KOLOMMEN = 'id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven';
+const MOMENT_KOLOMMEN = 'id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief';
 
 function code(e: { code?: string | null; message?: string } | null): OpslagCode {
     const c = e?.code ?? '';
-    return /^WK00[1-7]$/.test(c) ? (c as OpslagCode) : 'onbekend';
+    return /^WK00[1-9]$/.test(c) ? (c as OpslagCode) : 'onbekend';
 }
 
 function eenRij<T>(data: unknown): T | null {
@@ -53,7 +56,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
         async laadBronnen(orgId) {
             const { data: inst } = await sb
                 .from('winkel_instellingen')
-                .select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, kassa_open, site_url')
+                .select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url')
                 .eq('organization_id', orgId)
                 .maybeSingle();
             if (!inst) return null;
@@ -68,7 +71,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                regels in één keer ophalen en hier optellen. */
             const { data: momenten } = await sb
                 .from('winkel_momenten')
-                .select('id, groep, datum, van, tot, capaciteit, bestellen_tot, actief')
+                .select(MOMENT_KOLOMMEN)
                 .eq('organization_id', orgId)
                 .gte('datum', vandaagISO())
                 .order('datum', { ascending: true })
@@ -106,9 +109,23 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 }
             }
 
+            /* Templates: producten (met bezetting waar er een voorraadgetal is) en slots. */
+            const [{ data: producten }, { data: slots }] = await Promise.all([
+                sb.from('winkel_producten').select(PRODUCT_KOLOMMEN).eq('organization_id', orgId),
+                sb.from('winkel_artikel_slots').select(SLOT_KOLOMMEN).eq('organization_id', orgId).order('volgorde', { ascending: true }),
+            ]);
+            const productBezet = new Map<string, number>();
+            for (const p of producten ?? []) {
+                if (p.voorraad == null) continue;
+                const { data: n } = await sb.rpc('winkel_bezetting_product', { p_product_id: p.id, p_zonder_order: null });
+                productBezet.set(p.id, Number(n ?? 0));
+            }
+
             return {
                 artikelen: (artikelen ?? []).map((a) => (a.voorraad == null ? a : { ...a, voorraad_bezet: voorraadBezet.get(a.id) ?? 0 })) as Artikel[],
                 momenten: (momenten ?? []).map((m) => ({ ...m, bezet: bezet.get(m.id) ?? 0 })) as MomentRij[],
+                producten: (producten ?? []).map((p) => ({ ...p, prijs_per: Number(p.prijs_per), voorraad: p.voorraad == null ? null : Number(p.voorraad), voorraad_bezet: p.voorraad == null ? undefined : productBezet.get(p.id) ?? 0 })) as Product[],
+                slots: (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[],
                 instellingen: inst,
             };
         },
@@ -116,7 +133,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
         async laadMoment(id) {
             const { data: m } = await sb
                 .from('winkel_momenten')
-                .select('id, groep, datum, van, tot, capaciteit, bestellen_tot, actief')
+                .select(MOMENT_KOLOMMEN)
                 .eq('id', id)
                 .maybeSingle();
             if (!m) return null;
@@ -143,6 +160,21 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 .eq('order_id', orderId)
                 .order('id', { ascending: true });
             return (data ?? []) as OrderRegelRij[];
+        },
+
+        async laadComponenten(orderId) {
+            const { data } = await sb
+                .from('winkel_order_regel_componenten')
+                .select('id, order_regel_id, product_id, slot_type, naam, hoeveelheid, eenheid, winkel_order_regels!inner(order_id)')
+                .eq('winkel_order_regels.order_id', orderId)
+                .order('id', { ascending: true });
+            return ((data ?? []) as unknown as (ComponentRij & { winkel_order_regels: unknown })[]).map(({ winkel_order_regels: _r, ...c }) => ({ ...c, hoeveelheid: Number(c.hoeveelheid) }));
+        },
+        async boekRest(orderId, methode) {
+            const { data, error } = await sb.rpc('winkel_boek_rest', { p_order_id: orderId, p_methode: methode });
+            if (error) { console.error('[winkel] winkel_boek_rest faalde:', error.code, error.message); return 'onbekend'; }
+            const u = String(data);
+            return u === 'geboekt' || u === 'al_geboekt' || u === 'geen_rest' || u === 'niet_betaald' ? u : 'onbekend';
         },
 
         /* ── Vakjes (plan §4) ── */
@@ -221,9 +253,13 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 p_terug_url: o.terugUrl,
                 p_regels: o.regels.map((r) => ({
                     artikel_id: r.artikel_id, slug: r.slug, naam: r.naam, aantal: r.aantal, eenheid: r.eenheid,
-                    stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten, btw_pct: r.btw_pct, moment_id: r.moment_id,
+                    stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten, btw_pct: r.btw_pct, btw_cents: r.btw_cents, alcohol: r.alcohol, moment_id: r.moment_id,
                     eenheden: r.eenheden, voorraad_eenheden: r.voorraad_eenheden, afhaalmoment_tekst: r.afhaalmoment,
+                    componenten: r.componenten.map((c) => ({ product_id: c.product_id, slot_type: c.slot_type, naam: c.naam, hoeveelheid: c.hoeveelheid, eenheid: c.eenheid })),
                 })),
+                p_betaalwijze: o.betaalwijze,
+                p_nu_te_betalen_cents: o.nuTeBetalenCenten,
+                p_rest_cents: o.restCenten,
             });
             if (error) {
                 if (code(error) === 'onbekend') console.error('[winkel] winkel_plaats_order faalde:', error.code, error.message);

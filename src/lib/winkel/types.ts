@@ -9,6 +9,13 @@
 
 export type Leverwijze = 'afhalen' | 'verzenden';
 
+/**
+ * Volledig online betalen, of het reserveringsbedrag (€ 2,50 per order) nu en
+ * de rest in de winkel bij afhalen. De reservering is geen toeslag: hij gaat
+ * van het totaal af. (Overdracht Sinterklaas, blok S5.)
+ */
+export type Betaalwijze = 'volledig' | 'reservering';
+
 /** Wat de website stuurt: alleen keuzes, nooit bedragen. */
 export interface MandRegel {
     slug: string;
@@ -50,6 +57,11 @@ export interface Offerte {
     totaalCenten: number;
     moment: Moment | null;
     geldigTot: string;
+    /* Blok S5. Bij 'volledig': nuTeBetalen = totaal, rest 0. */
+    betaalwijze: Betaalwijze;
+    nuTeBetalenCenten: number;
+    restInWinkelCenten: number;
+    reserveringCenten: number;
 }
 
 export type Foutsoort = 'validatie' | 'moment-vol' | 'moment-verlopen' | 'prijs-gewijzigd' | 'niet-beschikbaar';
@@ -81,6 +93,7 @@ export interface Orderinvoer {
     sleutel: string;
     verwachtTotaalCenten: number;
     terugUrl: string;
+    betaalwijze?: Betaalwijze;
 }
 
 export type OrderUitkomst =
@@ -105,4 +118,9 @@ export interface Orderstatus {
     emailGemaskeerd: string;
     aangemaakt: string;
     betaalUrl: string | null;
+    /* Blok S5: de website toont alleen 'betaald' en noemt het restbedrag. */
+    betaalwijze: Betaalwijze;
+    nuTeBetalenCenten: number;
+    restInWinkelCenten: number;
+    restBetaald: boolean;
 }

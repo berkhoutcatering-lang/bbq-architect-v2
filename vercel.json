@@ -40,6 +40,10 @@
         {
             "path": "/api/cron/bestellingen-koppelen",
             "schedule": "45 4 * * *"
+        },
+        {
+            "path": "/api/cron/voorraad-dagstart",
+            "schedule": "0 7 * * *"
         }
     ]
 }

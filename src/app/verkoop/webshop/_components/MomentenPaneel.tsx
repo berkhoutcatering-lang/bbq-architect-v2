@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react';
 import { Archive, ArchiveRestore, Check, ChevronUp, Loader2, Plus } from 'lucide-react';
 import Button from '@/components/Button';
 import { capaciteitEenheid, datumKort, datumLang, groepLabel, telBezetting, tijdvak, type ArtikelRij, type MomentRij, type OrderRij } from '../_lib/vakjes';
-import { voegMomentToe, zetMomentActief, zetMomentBestellenTot, zetMomentCapaciteit } from '../actions';
+import { voegMomentToe, zetMomentActief, zetMomentBestellenTot, zetMomentCapaciteit, zetMomentSluitOp } from '../actions';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -38,7 +38,7 @@ export default function MomentenPaneel({ momenten, artikelen, orders, vandaag, h
         return [...set].sort((a, b) => (a === 'agenda' ? -1 : b === 'agenda' ? 1 : a.localeCompare(b)));
     }, [artikelen, momenten]);
 
-    const vol = momenten.filter((m) => m.actief && m.datum >= vandaag && (bezetting.get(m.id) ?? 0) >= m.capaciteit).length;
+    const vol = momenten.filter((m) => m.actief && m.datum >= vandaag && m.capaciteit != null && (bezetting.get(m.id) ?? 0) >= m.capaciteit).length;
 
     async function doe(sleutel: string, actie: () => Promise<{ data: unknown } | { error: string }>, gelukt: string) {
         setBezig(sleutel);
@@ -78,11 +78,12 @@ export default function MomentenPaneel({ momenten, artikelen, orders, vandaag, h
                             <div style={{ fontSize: 15, fontWeight: 600 }}>{groepLabel(groep, artikelen)}</div>
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{namen.join(' · ') || 'geen artikelen wijzen hierheen'}{dozenArt?.doos_klein_max && dozenArt.doos_groot ? ` · kleine doos t/m ${dozenArt.doos_klein_max}, grote doos ${dozenArt.doos_groot}` : ''}</div>
                         </div>
-                        <div className="ws-tabel-kop ws-momenten-grid"><span>Vak</span><span>Bezetting</span><span>Capaciteit</span><span>Bestellen tot</span><span /></div>
+                        <div className="ws-tabel-kop ws-momenten-grid"><span>Vak</span><span>Bezetting</span><span>Capaciteit</span><span>Bestellen tot</span><span>Deadline (tijd)</span><span /></div>
                         {rijen.length === 0 && <div className="ws-leeg" style={{ padding: 20 }}>Nog geen vakken. Zonder vak kan er niet besteld worden.</div>}
                         {rijen.map((m) => (
                             <VakRij key={m.id} m={m} bezet={bezetting.get(m.id) ?? 0} eenheid={eenheid} bezig={bezig} vandaag={vandaag}
-                                onCapaciteit={(c) => doe(`cap:${m.id}`, () => zetMomentCapaciteit({ id: m.id, capaciteit: c }), 'Capaciteit bijgewerkt')}
+                                onCapaciteit={(c) => doe(`cap:${m.id}`, () => zetMomentCapaciteit({ id: m.id, capaciteit: c }), c == null ? 'Geen grens meer op dit vak' : 'Capaciteit bijgewerkt')}
+                                onSluitOp={(d) => doe(`sluit:${m.id}`, () => zetMomentSluitOp({ id: m.id, sluit_op: d }), d ? 'Besteldeadline gezet' : 'Geen deadline met tijd meer')}
                                 onBestellenTot={(d) => doe(`tot:${m.id}`, () => zetMomentBestellenTot({ id: m.id, bestellen_tot: d }), d ? `Bestellen kan tot ${datumKort(d)}` : 'Geen besteltermijn meer')}
                                 onActief={(actief) => doe(`act:${m.id}`, () => zetMomentActief({ id: m.id, actief }), actief ? 'Vak staat weer open' : 'Vak uit de lijst gehaald')} />
                         ))}
@@ -93,14 +94,31 @@ export default function MomentenPaneel({ momenten, artikelen, orders, vandaag, h
     );
 }
 
-function VakRij({ m, bezet, eenheid, bezig, vandaag, onCapaciteit, onBestellenTot, onActief }: {
+/** ISO (UTC) → waarde voor <input type="datetime-local"> in de lokale tijd van de browser. */
+function lokaalVanIso(iso: string | null): string {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function isoVanLokaal(v: string): string | null {
+    if (!v) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+function VakRij({ m, bezet, eenheid, bezig, vandaag, onCapaciteit, onSluitOp, onBestellenTot, onActief }: {
     m: MomentRij; bezet: number; eenheid: string; bezig: string | null; vandaag: string;
-    onCapaciteit: (c: number) => void; onBestellenTot: (d: string | null) => void; onActief: (a: boolean) => void;
+    onCapaciteit: (c: number | null) => void; onSluitOp: (d: string | null) => void; onBestellenTot: (d: string | null) => void; onActief: (a: boolean) => void;
 }) {
-    const [cap, setCap] = useState(String(m.capaciteit));
-    const vol = m.actief && bezet >= m.capaciteit;
-    const pct = m.capaciteit > 0 ? Math.min(100, Math.round((bezet / m.capaciteit) * 100)) : 100;
-    const gewijzigd = cap.trim() !== '' && cap !== String(m.capaciteit);
+    /* Leeg = onbeperkt (Sinterklaas S3). */
+    const capTekst = (c: number | null) => (c == null ? '' : String(c));
+    const [cap, setCap] = useState(capTekst(m.capaciteit));
+    const onbeperkt = m.capaciteit == null;
+    const vol = m.actief && !onbeperkt && bezet >= m.capaciteit!;
+    const pct = onbeperkt ? 0 : m.capaciteit! > 0 ? Math.min(100, Math.round((bezet / m.capaciteit!) * 100)) : 100;
+    const gewijzigd = cap !== capTekst(m.capaciteit);
     const voorbij = m.datum < vandaag;
     return (
         <div className="ws-tabel-rij ws-momenten-grid" style={{ cursor: 'default', opacity: m.actief ? (voorbij ? .6 : 1) : .5, background: vol ? 'rgba(245,158,11,.04)' : undefined }}>
@@ -110,11 +128,11 @@ function VakRij({ m, bezet, eenheid, bezig, vandaag, onCapaciteit, onBestellenTo
             </div>
             <div className={`ws-balk${vol ? ' ws-balk-vol' : ''}`} style={{ maxWidth: 'none' }}>
                 <div className="ws-balk-spoor"><div className="ws-balk-vul" style={{ width: `${pct}%` }} /></div>
-                <span className="ws-balk-tekst">{bezet} / {m.capaciteit}{vol ? ' · vol' : ''}</span>
+                <span className="ws-balk-tekst">{bezet} / {onbeperkt ? '∞' : m.capaciteit}{vol ? ' · vol' : ''}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input inputMode="numeric" value={cap} onChange={(e) => setCap(e.target.value)}
-                    onBlur={() => { const n = Number(cap); if (gewijzigd && Number.isInteger(n) && n >= 0) onCapaciteit(n); else setCap(String(m.capaciteit)); }}
+                <input inputMode="numeric" value={cap} placeholder="∞" onChange={(e) => setCap(e.target.value)}
+                    onBlur={() => { if (!gewijzigd) return; if (cap.trim() === '') { onCapaciteit(null); return; } const n = Number(cap); if (Number.isInteger(n) && n >= 0) onCapaciteit(n); else setCap(capTekst(m.capaciteit)); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                     style={{ width: 56, height: 36, padding: '0 10px', background: 'var(--bg)', border: `1px solid ${gewijzigd ? 'var(--brand-gold)' : 'var(--border)'}`, borderRadius: 8, color: 'var(--text)', font: '500 13px var(--font-mono)', textAlign: 'right' }} />
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{bezig === `cap:${m.id}` ? <Loader2 size={12} /> : eenheid}</span>
@@ -123,6 +141,10 @@ function VakRij({ m, bezet, eenheid, bezig, vandaag, onCapaciteit, onBestellenTo
                 <input type="date" value={m.bestellen_tot ?? ''} max={m.datum} onChange={(e) => onBestellenTot(e.target.value || null)}
                     style={{ height: 36, padding: '0 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: m.bestellen_tot ? 'var(--text)' : 'var(--muted)', font: '400 13px var(--font-sans)', colorScheme: 'dark', width: '100%' }} />
             </div>
+            <div>
+                <input type="datetime-local" value={lokaalVanIso(m.sluit_op)} onChange={(e) => onSluitOp(isoVanLokaal(e.target.value))} title="Besteldeadline met tijd: daarna staat dit vak niet meer op de site"
+                    style={{ height: 36, padding: '0 10px', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, color: m.sluit_op ? 'var(--text)' : 'var(--muted)', font: '400 13px var(--font-sans)', colorScheme: 'dark', width: '100%' }} />
+            </div>
             <button type="button" className="mr-icon-btn-sm" style={{ width: 36, height: 36 }} title={m.actief ? 'Uit de lijst halen' : 'Terugzetten'} disabled={bezig === `act:${m.id}`} onClick={() => onActief(!m.actief)}>
                 {m.actief ? <Archive size={15} /> : <ArchiveRestore size={15} />}
             </button>
@@ -130,7 +152,7 @@ function VakRij({ m, bezet, eenheid, bezig, vandaag, onCapaciteit, onBestellenTo
     );
 }
 
-function NieuwVak({ groepen, artikelen, bezig, onOpslaan }: { groepen: string[]; artikelen: ArtikelRij[]; bezig: boolean; onOpslaan: (w: { groep: string; datum: string; van: string; tot: string; capaciteit: string; bestellen_tot: string }) => void }) {
+function NieuwVak({ groepen, artikelen, bezig, onOpslaan }: { groepen: string[]; artikelen: ArtikelRij[]; bezig: boolean; onOpslaan: (w: { groep: string; datum: string; van: string; tot: string; capaciteit: string; bestellen_tot: string; sluit_op: string }) => void }) {
     const [groep, setGroep] = useState(groepen[0] ?? 'agenda');
     const [eigen, setEigen] = useState('');
     const [datum, setDatum] = useState('');
@@ -138,6 +160,7 @@ function NieuwVak({ groepen, artikelen, bezig, onOpslaan }: { groepen: string[];
     const [tot, setTot] = useState('');
     const [capaciteit, setCapaciteit] = useState('');
     const [bestellenTot, setBestellenTot] = useState('');
+    const [sluitOp, setSluitOp] = useState('');
     const gekozen = groep === '__eigen' ? eigen.trim().toLowerCase() : groep;
     const eenheid = capaciteitEenheid(gekozen, artikelen);
     const isDag = artikelen.some((a) => a.moment_groep === gekozen && a.moment_soort === 'dag');
@@ -155,11 +178,12 @@ function NieuwVak({ groepen, artikelen, bezig, onOpslaan }: { groepen: string[];
                 <div className="field"><label>Datum</label><input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} style={{ colorScheme: 'dark' }} /></div>
                 {!isDag && <div className="field"><label>Van</label><input type="time" value={van} onChange={(e) => setVan(e.target.value)} style={{ colorScheme: 'dark' }} /></div>}
                 {!isDag && <div className="field"><label>Tot</label><input type="time" value={tot} onChange={(e) => setTot(e.target.value)} style={{ colorScheme: 'dark' }} /></div>}
-                <div className="field"><label>Capaciteit</label><input inputMode="numeric" value={capaciteit} onChange={(e) => setCapaciteit(e.target.value)} /><div className="field-hint">{eenheid}</div></div>
+                <div className="field"><label>Capaciteit</label><input inputMode="numeric" value={capaciteit} placeholder="∞" onChange={(e) => setCapaciteit(e.target.value)} /><div className="field-hint">{eenheid} · leeg = onbeperkt</div></div>
                 <div className="field"><label>Bestellen tot</label><input type="date" value={bestellenTot} max={datum || undefined} onChange={(e) => setBestellenTot(e.target.value)} style={{ colorScheme: 'dark' }} /><div className="field-hint">Daarna dicht op de site</div></div>
+                <div className="field"><label>Deadline met tijd</label><input type="datetime-local" value={sluitOp} onChange={(e) => setSluitOp(e.target.value)} style={{ colorScheme: 'dark' }} /><div className="field-hint">Leeg = alleen de dag hierboven telt</div></div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-                <Button icon={<Check size={14} />} loading={bezig} onClick={() => onOpslaan({ groep: gekozen, datum, van, tot, capaciteit, bestellen_tot: bestellenTot })}>Toevoegen</Button>
+                <Button icon={<Check size={14} />} loading={bezig} onClick={() => onOpslaan({ groep: gekozen, datum, van, tot, capaciteit, bestellen_tot: bestellenTot, sluit_op: isoVanLokaal(sluitOp) ?? '' })}>Toevoegen</Button>
             </div>
         </div>
     );

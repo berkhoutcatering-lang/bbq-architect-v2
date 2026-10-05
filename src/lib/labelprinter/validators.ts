@@ -100,7 +100,9 @@ export type PrintJobVerzoek =
     | { soort: 'herprint'; printerId: string; eenheidIds: string[] }
     /* Een op de client getekende sticker (canvas → ^GFA). Hangt aan niets in
        de voorraad; de referentie (bestelling, HACCP-record) gaat mee als label_data. */
-    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null };
+    | { soort: 'doos_sticker' | 'haccp_sticker'; printerId: string; zpl: string; aantal: number; referentie: Record<string, unknown> | null }
+    /* Sinterklaas S7: de etiketten van een webshop-order (één per pakket, één per schaal), op de server opgebouwd. */
+    | { soort: 'winkel_etiket'; printerId: string; orderId: number; regelIds: number[] | null };
 
 export const MAX_AFBEELDING_ZPL = 1_900_000; // Browser Print: 2 MB per job
 
@@ -161,6 +163,17 @@ export function validatePrintJob(body: unknown): ValidatorResult<PrintJobVerzoek
             if (typeof aantalRuw !== 'number' || !Number.isInteger(aantalRuw) || aantalRuw < 1 || aantalRuw > 20) return { ok: false, error: 'Aantal moet tussen 1 en 20 liggen' };
             const referentie = typeof b.referentie === 'object' && b.referentie !== null ? (b.referentie as Record<string, unknown>) : null;
             return { ok: true, data: { soort: b.soort, printerId, zpl, aantal: aantalRuw, referentie } };
+        }
+
+        case 'winkel_etiket': {
+            const orderId = Number(b.orderId);
+            if (!Number.isInteger(orderId) || orderId <= 0) return { ok: false, error: 'orderId is verplicht' };
+            let regelIds: number[] | null = null;
+            if (Array.isArray(b.regelIds) && b.regelIds.length > 0) {
+                if (b.regelIds.length > 100 || !b.regelIds.every((x) => Number.isInteger(x) && Number(x) > 0)) return { ok: false, error: 'regelIds ongeldig' };
+                regelIds = b.regelIds as number[];
+            }
+            return { ok: true, data: { soort: 'winkel_etiket', printerId, orderId, regelIds } };
         }
 
         default:

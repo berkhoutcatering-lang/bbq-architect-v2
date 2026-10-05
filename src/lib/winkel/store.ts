@@ -9,8 +9,8 @@
  * (plaatsen, betaalpoging starten, betaling bevestigen) is hier één aanroep,
  * zodat de route nooit "eerst lezen, dan schrijven" hoeft te doen.
  */
-import type { Artikel, Instellingen, MomentRij, Regelintern } from './rekenen';
-import type { Leverwijze, Orderstatussoort } from './types';
+import type { Artikel, Component, Instellingen, MomentRij, Product, Regelintern, Slot } from './rekenen';
+import type { Betaalwijze, Leverwijze, Orderstatussoort } from './types';
 
 export interface Tenant {
     orgId: string;
@@ -25,7 +25,10 @@ export interface Tenant {
 export interface Bronnen {
     artikelen: Artikel[];
     momenten: MomentRij[];
-    instellingen: Instellingen & { site_url: string | null };
+    /** Producten (met bezetting) en slots — de templates van pakketten en plank. */
+    producten: Product[];
+    slots: Slot[];
+    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null };
 }
 
 export interface OrderRij {
@@ -66,6 +69,13 @@ export interface OrderRij {
     plaatsing_status: PlaatsingStatus | null;
     plaatsing_fout: string | null;
     plaatsing_at: string | null;
+    /* Sinterklaas S5: twee betaalwijzen. Status blijft 'betaald' zodra het
+       online deel binnen is; het restbedrag wordt aan de balie geboekt. */
+    betaalwijze: Betaalwijze;
+    nu_te_betalen_cents: number;
+    rest_cents: number;
+    rest_betaald_at: string | null;
+    rest_betaalmethode: 'contant' | 'pin' | null;
 }
 
 /** Wat uit de opmerking van de klant gelezen is. Staat altijd naast het origineel. */
@@ -98,6 +108,16 @@ export interface OrderRegelRij {
     /** Het event waarin deze regel is geplaatst; leeg = vaste bak of nog niet geplaatst. */
     event_id: number | null;
     klaargezet_at: string | null;
+    /** Btw per tarief van deze regel (S6); null bij oude regels. */
+    btw_cents: Record<string, number> | null;
+    /** 18+ op het moment van bestellen. */
+    alcohol: boolean;
+}
+
+/** Eén component van een regel zoals vastgelegd bij het plaatsen (S2/S7). */
+export interface ComponentRij extends Component {
+    id: number;
+    order_regel_id: number;
 }
 
 /* ── Vakjes (plan §4) ─────────────────────────────────────────────────────── */
@@ -149,10 +169,13 @@ export interface NieuweOrder {
     btwCenten: Record<string, number>;
     terugUrl: string;
     regels: Regelintern[];
+    betaalwijze: Betaalwijze;
+    nuTeBetalenCenten: number;
+    restCenten: number;
 }
 
-/** De codes van de databasefuncties (zie de migratie). */
-export type OpslagCode = 'WK001' | 'WK002' | 'WK003' | 'WK004' | 'WK005' | 'WK006' | 'WK007' | 'onbekend';
+/** De codes van de databasefuncties (zie de migraties). WK008 = groep vol (A7), WK009 = product op. */
+export type OpslagCode = 'WK001' | 'WK002' | 'WK003' | 'WK004' | 'WK005' | 'WK006' | 'WK007' | 'WK008' | 'WK009' | 'onbekend';
 
 export type OpslagUitkomst<T> = { ok: true; waarde: T } | { ok: false; code: OpslagCode; detail?: string };
 
@@ -167,6 +190,10 @@ export interface WinkelStore {
     /** Op ordernummer (HB-2026-0042); het OrderID richting myPOS is nummer + '-' + poging. */
     vindOrderOpNummer(orgId: string, nummer: string): Promise<OrderRij | null>;
     laadRegels(orderId: number): Promise<OrderRegelRij[]>;
+    /** De componenten van de regels van één order (S2/S7). */
+    laadComponenten(orderId: number): Promise<ComponentRij[]>;
+    /** De balie boekt het restbedrag (S5). Idempotent. */
+    boekRest(orderId: number, methode: 'contant' | 'pin'): Promise<'geboekt' | 'al_geboekt' | 'geen_rest' | 'niet_betaald' | 'onbekend'>;
 
     /** Atomair: idempotentie op sleutel, capaciteit/voorraad tellen, nummer uitgeven, schrijven. */
     plaatsOrder(order: NieuweOrder): Promise<OpslagUitkomst<OrderRij>>;

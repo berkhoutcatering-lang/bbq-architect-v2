@@ -226,14 +226,16 @@ export async function sendOrderToSupplierAction(input: unknown) {
         let btwLaag = 0;
         let btwHoog = 0;
         const itemsSnapshot: OrderItemSnapshot[] = bucket.items.map(function (it): OrderItemSnapshot {
-            const pct = determineBtwPct(it.categorie);
+            const pct = it.btw_pct_vast === 9 || it.btw_pct_vast === 21 ? it.btw_pct_vast : determineBtwPct(it.categorie);
             const line = Math.round(it.est_total_eur * 100) / 100;
             subtotaal += line;
             if (pct === 9) btwLaag += line * 0.09;
             else btwHoog += line * 0.21;
             return {
                 inventory_id: it.inventory_id,
-                naam: it.naam,
+                winkel_product_id: it.winkel_product_id ?? null,
+                /* Winkelregel: de leverancier ziet "1 krat (24)", niet alleen 24 stuks. */
+                naam: it.plek === 'winkel' && it.pack_label ? `${it.naam} — ${it.pack_label}` : it.naam,
                 qty: it.qty,
                 unit: it.unit,
                 unit_price_eur: it.unit_price_eur,
@@ -349,6 +351,7 @@ export async function sendOrderToSupplierAction(input: unknown) {
                     organization_id: orgId,
                     concept_order_id: order.id,
                     inventory_id: it.inventory_id,
+                    winkel_product_id: it.winkel_product_id ?? null,
                     supplier_product_id: it.supplier_product_id ?? null,
                     naam: it.naam,
                     qty_needed: it.qty_needed,
@@ -356,7 +359,7 @@ export async function sendOrderToSupplierAction(input: unknown) {
                     qty_received: null,
                     unit: it.unit,
                     unit_price_eur: it.unit_price_eur,
-                    btw_pct: determineBtwPct(it.categorie),
+                    btw_pct: it.btw_pct_vast === 9 || it.btw_pct_vast === 21 ? it.btw_pct_vast : determineBtwPct(it.categorie),
                     categorie: it.categorie ?? null,
                 };
             });

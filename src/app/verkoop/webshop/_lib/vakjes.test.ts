@@ -5,6 +5,7 @@ const basis: Omit<ArtikelRij, 'id' | 'slug' | 'naam'> = {
     eenheid: 'per stuk', telt: 'stuks', prijs_cents: 100, btw_pct: 9, minimum: 1, maximum: null, verzendbaar: true, gekoeld: false,
     moment_soort: 'geen', moment_groep: null, afhaalmoment_tekst: null, capaciteit_soort: 'aantal', doos_klein_max: null, doos_groot: null,
     voorraad: null, actief: true, publiek: true, gerecht_id: null, inventory_id: null, inkoop_per_stuk: null, dieet: null, koppel_voorstel: null,
+    segment: null, vast: true, alcohol: false, schaal_verdeling: false, btw_verdeling: null, verpakking_klein_cents: null, verpakking_groot_cents: null,
 };
 const artikelen: ArtikelRij[] = [
     { ...basis, id: 'a-kerst', slug: 'kerst-box', naam: 'Kerst-Box', telt: 'personen', moment_soort: 'dag', moment_groep: 'kerst-box', capaciteit_soort: 'dozen', doos_klein_max: 3, doos_groot: 5, gerecht_id: 'g-1' },
@@ -13,8 +14,8 @@ const artikelen: ArtikelRij[] = [
     { ...basis, id: 'a-bier', slug: 'bier', naam: 'Speciaalbier', inventory_id: 7 },
 ];
 const momenten: MomentRij[] = [
-    { id: 'd-23', groep: 'kerst-box', datum: '2026-12-23', van: null, tot: null, capaciteit: 25, bestellen_tot: null, actief: true },
-    { id: 'm-1', groep: 'agenda', datum: '2026-10-16', van: '12:00:00', tot: '13:00:00', capaciteit: 4, bestellen_tot: null, actief: true },
+    { id: 'd-23', groep: 'kerst-box', datum: '2026-12-23', van: null, tot: null, capaciteit: 25, bestellen_tot: null, sluit_op: null, actief: true },
+    { id: 'm-1', groep: 'agenda', datum: '2026-10-16', van: '12:00:00', tot: '13:00:00', capaciteit: 4, bestellen_tot: null, sluit_op: null, actief: true },
 ];
 
 let regelId = 0;
@@ -28,6 +29,7 @@ function order(id: number, regels: RegelRij[], extra: Partial<OrderRij> = {}): O
         subtotaal_cents: 0, leverkosten_cents: 0, totaal_cents: regels.reduce((s, r) => s + r.bedrag_cents, 0), reservering_tot: '2026-09-25T10:30:00Z',
         betaald_at: '2026-09-25T10:00:00Z', betaalmethode: '2', created_at: '2026-09-25T09:55:00Z', refund_status: null, refund_fout: null,
         mail_status: 'verstuurd', mail_fout: null, wensen: null, wensen_bron: null, plaatsing_status: 'geplaatst', plaatsing_fout: null,
+        betaalwijze: 'volledig', nu_te_betalen_cents: 0, rest_cents: 0, rest_betaald_at: null, rest_betaalmethode: null,
         winkel_order_regels: regels, ...extra,
     };
 }

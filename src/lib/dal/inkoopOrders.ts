@@ -38,7 +38,9 @@ export interface ConceptInkoopOrder {
 }
 
 export interface OrderItemSnapshot {
-    inventory_id: number;
+    /** null bij een winkelregel (winkel_product_id). */
+    inventory_id: number | null;
+    winkel_product_id?: string | null;
     naam: string;
     qty: number;
     unit: string;
@@ -174,7 +176,7 @@ export async function markOrderReceived(
     // was — idempotent bij her-boeken/deel-levering, dus geen dubbeltelling.
     const { data: existingLines, error: readErr } = await sb
         .from('inkoop_order_lines')
-        .select('id, inventory_id, qty_ordered, qty_received, unit_price_eur')
+        .select('id, inventory_id, winkel_product_id, qty_ordered, qty_received, unit_price_eur')
         .eq('concept_order_id', orderId)
         .eq('organization_id', orgId);
     if (readErr) throw new Error('Orderregels ophalen mislukt: ' + readErr.message);
@@ -195,6 +197,28 @@ export async function markOrderReceived(
             .eq('concept_order_id', orderId)
             .eq('organization_id', orgId);
         if (upErr) throw new Error('Orderregel bijwerken mislukt: ' + upErr.message);
+
+        /* Winkelregel: naar de winkelvoorraad via het winkel-logboek (ontvangst).
+           Nog nooit geteld → de ontvangst start de telling vanaf 0. Minder dan
+           eerder geboekt kan hier niet (geen negatieve ontvangst): dat is een
+           afwijking of een telling in /voorraad/winkel. */
+        if (line.winkel_product_id != null && delta !== 0) {
+            if (delta < 0) throw new Error('Minder ontvangen dan eerder geboekt: corrigeer dit met een telling of afwijking in de winkel.');
+            const { data: prod } = await sb.from('winkel_producten').select('voorraad').eq('id', line.winkel_product_id).maybeSingle();
+            if (prod && prod.voorraad == null) {
+                const { error: tErr } = await sb.rpc('winkel_muteer_voorraad', {
+                    p_org: orgId, p_product_id: line.winkel_product_id, p_type: 'telling', p_hoeveelheid: 0,
+                    p_notitie: 'Start bij eerste ontvangst — tel om te bevestigen',
+                });
+                if (tErr) throw new Error('Winkelvoorraad starten mislukt: ' + tErr.message);
+            }
+            const { error: wErr } = await sb.rpc('winkel_muteer_voorraad', {
+                p_org: orgId, p_product_id: line.winkel_product_id, p_type: 'ontvangst', p_hoeveelheid: delta,
+                p_inkoop_order_id: orderId, p_idempotency_key: `iol:${r.line_id}:${next}`,
+                p_notitie: r.reason ? `Ontvangst: ${String(r.reason).slice(0, 200)}` : 'Ontvangst inkoop-order',
+            });
+            if (wErr) throw new Error('Winkelvoorraad ophogen mislukt: ' + wErr.message);
+        }
 
         if (line.inventory_id != null && delta !== 0) {
             const { error: rpcErr } = await sb.rpc('increment_inventory_stock', {
