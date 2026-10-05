@@ -34,6 +34,11 @@ function isAuthorized(req: Request): boolean {
   return auth === `Bearer ${secret}`;
 }
 
+/* Vercel Cron roept GET aan; POST blijft voor handmatig aftrappen. */
+export async function GET(req: Request) {
+  return POST(req);
+}
+
 export async function POST(req: Request) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
