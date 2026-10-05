@@ -3,15 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import type { Personeel } from '@/types';
+/* De kolomlijst (zonder Toonbank-kolommen) staat in personeelKolommen.ts: puur, dus te testen. */
+import { PERSONEEL_KOLOMMEN } from '@/lib/personeelKolommen';
 
-/**
- * De kolommen die de app van personeel leest. Nooit select('*'): kds_pin_hash
- * (de inlogcode van KDS en Toonbank, scrypt van 4-6 cijfers) is voor ingelogde
- * gebruikers niet leesbaar (review M2 K4, kolomrechten), en dan faalt '*'.
- * Werkt ook op een database zonder die kolomrechten.
- */
-export const PERSONEEL_KOLOMMEN =
-  'id, organization_id, user_id, naam, email, telefoon, functie, uurtarief, contract_type, actief, notitie, kds_pin_lockout_until, created_at';
+export { PERSONEEL_KOLOMMEN };
 
 /**
  * Personeel-hook met UUID id (los van useSupabase die number-id verwacht).
