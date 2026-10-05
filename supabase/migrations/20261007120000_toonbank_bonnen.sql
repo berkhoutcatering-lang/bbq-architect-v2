@@ -1470,6 +1470,18 @@ REVOKE ALL ON FUNCTION private.toonbank_orders_tekort(UUID, UUID) FROM PUBLIC, a
 -- goedkeuring door de eigenaar. Daarna: is vrij onder nul, welke orders
 -- komen tekort (private.toonbank_orders_tekort). Alles wat aandacht vraagt
 -- → conflict.
+--
+-- Hercontrole M2 (klein 9, ruis): een tabletklok die meer dan 5 minuten
+-- achterloopt, maakte elke online goedkeuring 'goedkeuring_ongeldig'. De
+-- goedkeuring staat op de klok van BBQ Architect, de verkoop op die van de
+-- tablet. Daarom eerst de achterstand van de tabletklok schatten uit zijn
+-- eigen recente meldingen: de kleinste (ontvangen − tijd op de tablet) van
+-- de laatste 50 meldingen tot en met deze, binnengekomen in het uur ervoor.
+-- Elke melding is (achterstand + verzendtijd), dus het minimum is de
+-- achterstand plus de kortste verzendtijd: nooit te veel. Een klok die
+-- voorloopt, telt als 0 (die begrenst LEAST al op ontvangen). Een verkoop
+-- die ook op de eigen klok van de tablet een uur eerder was, blijft buiten
+-- het tijdvenster.
 CREATE OR REPLACE FUNCTION private.toonbank_verwerk_vrij_overschreden(p_journaal_id BIGINT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -1487,6 +1499,7 @@ DECLARE
     v_ok         INTEGER;
     v_buiten     INTEGER;
     v_tijd       TIMESTAMPTZ;
+    v_achter     INTERVAL;
     v_vrij       NUMERIC;
     v_orders     JSONB := '[]'::JSONB;
     v_controles  JSONB := '[]'::JSONB;
@@ -1496,8 +1509,17 @@ BEGIN
     v_org := v_j.organization_id;
     PERFORM private.vereis_org(v_org);
     v_p := v_j.payload;
-    -- Het moment van de verkoop, begrensd op ontvangen (punt 8).
-    v_tijd := LEAST(v_j.apparaat_tijd, v_j.ontvangen_at);
+    -- De achterstand van de tabletklok (hercontrole klein 9), dan het moment
+    -- van de verkoop op de klok van BBQ Architect, begrensd op ontvangen (punt 8).
+    SELECT GREATEST(min(x.ontvangen_at - x.apparaat_tijd), INTERVAL '0')
+      INTO v_achter
+      FROM (SELECT j.ontvangen_at, j.apparaat_tijd
+              FROM public.toonbank_journaal j
+             WHERE j.apparaat_id = v_j.apparaat_id AND j.volgnummer <= v_j.volgnummer
+             ORDER BY j.volgnummer DESC
+             LIMIT 50) x
+     WHERE x.apparaat_tijd IS NOT NULL AND x.ontvangen_at >= v_j.ontvangen_at - INTERVAL '1 hour';
+    v_tijd := LEAST(v_j.apparaat_tijd + COALESCE(v_achter, INTERVAL '0'), v_j.ontvangen_at);
 
     v_product := private.tb_uuid(v_p->>'product_id');
     v_modus := v_p->>'modus';
@@ -1529,7 +1551,11 @@ BEGIN
                 v_controles := v_controles || jsonb_build_object('code', 'goedkeuring_ongeldig',
                     'melding', format('%s van de %s goedkeuringen kloppen niet (onbekend, andere tablet of eigenaar, al gebruikt, of niet rond het moment van de verkoop%s).',
                                       cardinality(v_ids) - v_ok, cardinality(v_ids),
-                                      CASE WHEN v_buiten > 0 THEN format(': %s buiten het tijdvenster', v_buiten) ELSE '' END));
+                                      CASE WHEN v_buiten > 0 THEN format(': %s buiten het tijdvenster', v_buiten)
+                                                                  || CASE WHEN v_achter >= INTERVAL '1 minute'
+                                                                          THEN format(', met de tabletklok %s min achter meegerekend', floor(extract(epoch FROM v_achter) / 60)::INTEGER)
+                                                                          ELSE '' END
+                                           ELSE '' END));
             ELSE
                 UPDATE public.toonbank_sessies SET gebruikt_gebeurtenis_id = v_j.gebeurtenis_id
                  WHERE id = ANY (v_ids) AND gebruikt_gebeurtenis_id IS NULL;

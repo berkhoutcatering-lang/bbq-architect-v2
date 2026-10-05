@@ -102,6 +102,11 @@ declare
     v_b21       uuid := gen_random_uuid();
     v_vo5       uuid := gen_random_uuid();
     v_s3        uuid;
+    v_app3      uuid;
+    v_s4        uuid;
+    v_s5        uuid;
+    v_vo6       uuid := gen_random_uuid();
+    v_vo7       uuid := gen_random_uuid();
     v_a_alc     uuid;
     v_b12       uuid := gen_random_uuid();
     v_b13       uuid := gen_random_uuid();
@@ -590,6 +595,37 @@ begin
        or (select gebruikt_gebeurtenis_id from public.toonbank_sessies where id = v_s3) is not null then
         v_fouten := v_fouten || 'goedkeuring buiten het tijdvenster: ' || row_to_json(v_j)::text || '; ';
     end if;
+    -- Hercontrole M2 (klein 9, ruis): een tablet waarvan de klok 10 minuten achterloopt. Al zijn
+    -- meldingen komen 10 minuten "te laat" binnen: dat is de klok, geen vertraging. Een goedkeuring
+    -- van nu en de verkoop 20 seconden later (op de tablet: nu − 9 min 40 s) is gewoon geldig.
+    v_r := public.toonbank_apparaat_nieuw(v_org, 'TEST bonnen 3 ' || v_sfx, 'winkel', v_hash);
+    v_app3 := (v_r->>'apparaat_id')::uuid;
+    perform pg_temp.tb_stuur(v_org, v_app3, jsonb_build_object('soort', 'inloggen', 'gebeurtenis_id', gen_random_uuid(), 'volgnummer', 1,
+        'moment', now() - interval '10 minutes', 'medewerker_id', v_mw));
+    insert into public.toonbank_sessies (organization_id, apparaat_id, medewerker_id, token_hash, rol, doel, geldig_tot)
+    values (v_org, v_app3, v_eig, encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex'), 'eigenaar', 'vrij_overschrijden', now() + interval '60 seconds')
+    returning id into v_s4;
+    v_j := pg_temp.tb_stuur(v_org, v_app3, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo6, 'volgnummer', 2,
+        'moment', now() - interval '9 minutes 40 seconds', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'klok loopt achter',
+        'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s4)));
+    if v_j.verwerk_status <> 'verwerkt' or (select gebruikt_gebeurtenis_id from public.toonbank_sessies where id = v_s4) is distinct from v_vo6 then
+        v_fouten := v_fouten || 'tabletklok 10 min achter: goedkeuring ten onrechte ongeldig: ' || row_to_json(v_j)::text || '; ';
+    end if;
+    -- Dezelfde tablet, maar een verkoop die ook op zijn eigen (achterlopende) klok een uur vóór de
+    -- goedkeuring was: nog steeds buiten het tijdvenster, met de achterstand in de melding.
+    insert into public.toonbank_sessies (organization_id, apparaat_id, medewerker_id, token_hash, rol, doel, geldig_tot)
+    values (v_org, v_app3, v_eig, encode(sha256(convert_to(gen_random_uuid()::text, 'UTF8')), 'hex'), 'eigenaar', 'vrij_overschrijden', now() + interval '60 seconds')
+    returning id into v_s5;
+    v_j := pg_temp.tb_stuur(v_org, v_app3, jsonb_build_object('soort', 'vrij_overschreden', 'gebeurtenis_id', v_vo7, 'volgnummer', 3,
+        'moment', now() - interval '70 minutes', 'medewerker_id', v_mw, 'bon_id', v_b1, 'regelnr', 1, 'product_id', v_bier,
+        'vrij_volgens_tablet', 0, 'verkocht', 1, 'boven_vrij', 1, 'voorraad_versie', 1, 'reden', 'oude verkoop',
+        'modus', 'online', 'eigenaar_medewerker_id', v_eig, 'goedkeuring_ids', jsonb_build_array(v_s5)));
+    if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'goedkeuring_ongeldig'
+       or v_j.fout_melding not like '%buiten het tijdvenster, met de tabletklok 9 min achter meegerekend%'
+       or (select gebruikt_gebeurtenis_id from public.toonbank_sessies where id = v_s5) is not null then
+        v_fouten := v_fouten || 'achterlopende klok, verkoop een uur eerder: ' || row_to_json(v_j)::text || '; ';
+    end if;
 
     -- ── 14. Rechten op de tabellen.
     if has_table_privilege('anon', 'public.toonbank_bonnen', 'SELECT') or has_table_privilege('authenticated', 'public.toonbank_bonnen', 'INSERT')
@@ -599,5 +635,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd (kern-vorm: regels, geen betaling, totaal 0) = verwerkt en boekt niets, geannuleerd met betaling = geannuleerd_betaald; tegenbon op geannuleerd / meer terug dan verkocht / zonder goederen_terug = Te controleren (zonder goederen_terug en op geannuleerd niets teruggeboekt); bon van vóór de laatste telling boekt niets (voor_telling), erna wel; alcohol onder 75%% / open prijs / terwijl uit = Te controleren, precies 75%% niet; bon onder vrij = order_komt_tekort (nieuwste eerst); goedkeuring buiten het tijdvenster ongeldig; totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
+    raise exception 'GESLAAGD: bon 2 × bier = één verkoop_kassa −2 op de tijd van de bon, btw 690/120; dezelfde bon twee keer = bestond en één mutatie; pakket van 3 delen = 3 mutaties, dubbel onderdeel = één mutatie −4, btw 21/9 = 52/140; voorraad 1 verkoop 3 = +2 tekort_correctie dan −3; NULL = niet_bijgehouden; tegenbon = retour +1 (goederen_terug false = niets), wacht op zijn bon (ook in één batch); btw 3 × 3,95 = 206, 1 × 3,95 = 69; geannuleerd (kern-vorm: regels, geen betaling, totaal 0) = verwerkt en boekt niets, geannuleerd met betaling = geannuleerd_betaald; tegenbon op geannuleerd / meer terug dan verkocht / zonder goederen_terug = Te controleren (zonder goederen_terug en op geannuleerd niets teruggeboekt); bon van vóór de laatste telling boekt niets (voor_telling), erna wel; alcohol onder 75%% / open prijs / terwijl uit = Te controleren, precies 75%% niet; bon onder vrij = order_komt_tekort (nieuwste eerst); goedkeuring buiten het tijdvenster ongeldig, maar met een tabletklok die 10 min achterloopt geldig (een uur eerder op die klok niet); totaal/order_rest/leeftijd = conflict maar geboekt; bon en regels vast (TB002); logboek op gebeurd_at; tekortslot dicht; vrij_overschreden: goedkeuring één keer, offline ter goedkeuring, order komt tekort 2 + 1 (nieuwste eerst) — alles teruggedraaid';
 end $$;
