@@ -1,7 +1,12 @@
 -- Handmatige test voor productie_partij_afronden. Draait in een transactie
 -- die aan het eind wordt teruggedraaid: er blijft niets achter.
 --
---   npx supabase db query --linked -o table -f supabase/tests/partij_afronden.sql
+-- Alleen op de dev-database, nooit op live en nooit met --linked:
+--
+--   npx supabase db query --db-url "$DEV_DB_URL" -o table -f supabase/tests/partij_afronden.sql
+--
+-- Weigert te draaien zonder de organisatie e2e-hop-en-bites (seed
+-- supabase/tests/seed_vier_naober.sql), die alleen op dev bestaat.
 --
 -- Verwacht: 1 partij, 12 eenheden, 1 stock_movement van +12, en de tweede
 -- aanroep met dezelfde sleutel geeft bestond=true zonder tweede partij.
@@ -25,6 +30,11 @@ declare
     v_delta numeric;
     v_eenheden jsonb;
 begin
+    -- Dev-only-guard: de e2e-organisatie bestaat alleen op de dev-database.
+    if not exists (select 1 from public.organizations where slug = 'e2e-hop-en-bites') then
+        raise exception 'GEWEIGERD: organisatie e2e-hop-en-bites bestaat niet. Deze test draait alleen op de dev-database, na supabase/tests/seed_vier_naober.sql.';
+    end if;
+
     select organization_id, id into v_org, v_comp
       from public.components
      where organization_id is not null

@@ -1,7 +1,12 @@
 -- Handmatige test voor afboeken bij inpakken (W3) en afwijkingen (W5).
 -- Draait in een transactie die aan het eind wordt teruggedraaid.
 --
---   npx supabase db query --linked -o table -f supabase/tests/winkel_inpakken.sql
+-- Alleen op de dev-database, nooit op live en nooit met --linked:
+--
+--   npx supabase db query --db-url "$DEV_DB_URL" -o table -f supabase/tests/winkel_inpakken.sql
+--
+-- Vereist de seed supabase/tests/seed_vier_naober.sql (organisatie
+-- e2e-hop-en-bites); zonder die organisatie weigert de test te draaien.
 --
 -- Verwacht: "GESLAAGD: ..." als EXCEPTION (zie partij_afronden.sql).
 --
@@ -29,8 +34,11 @@ declare
     v_maand   bigint;
     v_fouten  text := '';
 begin
-    select organization_id into v_org from public.winkel_instellingen limit 1;
-    if v_org is null then raise exception 'geen organisatie met een winkel om mee te testen'; end if;
+    -- Dev-only-guard: de e2e-organisatie bestaat alleen op de dev-database.
+    select id into v_org from public.organizations where slug = 'e2e-hop-en-bites';
+    if v_org is null then
+        raise exception 'GEWEIGERD: organisatie e2e-hop-en-bites bestaat niet. Deze test draait alleen op de dev-database, na supabase/tests/seed_vier_naober.sql.';
+    end if;
 
     -- Producten en het Bierpakket € 35 (zoals in de seed).
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, inkoop_excl_cents) values
@@ -111,6 +119,10 @@ begin
     if v_n <> 7 then v_fouten := v_fouten || 'bier na uitpakken ' || v_n || ' i.p.v. 7; '; end if;
 
     -- Afgebroken betaling: niets afgeboekt, niets gereserveerd, inpakken geweigerd.
+    -- Na het uitpakken liggen er 7 bier en zijn er weer 5 gereserveerd (order 1
+    -- is betaald en niet meer ingepakt): 2 vrij, dus een vijfde pakket van 5
+    -- bier krijgt terecht WK009. Eerst bijtellen tot 12 (7 vrij).
+    perform public.winkel_muteer_voorraad(v_org, v_bier, 'telling', 12);
     v_o := public.winkel_plaats_order(v_org, 'test-sleutel-' || gen_random_uuid(), 'test-token-' || gen_random_uuid(), 'afhalen', null,
         'Test', 'test@example.invalid', null, null, null, 3500, 0, 3500, '{}'::jsonb, 'https://example.invalid', v_regels);
     update public.winkel_orders set status = 'afgebroken' where id = v_o.id;

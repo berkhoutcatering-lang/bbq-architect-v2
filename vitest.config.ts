@@ -2,11 +2,12 @@ import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
 /* Vitest config — pure unit tests voor lib/* helpers zonder DB/JSX.
-   Test-bestanden staan naast de source: src/lib/<name>.test.ts. */
+   Test-bestanden staan naast de source: src/lib/<name>.test.ts, en voor
+   scripts naast het script: scripts/<name>.test.ts. */
 export default defineConfig({
     test: {
         environment: 'node',
-        include: ['src/**/*.test.ts'],
+        include: ['src/**/*.test.ts', 'scripts/*.test.ts'],
         globals: false,
     },
     resolve: {
