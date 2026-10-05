@@ -1,5 +1,6 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
+    "ignoreCommand": "node scripts/deploypoort.mjs",
     "regions": [
         "fra1"
     ],
