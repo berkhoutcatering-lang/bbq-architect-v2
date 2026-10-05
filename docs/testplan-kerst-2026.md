@@ -251,15 +251,17 @@ De verkoop gaat open (en blijft open) als **alles** hieronder waar is:
 
 De volgorde is: wat het eerst kerst kan breken, komt eerst. Weken zijn 2026 (vandaag = week 41).
 
-### Golf 1 — snelle fixes (week 41–42) · P0
+### Golf 1 — snelle fixes (week 41–42) · P0 — ✅ gebouwd 2026-10-05
 
-| # | Wat | Waar |
+| # | Wat | Stand |
 |---|---|---|
-| 1 | Crons `bestellingen-koppelen` en `ritten-vergeten` exporteren alleen `POST`, terwijl Vercel-cron `GET` aanroept. Ze draaien nu waarschijnlijk nooit. `GET` toevoegen zoals bij de andere crons | `src/app/api/cron/bestellingen-koppelen/route.ts`, `src/app/api/cron/ritten-vergeten/route.ts` |
-| 2 | Webshop-beheer leest de laatste **500** orders van álle statussen. Bij 500 kerstboxen valt een deel weg en klopt de getoonde bezetting niet. Oplossing: filteren (vaste orders + periode) en de bezetting uit de database-RPC `winkel_bezetting_moment` halen | `src/app/verkoop/webshop/page.tsx:65`, `_components/MomentenPaneel.tsx` |
-| 3 | Elke nieuwe order hertelt het hele dag-event. Gelijktijdige orders kunnen elkaars totalen overschrijven. Hertellen serialiseren (advisory lock of RPC), en `notitie` niet als 250 regels | `src/lib/winkel/plaatsing.ts` (`hertelEvent`) |
-| 4 | Het afmaken-scherm vult `basis × guests` in, in plaats van het aantal per gerecht | `src/app/keuken/kookbord/_components/KookbordClient.tsx` (~r. 485) → `gastenVoor(gerecht)` |
-| 5 | Live controleren en zo nodig fixen: `prep_tasks` in de realtime-publicatie; tijdzone van planner en dagvenster (`src/lib/keukenplanner/laden.ts`, `plan.ts`; de server draait in UTC); `haccpOpen` op het wandscherm telt `afwijking` niet mee | |
+| 1 | Crons `bestellingen-koppelen` en `ritten-vergeten` exporteerden alleen `POST`; Vercel-cron roept `GET` aan en kreeg 405 | ✅ `GET` toegevoegd (commit 08d3522). Vanaf de volgende deploy draaien de nachtelijke koppeling (met mail) en de maandelijkse ritten-check echt |
+| 2 | Webshop-beheer las de laatste **500** orders van álle statussen | ✅ verlopen/afgebroken weggelaten, de rest per pagina van 1000 opgehaald (8091490). De bezetting op het scherm volgt weer dezelfde regel als de kassa |
+| 3 | Gelijktijdige orders konden elkaars dagtotaal overschrijven (`hertelEvent`) | ✅ na schrijven opnieuw lezen en zo nodig opnieuw schrijven; test speelt de race na (aaa2a2a). `notitie` met 250 regels → golf 2 (afgifte-scherm) |
+| 4 | Afmaken-scherm vulde `basis × guests` in | ✅ nu per gerecht, zoals de MEP-kaart (3cf66b3) |
+| 5a | Planner/wandscherm rekenden in servertijd (UTC): dagvenster 04:00, uitlevertijd, klok, werkdaguren 1–2 uur verkeerd | ✅ `src/lib/keukenplanner/tijdzone.ts`, altijd Europe/Amsterdam, met tests incl. zomertijdwissel (50ff4b7) |
+| 5b | `haccpOpen` telde `afwijking` niet mee | ✅ (0b01760) |
+| 5c | `prep_tasks` niet in de realtime-publicatie | ✅ migratie `20261005120000_prep_tasks_realtime.sql` (03e23bb). **Nog toepassen op de live database** |
 
 ### Golf 2 — de kerstketen (week 42–45) · P0
 
@@ -337,7 +339,7 @@ Draft-only borgen (punt 15):
 
 | Week | Wat |
 |---|---|
-| 41–42 | Golf 1 · fase 0 + C testen op wat er nu is |
+| 41–42 | ✅ Golf 1 gebouwd · fase 0 + C testen op wat er nu is |
 | 42–45 | Golf 2 · A, B, E, F testen · website-ontwikkelaar past de site aan |
 | 45–46 | Golf 3 · D testen |
 | 46–47 | Golf 4 |
