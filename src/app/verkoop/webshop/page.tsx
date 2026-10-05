@@ -33,6 +33,30 @@ const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
 
 const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, afhaalmoment_tekst)';
 
+/* Verlopen en afgebroken orders houden nooit een plek vast en staan in geen
+   vakje of banner — die laten we weg. De rest halen we helemaal op, per
+   pagina: met een vast plafond (was 500) vielen er bij een volle kerst orders
+   uit de vakjes en telde de bezetting hier lager dan de kassa. */
+const PAGINA = 1000;
+const MAX_PAGINAS = 20;
+
+async function laadOrders(): Promise<{ data: OrderRij[]; error: { message: string } | null }> {
+    const alle: OrderRij[] = [];
+    for (let p = 0; p < MAX_PAGINAS; p++) {
+        const { data, error } = await supabase
+            .from('winkel_orders')
+            .select(ORDER_SELECT)
+            .not('status', 'in', '(verlopen,afgebroken)')
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(p * PAGINA, (p + 1) * PAGINA - 1);
+        if (error) return { data: alle, error };
+        alle.push(...((data ?? []) as unknown as OrderRij[]));
+        if ((data ?? []).length < PAGINA) break;
+    }
+    return { data: alle, error: null };
+}
+
 function paneelUitHash(): Paneel {
     if (typeof window === 'undefined') return 'vakjes';
     const h = window.location.hash.replace('#', '');
@@ -62,7 +86,7 @@ export default function WebshopPagina() {
 
     const laad = useCallback(async () => {
         const [o, a, m, i, g, v] = await Promise.all([
-            supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
+            laadOrders(),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, actief').order('datum'),
             supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url').maybeSingle(),
@@ -71,7 +95,7 @@ export default function WebshopPagina() {
         ]);
         const fout = [o, a, m, i, g, v].find((r) => r.error)?.error;
         if (fout) { melding(fout.message, 'error'); return; }
-        setOrders((o.data ?? []) as unknown as OrderRij[]);
+        setOrders(o.data);
         setArtikelen((a.data ?? []) as unknown as ArtikelRij[]);
         setMomenten((m.data ?? []) as MomentRij[]);
         setInstellingen((i.data as InstellingenRij | null) ?? null);
