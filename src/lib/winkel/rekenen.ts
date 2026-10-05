@@ -57,6 +57,8 @@ export interface Artikel {
     btw_verdeling?: Record<string, number> | null;
     verpakking_klein_cents?: number | null;
     verpakking_groot_cents?: number | null;
+    /** BA-6: inpakken in de makerij (standaard) of wegzetten uit het schap (losse winkelwaar). */
+    afhandeling?: 'inpakken' | 'wegzetten';
 }
 
 /** Wat er in een pakket of op een plank ligt (plan §1.1). */

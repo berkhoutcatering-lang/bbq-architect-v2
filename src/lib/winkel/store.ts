@@ -11,6 +11,7 @@
  */
 import type { Artikel, Component, Instellingen, MomentRij, Product, Regelintern, Slot } from './rekenen';
 import type { Betaalwijze, Leverwijze, Orderstatussoort } from './types';
+import type { VoorraadStand, VrijArtikel, VrijProduct } from './vrij';
 
 export interface Tenant {
     orgId: string;
@@ -76,6 +77,9 @@ export interface OrderRij {
     rest_cents: number;
     rest_betaald_at: string | null;
     rest_betaalmethode: 'contant' | 'pin' | null;
+    /* BA-2: de laatste 18+-weigering aan de balie (niets meegegeven). */
+    leeftijd_geweigerd_at?: string | null;
+    leeftijd_geweigerd_door?: string | null;
 }
 
 /** Wat uit de opmerking van de klant gelezen is. Staat altijd naast het origineel. */
@@ -108,6 +112,8 @@ export interface OrderRegelRij {
     /** Het event waarin deze regel is geplaatst; leeg = vaste bak of nog niet geplaatst. */
     event_id: number | null;
     klaargezet_at: string | null;
+    /** Afgehaald aan de balie (W3); de geheugen-opslag gebruikt het voor WV011 (BA-6). */
+    opgehaald_at?: string | null;
     /** Btw per tarief van deze regel (S6); null bij oude regels. */
     btw_cents: Record<string, number> | null;
     /** 18+ op het moment van bestellen. */
@@ -179,6 +185,15 @@ export type OpslagCode = 'WK001' | 'WK002' | 'WK003' | 'WK004' | 'WK005' | 'WK00
 
 export type OpslagUitkomst<T> = { ok: true; waarde: T } | { ok: false; code: OpslagCode; detail?: string };
 
+/** Wat de beschikbaarheidsroute nodig heeft (BA-5b). */
+export interface Beschikbaarheidsbron {
+    /** Gelezen vóór de artikelen: zo hoort een antwoord nooit bij een oudere versie dan zijn getallen. */
+    stand: VoorraadStand;
+    /** winkel_instellingen.beschikbaar_grens (standaard 5). */
+    grens: number;
+    artikelen: VrijArtikel[];
+}
+
 export interface WinkelStore {
     laadTenant(slug: string): Promise<Tenant | null>;
     /** null = deze organisatie heeft geen kassa (geen winkel_instellingen). */
@@ -219,4 +234,17 @@ export interface WinkelStore {
     laadBetaaldeRegelsOpEvent(eventId: number): Promise<RegelOpEvent[]>;
     werkEventTotalenBij(eventId: number, t: EventTotalen): Promise<void>;
     noteerPlaatsing(orderId: number, status: PlaatsingStatus, fout?: string | null): Promise<void>;
+
+    /* ── Vrij (plan v5, BA-5a/5b) ── */
+    /**
+     * Ligt er / gereserveerd / vrij per product van de organisatie, in één
+     * aanroep (winkel_vrij_producten). Gooit bij een fout: een getal wordt
+     * nooit geraden.
+     */
+    laadVrij(orgId: string): Promise<VrijProduct[]>;
+    /**
+     * Voor de website: eerst de voorraadstand, dan vrij per artikel, en de
+     * grens. null = deze organisatie heeft geen kassa. Gooit bij een fout.
+     */
+    laadBeschikbaarheid(orgId: string): Promise<Beschikbaarheidsbron | null>;
 }

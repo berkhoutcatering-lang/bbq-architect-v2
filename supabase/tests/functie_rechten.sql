@@ -119,7 +119,18 @@ begin
         'public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
         'public.voorraad_invoer_boeken(uuid, uuid)',
         'public.productie_partij_afronden(uuid, uuid, bigint, numeric, text, numeric, text, jsonb, date, date, text, text, uuid, uuid, integer, bigint, uuid, integer, numeric, jsonb, text)',
-        'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)'
+        'public.increment_inventory_stock(uuid, integer, numeric, text, numeric, uuid, text, bigint, uuid)',
+        -- BA-2 (20261005120000): zetOpgehaald, en straks de Toonbank via service_role
+        'public.winkel_order_ophalen(uuid, bigint, text, text, text, uuid, uuid)',
+        'public.winkel_order_ophalen_terug(uuid, bigint)',
+        -- BA-5 (20261005130000): voorraad/winkel, meldingen, beschikbaarheid, straks de Toonbank
+        'public.winkel_vrij_producten(uuid)',
+        'public.winkel_vrij_artikelen(uuid)',
+        'public.winkel_reserveringen(uuid, uuid)',
+        'public.winkel_voorraad_stand(uuid)',
+        -- BA-6 (20261005140000): paneel Apart zetten, straks de Toonbank via service_role
+        'public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',
+        'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
@@ -128,6 +139,24 @@ begin
             if not has_function_privilege('service_role',  v_sig, 'EXECUTE') then v_fouten := v_fouten || 'service_role mist '  || v_sig || '; '; end if;
         end if;
     end loop;
+
+    -- ── 3b. De triggerfunctie van de voorraadversie (BA-5): voor niemand los aan te roepen.
+    if to_regprocedure('private.winkel_voorraad_versie_omhoog()') is null then
+        v_fouten := v_fouten || 'private.winkel_voorraad_versie_omhoog() ontbreekt; ';
+    elsif has_function_privilege('anon', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE')
+       or has_function_privilege('authenticated', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE')
+       or has_function_privilege('service_role', 'private.winkel_voorraad_versie_omhoog()', 'EXECUTE') then
+        v_fouten := v_fouten || 'private.winkel_voorraad_versie_omhoog() is aan te roepen door anon, authenticated of service_role; ';
+    end if;
+
+    -- ── 3c. De view winkel_wegzet_taken (BA-6): lezen voor authenticated en service_role, niet voor anon.
+    if to_regclass('public.winkel_wegzet_taken') is null then
+        v_fouten := v_fouten || 'view winkel_wegzet_taken ontbreekt; ';
+    elsif has_table_privilege('anon', 'public.winkel_wegzet_taken', 'SELECT')
+       or not has_table_privilege('authenticated', 'public.winkel_wegzet_taken', 'SELECT')
+       or not has_table_privilege('service_role', 'public.winkel_wegzet_taken', 'SELECT') then
+        v_fouten := v_fouten || 'rechten op winkel_wegzet_taken kloppen niet (anon nee, authenticated en service_role ja); ';
+    end if;
 
     -- ── 4. Alleen de service-client: service_role ja, authenticated nee.
     foreach v_sig in array array[

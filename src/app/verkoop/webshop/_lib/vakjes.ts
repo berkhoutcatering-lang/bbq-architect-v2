@@ -117,6 +117,8 @@ export interface OrderRij {
     rest_cents: number;
     rest_betaald_at: string | null;
     rest_betaalmethode: 'contant' | 'pin' | null;
+    /* BA-2: de laatste 18+-weigering aan de balie. */
+    leeftijd_geweigerd_at?: string | null;
     winkel_order_regels: RegelRij[];
 }
 
@@ -154,6 +156,8 @@ export interface ArtikelRij {
     btw_verdeling: Record<string, number> | null;
     verpakking_klein_cents: number | null;
     verpakking_groot_cents: number | null;
+    /** BA-6: inpakken in de makerij of wegzetten uit het schap. Ontbreekt vóór migratie 20261005140000 = inpakken. */
+    afhandeling?: 'inpakken' | 'wegzetten';
 }
 
 export interface MomentRij {
@@ -356,6 +360,10 @@ export function bouwVakjes(orders: OrderRij[], artikelen: ArtikelRij[], momenten
         let metDozen = false;
         const ongekoppeld = new Set<string>();
         for (const { regel, artikel } of regels) {
+            /* Wegzetten (BA-6) is geen werk voor de makerij: die regels staan in
+               het paneel Apart zetten. Hier blijven ze alleen bij de order (om
+               mee te geven) en bij klaargezet, niet in de tellingen. */
+            if (artikel?.afhandeling === 'wegzetten') continue;
             if (artikel?.telt === 'personen') personen += regel.aantal; else stuks += regel.aantal;
             if (artikel?.dieet === 'vegetarisch') vegetarisch += regel.aantal;
             const pa = perArtikelMap.get(regel.artikel_id) ?? { artikel_id: regel.artikel_id, naam: artikel?.naam ?? regel.naam, aantal: 0, dieet: artikel?.dieet ?? null, gekoppeld: Boolean(artikel?.gerecht_id || artikel?.inventory_id) };

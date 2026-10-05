@@ -13,6 +13,7 @@
  * null betekent overal: niet bijgehouden. Een getal wordt nooit geraden.
  */
 import type { Product, Slot } from './rekenen';
+import { tekortTekst } from './wegzetten';
 
 /** Hoeveel pakketten van het voorstel voor de drempel (antwoord Mathijs, 26 sep). */
 export const DREMPEL_PAKKETTEN = 5;
@@ -182,15 +183,44 @@ export function hoeveelheidKort(n: number, eenheid: 'stuk' | 'gram'): string {
     return `${n.toLocaleString('nl-NL', { maximumFractionDigits: 2 })} st.`;
 }
 
-/** De foutcodes van de databasefuncties in mensentaal. */
-export function voorraadFout(code: string | undefined, bericht: string): string {
-    switch (code) {
+/**
+ * De foutcodes van de databasefuncties in mensentaal. De code staat altijd in
+ * de SQLSTATE (error.code): WV001–WV011, ook WV010 en WV011 (migratie
+ * 20261005140000). Alleen daarop wordt vertaald, net als straks in de
+ * Toonbank-API; de tekst van de melding telt niet. `details` is wat
+ * PostgREST uit DETAIL doorgeeft; bij WV010 is dat JSON met de tekorten.
+ */
+export function voorraadFout(code: string | undefined, bericht: string, details?: string | null): string {
+    const wv = code && /^WV\d{3}$/.test(code) ? code : undefined;
+    switch (wv) {
         case 'WV001': return `Dat kan niet: dan komt de voorraad onder nul. ${bericht.replace(/^onder nul[^:]*: /, '')}`;
         case 'WV002': return 'Dit product wordt nog niet bijgehouden. Tel het eerst.';
         case 'WV003': return 'De voorraad verandert alleen via tellen, ontvangst, overboeken of een afwijking.';
         case 'WV004': return `De eenheden passen niet op elkaar: ${bericht}`;
         case 'WV005': return bericht;
+        case 'WV006': return 'Deze order is (nog) niet betaald. Er is niets ingepakt of apart gezet.';
+        case 'WV010': {
+            const tekorten = tekortenUitDetails(details);
+            const wat = tekorten.length ? `${tekortTekst(tekorten)}. ` : '';
+            return `Te weinig op het schap om apart te zetten. ${wat}Er is niets apart gezet: tel het schap en corrigeer de voorraad.`;
+        }
+        case 'WV011': return 'Deze order is al opgehaald: apart zetten kan niet meer terug. Klopt de voorraad niet, tel dan opnieuw.';
         default: return bericht;
+    }
+}
+
+/** De tekorten uit de DETAIL van WV010 ({tekorten: [{naam, ligt_er, nodig}]}); leeg als het geen JSON is. */
+function tekortenUitDetails(details: string | null | undefined): { naam: string; ligt_er: number; nodig: number }[] {
+    if (!details) return [];
+    try {
+        const d = JSON.parse(details) as { tekorten?: unknown };
+        if (!Array.isArray(d.tekorten)) return [];
+        return d.tekorten
+            .filter((t): t is Record<string, unknown> => !!t && typeof t === 'object')
+            .map((t) => ({ naam: String(t.naam ?? ''), ligt_er: Number(t.ligt_er), nodig: Number(t.nodig) }))
+            .filter((t) => t.naam !== '' && Number.isFinite(t.ligt_er) && Number.isFinite(t.nodig));
+    } catch {
+        return [];
     }
 }
 

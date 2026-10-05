@@ -41,6 +41,7 @@ import AttentionPanel, { type AttentionItem, type AttentionSeverity } from '@/co
 import QuickActions from '@/components/dashboard/today/QuickActions';
 import TakenLijst from '@/components/dashboard/today/TakenLijst';
 import { voegTakenSamen, type Taak, type TaakUrgentie } from '@/lib/today/taken-samenvoegen';
+import { wegzetTakenNaarTaken } from '@/lib/today/wegzet-taken';
 
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
@@ -81,6 +82,24 @@ export default function DashboardPage() {
   const ealg = useSupabase<DbEventAllergy>('event_allergies', []);
   const ma = useSupabase<MargeAlert>('marge_alerts', []);
   const lds = useSupabase<{ id: number; naam: string; status: string; created_at: string; follow_up_at: string | null }>('leads', []);
+  /* Wegzet-taken uit de webshop (BA-6): de view winkel_wegzet_taken, met id =
+     order_id. Alleen naam en ordernummer, geen contactgegevens. Ontbreekt de
+     view nog (migratie niet gedraaid), dan blijft dit leeg. */
+  const wgz = useSupabase<{ id: number }>('winkel_wegzet_taken', [], {
+    columns: 'id, order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels',
+  });
+  /* Realtime werkt niet op een view: daarom elke minuut en bij terugkomen in
+     het venster opnieuw ophalen, zodat een net betaalde order zonder herladen
+     als taak verschijnt. */
+  const wegzetVerversen = wgz.refetch;
+  useEffect(() => {
+    const t = window.setInterval(wegzetVerversen, 60_000);
+    window.addEventListener('focus', wegzetVerversen);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener('focus', wegzetVerversen);
+    };
+  }, [wegzetVerversen]);
 
   const events: DbEvent[] = ev.data || [];
   const facturen: Factuur[] = fac.data || [];
@@ -761,10 +780,15 @@ export default function DashboardPage() {
     bron: 'dagbriefing',
   }));
 
+  /* Eigen bron 'winkel' met onderwerp wegzet:{order_id}: valt nooit samen met
+     een bestel- of voorraadmelding (zie taken-samenvoegen.ts). */
+  const takenUitWinkel: Taak[] = wegzetTakenNaarTaken(wgz.data || [], currentTime);
+
   const alleTaken = voegTakenSamen({
     dagbriefing: takenUitDagbriefing,
     aandacht: takenUitAandacht,
     shift: takenUitShift,
+    winkel: takenUitWinkel,
   });
 
   return (

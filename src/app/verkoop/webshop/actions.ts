@@ -23,7 +23,9 @@ import { hertelEvent, plaatsBestelling } from '@/lib/winkel/plaatsing';
 import { stelKoppelingenVoor, type KoppelArtikel, type KoppelVoorstel } from '@/lib/ai/winkelKoppelVoorsteller';
 import { voorraadFout } from '@/lib/winkel/voorraad';
 import { codeUitScan } from '@/lib/winkel/productie';
+import { ophaalMelding, terugMelding, type Melding, type OphaalUitkomst, type TerugUitkomst } from '@/lib/winkel/ophalen';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { verversNaAfloop } from '@/lib/website/verversSignaal';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -82,6 +84,8 @@ const ArtikelVelden = z.object({
     btw_verdeling: z.record(z.string().regex(/^(0|9|21)$/), z.number().min(0).max(100)).nullable().default(null),
     verpakking_klein_cents: z.number().int().min(0).nullable().default(null),
     verpakking_groot_cents: z.number().int().min(0).nullable().default(null),
+    /* BA-6: inpakken in de makerij, of wegzetten uit het schap (losse winkelwaar). */
+    afhandeling: z.enum(['inpakken', 'wegzetten']).default('inpakken'),
 });
 type ArtikelVelden = z.infer<typeof ArtikelVelden>;
 
@@ -113,6 +117,7 @@ function artikelRij(a: ArtikelVelden) {
         segment: a.segment, alcohol: a.alcohol, schaal_verdeling: a.schaal_verdeling,
         btw_verdeling: a.btw_verdeling && Object.keys(a.btw_verdeling).length ? a.btw_verdeling : null,
         verpakking_klein_cents: a.verpakking_klein_cents, verpakking_groot_cents: a.verpakking_groot_cents,
+        afhandeling: a.afhandeling,
     };
 }
 
@@ -146,6 +151,8 @@ export async function werkArtikelBij(input: unknown): Promise<ActionResult<{ ok:
 
     const { error } = await s.supabase.from('winkel_artikelen').update(artikelRij(parsed.data)).eq('id', parsed.data.id).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
+    /* Quotum (voorraad), actief of publiek kan de beschikbaarheid veranderen. */
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { ok: true } };
 }
@@ -157,6 +164,7 @@ export async function zetArtikelActief(input: unknown): Promise<ActionResult<{ o
     if (!s) return { error: 'unauthorized' };
     const { error } = await s.supabase.from('winkel_artikelen').update({ actief: parsed.data.actief }).eq('id', parsed.data.id).eq('organization_id', s.orgId);
     if (error) return { error: error.message };
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { ok: true } };
 }
@@ -485,12 +493,87 @@ export async function zetKlaargezet(input: unknown): Promise<ActionResult<{ ok: 
     const { data, error } = await s.supabase.rpc('winkel_zet_klaargezet', {
         p_org: s.orgId, p_regel_id: parsed.data.regelId, p_klaargezet: parsed.data.klaargezet,
     });
-    if (error) return { error: voorraadFout(error.code, error.message) };
+    if (error) return { error: voorraadFout(error.code, error.message, error.details) };
     const boekingen = ((data as { boekingen?: { product_id: string }[] } | null)?.boekingen ?? []);
     if (boekingen.length) await evalueerWinkelMeldingen(s.orgId, boekingen.map((b) => b.product_id));
+    verversNaAfloop();
     revalidatePath(PAD);
     revalidatePath('/voorraad/winkel');
     return { data: { ok: true, boekingen: boekingen.length } };
+}
+
+/* ── Apart zetten: wegzet-taken (BA-6) ─────────────────────────────────────
+   Losse winkelwaar (artikel met afhandeling 'wegzetten') wordt na betaling
+   een taak: uit het schap pakken en apart zetten. De database doet het in één
+   transactie (winkel_zet_order_apart): order, regels en producten op slot,
+   dan per regel winkel_zet_klaargezet. Alles of niets: ligt er te weinig,
+   dan WV010 en is er niets geboekt. Terugdraaien kan dezelfde dag, en niet
+   meer na ophalen (WV011). Migratie 20261005140000_winkel_wegzetten. */
+
+export interface ApartBoeking {
+    regel_id: number;
+    product_id: string;
+    hoeveelheid: number;
+    voorraad: number;
+    type: 'verkoop_online' | 'retour';
+}
+export interface ApartUitkomst {
+    uitkomst: 'apart' | 'al_apart' | 'geen_taak';
+    order_id: number;
+    nummer: string;
+    boekingen: ApartBoeking[];
+}
+export interface ApartTerugUitkomst {
+    uitkomst: 'ongedaan' | 'niet_apart' | 'niet_zelfde_dag' | 'geen_taak';
+    order_id: number;
+    nummer: string;
+    boekingen: ApartBoeking[];
+}
+
+const ApartSchema = z.object({ orderId: z.coerce.number().int().positive() });
+
+/** Een wegzet-taak afvinken: alle losse winkelwaar van de order in één keer apart. */
+export async function zetOrderApart(input: unknown): Promise<ActionResult<ApartUitkomst>> {
+    const parsed = ApartSchema.safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    /* De ingelogde gebruiker staat via auth.uid() in het logboek; bron = ba. */
+    const { data, error } = await s.supabase.rpc('winkel_zet_order_apart', {
+        p_org: s.orgId, p_order_id: parsed.data.orderId, p_bron: 'ba',
+    });
+    if (error) return { error: voorraadFout(error.code, error.message, error.details) };
+    const uit = data as ApartUitkomst;
+    if (uit.boekingen?.length) {
+        await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+        verversNaAfloop();
+    }
+    revalidatePath(PAD);
+    revalidatePath('/voorraad/winkel');
+    return { data: uit };
+}
+
+/** Apart zetten ongedaan maken: dezelfde dag, en alleen zolang de order niet is opgehaald. */
+export async function zetOrderApartTerug(input: unknown): Promise<ActionResult<ApartTerugUitkomst>> {
+    const parsed = ApartSchema.safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const { data, error } = await s.supabase.rpc('winkel_zet_order_apart_terug', {
+        p_org: s.orgId, p_order_id: parsed.data.orderId, p_bron: 'ba',
+    });
+    if (error) return { error: voorraadFout(error.code, error.message, error.details) };
+    const uit = data as ApartTerugUitkomst;
+    if (uit.uitkomst === 'niet_zelfde_dag') {
+        return { error: 'Dit is op een eerdere dag apart gezet. Terugdraaien kan alleen dezelfde dag; klopt de voorraad niet, tel dan opnieuw.' };
+    }
+    if (uit.boekingen?.length) {
+        await evalueerWinkelMeldingen(s.orgId, uit.boekingen.map((b) => b.product_id));
+        verversNaAfloop();
+    }
+    revalidatePath(PAD);
+    revalidatePath('/voorraad/winkel');
+    return { data: uit };
 }
 
 export type ScanUitkomst =
@@ -518,26 +601,59 @@ export async function scanDoos(input: unknown): Promise<ActionResult<ScanUitkoms
     return { data: data as ScanUitkomst };
 }
 
-/** Afgehaald aan de balie. Alleen status: de voorraad is bij het inpakken al afgeboekt. */
-export async function zetOpgehaald(input: unknown): Promise<ActionResult<{ ok: true }>> {
-    const parsed = z.object({ orderId: z.coerce.number().int().positive(), opgehaald: z.boolean() }).safeParse(input);
+export type OpgehaaldResultaat =
+    | { soort: 'ophalen'; uitkomst: OphaalUitkomst; melding: Melding }
+    | { soort: 'terug'; uitkomst: TerugUitkomst; melding: Melding };
+
+/**
+ * Afgehaald aan de balie (BA-2: ophaallek dicht). Eén databasefunctie,
+ * winkel_order_ophalen, doet alles in één transactie: controleert betaald,
+ * al opgehaald, 18+ en de rest; pakt in wat nog niet ingepakt is
+ * (verkoop_online); boekt de rest; zet regels en dozen op opgehaald. Een "nee"
+ * (rest_nodig, leeftijd_nodig, geweigerd, te_weinig_voorraad, ...) is geen
+ * fout maar een uitkomst: het scherm toont de volgende stap.
+ *
+ * opgehaald: false = ongedaan maken via winkel_order_ophalen_terug: alleen de
+ * status, alleen op dezelfde dag. Voorraad en rest blijven staan.
+ */
+export async function zetOpgehaald(input: unknown): Promise<ActionResult<OpgehaaldResultaat>> {
+    const parsed = z.object({
+        orderId: z.coerce.number().int().positive(),
+        opgehaald: z.boolean(),
+        restMethode: z.enum(['contant', 'pin']).nullable().default(null),
+        leeftijd: z.enum(['vastgesteld', 'geweigerd']).nullable().default(null),
+    }).safeParse(input);
     if (!parsed.success) return { error: 'validation' };
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
-    const { error } = await s.supabase
-        .from('winkel_order_regels')
-        .update(parsed.data.opgehaald
-            ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id }
-            : { opgehaald_at: null, opgehaald_door: null })
-        .eq('order_id', parsed.data.orderId)
-        .eq('organization_id', s.orgId);
-    if (error) return { error: error.message };
-    /* De dozen van deze order mee, zodat de balie niets meer als open ziet. */
-    await s.supabase.from('winkel_dozen')
-        .update(parsed.data.opgehaald ? { opgehaald_at: new Date().toISOString(), opgehaald_door: s.user.id } : { opgehaald_at: null, opgehaald_door: null })
-        .eq('order_id', parsed.data.orderId).eq('organization_id', s.orgId);
-    revalidatePath(PAD);
-    return { data: { ok: true } };
+    const { orderId, opgehaald, restMethode, leeftijd } = parsed.data;
+
+    if (!opgehaald) {
+        const { data, error } = await s.supabase.rpc('winkel_order_ophalen_terug', { p_org: s.orgId, p_order_id: orderId });
+        if (error) return { error: voorraadFout(error.code, error.message) };
+        const uitkomst = data as TerugUitkomst;
+        if (uitkomst.uitkomst === 'teruggezet') revalidatePath(PAD);
+        return { data: { soort: 'terug', uitkomst, melding: terugMelding(uitkomst) } };
+    }
+
+    const { data, error } = await s.supabase.rpc('winkel_order_ophalen', {
+        p_org: s.orgId, p_order_id: orderId, p_rest_methode: restMethode, p_leeftijd: leeftijd,
+        p_bron: 'ba', p_door_user_id: s.user.id, p_medewerker_id: null,
+    });
+    if (error) return { error: voorraadFout(error.code, error.message) };
+    const uitkomst = data as OphaalUitkomst;
+    if (uitkomst.uitkomst === 'opgehaald') {
+        if (uitkomst.boekingen.length) {
+            await evalueerWinkelMeldingen(s.orgId, [...new Set(uitkomst.boekingen.map((b) => b.product_id))]);
+            revalidatePath('/voorraad/winkel');
+            /* Bij het ophalen ingepakt = afgeboekt: de website ververst (BA-5c). */
+            verversNaAfloop();
+        }
+        revalidatePath(PAD);
+    } else if (uitkomst.uitkomst === 'geweigerd') {
+        revalidatePath(PAD);
+    }
+    return { data: { soort: 'ophalen', uitkomst, melding: ophaalMelding(uitkomst) } };
 }
 
 /** Na een koppeling: de events waar dit artikel al in ligt opnieuw tellen. */
@@ -660,6 +776,8 @@ export async function zetSlots(input: unknown): Promise<ActionResult<{ aantal: n
             : await s.supabase.from('winkel_artikel_slots').insert(rij);
         if (error) return { error: error.message };
     }
+    /* Een ander product of aantal per pakket verandert wat er nog te maken is. */
+    verversNaAfloop();
     revalidatePath(PAD);
     return { data: { aantal: slots.length } };
 }

@@ -10,7 +10,11 @@
 --  Signaturen zijn de exacte argumenttypes uit de migraties op
 --  fix/ba-s-functierechten (basis feat/winkelvoorraad). "één versie" betekent:
 --  precies één overload met die naam; twee versies kan PostgREST niet kiezen.
---  private.vereis_org staat ONTBREEKT tot BA-S (20261003150000) live is.
+--  private.vereis_org staat ONTBREEKT tot BA-S (20261003150000) live is; de
+--  ophaalkolommen en winkel_order_ophalen(_terug) tot BA-2 (20261005120000);
+--  de vrij-objecten (teller, vier functies, triggers, grens) tot BA-5
+--  (20261005130000 en 20261005130100); de wegzet-objecten (view, kolom, twee
+--  functies) tot BA-6 (20261005140000).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 WITH
@@ -30,11 +34,13 @@ tabellen(naam, migratie) AS (VALUES
     ('winkel_dozen',                   '20260928130000_geschenkpakketten_dozen'),
     ('voorraad_invoer',                '20260928140000_voorraad_invoer'),
     ('voorraad_invoer_regels',         '20260928140000_voorraad_invoer'),
-    ('voorraad_invoer_koppelingen',    '20260928140000_voorraad_invoer')
+    ('voorraad_invoer_koppelingen',    '20260928140000_voorraad_invoer'),
+    ('winkel_voorraad_versie',         '20261005130000_winkel_vrij (BA-5)')
 ),
 views(naam, migratie) AS (VALUES
     ('voorraad_logboek',           '20260928120000_winkelvoorraad_logboek'),
-    ('voorraad_afwijkingen_maand', '20260928120200_winkelvoorraad_meldingen_afwijkingen')
+    ('voorraad_afwijkingen_maand', '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
+    ('winkel_wegzet_taken',        '20261005140000_winkel_wegzetten (BA-6)')
 ),
 kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_artikelen',      'gerecht_id',              '20260925120000_winkel_vakjes'),
@@ -83,7 +89,14 @@ kolommen(tabel, kolom, migratie) AS (VALUES
     ('winkel_order_regels',   'opgehaald_door',          '20260928120100_winkelvoorraad_inpakken'),
     ('winkel_instellingen',   'melding_email',           '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
     ('stock_movements',       'idempotency_key',         '20260928120200_winkelvoorraad_meldingen_afwijkingen'),
-    ('voorraad_invoer',       'prijzen_incl_btw',        '20260928140100_voorraad_invoer_btw')
+    ('voorraad_invoer',       'prijzen_incl_btw',        '20260928140100_voorraad_invoer_btw'),
+    ('winkel_order_regels',   'leeftijd_vastgesteld_at', '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_order_regels',   'opgehaald_bron',          '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_order_regels',   'opgehaald_medewerker_id', '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_orders',         'leeftijd_geweigerd_at',   '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_orders',         'leeftijd_geweigerd_door', '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('winkel_instellingen',   'beschikbaar_grens',       '20261005130100_winkel_beschikbaar_grens (BA-5)'),
+    ('winkel_artikelen',      'afhandeling',             '20261005140000_winkel_wegzetten (BA-6)')
 ),
 functies(signatuur, migratie) AS (VALUES
     ('private.user_org_ids()',                                   '20260508084409_security_advisor_hardening'),
@@ -118,7 +131,17 @@ functies(signatuur, migratie) AS (VALUES
     ('public.winkel_doos_ophalen(uuid, text, text)',             '20260928130000_geschenkpakketten_dozen'),
     ('public.voorraad_invoer_op_slot()',                         '20260928140000_voorraad_invoer'),
     ('public.voorraad_invoer_boeken(uuid, uuid)',                '20260928140000_voorraad_invoer + 20260928140100'),
-    ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)')
+    ('private.vereis_org(uuid)',                                 '20261003150000_winkel_functies_niet_voor_anon (BA-S)'),
+    ('public.winkel_order_ophalen(uuid, bigint, text, text, text, uuid, uuid)',
+                                                                 '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('public.winkel_order_ophalen_terug(uuid, bigint)',          '20261005120000_winkel_order_ophalen (BA-2)'),
+    ('private.winkel_voorraad_versie_omhoog()',                  '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_vrij_producten(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_vrij_artikelen(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_reserveringen(uuid, uuid)',                  '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_voorraad_stand(uuid)',                       '20261005130000_winkel_vrij (BA-5)'),
+    ('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',       '20261005140000_winkel_wegzetten (BA-6)'),
+    ('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)', '20261005140000_winkel_wegzetten (BA-6)')
 ),
 triggers(tabel, trig, migratie) AS (VALUES
     ('winkel_instellingen',   'trg_winkel_instellingen_updated_at', '20260913120000_winkel_kassa'),
@@ -132,7 +155,18 @@ triggers(tabel, trig, migratie) AS (VALUES
     ('voorraad_plekken',      'trg_voorraad_plekken_updated_at',    '20260928120000_winkelvoorraad_logboek'),
     ('voorraad_invoer',       'trg_voorraad_invoer_updated_at',     '20260928140000_voorraad_invoer'),
     ('voorraad_invoer',       'trg_voorraad_invoer_op_slot',        '20260928140000_voorraad_invoer'),
-    ('voorraad_invoer_regels','trg_voorraad_invoer_regels_op_slot', '20260928140000_voorraad_invoer')
+    ('voorraad_invoer_regels','trg_voorraad_invoer_regels_op_slot', '20260928140000_voorraad_invoer'),
+    ('winkel_voorraad_mutaties','trg_winkel_vv_mutaties',           '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_orders',         'trg_winkel_vv_order_nieuw',          '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_orders',         'trg_winkel_vv_order_status',         '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_orders',         'trg_winkel_vv_order_weg',            '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_order_regels',   'trg_winkel_vv_regel_status',         '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_artikel_slots',  'trg_winkel_vv_slots',                '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_artikelen',      'trg_winkel_vv_artikel_quotum',       '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_artikelen',      'trg_winkel_vv_artikel_erbij',        '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_producten',      'trg_winkel_vv_product_erbij',        '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_producten',      'trg_winkel_vv_product',              '20261005130000_winkel_vrij (BA-5)'),
+    ('winkel_instellingen',   'trg_winkel_vv_grens',                '20261005130100_winkel_beschikbaar_grens (BA-5)')
 ),
 indexen(naam, migratie) AS (VALUES
     ('winkel_orders_sleutel_idx',     '20260913120000_winkel_kassa'),
@@ -211,6 +245,22 @@ proef AS (
     SELECT 11, 'fix', 'pakketten: winkel_controleer_capaciteit weigert een product dat op is (WK009)',
            '20260927120000_winkel_sinterklaas',
            COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_controleer_capaciteit(uuid, jsonb, bigint)')) LIKE '%WK009%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'lockvolgorde: winkel_zet_klaargezet vergrendelt eerst de order (FOR NO KEY UPDATE)',
+           '20261005120100_winkel_lockvolgorde (BA-2)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_klaargezet(uuid, bigint, boolean)')) LIKE '%FOR NO KEY UPDATE%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'lockvolgorde: winkel_doos_ophalen vergrendelt eerst de order (FOR NO KEY UPDATE)',
+           '20261005120100_winkel_lockvolgorde (BA-2)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_doos_ophalen(uuid, text, text)')) LIKE '%FOR NO KEY UPDATE%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'wegzetten: WV010 is een eigen SQLSTATE (niet P0001)',
+           '20261005140000_winkel_wegzetten (BA-6)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)')) LIKE '%ERRCODE = ''WV010''%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'wegzetten: WV011 is een eigen SQLSTATE (niet P0001)',
+           '20261005140000_winkel_wegzetten (BA-6)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)')) LIKE '%ERRCODE = ''WV011''%', false)
 )
 SELECT soort, naam, migratie, CASE WHEN ok THEN 'OK' ELSE 'ONTBREEKT' END AS status
   FROM proef

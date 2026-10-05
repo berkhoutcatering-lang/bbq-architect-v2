@@ -18,7 +18,9 @@
 --   - product Naober (bier, stuk, 18+, € 3,45, 21%), geteld op 6 via
 --     winkel_muteer_voorraad (type telling);
 --   - artikel roeg-naober (345 ct, btw 21, alcohol, actief, publiek, met
---     afhaalmoment) met één slot: 1 × Naober.
+--     afhaalmoment) met één slot: 1 × Naober. Afhandeling 'wegzetten'
+--     (losse winkelwaar, BA-6) zodra die kolom bestaat
+--     (migratie 20261005140000_winkel_wegzetten).
 -- Geen personen, geen e-mailadressen, geen sleutels.
 --
 -- Guard: weigert als er winkelartikelen of events van een andere organisatie
@@ -119,6 +121,13 @@ begin
            moment_soort = 'moment', moment_groep = 'afhalen', capaciteit_soort = 'regel', voorraad = null,
            actief = true, publiek = true, alcohol = true, segment = 'bier', vast = true, btw_verdeling = null
     returning id into v_art;
+
+    -- ── BA-6: Naober is losse winkelwaar. Na betaling een wegzet-taak, geen
+    --    inpakken in de makerij. Alleen als de migratie er al op staat.
+    if exists (select 1 from information_schema.columns
+                where table_schema = 'public' and table_name = 'winkel_artikelen' and column_name = 'afhandeling') then
+        execute 'update public.winkel_artikelen set afhandeling = ''wegzetten'' where id = $1' using v_art;
+    end if;
 
     -- ── Precies één slot: 1 × Naober. Slots zijn het template; bestaande
     --    orders hebben hun eigen componenten en merken hier niets van.
