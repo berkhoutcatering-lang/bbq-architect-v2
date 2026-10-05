@@ -392,6 +392,14 @@ proef AS (
            '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
            COALESCE(NOT has_function_privilege('authenticated', to_regprocedure('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)')::OID, 'EXECUTE'), false)
     UNION ALL
+    SELECT 11, 'fix', 'dagstaat: goedgekeurd blijft goedgekeurd bij een late bon zonder verschil (hercontrole M2 K5-rand)',
+           '20261007130000_toonbank_afhalen_dagstaten (BA-10)',
+           COALESCE(pg_get_functiondef(to_regprocedure('public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)')) LIKE '%NOT p_aangevuld OR jsonb_array_length(v_verschil) = 0%', false)
+    UNION ALL
+    SELECT 11, 'fix', 'vrij_overschreden: de achterstand van de tabletklok telt mee (hercontrole M2 klein 9)',
+           '20261007120000_toonbank_bonnen (BA-9)',
+           COALESCE(pg_get_functiondef(to_regprocedure('private.toonbank_verwerk_vrij_overschreden(bigint)')) LIKE '%v_j.apparaat_tijd + COALESCE(v_achter%', false)
+    UNION ALL
     SELECT 11, 'fix', 'Toonbank-beheer alleen door een Admin (review M2 K4)',
            '20261006130000_toonbank_apparaten (BA-7a)',
            COALESCE(pg_get_functiondef(to_regprocedure('public.toonbank_apparaat_nieuw(uuid, text, text, text, uuid)')) LIKE '%toonbank_vereis_admin%'
