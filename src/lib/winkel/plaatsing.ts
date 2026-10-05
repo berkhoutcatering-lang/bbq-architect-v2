@@ -112,11 +112,28 @@ export interface PlaatsingUitkomst {
     fout?: string;
 }
 
-/** Telt een event opnieuw uit alle betaalde regels erop. */
+/* Hooguit zo vaak schrijven voordat we opgeven; in de praktijk is één keer
+   nalezen genoeg, tenzij er een stortvloed tegelijk binnenkomt. */
+const MAX_HERTELRONDES = 4;
+
+/**
+ * Telt een event opnieuw uit alle betaalde regels erop.
+ *
+ * Twee orders die tegelijk betaald worden hertellen hetzelfde event. Zonder
+ * meer zou de trage van de twee een totaal wegschrijven dat de ander mist.
+ * Daarom: na het schrijven opnieuw lezen, en is de uitkomst intussen anders,
+ * nog eens schrijven. Wie als laatste schrijft heeft daarna nog gelezen, dus
+ * het event klopt met de laatste stand.
+ */
 export async function hertelEvent(store: WinkelStore, orgId: string, eventId: number, artikelen?: Map<string, Artikel>): Promise<EventTotalen> {
     const art = artikelen ?? new Map((await store.laadArtikelen(orgId)).map((a) => [a.id, a]));
-    const rijen = await store.laadBetaaldeRegelsOpEvent(eventId);
-    const t = telTotalen(rijen, art);
+    let t = telTotalen(await store.laadBetaaldeRegelsOpEvent(eventId), art);
+    for (let ronde = 0; ronde < MAX_HERTELRONDES; ronde++) {
+        await store.werkEventTotalenBij(eventId, t);
+        const na = telTotalen(await store.laadBetaaldeRegelsOpEvent(eventId), art);
+        if (JSON.stringify(na) === JSON.stringify(t)) return t;
+        t = na;
+    }
     await store.werkEventTotalenBij(eventId, t);
     return t;
 }

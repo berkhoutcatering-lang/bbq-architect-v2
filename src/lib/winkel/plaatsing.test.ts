@@ -166,6 +166,26 @@ describe('plaatsBestelling', () => {
         expect(store.events).toHaveLength(0);
     });
 
+    it('gelijktijdige orders: een trage hertelling schrijft geen verouderd totaal weg', async () => {
+        const o1 = await betaaldeOrder('1', [{ artikel: artikelen[0], aantal: 4, moment: 'd-23' }]);
+        await plaatsBestelling(store, tenant, o1, nu);
+        const eventId = store.events[0].id;
+        /* Order 2 is betaald; zijn regel landt op het event precies tussen het
+           lezen en het schrijven van de hertelling hieronder — zoals een tweede
+           webhook die tegelijk binnenkomt. */
+        await betaaldeOrder('2', [{ artikel: artikelen[1], aantal: 3, moment: 'd-23' }]);
+        let tussendoor = true;
+        const racend = {
+            ...store,
+            async werkEventTotalenBij(id: number, t: Parameters<GeheugenStore['werkEventTotalenBij']>[1]) {
+                if (tussendoor) { tussendoor = false; store.orders[1].regels[0].event_id = eventId; }
+                return store.werkEventTotalenBij(id, t);
+            },
+        };
+        await hertelEvent(racend, tenant.orgId, eventId);
+        expect(store.events[0]).toMatchObject({ guests: 7, veg_guests: 3, menu_gasten: { [KERST]: 4, [VEGA]: 3 } });
+    });
+
     it('hertelEvent telt een event opnieuw uit wat er betaald op ligt', async () => {
         const o = await betaaldeOrder('1', [{ artikel: artikelen[0], aantal: 4, moment: 'd-23' }]);
         await plaatsBestelling(store, tenant, o, nu);
