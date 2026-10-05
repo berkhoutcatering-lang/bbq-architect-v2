@@ -3,8 +3,8 @@
  * Body {koppelcode: "123456", naam?}. Antwoord {apparaat_id, code, naam,
  * sleutel}; de sleutel komt maar één keer. Fout: 403 koppelcode_ongeldig
  * (fout, verlopen, gebruikt of na 25 pogingen), 429 te_snel (10 per minuut per
- * IP in het geheugen, en 5 foute codes per 15 minuten per IP in de database;
- * review M2 klein 7). Geen sleutel nodig; logica in src/lib/toonbank/koppelen.ts.
+ * IP in het geheugen, en 5 foute codes per 15 minuten per bron in de database:
+ * een IPv4-adres of een IPv6-/56; review M2 klein 7, hercontrole N4b). Geen sleutel nodig; logica in src/lib/toonbank/koppelen.ts.
  */
 import { KoppelVerzoek } from '@/lib/toonbank/contract';
 import { koppel, koppelBron } from '@/lib/toonbank/koppelen';

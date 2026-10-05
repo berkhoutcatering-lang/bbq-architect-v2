@@ -197,6 +197,22 @@ describe('POST koppelen', () => {
         expect((await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' } }), geen)).status).toBe(200);
     });
 
+    it('IPv6: 25 adressen uit één /56 (ook andere /64’s) zijn samen één bron; de code blijft open (hercontrole M2, N4b)', async () => {
+        const uitkomsten: number[] = [];
+        for (let i = 0; i < 25; i++) {
+            const ip = `2001:db8:12:34${(i % 4).toString(16).padStart(2, '0')}:${(i + 1).toString(16)}::${(i * 7 + 3).toString(16)}`;
+            uitkomsten.push((await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' }, ip }), geen)).status);
+        }
+        expect(uitkomsten.slice(0, 5)).toEqual([403, 403, 403, 403, 403]);
+        expect(uitkomsten.slice(5).every((s) => s === 429)).toBe(true);
+        const t2 = store.g.apparaten.find((a) => a.id === NIEUW)!;
+        expect(t2.koppelpogingen).toBe(5);
+        expect(t2.koppelcode_hash).not.toBeNull();
+        /* Ook de goede code niet vanuit dat netwerk; vanuit een ander /56 koppelt de tablet gewoon. */
+        await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' }, ip: '2001:db8:12:34ff::1' }), geen), 429, 'te_snel');
+        expect((await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '042917' }, ip: '2001:db8:12:3500::1' }), geen)).status).toBe(200);
+    });
+
     it('een code vervalt pas na 25 foute pogingen (van verschillende bronnen)', async () => {
         for (let i = 0; i < 24; i++) {
             await verwachtFout(await koppelenPOST(verzoek('koppelen', { body: { koppelcode: '111111' } }), geen), 403, 'koppelcode_ongeldig');

@@ -37,8 +37,9 @@ export type TabletStatus = 'ingetrokken' | 'wacht_op_koppelen' | 'code_verlopen'
 /**
  * Review M2 (klein 7): een foute koppelcode telde mee bij álle open codes, en na 5 verviel een
  * code: vijf verzoeken blokkeerden het koppelen voor iedereen. Nu per bron (SHA-256 van het
- * IP-adres): hooguit 5 foute codes per 15 minuten (daarna 429), en een code vervalt pas na 25
- * foute pogingen, dus van minstens 5 bronnen. Zie toonbank_koppel_mislukt en _geblokkeerd.
+ * IPv4-adres of van het IPv6-/56-netwerk, koppelen.ts koppelNetwerk; hercontrole N4b): hooguit
+ * 5 foute codes per 15 minuten (daarna 429), en een code vervalt pas na 25 foute pogingen, dus
+ * van minstens 5 bronnen. Zie toonbank_koppel_mislukt en _geblokkeerd.
  */
 export const KOPPEL_POGINGEN_PER_BRON = 5;
 export const KOPPEL_BRON_MINUTEN = 15;

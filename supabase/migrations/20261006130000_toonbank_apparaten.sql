@@ -29,7 +29,8 @@
 --  de organisatie is dan nog onbekend. De API haalt de open codes op
 --  (toonbank_koppel_kandidaten), controleert ze met scrypt en maakt het af
 --  met toonbank_koppel_af (alleen als de code nog open is: geen race). Een
---  foute code wordt per bron (SHA-256 van het IP-adres) bijgehouden: 5 per
+--  foute code wordt per bron (SHA-256 van het IP-adres, bij IPv6 van het
+--  /56-netwerk: hercontrole N4b) bijgehouden: 5 per
 --  15 minuten, daarna 429 (toonbank_koppel_geblokkeerd). Die 5 tellen mee
 --  bij álle open codes (toonbank_koppel_mislukt); na 25 vervalt een code
 --  (review M2 klein 7: eerst blokkeerden 5 verzoeken het koppelen voor
@@ -555,7 +556,8 @@ GRANT EXECUTE ON FUNCTION public.toonbank_apparaat_intrekken(UUID, UUID, TEXT, U
 --
 -- Review M2 (klein 7): eerst telde elke foute code mee bij álle open codes
 -- van alle organisaties, en na 5 verviel een code: vijf verzoeken blokkeerden
--- het koppelen voor iedereen. Nu per bron (SHA-256 van het IP-adres, nooit
+-- het koppelen voor iedereen. Nu per bron (SHA-256 van het IP-adres, bij
+-- IPv6 van het /56-netwerk (hercontrole N4b, koppelen.ts koppelNetwerk); nooit
 -- het adres zelf): een bron mag 5 foute codes per 15 minuten, daarna 429
 -- (toonbank_koppel_geblokkeerd). Alleen die 5 tellen mee bij de open codes;
 -- een code vervalt pas na 25 foute pogingen, dus van minstens 5 bronnen. Wie
@@ -566,7 +568,7 @@ CREATE TABLE IF NOT EXISTS public.toonbank_koppel_pogingen (
     at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE public.toonbank_koppel_pogingen IS
-    'Foute koppelcodes per bron (SHA-256 van het IP-adres), voor de grens van 5 per 15 minuten (review M2 klein 7). Ouder dan een dag wordt opgeruimd. Alleen service_role.';
+    'Foute koppelcodes per bron (SHA-256 van het IPv4-adres of het IPv6-/56-netwerk), voor de grens van 5 per 15 minuten (review M2 klein 7). Ouder dan een dag wordt opgeruimd. Alleen service_role.';
 CREATE INDEX IF NOT EXISTS toonbank_koppel_pogingen_bron_idx ON public.toonbank_koppel_pogingen (bron, at DESC);
 ALTER TABLE public.toonbank_koppel_pogingen ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.toonbank_koppel_pogingen FROM PUBLIC, anon, authenticated, service_role;
@@ -606,7 +608,7 @@ AS $$
              WHERE p.bron = p_bron AND p.at > now() - INTERVAL '15 minutes') >= 5;
 $$;
 COMMENT ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) IS
-    'Review M2 klein 7: 5 foute koppelcodes van deze bron (SHA-256 van het IP-adres) in 15 minuten → true (de API antwoordt 429). Alleen service_role.';
+    'Review M2 klein 7: 5 foute koppelcodes van deze bron (SHA-256 van het IPv4-adres of het IPv6-/56-netwerk) in 15 minuten → true (de API antwoordt 429). Alleen service_role.';
 REVOKE ALL ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.toonbank_koppel_geblokkeerd(TEXT) TO service_role;
 
