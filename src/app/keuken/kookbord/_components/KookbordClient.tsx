@@ -482,7 +482,7 @@ export default function KookbordClient() {
           onClose={() => { setAfmakenItem(null); if (selectedEventId !== null) void laadMepData(selectedEventId); }}
           product={{
             naam: afmakenItem.name,
-            hoeveelheid: afmakenItem.base_quantity > 0 ? Math.round(afmakenItem.base_quantity * guests * 1000) / 1000 : null,
+            hoeveelheid: afmakenItem.base_quantity > 0 ? Math.round(afmakenItem.base_quantity * gastenVoor(mepData?.gerechten.find(g => g.components.some(c => c.mep_item_id === afmakenItem.mep_item_id))?.id ?? null) * 1000) / 1000 : null,
             eenheid: afmakenItem.base_unit,
             verpakkingGrootte: afmakenItem.verpakking_grootte ?? null,
             verpakkingEenheid: afmakenItem.verpakking_eenheid ?? null,
