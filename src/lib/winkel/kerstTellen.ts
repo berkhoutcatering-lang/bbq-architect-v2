@@ -10,7 +10,13 @@ export const KERST_SLUG = {
     vega: 'kerst-box-vegetarisch',
     bier: 'kerst-bierproeverij',
     wijn: 'kerst-wijnproeverij',
+    /* De bubbel om mee te beginnen, per fles (Mathijs, 5 oktober 2026). */
+    cremant: 'kerst-cremant',
+    champagne: 'kerst-champagne',
 } as const;
+
+/** Voor hoeveel personen één wijnproeverij is (drie flessen; Mathijs, 5 oktober 2026 — was 2). */
+export const WIJN_VOOR_PERSONEN = 4;
 
 export const KERST_SLUG_LIJST: string[] = Object.values(KERST_SLUG);
 
@@ -21,6 +27,9 @@ export interface KerstMailVelden {
     vegetarisch: number;
     bier: number;
     wijn: number;
+    /** Flessen crémant en champagne. */
+    cremant: number;
+    champagne: number;
     /** ISO-datum. */
     afhaaldag: string;
     totaalCenten: number;
@@ -61,6 +70,8 @@ export function veldenUitOrder(order: Pick<OrderRij, 'contact_naam' | 'nummer' |
         vegetarisch: vegaRegel || Math.min(uitOpmerking, personen),
         bier: som(KERST_SLUG.bier),
         wijn: som(KERST_SLUG.wijn),
+        cremant: som(KERST_SLUG.cremant),
+        champagne: som(KERST_SLUG.champagne),
         afhaaldag: box?.klaar_op ?? regels[0]?.klaar_op ?? '',
         totaalCenten: order.totaal_cents,
     };
@@ -99,6 +110,8 @@ export interface DagTotaal {
     gewoon: number;
     bier: number;
     wijn: number;
+    cremant: number;
+    champagne: number;
     /** Dozen zoals de capaciteit ze telt (klein/groot). */
     dozen: number;
     totaalCenten: number;
@@ -110,7 +123,7 @@ export interface DagTotaal {
 }
 
 function leegDag(dag: string): DagTotaal {
-    return { dag, orders: 0, personen: 0, vega: 0, gewoon: 0, bier: 0, wijn: 0, dozen: 0, totaalCenten: 0, openCenten: 0, onzeker: 0, opgehaald: 0 };
+    return { dag, orders: 0, personen: 0, vega: 0, gewoon: 0, bier: 0, wijn: 0, cremant: 0, champagne: 0, dozen: 0, totaalCenten: 0, openCenten: 0, onzeker: 0, opgehaald: 0 };
 }
 
 /** De afhaaldag van een Kerst-order: de dag van de box-regel, anders van een willekeurige regel. */
@@ -139,6 +152,8 @@ export function kerstTotalen(orders: KerstOrder[], dagen: readonly string[] = []
             t.gewoon += v.personen - v.vegetarisch;
             t.bier += v.bier;
             t.wijn += v.wijn;
+            t.cremant += v.cremant;
+            t.champagne += v.champagne;
             t.dozen += dozen;
             t.totaalCenten += o.totaal_cents;
             t.openCenten += open;
@@ -193,4 +208,42 @@ export function hoeveelheidTekst(n: number, eenheid: KerstOnderdeel['eenheid']):
     if (eenheid === 'gram') return n >= 1000 ? `${getal(n / 1000, 2)} kg` : `${getal(n, 0)} g`;
     if (eenheid === 'ml') return n >= 1000 ? `${getal(n / 1000, 2)} l` : `${getal(n, 0)} ml`;
     return `${getal(n, 1)} st.`;
+}
+
+/* ── Flessen: wat er per afhaaldag ingepakt wordt ─────────────────────────── */
+
+/**
+ * Wat er in een bubbel of proeverij zit (Mathijs, 5 oktober 2026; de site
+ * toont hetzelfde, config/kerst.ts → KERST_ERBIJ). Eén bierproeverij is één
+ * van elk van de drie bieren, één wijnproeverij één fles van elk van de drie
+ * wijnen; een crémant of champagne is die fles.
+ */
+export const KERST_DRANK: Record<'cremant' | 'champagne' | 'bier' | 'wijn', readonly string[]> = {
+    cremant: ["'Louis' Crémant de Loire BIO"],
+    champagne: ['Champagne Grande Réserve Brut (Emilien Fresne)'],
+    bier: ['Garage Ocata (blik 33 cl)', 'Boulevard Tank 7 (fles 33 cl)', 'Gouden Carolus Whisky Infused (fles 33 cl)'],
+    wijn: ['Tre Venti Grillo', 'Locus Primitivo', 'Atlas Son of Titan Shiraz (Penley Estate)'],
+};
+
+export interface FlesRij {
+    naam: string;
+    perDag: Record<string, number>;
+    totaal: number;
+}
+
+/** Per fles hoeveel er per afhaaldag nodig is: proeverijen × één van elk, bubbels × één. */
+export function kerstFlessen(dagen: Pick<DagTotaal, 'dag' | 'bier' | 'wijn' | 'cremant' | 'champagne'>[]): FlesRij[] {
+    const rijen: FlesRij[] = [];
+    for (const soort of ['cremant', 'champagne', 'bier', 'wijn'] as const) {
+        for (const naam of KERST_DRANK[soort]) {
+            const perDag: Record<string, number> = {};
+            let totaal = 0;
+            for (const d of dagen) {
+                perDag[d.dag] = d[soort];
+                totaal += d[soort];
+            }
+            if (totaal > 0) rijen.push({ naam, perDag, totaal });
+        }
+    }
+    return rijen;
 }

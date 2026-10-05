@@ -91,7 +91,7 @@ export default function Bestellingen({ orders, dagen, herlaad, melding }: Props)
                                 <span>{afhaaldagVoluit(v.afhaaldag)}</span>
                                 <span className="kr-getal">
                                     <b>{v.personen}</b>{v.vegetarisch ? <span className="kr-zacht"> ({v.vegetarisch} vega)</span> : null}
-                                    {(v.bier || v.wijn) ? <div className="kr-zacht" style={{ fontSize: 12 }}>{[v.bier ? `${v.bier} bier` : '', v.wijn ? `${v.wijn} wijn` : ''].filter(Boolean).join(' · ')}</div> : null}
+                                    {(v.bier || v.wijn || v.cremant || v.champagne) ? <div className="kr-zacht" style={{ fontSize: 12 }}>{[v.cremant ? `${v.cremant} crémant` : '', v.champagne ? `${v.champagne} champagne` : '', v.bier ? `${v.bier} bier` : '', v.wijn ? `${v.wijn} wijn` : ''].filter(Boolean).join(' · ')}</div> : null}
                                 </span>
                                 <span className="kr-getal">{euroKerst(o.totaal_cents)}</span>
                                 <div className="ws-chips" style={{ gap: 4 }}>
@@ -130,9 +130,11 @@ function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
     const [vega, setVega] = useState(v.vegetarisch);
     const [bier, setBier] = useState(v.bier);
     const [wijn, setWijn] = useState(v.wijn);
+    const [cremant, setCremant] = useState(v.cremant);
+    const [champagne, setChampagne] = useState(v.champagne);
     const [onzeker, setOnzeker] = useState(o.aantal_onzeker);
     const geannuleerd = o.status === 'geannuleerd';
-    const gewijzigd = personen !== v.personen || vega !== v.vegetarisch || bier !== v.bier || wijn !== v.wijn || onzeker !== o.aantal_onzeker;
+    const gewijzigd = personen !== v.personen || vega !== v.vegetarisch || bier !== v.bier || wijn !== v.wijn || cremant !== v.cremant || champagne !== v.champagne || onzeker !== o.aantal_onzeker;
     const isOpgehaald = opgehaald(o);
     const vast = Boolean(o.rest_betaald_at) || o.winkel_order_regels.some((r) => r.klaargezet_at || r.opgehaald_at);
     const opm = opmerkingKlant(o);
@@ -167,12 +169,14 @@ function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
                         <div className="field"><label>Waarvan vega</label><input type="number" min={0} value={vega || ''} placeholder="0" onChange={getal(setVega)} /></div>
                         <div className="field"><label>Bierproeverij</label><input type="number" min={0} value={bier || ''} placeholder="0" onChange={getal(setBier)} /></div>
                         <div className="field"><label>Wijnproeverij</label><input type="number" min={0} value={wijn || ''} placeholder="0" onChange={getal(setWijn)} /></div>
+                        <div className="field"><label>Crémant</label><input type="number" min={0} value={cremant || ''} placeholder="0" onChange={getal(setCremant)} /></div>
+                        <div className="field"><label>Champagne</label><input type="number" min={0} value={champagne || ''} placeholder="0" onChange={getal(setChampagne)} /></div>
                         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                             <label className="ws-onderschrift" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                                 <input type="checkbox" checked={onzeker} onChange={(e) => setOnzeker(e.target.checked)} /> Nog niet zeker
                             </label>
                             <button type="button" className="btn btn-brand" disabled={!gewijzigd || bezig !== null}
-                                onClick={() => doe(`aantal:${o.id}`, () => wijzigKerstAantal({ orderId: o.id, personen, vegetarisch: vega, bier, wijn, onzeker }), 'Aantal aangepast')}>
+                                onClick={() => doe(`aantal:${o.id}`, () => wijzigKerstAantal({ orderId: o.id, personen, vegetarisch: vega, bier, wijn, cremant, champagne, onzeker }), 'Aantal aangepast')}>
                                 {bezig === `aantal:${o.id}` ? 'Bezig…' : 'Opslaan'}
                             </button>
                         </div>

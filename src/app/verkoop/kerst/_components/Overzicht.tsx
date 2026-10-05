@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Printer } from 'lucide-react';
-import { afhaaldagVoluit, euroKerst, hoeveelheidTekst, kerstProductie, type DagTotaal, type KerstOnderdeel } from '@/lib/winkel/kerstTellen';
+import { afhaaldagVoluit, euroKerst, hoeveelheidTekst, kerstFlessen, kerstProductie, type DagTotaal, type KerstOnderdeel } from '@/lib/winkel/kerstTellen';
 import { negeerKerstLead, zetLeadOmOpnieuw } from '../actions';
 import type { KerstLead, Melding, MomentRij } from './types';
 
@@ -26,6 +26,7 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
     const [bezig, setBezig] = useState<string | null>(null);
     const t = totalen.totaal;
     const productie = useMemo(() => kerstProductie(onderdelen, totalen.dagen), [onderdelen, totalen.dagen]);
+    const flessen = useMemo(() => kerstFlessen(totalen.dagen), [totalen.dagen]);
     const capaciteit = (dag: string) => momenten.find((m) => m.datum === dag)?.capaciteit ?? null;
 
     async function doe(sleutel: string, fn: () => Promise<{ error: string } | { data: unknown }>, gelukt: string) {
@@ -45,6 +46,8 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
         [String(t.vega), 'waarvan vegetarisch'],
         [String(t.bier), 'bierproeverijen'],
         [String(t.wijn), 'wijnproeverijen'],
+        [String(t.cremant), 'flessen crémant'],
+        [String(t.champagne), 'flessen champagne'],
         [String(t.dozen), 'dozen'],
         [euroKerst(t.totaalCenten), 'omzet'],
         [euroKerst(t.openCenten), 'nog te betalen aan de balie'],
@@ -89,7 +92,7 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
                     <div className="ws-onderschrift">Alleen geldige bestellingen; geannuleerde tellen niet mee.{!vegaApart && ' Vegetarisch komt uit de regel "Waarvan vegetarisch" in de opmerking.'}</div>
                 </div>
                 <div className="ws-tabel-kop kr-dag-grid">
-                    <span>Dag</span><span className="kr-getal">Best.</span><span className="kr-getal">Pers.</span><span className="kr-getal">Gewoon</span><span className="kr-getal">Vega</span><span className="kr-getal">Bier</span><span className="kr-getal">Wijn</span><span className="kr-getal">Dozen</span><span className="kr-getal">Nog te betalen</span>
+                    <span>Dag</span><span className="kr-getal">Best.</span><span className="kr-getal">Pers.</span><span className="kr-getal">Gewoon</span><span className="kr-getal">Vega</span><span className="kr-getal">Bier</span><span className="kr-getal">Wijn</span><span className="kr-getal">Crém.</span><span className="kr-getal">Champ.</span><span className="kr-getal">Dozen</span><span className="kr-getal">Nog te betalen</span>
                 </div>
                 {totalen.dagen.map((d) => {
                     const cap = capaciteit(d.dag);
@@ -108,6 +111,8 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
                             <span className="kr-getal">{d.vega}</span>
                             <span className="kr-getal">{d.bier || '—'}</span>
                             <span className="kr-getal">{d.wijn || '—'}</span>
+                            <span className="kr-getal">{d.cremant || '—'}</span>
+                            <span className="kr-getal">{d.champagne || '—'}</span>
                             <span className="kr-getal" title={cap == null ? 'Geen grens op deze dag' : `Grens: ${cap} dozen`} style={cap != null && d.dozen >= cap ? { color: 'var(--ws-warn)' } : undefined}>{d.dozen}{cap != null ? ` / ${cap}` : ''}</span>
                             <span className="kr-getal">{euroKerst(d.openCenten)}</span>
                         </div>
@@ -121,6 +126,8 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
                     <span className="kr-getal">{t.vega}</span>
                     <span className="kr-getal">{t.bier || '—'}</span>
                     <span className="kr-getal">{t.wijn || '—'}</span>
+                    <span className="kr-getal">{t.cremant || '—'}</span>
+                    <span className="kr-getal">{t.champagne || '—'}</span>
                     <span className="kr-getal">{t.dozen}</span>
                     <span className="kr-getal">{euroKerst(t.openCenten)}</span>
                 </div>
@@ -158,6 +165,27 @@ export default function Overzicht({ totalen, onderdelen, momenten, leads, vegaAp
                     </>
                 )}
             </div>
+
+            {flessen.length > 0 && (
+                <div className="panel">
+                    <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+                        <div className="ws-sectie-kop">Flessen inpakken</div>
+                        <div className="ws-onderschrift" style={{ marginTop: 2 }}>Een bierproeverij is één van elk bier, een wijnproeverij één fles van elke wijn (voor vier personen).</div>
+                    </div>
+                    <div className="ws-tabel-kop kr-prod-grid" style={{ ['--kr-dagen' as string]: totalen.dagen.length }}>
+                        <span>Fles</span>
+                        {totalen.dagen.map((d) => <span key={d.dag} className="kr-getal">{afhaaldagVoluit(d.dag).split(' ').slice(1).join(' ')}</span>)}
+                        <span className="kr-getal">Totaal</span>
+                    </div>
+                    {flessen.map((f) => (
+                        <div key={f.naam} className="ws-tabel-rij kr-prod-grid" style={{ cursor: 'default', ['--kr-dagen' as string]: totalen.dagen.length }}>
+                            <div style={{ fontWeight: 500 }}>{f.naam}</div>
+                            {totalen.dagen.map((d) => <span key={d.dag} className="kr-getal">{f.perDag[d.dag] || '—'}</span>)}
+                            <span className="kr-getal"><b>{f.totaal}</b></span>
+                        </div>
+                    ))}
+                </div>
+            )}
         </>
     );
 }

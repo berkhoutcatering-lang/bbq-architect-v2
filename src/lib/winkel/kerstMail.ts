@@ -7,8 +7,8 @@
  *
  * De eerste en de laatste zijn de sjablonen van de site (kerstMailSjablonen.ts,
  * woorden niet aanpassen). De navraag is hetzelfde sjabloon met een eigen kop
- * en alinea. Bier- en wijnproeverijen krijgen een eigen rij in de bon, in de
- * stijl van de rij "Waarvan vegetarisch".
+ * en alinea. Bier- en wijnproeverijen en de bubbels (crémant, champagne)
+ * krijgen een eigen rij in de bon, in de stijl van de rij "Waarvan vegetarisch".
  *
  * Afzender: KERST_MAIL_FROM (bijv. "Hop & Bites <info@hopbites.nl>", domein
  * geverifieerd in Resend), anders RESEND_FROM_EMAIL. Antwoorden gaan naar het
@@ -17,7 +17,7 @@
 import { sendServerMail } from '@/lib/serverMail';
 import type { KerstMail } from './kerst';
 import { KERSTBOX_HERINNERING, KERSTBOX_ONTVANGEN } from './kerstMailSjablonen';
-import { afhaaldagVoluit, euroKerst, veldenUitOrder, type KerstMailVelden } from './kerstTellen';
+import { WIJN_VOOR_PERSONEN, afhaaldagVoluit, euroKerst, veldenUitOrder, type KerstMailVelden } from './kerstTellen';
 
 export { afhaaldagVoluit, euroKerst, veldenUitOrder, voornaamVan, type KerstMailVelden } from './kerstTellen';
 
@@ -38,8 +38,25 @@ function rijZoalsVega(sjabloon: string, label: string, waarde: string): string {
     return m[0].replace('>Waarvan vegetarisch<', `>${escH(label)}<`).replace('{{vegetarisch}}', escH(waarde));
 }
 
-function proeverijTekst(n: number, per: 'persoon' | '2 personen'): string {
-    return `${n} × (${per === 'persoon' ? `voor ${n} ${n === 1 ? 'persoon' : 'personen'}` : `voor ${n * 2} personen`})`;
+/** "6 × (voor 6 personen)" bij bier; "2 × (voor 8 personen)" bij wijn, één proeverij voor vier. */
+function proeverijTekst(n: number, soort: 'bier' | 'wijn'): string {
+    const personen = soort === 'bier' ? n : n * WIJN_VOOR_PERSONEN;
+    return `${n} × (voor ${personen} ${personen === 1 ? 'persoon' : 'personen'})`;
+}
+
+/** "1 fles", "2 flessen". */
+function flessenTekst(n: number): string {
+    return `${n} ${n === 1 ? 'fles' : 'flessen'}`;
+}
+
+/** De extra rijen in de bon, in de volgorde van de site: de bubbel eerst. */
+function extraRijen(v: KerstMailVelden): [string, string][] {
+    return [
+        ...(v.cremant > 0 ? [['Crémant', flessenTekst(v.cremant)] as [string, string]] : []),
+        ...(v.champagne > 0 ? [['Champagne', flessenTekst(v.champagne)] as [string, string]] : []),
+        ...(v.bier > 0 ? [['Bierproeverij', proeverijTekst(v.bier, 'bier')] as [string, string]] : []),
+        ...(v.wijn > 0 ? [['Wijnproeverij', proeverijTekst(v.wijn, 'wijn')] as [string, string]] : []),
+    ];
 }
 
 /** De navraag: het bevestigingssjabloon met een eigen kop, alinea en onderwerp. */
@@ -72,10 +89,7 @@ const ONDERWERP: Record<KerstMailSoort, string> = {
 export function vulKerstSjabloon(sjabloon: string, v: KerstMailVelden): string {
     let s = sjabloon;
     /* Proeverijen eerst, zolang de vega-rij er nog als voorbeeld staat. */
-    const extra = [
-        v.bier > 0 ? rijZoalsVega(s, 'Bierproeverij', proeverijTekst(v.bier, 'persoon')) : '',
-        v.wijn > 0 ? rijZoalsVega(s, 'Wijnproeverij', proeverijTekst(v.wijn, '2 personen')) : '',
-    ].join('');
+    const extra = extraRijen(v).map(([label, waarde]) => rijZoalsVega(s, label, waarde)).join('');
     if (v.vegetarisch === 0) s = s.replace(VEGA_RIJ, '');
     if (extra) {
         /* Na "Waarvan vegetarisch" als die er staat, anders na "Wat". */
@@ -107,8 +121,7 @@ function tekstVersie(soort: KerstMailSoort, v: KerstMailVelden, telefoon: string
         `Bestelling ........ ${v.nummer}`,
         `Wat ............... Kerst-Box voor ${v.personen} personen`,
         ...(v.vegetarisch > 0 ? [`Waarvan vegetarisch  ${v.vegetarisch}`] : []),
-        ...(v.bier > 0 ? [`Bierproeverij ..... ${proeverijTekst(v.bier, 'persoon')}`] : []),
-        ...(v.wijn > 0 ? [`Wijnproeverij ..... ${proeverijTekst(v.wijn, '2 personen')}`] : []),
+        ...extraRijen(v).map(([label, waarde]) => `${`${label} `.padEnd(19, '.')} ${waarde}`),
         `Afhalen ........... ${dag}, tussen 10:00 en 18:00`,
         'Waar .............. Tramstraat 13, Schoonoord',
         `Totaal ............ ${euroKerst(v.totaalCenten)}`,
