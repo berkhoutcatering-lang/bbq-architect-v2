@@ -11,8 +11,7 @@
  *   Kerst-Box € 23,50 p.p., minimaal 2, geen maximum, dag 23 of 24 december,
  *   twee doosmaten (klein tot en met doos_klein_max, groot = 5).
  *   [BEVESTIGEN] doos_klein_max staat op 3 — de website noemt "2–3".
- *   [BEVESTIGEN] capaciteit per dag: 25 dozen, overgenomen van de bestaande
- *   afhaalmomenten van de-eettocht (23 en 24 december).
+ *   Capaciteit per dag: onbeperkt (besluit 5 oktober 2026; was 25 dozen).
  *
  *   node scripts/winkel-seed-hop-en-bites.mjs
  */
@@ -87,8 +86,8 @@ for (const a of artikelen) {
 
 /* Afhaaldagen Kerst-Box: 23 t/m 26 december (besluit 5 oktober 2026), geen
    tijdvak. Groep 'kerst-box' wordt door alle Kerst-artikelen gedeeld (dagen én
-   capaciteit). Een bestaande dag blijft zoals hij is; alleen ontbrekende dagen
-   komen erbij, zonder grens (capaciteit null = onbeperkt). De Kerst-omzetting
+   capaciteit). Ontbrekende dagen komen erbij; geen enkele dag heeft een grens
+   (capaciteit null = onbeperkt, besluit 5 oktober 2026). De Kerst-omzetting
    maakt een ontbrekende dag ook zelf aan (src/lib/winkel/kerst.ts). */
 const { data: dagen } = await sb.from('winkel_momenten').select('datum').eq('organization_id', o).eq('groep', 'kerst-box');
 const bekendeDagen = new Set((dagen ?? []).map((d) => d.datum));
@@ -97,6 +96,11 @@ if (nieuweDagen.length) {
     const { error } = await sb.from('winkel_momenten').insert(nieuweDagen.map((datum) => ({ organization_id: o, groep: 'kerst-box', datum, van: null, tot: null, capaciteit: null, actief: true })));
     if (error) throw error;
     console.log('afhaaldagen Kerst-Box aangemaakt:', nieuweDagen.join(', '));
+}
+/* Geen maximum per dag (besluit 5 oktober 2026): een oude grens gaat eraf. */
+{
+    const { error } = await sb.from('winkel_momenten').update({ capaciteit: null }).eq('organization_id', o).eq('groep', 'kerst-box').not('capaciteit', 'is', null);
+    if (error) throw error;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

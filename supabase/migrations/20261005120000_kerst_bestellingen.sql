@@ -23,10 +23,12 @@
 --  Alles additief. Bestaande orders veranderen niet.
 --  Toepassen: npx supabase db query --linked -f <dit bestand> (nooit db push).
 --
---  Er gaat geen data mee (zelfde afspraak als de Sinterklaas-migratie): de
---  afhaaldagen 25 en 26 december en de proeverij-artikelen maakt de code zelf
---  aan als ze ontbreken (src/lib/winkel/kerst.ts), en staan ook in
---  scripts/winkel-seed-hop-en-bites.mjs.
+--  Eén data-wijziging, op verzoek van Mathijs (5 oktober 2026): de Kerst-Box
+--  heeft geen maximum per afhaaldag. De 25 dozen per dag uit de seed waren
+--  nooit bevestigd; capaciteit gaat naar NULL (= onbeperkt) voor de groep
+--  'kerst-box' (§5). De afhaaldagen 25 en 26 december en de proeverij-
+--  artikelen maakt de code zelf aan als ze ontbreken (src/lib/winkel/kerst.ts),
+--  en staan ook in scripts/winkel-seed-hop-en-bites.mjs.
 
 -- ── 1 + 2. Betaalwijze en status ────────────────────────────────────────────
 -- De CHECK-namen zijn door Postgres gekozen (inline bij ADD COLUMN / CREATE
@@ -119,7 +121,13 @@ DROP POLICY IF EXISTS kerst_onderdelen_delete ON public.kerst_onderdelen;
 CREATE POLICY kerst_onderdelen_delete ON public.kerst_onderdelen FOR DELETE TO authenticated
     USING (organization_id IN (SELECT private.user_org_ids()));
 
--- ── 5. Verificatie ──────────────────────────────────────────────────────────
+-- ── 5. Geen maximum per afhaaldag voor de Kerst-Box ─────────────────────────
+-- Besluit Mathijs, 5 oktober 2026: onbeperkt. Wie later toch een grens wil,
+-- zet die per dag in Webshop → Momenten.
+UPDATE public.winkel_momenten SET capaciteit = NULL WHERE groep = 'kerst-box' AND capaciteit IS NOT NULL;
+
+-- ── 6. Verificatie ──────────────────────────────────────────────────────────
 --   SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname IN ('winkel_orders_betaalwijze_check','winkel_orders_status_check');
 --   SELECT column_name FROM information_schema.columns WHERE table_name = 'winkel_orders' AND column_name IN ('lead_id','aantal_onzeker','navraag_verstuurd_at','herinnering_verstuurd_at','geannuleerd_at');  -- 5
 --   SELECT count(*) FROM pg_policies WHERE tablename = 'kerst_onderdelen';  -- 4
+--   SELECT datum, capaciteit FROM winkel_momenten WHERE groep = 'kerst-box' ORDER BY datum;  -- capaciteit leeg

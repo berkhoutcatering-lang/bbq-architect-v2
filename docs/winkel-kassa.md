@@ -151,7 +151,7 @@ aanvraagformulier en betaalt hij bij het afhalen. Opdracht:
 - `src/lib/winkel/kerst.ts` maakt er een gewone winkel-order van: betaalwijze
   `bij_afhalen` (niets online, alles is rest), meteen status `betaald`, sleutel
   `lead-<id>` (idempotent), `lead_id` op de order. Daarna de plaatsing in het vakje,
-  net als na myPOS. Een ontbrekende kerstdag (23–26 december) wordt aangemaakt zonder grens.
+  net als na myPOS. Een ontbrekende kerstdag (23–26 december) wordt aangemaakt. Geen maximum per dag: de migratie maakt de capaciteit van de groep `kerst-box` leeg (besluit 5 oktober 2026).
 - De klant krijgt meteen de Kerst-bevestiging (sjabloon van de site, `kerstMail.ts`); geen
   cateringmail en geen melding aan Mathijs. Lukt het omzetten niet, dan gaat de bevestiging
   toch, krijgt de lead `omzet_fout` en krijgt Mathijs één mail; in Verkoop → Kerst staat hij

@@ -218,7 +218,7 @@ export type KerstUitkomst =
     | { ok: false; reden: string };
 
 const REDEN: Record<string, string> = {
-    WK001: 'De afhaaldag is vol. Zet de capaciteit van die dag hoger (Webshop → Momenten) en zet hem daarna opnieuw om.',
+    WK001: 'De afhaaldag is vol. Maak de capaciteit van die dag leeg (onbeperkt) in Webshop → Momenten en zet hem daarna opnieuw om.',
     WK002: 'Een artikel is uitverkocht.',
     WK003: 'De afhaaldag is niet (meer) beschikbaar.',
     WK004: 'Een artikel staat uit (Webshop → Artikelen).',
