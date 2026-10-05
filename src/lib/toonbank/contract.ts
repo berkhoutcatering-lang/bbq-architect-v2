@@ -468,6 +468,13 @@ const VerkoopRegel = z.object({
     scan_code: z.string().min(1).optional(),
     prijs_bron: z.enum(['catalogus', 'open_prijs']),
     verwijst_naar_regelnr: z.int().positive().optional(),
+    /**
+     * Op een tegenbon: kwam de waar terug (true: retour op de voorraad) of niet (false). De
+     * tablet stuurt het daar altijd mee. Ontbreekt het, dan weigert BBQ Architect de tegenbon
+     * niet (geen schemafout: het geld moet in de dagstaat), maar boekt hij niets terug en komt
+     * de tegenbon in Te controleren (goederen_terug_onbekend; review M2 klein 5, hercontrole).
+     * Op een gewone verkoopregel heeft het geen betekenis.
+     */
     goederen_terug: z.boolean().optional(),
 });
 
