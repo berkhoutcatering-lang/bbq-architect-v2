@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { afhaaldagVoluit, euroKerst, kerstMailInhoud, veldenUitOrder, type KerstMailVelden } from './kerstMail';
 
-const v: KerstMailVelden = { voornaam: 'Anne', nummer: 'HB-2026-0042', personen: 6, vegetarisch: 2, bier: 0, wijn: 0, afhaaldag: '2026-12-24', totaalCenten: 14100 };
+const v: KerstMailVelden = { voornaam: 'Anne', nummer: 'HB-2026-0042', personen: 6, vegetarisch: 2, bier: 0, wijn: 0, cremant: 0, champagne: 0, afhaaldag: '2026-12-24', totaalCenten: 14100 };
 
 describe('kerstMail', () => {
     it('afhaaldag voluit zonder jaartal, totaal met euroteken en komma', () => {
@@ -37,9 +37,20 @@ describe('kerstMail', () => {
         expect(m.html).toContain('>Bierproeverij<');
         expect(m.html).toContain('4 × (voor 4 personen)');
         expect(m.html).toContain('>Wijnproeverij<');
-        expect(m.html).toContain('2 × (voor 4 personen)');
+        expect(m.html).toContain('2 × (voor 8 personen)');
         expect(m.html.indexOf('Bierproeverij')).toBeGreaterThan(m.html.indexOf('>Wat<'));
         expect(m.html.indexOf('Bierproeverij')).toBeLessThan(m.html.indexOf('>Afhalen<'));
+    });
+
+    it('de bubbels: eigen rij per fles, vóór de proeverijen', () => {
+        const m = kerstMailInhoud('ontvangen', { ...v, cremant: 1, champagne: 2, bier: 6 });
+        expect(m.html).toContain('>Crémant<');
+        expect(m.html).toContain('1 fles');
+        expect(m.html).toContain('>Champagne<');
+        expect(m.html).toContain('2 flessen');
+        expect(m.html.indexOf('>Crémant<')).toBeLessThan(m.html.indexOf('>Bierproeverij<'));
+        expect(m.text).toContain('Crémant ........... 1 fles');
+        expect(m.text).toContain('Bierproeverij ..... 6 × (voor 6 personen)');
     });
 
     it('de herinnering en de navraag', () => {
@@ -63,7 +74,7 @@ describe('kerstMail', () => {
             { slug: 'kerst-bierproeverij', aantal: 3, klaar_op: '2026-12-23' },
         ];
         expect(veldenUitOrder({ contact_naam: 'Anne de Vries', nummer: 'HB-1', totaal_cents: 100, opmerking: null }, regels)).toEqual({
-            voornaam: 'Anne', nummer: 'HB-1', personen: 6, vegetarisch: 2, bier: 3, wijn: 0, afhaaldag: '2026-12-23', totaalCenten: 100,
+            voornaam: 'Anne', nummer: 'HB-1', personen: 6, vegetarisch: 2, bier: 3, wijn: 0, cremant: 0, champagne: 0, afhaaldag: '2026-12-23', totaalCenten: 100,
         });
         /* Geen vega-artikel: uit de opmerking. */
         expect(veldenUitOrder({ contact_naam: 'Bo', nummer: 'HB-2', totaal_cents: 100, opmerking: 'Waarvan vegetarisch: 1\nhoi' }, [{ slug: 'kerst-box', aantal: 3, klaar_op: '2026-12-24' }]).vegetarisch).toBe(1);

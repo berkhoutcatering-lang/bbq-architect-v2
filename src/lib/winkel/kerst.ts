@@ -30,9 +30,13 @@ export const KERST_GROEP = 'kerst-box';
 
 export const KERST_SLUGS = KERST_SLUG;
 
-export type KerstProeverij = 'bier' | 'wijn';
+/** Wat er bij de doos te bestellen is: de twee proeverijen en de bubbel om mee te beginnen (per fles). */
+export type KerstProeverij = 'bier' | 'wijn' | 'cremant' | 'champagne';
 
-/** De proeverij-artikelen zoals de code ze aanmaakt als ze ontbreken (prijs volgt, uit). */
+/** Alle vier, in de volgorde van het formulier op de site: de bubbel eerst. */
+export const KERST_ERBIJ: readonly KerstProeverij[] = ['cremant', 'champagne', 'bier', 'wijn'];
+
+/** De proeverij- en bubbelartikelen zoals de code ze aanmaakt als ze ontbreken (prijs volgt, uit). */
 export const PROEVERIJ_ARTIKEL: Record<KerstProeverij, Omit<Artikel, 'id'>> = {
     bier: {
         slug: KERST_SLUGS.bier, naam: 'Bierproeverij', eenheid: 'per persoon', telt: 'stuks',
@@ -41,7 +45,19 @@ export const PROEVERIJ_ARTIKEL: Record<KerstProeverij, Omit<Artikel, 'id'>> = {
         doos_klein_max: null, doos_groot: null, voorraad: null, actief: false, publiek: false, alcohol: true,
     },
     wijn: {
-        slug: KERST_SLUGS.wijn, naam: 'Wijnproeverij', eenheid: 'per 2 personen', telt: 'stuks',
+        slug: KERST_SLUGS.wijn, naam: 'Wijnproeverij', eenheid: 'voor 4 personen', telt: 'stuks',
+        prijs_cents: null, btw_pct: 21, minimum: 1, maximum: null, verzendbaar: false, gekoeld: false,
+        moment_soort: 'dag', moment_groep: KERST_GROEP, afhaalmoment_tekst: null, capaciteit_soort: 'regel',
+        doos_klein_max: null, doos_groot: null, voorraad: null, actief: false, publiek: false, alcohol: true,
+    },
+    cremant: {
+        slug: KERST_SLUGS.cremant, naam: "'Louis' Crémant de Loire", eenheid: 'per fles', telt: 'stuks',
+        prijs_cents: null, btw_pct: 21, minimum: 1, maximum: null, verzendbaar: false, gekoeld: false,
+        moment_soort: 'dag', moment_groep: KERST_GROEP, afhaalmoment_tekst: null, capaciteit_soort: 'regel',
+        doos_klein_max: null, doos_groot: null, voorraad: null, actief: false, publiek: false, alcohol: true,
+    },
+    champagne: {
+        slug: KERST_SLUGS.champagne, naam: 'Champagne Grande Réserve', eenheid: 'per fles', telt: 'stuks',
         prijs_cents: null, btw_pct: 21, minimum: 1, maximum: null, verzendbaar: false, gekoeld: false,
         moment_soort: 'dag', moment_groep: KERST_GROEP, afhaalmoment_tekst: null, capaciteit_soort: 'regel',
         doos_klein_max: null, doos_groot: null, voorraad: null, actief: false, publiek: false, alcohol: true,
@@ -62,6 +78,9 @@ export interface KerstAanvraag {
     afhaaldag: string;
     bier: number;
     wijn: number;
+    /** Flessen crémant en champagne (sinds 5 oktober 2026; een oudere site stuurt ze niet: 0). */
+    cremant: number;
+    champagne: number;
     /** De opmerking van de klant, zonder de regels die hierboven al staan. */
     opmerking: string;
 }
@@ -75,6 +94,8 @@ export const KerstBestellingSchema = z.object({
     afhaaldag: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     bierproeverij: z.coerce.number().int().min(0).max(1000).optional().default(0),
     wijnproeverij: z.coerce.number().int().min(0).max(1000).optional().default(0),
+    cremant: z.coerce.number().int().min(0).max(1000).optional().default(0),
+    champagne: z.coerce.number().int().min(0).max(1000).optional().default(0),
     opmerking: z.string().max(2000).optional().default(''),
 });
 export type KerstBestelling = z.infer<typeof KerstBestellingSchema>;
@@ -120,6 +141,8 @@ export function leesKerstLead(l: LeadInvoer): KerstAanvraag | null {
             afhaaldag: b.afhaaldag,
             bier: b.bierproeverij,
             wijn: b.wijnproeverij,
+            cremant: b.cremant,
+            champagne: b.champagne,
             opmerking: zonderVegaRegel(b.opmerking),
         };
     }
@@ -132,6 +155,9 @@ export function leesKerstLead(l: LeadInvoer): KerstAanvraag | null {
     const vega = Number(/waarvan vegetarisch\s*:\s*(\d+)/i.exec(bericht)?.[1] ?? 0);
     const bier = Number(/bierproeverij(?:en)?\.*:?\s+(\d+)/i.exec(bericht)?.[1] ?? 0);
     const wijn = Number(/wijnproeverij(?:en)?\.*:?\s+(\d+)/i.exec(bericht)?.[1] ?? 0);
+    /* De bubbels staan op de bon onder hun eigen naam, met "1 × € 22,50 = …" erachter. */
+    const cremant = Number(/^[^\n]*cr[ée]mant[^\n]*?\s(\d+)\s×/im.exec(bericht)?.[1] ?? 0);
+    const champagne = Number(/^[^\n]*champagne[^\n]*?\s(\d+)\s×/im.exec(bericht)?.[1] ?? 0);
     return {
         personen,
         vegetarisch: Math.min(vega, personen),
@@ -139,6 +165,8 @@ export function leesKerstLead(l: LeadInvoer): KerstAanvraag | null {
         afhaaldag,
         bier,
         wijn,
+        cremant,
+        champagne,
         opmerking: zonderVegaRegel(opmerkingUitBon(bericht)),
     };
 }
@@ -159,6 +187,8 @@ export function kerstMand(a: KerstAanvraag, momentId: string, artikelen: Pick<Ar
     if (vegaApart) regels.push({ slug: KERST_SLUGS.vega, aantal: a.vegetarisch, moment: momentId });
     if (a.bier > 0) regels.push({ slug: KERST_SLUGS.bier, aantal: a.bier, moment: momentId });
     if (a.wijn > 0) regels.push({ slug: KERST_SLUGS.wijn, aantal: a.wijn, moment: momentId });
+    if (a.cremant > 0) regels.push({ slug: KERST_SLUGS.cremant, aantal: a.cremant, moment: momentId });
+    if (a.champagne > 0) regels.push({ slug: KERST_SLUGS.champagne, aantal: a.champagne, moment: momentId });
     return { versie: 1, regels };
 }
 
@@ -179,7 +209,9 @@ export function kerstTotaalCenten(a: KerstAanvraag, artikelen: Pick<Artikel, 'sl
     const vega = prijs(KERST_SLUGS.vega, box) ?? box;
     const bier = prijs(KERST_SLUGS.bier, null) ?? 0;
     const wijn = prijs(KERST_SLUGS.wijn, null) ?? 0;
-    return (a.personen - a.vegetarisch) * box + a.vegetarisch * vega + a.bier * bier + a.wijn * wijn;
+    const cremant = prijs(KERST_SLUGS.cremant, null) ?? 0;
+    const champagne = prijs(KERST_SLUGS.champagne, null) ?? 0;
+    return (a.personen - a.vegetarisch) * box + a.vegetarisch * vega + a.bier * bier + a.wijn * wijn + a.cremant * cremant + a.champagne * champagne;
 }
 
 /** De opmerking op de order: de vega-regel bovenaan, dan wat de klant schreef. */

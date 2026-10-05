@@ -60,12 +60,14 @@ async function tenantVoor(orgId: string) {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Prijs zetten = de proeverij aan (en zichtbaar op de site); prijs leeg = uit.
- * Het artikel wordt aangemaakt als het er nog niet is.
+ * Prijs zetten = de proeverij of bubbel aan (en zichtbaar op de site); prijs
+ * leeg = uit. Het artikel wordt aangemaakt als het er nog niet is; bestaat het
+ * al, dan krijgt het ook de naam en eenheid uit de code (zo gaat de
+ * wijnproeverij van "per 2 personen" naar "voor 4 personen").
  */
 export async function zetProeverijPrijs(input: unknown): Promise<ActionResult<{ ok: true }>> {
     const parsed = z.object({
-        soort: z.enum(['bier', 'wijn']),
+        soort: z.enum(['bier', 'wijn', 'cremant', 'champagne']),
         prijs_cents: z.number().int().min(1, 'Een prijs is minstens 1 cent').max(100000).nullable(),
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
@@ -77,7 +79,7 @@ export async function zetProeverijPrijs(input: unknown): Promise<ActionResult<{ 
     const { data: bestaand } = await s.supabase.from('winkel_artikelen').select('id').eq('organization_id', s.orgId).eq('slug', basis.slug).maybeSingle();
     const velden = { prijs_cents, actief: prijs_cents != null };
     const { error } = bestaand
-        ? await s.supabase.from('winkel_artikelen').update(velden).eq('id', bestaand.id).eq('organization_id', s.orgId)
+        ? await s.supabase.from('winkel_artikelen').update({ ...velden, naam: basis.naam, eenheid: basis.eenheid }).eq('id', bestaand.id).eq('organization_id', s.orgId)
         : await s.supabase.from('winkel_artikelen').insert({ ...basis, ...velden, organization_id: s.orgId });
     if (error) return { error: error.message };
     revalidatePath(PAD);
@@ -176,6 +178,8 @@ const AantalSchema = z.object({
     vegetarisch: z.number().int().min(0).max(1000),
     bier: z.number().int().min(0).max(1000),
     wijn: z.number().int().min(0).max(1000),
+    cremant: z.number().int().min(0).max(1000).default(0),
+    champagne: z.number().int().min(0).max(1000).default(0),
     onzeker: z.boolean(),
 });
 
@@ -216,7 +220,7 @@ export async function wijzigKerstAantal(input: unknown): Promise<ActionResult<{ 
     const eigen = oud.filter((r) => r.moment_id === momentId).reduce((n, r) => n + r.eenheden, 0);
     const momenten = bronnen.momenten.map((m) => (m.id === momentId ? { ...m, bezet: Math.max(0, m.bezet - eigen), bestellen_tot: null, sluit_op: null } : m));
     const opmerkingKlant = (o.opmerking ?? '').split('\n').filter((r: string) => !/^\s*waarvan vegetarisch\s*:/i.test(r) && !/^aantal nog niet zeker/i.test(r)).join('\n').trim();
-    const aanvraag: KerstAanvraag = { personen: d.personen, vegetarisch: d.vegetarisch, onzeker: d.onzeker, afhaaldag: boxRegel?.klaar_op ?? '', bier: d.bier, wijn: d.wijn, opmerking: opmerkingKlant };
+    const aanvraag: KerstAanvraag = { personen: d.personen, vegetarisch: d.vegetarisch, onzeker: d.onzeker, afhaaldag: boxRegel?.klaar_op ?? '', bier: d.bier, wijn: d.wijn, cremant: d.cremant, champagne: d.champagne, opmerking: opmerkingKlant };
     const uit = berekenOfferte(
         { ...bronnen, artikelen: kerstArtikelen(bronnen.artikelen), momenten },
         kerstMand(aanvraag, momentId, bronnen.artikelen), 'afhalen', null, 'bij_afhalen',

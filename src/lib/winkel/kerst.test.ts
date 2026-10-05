@@ -37,12 +37,27 @@ describe('leesKerstLead', () => {
             event_type: 'Kerst-Box',
             bestelling: { artikel: 'kerst-box', personen: 5, vegetarisch: 1, onzeker: true, afhaaldag: '2026-12-23', bierproeverij: 5, wijnproeverij: 2, opmerking: 'Waarvan vegetarisch: 1\nLactosevrij graag' },
         });
-        expect(a).toEqual({ personen: 5, vegetarisch: 1, onzeker: true, afhaaldag: '2026-12-23', bier: 5, wijn: 2, opmerking: 'Lactosevrij graag' });
+        expect(a).toEqual({ personen: 5, vegetarisch: 1, onzeker: true, afhaaldag: '2026-12-23', bier: 5, wijn: 2, cremant: 0, champagne: 0, opmerking: 'Lactosevrij graag' });
     });
 
     it('valt terug op de bon van een oudere site', () => {
         const a = leesKerstLead({ event_type: 'Kerst-Box', event_datum: '2026-12-24', gasten: 6, bericht: BON });
-        expect(a).toEqual({ personen: 6, vegetarisch: 2, onzeker: false, afhaaldag: '2026-12-24', bier: 0, wijn: 0, opmerking: 'Graag zonder noten.' });
+        expect(a).toEqual({ personen: 6, vegetarisch: 2, onzeker: false, afhaaldag: '2026-12-24', bier: 0, wijn: 0, cremant: 0, champagne: 0, opmerking: 'Graag zonder noten.' });
+    });
+
+    it('leest de bubbels: gestructureerd, en uit de bon onder hun eigen naam', () => {
+        const a = leesKerstLead({
+            event_type: 'Kerst-Box',
+            bestelling: { artikel: 'kerst-box', personen: 6, afhaaldag: '2026-12-24', bierproeverij: 6, wijnproeverij: 2, cremant: 1, champagne: 2 },
+        });
+        expect(a).toMatchObject({ bier: 6, wijn: 2, cremant: 1, champagne: 2 });
+        const bon = BON.replace('Levering..........', [
+            "'Louis' Crémant de Loire 1 × € 22,50 = € 22,50",
+            'Champagne Grande Réserve 2 × € 42,50 = € 85,00',
+            'Bierproeverij..... 6 × € 9,50 = € 57,00',
+            'Levering..........',
+        ].join('\n'));
+        expect(leesKerstLead({ event_type: 'Kerst-Box', event_datum: '2026-12-24', gasten: 6, bericht: bon })).toMatchObject({ bier: 6, wijn: 0, cremant: 1, champagne: 2 });
     });
 
     it('ziet "weet het nog niet precies" in de bon', () => {
@@ -61,7 +76,7 @@ describe('leesKerstLead', () => {
     });
 });
 
-const aanvraag = (x: Partial<KerstAanvraag> = {}): KerstAanvraag => ({ personen: 6, vegetarisch: 2, onzeker: false, afhaaldag: '2026-12-24', bier: 0, wijn: 0, opmerking: '', ...x });
+const aanvraag = (x: Partial<KerstAanvraag> = {}): KerstAanvraag => ({ personen: 6, vegetarisch: 2, onzeker: false, afhaaldag: '2026-12-24', bier: 0, wijn: 0, cremant: 0, champagne: 0, opmerking: '', ...x });
 
 describe('kerstMand en totaal', () => {
     it('splitst vega af als er een vega-artikel aan staat', () => {
@@ -75,6 +90,16 @@ describe('kerstMand en totaal', () => {
     it('alles op de gewone box als vega er niet (aan) is', () => {
         const mand = kerstMand(aanvraag(), 'd-24', [{ slug: 'kerst-box', actief: true }, { slug: 'kerst-box-vegetarisch', actief: false }]);
         expect(mand.regels).toEqual([{ slug: 'kerst-box', aantal: 6, moment: 'd-24' }]);
+    });
+    it('de bubbels in de mand, per fles', () => {
+        const mand = kerstMand(aanvraag({ vegetarisch: 0, cremant: 1, champagne: 2, wijn: 2 }), 'd-24', [{ slug: 'kerst-box', actief: true }]);
+        expect(mand.regels).toEqual([
+            { slug: 'kerst-box', aantal: 6, moment: 'd-24' },
+            { slug: 'kerst-wijnproeverij', aantal: 2, moment: 'd-24' },
+            { slug: 'kerst-cremant', aantal: 1, moment: 'd-24' },
+            { slug: 'kerst-champagne', aantal: 2, moment: 'd-24' },
+        ]);
+        expect(kerstTotaalCenten(aanvraag({ cremant: 1, champagne: 2 }), [{ slug: 'kerst-cremant', prijs_cents: 2250 }, { slug: 'kerst-champagne', prijs_cents: 4250 }])).toBe(14100 + 2250 + 8500);
     });
     it('totaal: personen × prijs plus de proeverijen met prijs', () => {
         expect(kerstTotaalCenten(aanvraag(), [])).toBe(14100);

@@ -248,7 +248,7 @@ async function naMislukken(
   } catch {
     totaal = kerstTotaalCenten(a, []);
   }
-  const velden = { voornaam: voornaamVan(contact.naam), nummer: `A-${leadId}`, personen: a.personen, vegetarisch: a.vegetarisch, bier: a.bier, wijn: a.wijn, afhaaldag: a.afhaaldag, totaalCenten: totaal };
+  const velden = { voornaam: voornaamVan(contact.naam), nummer: `A-${leadId}`, personen: a.personen, vegetarisch: a.vegetarisch, bier: a.bier, wijn: a.wijn, cremant: a.cremant, champagne: a.champagne, afhaaldag: a.afhaaldag, totaalCenten: totaal };
   const klant = await stuurKerstMail('ontvangen', contact.email, velden, t.settings?.email ?? null).catch(() => ({ success: false }));
 
   /* Mathijs moet dit weten: de klant denkt dat het vaststaat. */
@@ -262,6 +262,8 @@ async function naMislukken(
       `Personen: ${a.personen}${a.vegetarisch ? ` (waarvan vegetarisch ${a.vegetarisch})` : ''}${a.onzeker ? ' — nog niet zeker' : ''}`,
       ...(a.bier ? [`Bierproeverij: ${a.bier}`] : []),
       ...(a.wijn ? [`Wijnproeverij: ${a.wijn}`] : []),
+      ...(a.cremant ? [`Crémant: ${a.cremant} ${a.cremant === 1 ? 'fles' : 'flessen'}`] : []),
+      ...(a.champagne ? [`Champagne: ${a.champagne} ${a.champagne === 1 ? 'fles' : 'flessen'}`] : []),
       `Afhalen: ${afhaaldagVoluit(a.afhaaldag)}`,
       `Totaal: ${euroKerst(totaal)}, betalen bij afhalen`,
       `Contact: ${contact.email}${contact.telefoon ? ` · ${contact.telefoon}` : ''}`,

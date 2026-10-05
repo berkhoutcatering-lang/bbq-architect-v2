@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmDialog';
-import { euroKerst, KERST_SLUG, type KerstOnderdeel } from '@/lib/winkel/kerstTellen';
+import { euroKerst, KERST_DRANK, KERST_SLUG, WIJN_VOOR_PERSONEN, type KerstOnderdeel } from '@/lib/winkel/kerstTellen';
 import { bewaarOnderdeel, verwijderOnderdeel, zetProeverijPrijs } from '../actions';
 import type { ArtikelRij, Melding } from './types';
 
@@ -60,7 +60,7 @@ export default function Inhoud({ onderdelen, artikelen, herlaad, melding }: Prop
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
                     <div className="ws-sectie-kop">Prijzen</div>
                     <div className="ws-onderschrift" style={{ marginTop: 2 }}>
-                        Een proeverij met een prijs staat binnen een minuut op het bestelformulier van de site; leeg = niet te bestellen. De klant kiest zelf hoeveel.
+                        Een bubbel of proeverij met een prijs staat binnen een minuut op het bestelformulier van de site; leeg = niet te bestellen. De klant kiest zelf hoeveel. Bier en wijn staan er alleen samen op de plank als ze allebei een prijs hebben.
                     </div>
                 </div>
                 <div className="ws-tabel-rij" style={{ gridTemplateColumns: 'minmax(160px,1fr) minmax(200px,1.4fr)', cursor: 'default' }}>
@@ -70,8 +70,10 @@ export default function Inhoud({ onderdelen, artikelen, herlaad, melding }: Prop
                         <span className="kr-zacht"> — aanpassen in Webshop → Artikelen</span>
                     </div>
                 </div>
-                <ProeverijRij soort="bier" titel="Bierproeverij" per="per persoon" artikel={artikelen.find((a) => a.slug === KERST_SLUG.bier)} bezig={bezig} doe={doe} />
-                <ProeverijRij soort="wijn" titel="Wijnproeverij" per="per 2 personen" artikel={artikelen.find((a) => a.slug === KERST_SLUG.wijn)} bezig={bezig} doe={doe} />
+                <ProeverijRij soort="cremant" titel="Crémant" per={`per fles · ${KERST_DRANK.cremant[0]}`} artikel={artikelen.find((a) => a.slug === KERST_SLUG.cremant)} bezig={bezig} doe={doe} />
+                <ProeverijRij soort="champagne" titel="Champagne" per={`per fles · ${KERST_DRANK.champagne[0]}`} artikel={artikelen.find((a) => a.slug === KERST_SLUG.champagne)} bezig={bezig} doe={doe} />
+                <ProeverijRij soort="bier" titel="Bierproeverij" per={`per persoon · ${KERST_DRANK.bier.join(', ')}`} artikel={artikelen.find((a) => a.slug === KERST_SLUG.bier)} bezig={bezig} doe={doe} />
+                <ProeverijRij soort="wijn" titel="Wijnproeverij" per={`voor ${WIJN_VOOR_PERSONEN} personen · ${KERST_DRANK.wijn.join(', ')}`} artikel={artikelen.find((a) => a.slug === KERST_SLUG.wijn)} bezig={bezig} doe={doe} />
             </div>
 
             <div className="panel">
@@ -96,7 +98,7 @@ export default function Inhoud({ onderdelen, artikelen, herlaad, melding }: Prop
 }
 
 function ProeverijRij({ soort, titel, per, artikel, bezig, doe }: {
-    soort: 'bier' | 'wijn'; titel: string; per: string; artikel: ArtikelRij | undefined; bezig: string | null;
+    soort: 'bier' | 'wijn' | 'cremant' | 'champagne'; titel: string; per: string; artikel: ArtikelRij | undefined; bezig: string | null;
     doe: (s: string, fn: () => Promise<{ error: string } | { data: unknown }>, g: string) => Promise<boolean | undefined>;
 }) {
     const [prijs, setPrijs] = useState(euroInvoer(artikel?.prijs_cents));
