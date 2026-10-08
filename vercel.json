@@ -1,5 +1,6 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
+    "ignoreCommand": "node scripts/deploypoort.mjs",
     "regions": [
         "fra1"
     ],
@@ -43,6 +44,10 @@
         {
             "path": "/api/cron/voorraad-dagstart",
             "schedule": "0 7 * * *"
+        },
+        {
+            "path": "/api/cron/kerst-mails",
+            "schedule": "0 9 * * *"
         }
     ]
 }

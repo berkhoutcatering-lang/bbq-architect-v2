@@ -19,6 +19,8 @@
  * voor de uitkomst niets uit.
  */
 
+import type { Betaalwijze } from './types';
+
 export type Leeftijd = 'vastgesteld' | 'geweigerd';
 export type RestMethode = 'contant' | 'pin';
 export type OphaalBron = 'ba' | 'toonbank';
@@ -26,7 +28,10 @@ export type OphaalBron = 'ba' | 'toonbank';
 /** Wat de regels van ophalen van een order nodig hebben. */
 export interface OphaalOrder {
     status: string;
-    betaalwijze: 'volledig' | 'reservering';
+    /* 'bij_afhalen' (Kerst-Box) kent de rest-stap hier nog niet, net als
+       winkel_order_ophalen in de database: restOpen kijkt alleen naar
+       'reservering'. */
+    betaalwijze: Betaalwijze;
     rest_cents: number;
     rest_betaald_at: string | null;
     regels: { alcohol?: boolean | null; opgehaald_at?: string | null }[];

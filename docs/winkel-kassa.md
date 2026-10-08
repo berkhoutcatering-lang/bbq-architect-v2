@@ -198,3 +198,32 @@ ingevulde prijzen blijven staan).
   willekeurige CVC.
 - Productie: `node scripts/mypos-config-naar-env.mjs` na het plaatsen van
   `.mypos/config.b64`; dezelfde vijf `MYPOS_`-waarden in Vercel. `MYPOS_TEST_MODE` leeg.
+
+## Kerst-Box zonder online betalen — betalen bij afhalen (5 oktober 2026)
+
+Zolang myPOS de site niet heeft goedgekeurd, bestelt de klant de Kerst-Box via het
+aanvraagformulier en betaalt hij bij het afhalen. Opdracht:
+`OPDRACHT-BBQ-ARCHITECT-KERSTBOX-BESTELLINGEN.md` (website-repo). Migratie
+`20261005110000_kerst_bestellingen.sql`.
+
+- De site stuurt een lead naar `POST /api/public-lead-form/hop-en-bites` met
+  `event_type: "Kerst-Box"` en (sinds 5 oktober) een gestructureerd veld `bestelling`
+  `{ artikel, personen, vegetarisch, onzeker, afhaaldag, bierproeverij, wijnproeverij, opmerking }`.
+  Zonder dat veld wordt de bon in `bericht` gelezen.
+- `src/lib/winkel/kerst.ts` maakt er een gewone winkel-order van: betaalwijze
+  `bij_afhalen` (niets online, alles is rest), meteen status `betaald`, sleutel
+  `lead-<id>` (idempotent), `lead_id` op de order. Daarna de plaatsing in het vakje,
+  net als na myPOS. Een ontbrekende kerstdag (23–26 december) wordt aangemaakt. Geen maximum per dag: de migratie maakt de capaciteit van de groep `kerst-box` leeg (besluit 5 oktober 2026).
+- De klant krijgt meteen de Kerst-bevestiging (sjabloon van de site, `kerstMail.ts`); geen
+  cateringmail en geen melding aan Mathijs. Lukt het omzetten niet, dan gaat de bevestiging
+  toch, krijgt de lead `omzet_fout` en krijgt Mathijs één mail; in Verkoop → Kerst staat hij
+  dan met de knop *Zet om*.
+- Cron `/api/cron/kerst-mails` (09:00 UTC = 10:00 in december): navraag bij "weet ik nog niet
+  precies" vanaf vijf dagen vóór het afhalen, herinnering de dag ervoor. Elk één keer.
+- `GET /api/public-winkel/{slug}/kerst`: de prijs van de box en de proeverijen met een prijs.
+  De site toont een proeverij pas als hij hier staat.
+- `/verkoop/kerst`: totalen per afhaaldag, wat er gemaakt moet worden (tabel
+  `kerst_onderdelen`, grammen per persoon gewoon/vega), de bestellingen (aantal aanpassen,
+  pin/contant, opgehaald, annuleren, mail opnieuw) en de prijzen van de proeverijen.
+- Afzender van de Kerst-mails: `KERST_MAIL_FROM` (bijv. `Hop & Bites <info@hopbites.nl>`,
+  domein geverifieerd in Resend), anders `RESEND_FROM_EMAIL`.

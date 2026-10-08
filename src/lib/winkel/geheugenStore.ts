@@ -544,6 +544,16 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             return 'betaald';
         },
 
+        async maakMoment(m) {
+            const nieuw = { id: `moment-${g.momenten.length + 1}-${m.datum}`, groep: m.groep, datum: m.datum, van: null, tot: null, capaciteit: null, bestellen_tot: null, sluit_op: null, actief: true };
+            g.momenten.push(nieuw);
+            return { ...nieuw, bezet: 0 };
+        },
+        async markeerKerstOrder(orderId, k) {
+            const o = orders.find((x) => x.id === orderId);
+            if (o) Object.assign(o, { lead_id: k.leadId, aantal_onzeker: k.onzeker });
+        },
+
         async zetStatus(orderId, status, reden = null) {
             const o = orders.find((x) => x.id === orderId);
             if (o) {

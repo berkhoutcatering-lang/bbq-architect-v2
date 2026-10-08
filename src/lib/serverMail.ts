@@ -22,6 +22,8 @@ interface SendArgs {
   html?: string;
   text?: string;
   replyTo?: string;
+  /** Afzender; standaard RESEND_FROM_EMAIL. Het domein moet in Resend geverifieerd zijn. */
+  from?: string;
 }
 
 export async function sendServerMail(args: SendArgs): Promise<{ success: boolean; error?: string }> {
@@ -35,7 +37,7 @@ export async function sendServerMail(args: SendArgs): Promise<{ success: boolean
   try {
     const resend = new Resend(apiKey);
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'BBQ Architect <noreply@resend.dev>',
+      from: args.from || process.env.RESEND_FROM_EMAIL || 'BBQ Architect <noreply@resend.dev>',
       to: [args.to],
       subject: args.subject,
       html: args.html,

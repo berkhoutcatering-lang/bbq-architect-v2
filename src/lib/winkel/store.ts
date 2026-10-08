@@ -215,7 +215,7 @@ export interface WinkelStore {
     /** Atomair: (opnieuw) op 'wacht' met verse reservering en een OrderID voor myPOS. */
     startBetaalpoging(orderId: number): Promise<OpslagUitkomst<OrderRij>>;
     /** Atomair en idempotent: betaald / al_betaald / vol (verlopen en geen plek meer). */
-    bevestigBetaling(orderId: number, b: { trnref: string; centen: number | null; methode: string | null }): Promise<'betaald' | 'al_betaald' | 'vol' | 'onbekend'>;
+    bevestigBetaling(orderId: number, b: { trnref: string | null; centen: number | null; methode: string | null }): Promise<'betaald' | 'al_betaald' | 'vol' | 'onbekend'>;
     zetStatus(orderId: number, status: Orderstatussoort, reden?: string | null): Promise<void>;
 
     /** false = dit bericht is al eerder gezien. */
@@ -247,4 +247,10 @@ export interface WinkelStore {
      * grens. null = deze organisatie heeft geen kassa. Gooit bij een fout.
      */
     laadBeschikbaarheid(orgId: string): Promise<Beschikbaarheidsbron | null>;
+
+    /* ── Kerst-Box zonder online betalen (kerst.ts) ── */
+    /** Een afhaaldag zonder grens en zonder tijdvak. null = mislukt. */
+    maakMoment(m: { orgId: string; groep: string; datum: string }): Promise<MomentRij | null>;
+    /** Lead en "weet het nog niet precies" op de order zetten. */
+    markeerKerstOrder(orderId: number, k: { leadId: number; onzeker: boolean }): Promise<void>;
 }
