@@ -13,8 +13,12 @@ export type Leverwijze = 'afhalen' | 'verzenden';
  * Volledig online betalen, of het reserveringsbedrag (€ 2,50 per order) nu en
  * de rest in de winkel bij afhalen. De reservering is geen toeslag: hij gaat
  * van het totaal af. (Overdracht Sinterklaas, blok S5.)
+ *
+ * 'bij_afhalen': niets online, alles aan de balie. Alleen voor bestellingen
+ * die niet via de kassa lopen (de Kerst-Box zolang online betalen uit staat,
+ * oktober 2026); de publieke order-route accepteert hem niet.
  */
-export type Betaalwijze = 'volledig' | 'reservering';
+export type Betaalwijze = 'volledig' | 'reservering' | 'bij_afhalen';
 
 /** Wat de website stuurt: alleen keuzes, nooit bedragen. */
 export interface MandRegel {
@@ -102,7 +106,7 @@ export type OrderUitkomst =
     | { ok: false; soort: 'validatie'; fouten: string[] }
     | { ok: false; soort: 'moment-vol' | 'moment-verlopen' | 'niet-beschikbaar'; melding: string };
 
-export type Orderstatussoort = 'wacht' | 'betaald' | 'afgebroken' | 'mislukt' | 'verlopen';
+export type Orderstatussoort = 'wacht' | 'betaald' | 'afgebroken' | 'mislukt' | 'verlopen' | 'geannuleerd';
 
 export interface Orderstatus {
     token: string;

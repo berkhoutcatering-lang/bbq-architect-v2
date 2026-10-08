@@ -295,6 +295,19 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 artikelen: ((artikelen ?? []) as Record<string, unknown>[]).map(naarVrijArtikel),
             };
         },
+        async maakMoment(m) {
+            const { data, error } = await sb
+                .from('winkel_momenten')
+                .insert({ organization_id: m.orgId, groep: m.groep, datum: m.datum, van: null, tot: null, capaciteit: null, actief: true })
+                .select(MOMENT_KOLOMMEN)
+                .single();
+            if (error || !data) { console.error('[winkel] moment aanmaken faalde:', error?.code, error?.message); return null; }
+            return { ...(data as Omit<MomentRij, 'bezet'>), bezet: 0 };
+        },
+        async markeerKerstOrder(orderId, k) {
+            const { error } = await sb.from('winkel_orders').update({ lead_id: k.leadId, aantal_onzeker: k.onzeker }).eq('id', orderId);
+            if (error) throw new Error(`Kerst-order markeren mislukt: ${error.message}`);
+        },
 
         async plaatsOrder(o): Promise<OpslagUitkomst<OrderRij>> {
             const { data, error } = await sb.rpc('winkel_plaats_order', {

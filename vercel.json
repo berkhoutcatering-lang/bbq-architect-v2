@@ -44,6 +44,10 @@
         {
             "path": "/api/cron/voorraad-dagstart",
             "schedule": "0 7 * * *"
+        },
+        {
+            "path": "/api/cron/kerst-mails",
+            "schedule": "0 9 * * *"
         }
     ]
 }
