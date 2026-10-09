@@ -1,0 +1,24 @@
+{
+  "versie": 1181,
+  "volledig": false,
+  "vrij_verloopt_at": "2027-03-06T10:45:00+01:00",
+  "producten": [
+    {
+      "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4",
+      "eenheid": "stuk",
+      "ligt_er": 6,
+      "gereserveerd": 4,
+      "vrij": 2,
+      "bijgehouden": true,
+      "reserveringen": [
+        {
+          "order_id": 1042,
+          "nummer": "HB-2027-1042",
+          "naam": "Jansen",
+          "afhaalmoment": "2027-03-06T16:30:00+01:00",
+          "aantal": 4
+        }
+      ]
+    }
+  ]
+}

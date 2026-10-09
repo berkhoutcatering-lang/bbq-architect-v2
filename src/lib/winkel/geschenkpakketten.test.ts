@@ -278,8 +278,9 @@ describe('betaalwijze (S5)', () => {
         const s1 = (await haalStatus(ctx, 'hop-en-bites', token)).body as { status: Record<string, unknown> };
         expect(s1.status).toMatchObject({ status: 'betaald', betaalwijze: 'reservering', nuTeBetalenCenten: 250, restInWinkelCenten: 3250, restBetaald: false });
 
-        expect(await store.boekRest(1, 'pin')).toBe('geboekt');
-        expect(await store.boekRest(1, 'contant')).toBe('al_geboekt');
+        expect(await store.boekRest('org-andere', 1, 'pin')).toBe('onbekend');
+        expect(await store.boekRest('org-1', 1, 'pin')).toBe('geboekt');
+        expect(await store.boekRest('org-1', 1, 'contant')).toBe('al_geboekt');
         expect(store.orders[0]).toMatchObject({ rest_betaalmethode: 'pin' });
         const s2 = (await haalStatus(ctx, 'hop-en-bites', token)).body as { status: Record<string, unknown> };
         expect(s2.status).toMatchObject({ restBetaald: true });
@@ -288,7 +289,7 @@ describe('betaalwijze (S5)', () => {
         await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', regels, { verwachtTotaalCenten: 3500 }));
         await store.startBetaalpoging(1);
         await store.bevestigBetaling(1, { trnref: 't', centen: 3500, methode: null });
-        expect(await store.boekRest(1, 'pin')).toBe('geen_rest');
+        expect(await store.boekRest('org-1', 1, 'pin')).toBe('geen_rest');
     });
     it('de bevestigingsmail noemt reeds betaald, het rest en 18+', async () => {
         await plaatsOrder(ctx, 'hop-en-bites', order('sleutel-1', regels, { verwachtTotaalCenten: 3500, betaalwijze: 'reservering' }));

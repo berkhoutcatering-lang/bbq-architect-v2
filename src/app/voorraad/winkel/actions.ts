@@ -257,6 +257,10 @@ export async function laadLogboek(input: unknown): Promise<ActionResult<LogboekR
         .eq('organization_id', s.orgId)
         .eq('plek', parsed.data.plek)
         .eq('item_id', parsed.data.itemId)
+        /* Op volgorde van boeken (geboekt_at), niet van gebeuren: dan loopt de kolom resultaat
+           (de stand na elke regel) door, ook bij een Toonbank-bon die later binnenkwam. De getoonde
+           tijd blijft created_at = wanneer het gebeurde (review M2 klein 3). */
+        .order('geboekt_at', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(100);
     if (error) return { error: error.message };
@@ -281,7 +285,7 @@ export interface BelMelding {
     read_at: string | null;
 }
 
-const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'kassa_onbekend'];
+const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen', 'kassa_onbekend'];
 
 /** De voorraadmeldingen: de ongelezen eerst, dan de laatste gelezen. */
 export async function laadBelMeldingen(): Promise<ActionResult<{ ongelezen: number; meldingen: BelMelding[] }>> {

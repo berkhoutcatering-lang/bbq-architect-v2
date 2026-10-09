@@ -1,0 +1,11 @@
+{
+  "fout": {
+    "code": "niet_zelfde_dag",
+    "melding": "HB-2027-1050 is op zaterdag 6 maart apart gezet. Ongedaan maken kan alleen op dezelfde dag. Er is niets geboekt; corrigeer de voorraad met een telling in BBQ Architect.",
+    "details": {
+      "order_id": 1050,
+      "nummer": "HB-2027-1050",
+      "apart_gezet_at": "2027-03-06T14:05:00+01:00"
+    }
+  }
+}

@@ -111,10 +111,12 @@ begin
     foreach v_sig in array array[
         'public.winkel_bezetting_product(uuid, bigint)',
         'public.winkel_zet_klaargezet(uuid, bigint, boolean)',
-        'public.winkel_doos_ophalen(uuid, text, text)',
-        'public.winkel_boek_rest(bigint, text)',
+        -- BA-10 (20261007130000): + leeftijd, medewerker, bon en leeftijd_at; boek_rest met p_org
+        'public.winkel_doos_ophalen(uuid, text, text, text, uuid, uuid, timestamp with time zone)',
+        'public.winkel_boek_rest(uuid, bigint, text, uuid)',
         'public.winkel_dozen_voor_regel(uuid, bigint, text[])',
-        'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid)',
+        -- BA-9 (20261007120000): + p_gebeurd_at en p_toonbank_bon_regel_id
+        'public.winkel_muteer_voorraad(uuid, uuid, text, numeric, text, text, bigint, bigint, date, integer, uuid, text, integer, bigint, uuid, timestamp with time zone, bigint)',
         'public.voorraad_overboeken(uuid, integer, uuid, numeric, text, text, text)',
         'public.keuken_afwijking(uuid, integer, numeric, text, text, text)',
         'public.voorraad_invoer_boeken(uuid, uuid)',
@@ -130,7 +132,13 @@ begin
         'public.winkel_voorraad_stand(uuid)',
         -- BA-6 (20261005140000): paneel Apart zetten, straks de Toonbank via service_role
         'public.winkel_zet_order_apart(uuid, bigint, text, uuid, uuid)',
-        'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)'
+        'public.winkel_zet_order_apart_terug(uuid, bigint, text, uuid, uuid)',
+        -- BA-9 (20261007120000): Te controleren in BA
+        'public.toonbank_journaal_afhandelen(uuid, bigint, text, text, uuid)',
+        -- BA-10 (20261007130000): Dagstaten in BA. "Opnieuw narekenen" via de
+        -- Admin-wrapper; toonbank_dagstaat_herberekenen zelf alleen service_role (review M2 K5).
+        'public.toonbank_dagstaat_narekenen(uuid, uuid)',
+        'public.toonbank_dagstaat_goedkeuren(uuid, uuid, text, uuid)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';
@@ -168,7 +176,9 @@ begin
         'public.winkel_bezetting_moment(uuid, bigint)',
         'public.winkel_bezetting_voorraad(uuid, bigint)',
         'public.winkel_keuken_factor(text, text)',
-        'public.partij_als_jsonb(uuid, boolean)'
+        'public.partij_als_jsonb(uuid, boolean)',
+        -- Review M2 K5: met p_aangevuld kon een gewoon lid een goedgekeurde dagstaat openzetten.
+        'public.toonbank_dagstaat_herberekenen(uuid, uuid, boolean)'
     ] loop
         if to_regprocedure(v_sig) is null then
             v_fouten := v_fouten || v_sig || ' ontbreekt; ';

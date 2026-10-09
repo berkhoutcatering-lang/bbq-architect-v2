@@ -60,6 +60,23 @@ export interface ProductRij {
     hop_and_bites_tip: boolean;
     voorraad: number | null;
     actief: boolean;
+    /* De pagina op de website (catalogus, 3 oktober 2026). Leeg bij een product zonder pagina. */
+    slug?: string | null;
+    kenmerken?: Record<string, unknown>;
+    alcohol_pct?: number | string | null;
+    allergenen?: string[] | null;
+    ingredienten?: string[] | null;
+    bewaren?: string | null;
+    lekker_bij?: string | null;
+    foto?: { basis: string; breedte: number; hoogte: number; maten: { w: number; h: number }[]; formaten: ('avif' | 'webp')[] } | null;
+    pagina_status?: 'geen' | 'concept' | 'live';
+    pagina_volgorde?: number | null;
+    goedgekeurd?: Record<string, { door?: string; op?: string } | undefined>;
+    bronnen?: { veld?: string; url: string; titel: string }[];
+    ean?: string | null;
+    updated_at?: string;
+    /** BA-4a: statiegeld per stuk in centen, buiten de btw. Ontbreekt vóór migratie 20261006120000 = 0. */
+    statiegeld_cents?: number;
 }
 
 export interface SlotRij {
@@ -158,6 +175,11 @@ export interface ArtikelRij {
     verpakking_groot_cents: number | null;
     /** BA-6: inpakken in de makerij of wegzetten uit het schap. Ontbreekt vóór migratie 20261005140000 = inpakken. */
     afhandeling?: 'inpakken' | 'wegzetten';
+    /** BA-4a: waar het artikel verkocht wordt, en de knop op de Toonbank. Ontbreekt vóór migratie 20261006120000 = {webshop}. */
+    kanalen?: string[];
+    toonbank_groep?: string | null;
+    toonbank_volgorde?: number;
+    toonbank_favoriet?: boolean;
 }
 
 export interface MomentRij {

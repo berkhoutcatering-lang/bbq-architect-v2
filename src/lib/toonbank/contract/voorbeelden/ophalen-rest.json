@@ -1,0 +1,13 @@
+{
+  "gebeurtenis_id": "e8b91ed5-c9f8-4c6f-bf36-62f586aab31f",
+  "moment": "2027-03-06T16:32:40+01:00",
+  "bon_id": "fe26f6ed-9a93-4f50-b0b8-58b277ea1455",
+  "rest": {
+    "methode": "pin",
+    "bedrag_cents": 450
+  },
+  "leeftijd": {
+    "uitkomst": "vastgesteld",
+    "at": "2027-03-06T16:31:55+01:00"
+  }
+}

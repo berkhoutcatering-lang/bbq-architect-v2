@@ -19,7 +19,22 @@ export function isHoofd(metaUrl) {
 export const REPO = process.env.TESTDB_REPO
     ? path.resolve(process.env.INIT_CWD ?? process.cwd(), process.env.TESTDB_REPO)
     : path.resolve(HIER, '..', '..');
-export const DATA = path.join(HIER, '.data');
+// Het cluster staat in tools/testdb/.data, of in een eigen map via TESTDB_DATA
+// (een tweede database naast de gewone, bijvoorbeeld voor de E2E-keten of een
+// agent die parallel werkt). Met een eigen TESTDB_POORT erbij storen ze elkaar niet.
+export const DATA = process.env.TESTDB_DATA
+    ? path.resolve(process.env.INIT_CWD ?? process.cwd(), process.env.TESTDB_DATA)
+    : path.join(HIER, '.data');
+// De api-stand (api.mjs): JWT-geheim, sleutels en PostgREST-configuratie.
+// Buiten .data, zodat `opnieuw` de sleutels niet verandert; met TESTDB_DATA
+// erbij standaard in die map, met TESTDB_API_MAP in een eigen map.
+export const API_MAP = process.env.TESTDB_API_MAP
+    ? path.resolve(process.env.INIT_CWD ?? process.cwd(), process.env.TESTDB_API_MAP)
+    : process.env.TESTDB_DATA
+        ? path.join(DATA, 'api')
+        : path.join(HIER, '.api');
+// Gedownloade binaries (PostgREST), gedeeld door alle databases van deze checkout.
+export const BIN = path.join(HIER, '.bin');
 export const CLUSTER = path.join(DATA, 'pg');
 export const LOG = path.join(DATA, 'postgres.log');
 export const POORTBESTAND = path.join(DATA, 'poort');

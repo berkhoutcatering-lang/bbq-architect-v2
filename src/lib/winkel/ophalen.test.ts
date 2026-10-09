@@ -236,7 +236,7 @@ describe('haalOp (geheugen) — elke uitkomst', () => {
     it('rest al betaald: geen rest_nodig en niets opnieuw geboekt', async () => {
         const o = await betaaldeOrder('a', [{ slug: 'kaasplankje', aantal: 1 }]);
         zetReservering(o, 1250);
-        await store.boekRest(o.id, 'contant');
+        await store.boekRest('org-1', o.id, 'contant');
         const u = store.haalOp('org-1', o.id, { restMethode: 'pin' });
         expect(u).toMatchObject({ uitkomst: 'opgehaald', rest_cents: 0, rest_geboekt: null });
         expect(o.rest_betaalmethode).toBe('contant');

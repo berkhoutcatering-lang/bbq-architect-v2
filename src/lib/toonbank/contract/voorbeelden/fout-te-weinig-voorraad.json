@@ -1,0 +1,19 @@
+{
+  "fout": {
+    "code": "te_weinig_voorraad",
+    "melding": "Er liggen er 3, deze order vraagt er 4. Er is niets apart gezet. Tel het schap en corrigeer de voorraad in BBQ Architect.",
+    "details": {
+      "wv_code": "WV010",
+      "order_id": 1042,
+      "nummer": "HB-2027-1042",
+      "tekorten": [
+        {
+          "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4",
+          "naam": "Naober",
+          "ligt_er": 3,
+          "nodig": 4
+        }
+      ]
+    }
+  }
+}

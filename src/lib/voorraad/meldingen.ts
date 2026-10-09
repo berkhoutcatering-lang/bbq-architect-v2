@@ -20,8 +20,8 @@ import { sendServerMail } from '@/lib/serverMail';
 import type { Slot } from '@/lib/winkel/rekenen';
 import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import {
-    DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, verschil, winkelProductMeldingen,
-    type ArtikelKort, type KeukenItem, type Melding, type Vraag, type WinkelProduct,
+    DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tellenMeldingen, verschil, winkelProductMeldingen,
+    type ArtikelKort, type KeukenItem, type Melding, type TelMutatie, type Vraag, type WinkelProduct,
 } from './meldingRegels';
 
 type Sb = ReturnType<typeof createServiceSupabase>;
@@ -56,6 +56,21 @@ async function laadWinkel(sb: Sb, orgId: string) {
             .map((c) => ({ product_id: c.product_id, klaar_op: c.winkel_order_regels.klaar_op, hoeveelheid: Number(c.hoeveelheid), pakketten: c.winkel_order_regels.aantal }));
     }
 
+    /* "Tel {product}" (contract §4.2 stap 8): tekortcorrecties en tellingen van de laatste 60 dagen. */
+    let telMutaties: TelMutatie[] = [];
+    if (bijgehouden.length) {
+        const sinds = new Date(Date.now() - 60 * 24 * 3_600_000).toISOString();
+        const { data: muts } = await sb
+            .from('winkel_voorraad_mutaties')
+            .select('winkel_product_id, type, hoeveelheid, created_at')
+            .eq('organization_id', orgId)
+            .in('type', ['tekort_correctie', 'telling'])
+            .gte('created_at', sinds)
+            .order('created_at', { ascending: false })
+            .limit(2000);
+        telMutaties = ((muts ?? []) as TelMutatie[]).map((m) => ({ ...m, hoeveelheid: Number(m.hoeveelheid) }));
+    }
+
     const prods: WinkelProduct[] = (producten ?? []).map((p) => ({
         id: p.id as string, naam: p.naam as string, eenheid: p.eenheid as 'stuk' | 'gram', actief: !!p.actief,
         voorraad: p.voorraad == null ? null : Number(p.voorraad),
@@ -66,7 +81,7 @@ async function laadWinkel(sb: Sb, orgId: string) {
         bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
     }));
     const sl = (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[];
-    return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag };
+    return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag, telMutaties };
 }
 
 async function laadInstellingen(sb: Sb, orgId: string) {
@@ -142,6 +157,7 @@ export async function evalueerWinkelMeldingen(orgId: string, productIds?: string
             ...winkelProductMeldingen(w.producten, w.slots, actief),
             ...artikelDichtMeldingen(w.artikelen, w.producten, w.slots),
             ...tekortVooruitMeldingen(w.producten, w.vraag),
+            ...tellenMeldingen(w.producten, w.telMutaties),
         ];
         const scope = productIds ? new Set(productIds) : null;
         return await verwerk(sb, orgId, gewenst, (m) =>
@@ -186,7 +202,7 @@ export async function stuurDagoverzicht(orgId: string): Promise<{ verstuurd: boo
     const ids = (staat ?? []).map((s) => s.notification_id).filter((x): x is string => !!x);
     if (!ids.length) return { verstuurd: false, aantal: 0 };
     const { data: notes } = await sb.from('notifications').select('id, type, title, body, link').in('id', ids);
-    const volgorde: Record<string, number> = { voorraad_tekort_vooruit: 0, voorraad_op: 1, artikel_dicht: 2, voorraad_laag: 3 };
+    const volgorde: Record<string, number> = { voorraad_tekort_vooruit: 0, voorraad_op: 1, artikel_dicht: 2, voorraad_tellen: 3, voorraad_laag: 4 };
     const lijst = ((notes ?? []) as { type: string; title: string; body: string | null; link: string | null }[])
         .sort((a, b) => (volgorde[a.type] ?? 9) - (volgorde[b.type] ?? 9))
         .map((n) => ({ titel: n.title, tekst: n.body ?? '', link: n.link ?? '' }));
