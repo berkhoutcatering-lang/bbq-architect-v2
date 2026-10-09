@@ -126,7 +126,7 @@ export default function KerstPagina() {
                     <div>
                         <div className="ws-banner-titel">De database is nog niet bijgewerkt voor Kerst</div>
                         <div className="ws-onderschrift" style={{ marginTop: 4 }}>
-                            De migratie <span className="ws-mono">20261005120000_kerst_bestellingen.sql</span> moet nog worden toegepast. Tot die tijd komen Kerst-bestellingen binnen als aanvraag (Verkoop → Aanvragen) en krijgt de klant wel zijn bevestiging.
+                            De migratie <span className="ws-mono">20261005110000_kerst_bestellingen.sql</span> moet nog worden toegepast. Tot die tijd komen Kerst-bestellingen binnen als aanvraag (Verkoop → Aanvragen) en krijgt de klant wel zijn bevestiging.
                         </div>
                     </div>
                 </div>

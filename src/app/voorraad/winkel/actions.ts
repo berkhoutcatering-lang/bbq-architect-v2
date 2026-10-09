@@ -17,6 +17,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { voorraadFout } from '@/lib/winkel/voorraad';
 import { evalueerKeukenMeldingen, evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { verversNaAfloop } from '@/lib/website/verversSignaal';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -83,6 +84,7 @@ export async function telWinkelProduct(input: unknown): Promise<ActionResult<Mut
     });
     if (error) return { error: vertaal(error) };
     await evalueerWinkelMeldingen(s.orgId, [d.productId]);
+    verversNaAfloop();
     ververs();
     return { data: uitkomst(data) };
 }
@@ -111,6 +113,7 @@ export async function ontvangWinkelProduct(input: unknown): Promise<ActionResult
     });
     if (error) return { error: vertaal(error) };
     await evalueerWinkelMeldingen(s.orgId, [d.productId]);
+    verversNaAfloop();
     ververs();
     return { data: uitkomst(data) };
 }
@@ -138,6 +141,7 @@ export async function boekOver(input: unknown): Promise<ActionResult<MutatieUitk
     if (error) return { error: vertaal(error) };
     await evalueerWinkelMeldingen(s.orgId, [d.productId]);
     await evalueerKeukenMeldingen(s.orgId, [d.inventoryId]);
+    verversNaAfloop();
     ververs();
     revalidatePath('/voorraad');
     return { data: { ...uitkomst(data), keukenVoorraad: Number((data as { keuken_voorraad?: number }).keuken_voorraad ?? 0) } };
@@ -176,6 +180,7 @@ export async function legAfwijkingVast(input: unknown): Promise<ActionResult<{ v
         });
         if (error) return { error: vertaal(error) };
         await evalueerWinkelMeldingen(s.orgId, [d.id]);
+        verversNaAfloop();
         ververs();
         const j = data as { voorraad: number; mutatie: { waarde_cents: number | null } };
         return { data: { voorraad: Number(j.voorraad), waardeCents: j.mutatie.waarde_cents } };

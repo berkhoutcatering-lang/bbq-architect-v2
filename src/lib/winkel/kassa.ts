@@ -19,6 +19,7 @@ import { berekenOfferte, maskeerEmail, momentOpen, naarMoment, vandaagISO, type 
 import { plaatsBestelling } from './plaatsing';
 import type { OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
 import type { Mand, Moment, Offerte, Offerteregel, OfferteUitkomst, OrderUitkomst, Orderstatus } from './types';
+import { standVoorWebsite, type WebsiteStand } from './vrij';
 
 /* ── Context ───────────────────────────────────────────────────────────────── */
 
@@ -184,6 +185,57 @@ export async function haalMomenten(ctx: KassaContext, slug: string, groep = 'age
     const g = artikel?.moment_groep ?? groep;
     const momenten = t.bronnen.momenten.filter((m) => m.groep === g && momentOpen(m, vandaag, ctx.nu?.())).map(naarMoment);
     return { status: 200, body: { momenten } };
+}
+
+/* ── 2b. Beschikbaarheid (plan v5, BA-5b) ──────────────────────────────────── */
+
+export interface BeschikbaarheidArtikel {
+    slug: string;
+    stand: WebsiteStand;
+    /** Alleen bij 'op' (0) en 'nog' (1..grens); anders null. */
+    nog: number | null;
+}
+
+export interface Beschikbaarheid {
+    ok: true;
+    /** De voorraadversie (winkel_voorraad_versie): verandert hij niet, dan veranderde vrij niet — tot vrij_verloopt_at. */
+    versie: number;
+    /** Het eerste moment waarop een lopende reservering verloopt; daarna opnieuw ophalen. */
+    vrij_verloopt_at: string | null;
+    artikelen: BeschikbaarheidArtikel[];
+}
+
+/**
+ * Wat de website per artikel mag weten: op, nog n (tot en met de grens uit
+ * winkel_instellingen.beschikbaar_grens), ruim of onbeperkt. Alleen artikelen
+ * die actief én publiek zijn. Geen getallen boven de grens, geen producten,
+ * geen orders. BBQ Architect blijft de poort bij de order (WK002/WK009); dit
+ * is alleen de badge.
+ */
+export async function haalBeschikbaarheid(ctx: KassaContext, slug: string): Promise<Antwoord> {
+    const onbekend: Antwoord = { status: 404, body: { ok: false, soort: 'niet-beschikbaar', melding: 'Onbekende winkel.' } };
+    try {
+        const tenant = await ctx.store.laadTenant(slug);
+        if (!tenant) return onbekend;
+        /* Eerst de stand en vrij (in die volgorde, zie laadBeschikbaarheid), dan
+           welke artikelen getoond mogen worden. */
+        const bron = await ctx.store.laadBeschikbaarheid(tenant.orgId);
+        if (!bron) return onbekend;
+        const artikelen = await ctx.store.laadArtikelen(tenant.orgId);
+        const tonen = new Set(artikelen.filter((a) => a.actief && a.publiek).map((a) => a.id));
+        const body: Beschikbaarheid = {
+            ok: true,
+            versie: bron.stand.versie,
+            vrij_verloopt_at: bron.stand.vrij_verloopt_at,
+            artikelen: bron.artikelen
+                .filter((v) => tonen.has(v.artikel_id))
+                .map((v) => ({ slug: v.slug, ...standVoorWebsite(v.vrij, v.bijgehouden, bron.grens) })),
+        };
+        return { status: 200, body };
+    } catch (e) {
+        console.error('[winkel] beschikbaarheid faalde:', e instanceof Error ? e.message : e);
+        return { status: 503, body: { ok: false, soort: 'niet-beschikbaar', melding: 'De beschikbaarheid is op dit moment niet op te halen.' } };
+    }
 }
 
 /* ── 3. Offerte ────────────────────────────────────────────────────────────── */

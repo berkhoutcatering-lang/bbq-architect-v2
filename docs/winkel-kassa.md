@@ -11,7 +11,7 @@ meestuurt is `verwachtTotaalCenten`, om een prijswijziging te ontdekken.
 
 ---
 
-## De zes routes
+## De routes
 
 Basis: `{BBQ Architect}/api/public-winkel/hop-en-bites`. Alle antwoorden JSON, fouten
 overal in dezelfde vorm: `{ ok: false, soort, fouten? | melding? }`.
@@ -24,10 +24,71 @@ overal in dezelfde vorm: `{ ok: false, soort, fouten? | melding? }`.
 | `GET order/{token}` | status op een 256-bit token | alleen de contractvelden; onbekend token 404; `betaalUrl` gevuld zolang opnieuw betalen kan |
 | `GET betaal/{token}` | de `betaalUrl`: brug naar myPOS | zet de order (opnieuw) op wacht met verse reservering en post een ondertekend formulier naar de myPOS-betaalpagina |
 | `POST mypos-webhook` | `URL_Notify` van myPOS | handtekening met het myPOS-certificaat; idempotent op transactiereferentie; antwoordt `OK` |
+| `GET beschikbaarheid` | per artikel `op` / `nog n` / `ruim` / `onbeperkt` (plan v5, BA-5b) | alleen artikelen die actief én publiek zijn; per IP 120 per minuut; `no-store`; zie hieronder |
 
 De klant keert van myPOS terug via `betaal/{token}/terug?uitkomst=ok|afgebroken`, dat
 meteen door stuurt naar `{site}/bestelling/{token}`. Een bezoek daar is géén bewijs
 van betaling; de site pollt de status.
+
+## Beschikbaarheid — wat de website over de voorraad hoort (plan v5, BA-5b)
+
+`GET /api/public-winkel/{slug}/beschikbaarheid` geeft:
+
+```json
+{ "ok": true, "versie": 1181, "vrij_verloopt_at": null,
+  "artikelen": [ { "slug": "roeg-naober", "stand": "nog", "nog": 2 },
+                 { "slug": "borrelplank", "stand": "onbeperkt", "nog": null } ] }
+```
+
+- **Stand per artikel** (`standVoorWebsite` in `src/lib/winkel/vrij.ts`): `onbeperkt` als er
+  geen grens bekend is (geen bijgehouden onderdeel en geen quotum), `op` bij 0 vrij,
+  `nog` met het getal tot en met de grens, en daarboven `ruim` zonder getal. BBQ Architect
+  zegt boven de grens dus nooit hoeveel er ligt.
+- **De grens** staat in `winkel_instellingen.beschikbaar_grens` (standaard 5, dezelfde als
+  de "nog n"-pil van de Toonbank; 0 = nooit een getal). Migratie `20261005130100`.
+- **Vrij per artikel** komt uit `winkel_vrij_artikelen` (migratie `20261005130000`, BA-5a):
+  het kleinste aantal dat uit de onderdelen te maken is (Naober vrij 2, twee per duo → 1),
+  begrensd door het artikelquotum (`winkel_artikelen.voorraad`). Vrij per product =
+  ligt er − gereserveerd, met dezelfde regel als de webshop bij het bestellen
+  (`winkel_bezetting_product`: betaald, of wacht met een lopende reservering, en nog niet
+  ingepakt).
+- **`versie`** is `winkel_voorraad_versie`: één omhoog per transactie die ligt er,
+  gereserveerd of vrij raakt (deferred triggers op mutaties, orders, regels, slots en het
+  artikelquotum). Gelijk gebleven = niets veranderd, **behalve** dat een reservering kan
+  verlopen zonder dat er iets geschreven wordt: daarom `vrij_verloopt_at`, het eerste moment
+  waarop een lopende reservering afloopt. Daarna opnieuw vragen. Geen cron nodig.
+- Het is alleen een badge. BBQ Architect blijft de poort bij de order (`WK002`/`WK009`).
+  Geeft deze route een fout (503) of is hij onbereikbaar, dan toont de website geen badge
+  en geen limiet.
+
+Intern lezen de BA-schermen dezelfde getallen in één aanroep: `WinkelStore.laadVrij(orgId)`
+(`winkel_vrij_producten`) in `/voorraad/winkel` en in de voorraadmeldingen, in plaats van
+`winkel_bezetting_product` per product. `winkel_reserveringen(p_org, p_product_id)` geeft per
+order het nummer, de naam, het afhaalmoment en het aantal — nooit e-mail of telefoon — voor
+de Toonbank (contract `toonbank/v1` §1.9). Test op de dev-database: `supabase/tests/winkel_vrij.sql`.
+
+### Ververs-signaal naar de website (plan v5, BA-5c)
+
+Na iets dat de beschikbaarheid kan veranderen stuurt BBQ Architect de website een seintje
+om zijn cache weg te gooien (`src/lib/website/verversSignaal.ts`). Er gaan geen getallen
+mee; de website haalt daarna zelf `GET beschikbaarheid` op.
+
+- `POST {WEBSITE_VERVERS_URL}` met body `{"tags":["beschikbaarheid"]}`, header `x-hb-tijd`
+  (seconden) en `x-hb-handtekening` = `sha256=` + hex(HMAC-SHA256(`WEBSITE_VERVERS_GEHEIM`,
+  `` `${tijd}.${body}` ``)). De website controleert ±300 s en vergelijkt in constante tijd
+  (WEB-2b, variabele `HB_VERVERS_GEHEIM` = hetzelfde geheim).
+- Gedeelde testvector (aan beide kanten getest): geheim `testgeheim-hop-en-bites`, tijd
+  `1791000000`, body `{"tags":["beschikbaarheid"]}` →
+  `sha256=67c7c403fe3d7c60339cc7983cd93326dffd55f06331fd025f644590b3a2455a`.
+- Hooguit 2 seconden, gooit nooit, en verstuurt via `after()` pas na het antwoord: myPOS
+  en de knoppen in BA wachten er niet op. Zonder **beide** variabelen
+  (`WEBSITE_VERVERS_URL`, `WEBSITE_VERVERS_GEHEIM`) gebeurt er niets.
+- Wanneer: na een bevestigde betaling (`naBetaling` in `src/lib/winkel/context.ts`), na
+  inpakken/uitpakken (`zetKlaargezet`), na tellen, ontvangst, overboeken en een afwijking in
+  de winkel (`/voorraad/winkel`), na het boeken van een ontvangst met winkelproducten
+  (`/voorraad/ontvangst`), en na het wijzigen van een artikel (quotum, actief) of zijn slots.
+- Een gemist signaal is niet erg: de website ververst ook op tijd en op `vrij_verloopt_at`,
+  en BBQ Architect blijft de poort bij de order.
 
 ## Zo werkt een order
 
@@ -123,6 +184,7 @@ zegt wat waar staat; de Supabase-tabel-editor is niet meer nodig.
 | Producten, slots per artikel, 18+, btw-verdeling | panelen Producten en Artikelen |
 | Reserveringsbedrag, QR-basis-URL | paneel Instellingen |
 | Capaciteit leeg = onbeperkt, deadline met tijd | paneel Momenten |
+| Grens voor "nog n" op de website en de Toonbank | `winkel_instellingen.beschikbaar_grens` (standaard 5; nog geen veld in het paneel) |
 
 `node scripts/winkel-seed-hop-en-bites.mjs` zet de catalogus opnieuw (idempotent;
 ingevulde prijzen blijven staan).
@@ -142,7 +204,7 @@ ingevulde prijzen blijven staan).
 Zolang myPOS de site niet heeft goedgekeurd, bestelt de klant de Kerst-Box via het
 aanvraagformulier en betaalt hij bij het afhalen. Opdracht:
 `OPDRACHT-BBQ-ARCHITECT-KERSTBOX-BESTELLINGEN.md` (website-repo). Migratie
-`20261005120000_kerst_bestellingen.sql`.
+`20261005110000_kerst_bestellingen.sql`.
 
 - De site stuurt een lead naar `POST /api/public-lead-form/hop-en-bites` met
   `event_type: "Kerst-Box"` en (sinds 5 oktober) een gestructureerd veld `bestelling`

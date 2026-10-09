@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:branch": "node scripts/controleer-dev-db.mjs",
     "build": "node scripts/inject-sw-version.mjs && next build",
     "analyze": "node scripts/inject-sw-version.mjs && ANALYZE=true next build",
     "start": "next start",

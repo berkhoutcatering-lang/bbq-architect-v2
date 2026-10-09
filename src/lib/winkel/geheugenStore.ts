@@ -9,7 +9,26 @@
 import type { Artikel, Instellingen, MomentRij, Product, Slot } from './rekenen';
 import { vandaagISO } from './rekenen';
 import { regelBoekingen } from './voorraad';
+import { heeftAlcohol, nogOpen, opDezelfdeDag, ophaalBlokkade, restOpen, type Boeking, type Leeftijd, type OphaalBron, type OphaalUitkomst, type RestMethode, type TerugUitkomst } from './ophalen';
+import { tekortenVoorApart, zelfdeBedrijfsdag, type Tekort } from './wegzetten';
 import type { Bronnen, ComponentRij, EventTotalen, NieuweOrder, OpslagUitkomst, OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
+import { BESCHIKBAAR_GRENS, vrijArtikelen, vrijProducten } from './vrij';
+
+/** Eén boeking van apart zetten of terugdraaien, zoals winkel_zet_order_apart(_terug) hem teruggeeft. */
+export interface ApartBoeking {
+    regel_id: number;
+    product_id: string;
+    hoeveelheid: number;
+    type: 'verkoop_online' | 'retour';
+}
+
+export type ApartUitkomst =
+    | { ok: true; uitkomst: 'apart' | 'al_apart' | 'geen_taak'; boekingen: ApartBoeking[] }
+    | { ok: false; code: 'WV006' | 'WV010' | 'WV001' | 'onbekend'; tekorten?: Tekort[] };
+
+export type ApartTerugUitkomst =
+    | { ok: true; uitkomst: 'ongedaan' | 'niet_apart' | 'niet_zelfde_dag' | 'geen_taak'; boekingen: ApartBoeking[] }
+    | { ok: false; code: 'WV011' | 'WV001' | 'onbekend' };
 
 /** Een event zoals de plaatsing hem aanmaakt en bijtelt (de kolommen die de keuken leest). */
 export interface EventGeheugen extends EventTotalen {
@@ -24,6 +43,32 @@ export interface EventGeheugen extends EventTotalen {
     type: string;
 }
 
+/** Een orderregel in het geheugen, met wat het ophalen (BA-2) erop zet. */
+export interface GeheugenRegel extends OrderRegelRij {
+    opgehaald_at: string | null;
+    opgehaald_door: string | null;
+    opgehaald_bron: OphaalBron | null;
+    opgehaald_medewerker_id: string | null;
+    leeftijd_vastgesteld_at: string | null;
+}
+
+/** Een doos (QR per pakket, S7) zoals het ophalen hem ziet. */
+export interface GeheugenDoos {
+    id: number;
+    order_id: number;
+    order_regel_id: number;
+    opgehaald_at: string | null;
+    opgehaald_door: string | null;
+}
+
+export interface OphaalOpties {
+    restMethode?: RestMethode | null;
+    leeftijd?: Leeftijd | null;
+    bron?: OphaalBron;
+    doorUserId?: string | null;
+    medewerkerId?: string | null;
+}
+
 interface Geheugen {
     tenant: Tenant;
     artikelen: Artikel[];
@@ -31,12 +76,12 @@ interface Geheugen {
     /** Producten en slots (templates); ontbreekt = geen templates. */
     producten?: Omit<Product, 'voorraad_bezet'>[];
     slots?: Slot[];
-    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null };
+    instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null; beschikbaar_grens?: number };
     nu: () => Date;
 }
 
 export interface GeheugenStore extends WinkelStore {
-    orders: (OrderRij & { regels: OrderRegelRij[] })[];
+    orders: (OrderRij & { regels: GeheugenRegel[] })[];
     /** De componenten per regel, zoals vastgelegd bij het plaatsen. */
     componenten: ComponentRij[];
     berichten: { referentie: string; uitkomst: string | null }[];
@@ -49,6 +94,26 @@ export interface GeheugenStore extends WinkelStore {
     mutaties: { product_id: string; order_regel_id: number; hoeveelheid: number; type: 'verkoop_online' | 'retour' }[];
     /** Inpakken of uitpakken: vinkje + afboeken in één stap. WV006 = niet betaald, WV001 = onder nul. */
     pakIn(regelId: number, ingepakt: boolean): { ok: true } | { ok: false; code: 'WV001' | 'WV006' | 'onbekend' };
+    /** De dozen van de orders (een test zet ze er zelf in). */
+    dozen: GeheugenDoos[];
+    /**
+     * Een order meegeven (BA-2) — dezelfde regels als winkel_order_ophalen:
+     * controleren, inpakken wat nog niet ingepakt is (alles of niets), de rest
+     * boeken, regels en dozen op opgehaald.
+     */
+    haalOp(orgId: string, orderId: number, opties?: OphaalOpties): OphaalUitkomst;
+    /** Opgehaald ongedaan maken, alleen op dezelfde dag; voorraad en rest blijven. */
+    haalOpTerug(orgId: string, orderId: number): TerugUitkomst;
+    /** De voorraadversie (BA-5a): één omhoog per handeling die vrij raakt, zoals de deferred trigger per transactie. */
+    voorraadVersie(): number;
+    /**
+     * BA-6, zoals winkel_zet_order_apart: alle open wegzet-regels (artikel met
+     * afhandeling 'wegzetten') van een betaalde order in één keer apart.
+     * Alles of niets: ligt er te weinig, dan WV010 en verandert er niets.
+     */
+    zetOrderApart(orderId: number): ApartUitkomst;
+    /** BA-6, zoals winkel_zet_order_apart_terug: dezelfde bedrijfsdag retour; na ophalen WV011. */
+    zetOrderApartTerug(orderId: number): ApartTerugUitkomst;
 }
 
 export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): GeheugenStore {
@@ -65,6 +130,13 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
        fixtures van een andere test niet raken. */
     const producten = (g.producten ?? []).map((p) => ({ ...p }));
     const mutaties: GeheugenStore['mutaties'] = [];
+    const dozen: GeheugenDoos[] = [];
+    /* De voorraadversie: de database verhoogt hem één keer per transactie
+       (deferred trigger); hier één keer per handeling (pakIn, haalOp, …),
+       nooit per regel binnen een handeling. */
+    let versie = 0;
+    let versieAt: string | null = null;
+    const versieOmhoog = () => { versie += 1; versieAt = nu.toISOString(); };
 
     const telt = (o: OrderRij) => o.status === 'betaald' || (o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime());
     const bezetMoment = (id: string, zonder: number | null) =>
@@ -110,10 +182,167 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         return componenten.filter((c) => ids.has(c.order_regel_id));
     };
 
-    const zonderRegels = (o: OrderRij & { regels: OrderRegelRij[] }): OrderRij => {
+    const zonderRegels = (o: OrderRij & { regels: GeheugenRegel[] }): OrderRij => {
         const { regels: _r, ...rest } = o;
         return { ...rest };
     };
+
+    /**
+     * Eén regel in- of uitpakken, zoals winkel_zet_klaargezet: vinkje + netto
+     * boeken, alles of niets. Geeft de boekingen terug en of er iets
+     * veranderde. Verhoogt de versie niet: dat doet de handeling eromheen
+     * (pakIn, haalOp, zetOrderApart, …), één keer.
+     */
+    function boekRegel(regelId: number, ingepakt: boolean):
+        { ok: true; boekingen: ApartBoeking[]; gewijzigd: boolean } | { ok: false; code: 'WV001' | 'WV006' | 'onbekend' } {
+        const o = orders.find((x) => x.regels.some((r) => r.id === regelId));
+        const r = o?.regels.find((x) => x.id === regelId);
+        if (!o || !r) return { ok: false, code: 'onbekend' };
+        if (ingepakt && o.status !== 'betaald') return { ok: false, code: 'WV006' };
+        const alGeboekt = new Map<string, number>();
+        for (const m of mutaties) if (m.order_regel_id === regelId) alGeboekt.set(m.product_id, (alGeboekt.get(m.product_id) ?? 0) + m.hoeveelheid);
+        const boekingen = regelBoekingen(componenten.filter((c) => c.order_regel_id === regelId), { ingepakt, betaald: o.status === 'betaald' }, alGeboekt,
+            (id) => producten.find((p) => p.id === id)?.voorraad != null);
+        /* Alles of niets, net als de transactie. */
+        for (const b of boekingen) {
+            const p = producten.find((x) => x.id === b.product_id);
+            if (!p || p.voorraad == null || p.voorraad + b.hoeveelheid < 0) return { ok: false, code: 'WV001' };
+        }
+        for (const b of boekingen) {
+            const p = producten.find((x) => x.id === b.product_id)!;
+            p.voorraad = Math.round((p.voorraad! + b.hoeveelheid) * 1000) / 1000;
+            mutaties.push({ ...b, order_regel_id: regelId });
+        }
+        const was = r.klaargezet_at;
+        r.klaargezet_at = ingepakt ? (r.klaargezet_at ?? nu.toISOString()) : null;
+        return {
+            ok: true,
+            boekingen: boekingen.map((b) => ({ ...b, regel_id: regelId })),
+            gewijzigd: boekingen.length > 0 || was !== r.klaargezet_at,
+        };
+    }
+
+    /** Legt voorraad, logboek en vinkjes vast; de teruggegeven functie zet ze terug (de terugrol van de transactie). */
+    function momentopname(): () => void {
+        const voorraad = producten.map((p) => p.voorraad);
+        const aantalMutaties = mutaties.length;
+        const vinkjes = orders.flatMap((o) => o.regels.map((r) => [r, r.klaargezet_at] as const));
+        return () => {
+            producten.forEach((p, i) => { p.voorraad = voorraad[i] ?? null; });
+            mutaties.length = aantalMutaties;
+            for (const [r, k] of vinkjes) r.klaargezet_at = k;
+        };
+    }
+
+    /** Voert f uit; lukt het niet, dan gaat alles terug zoals het was (één transactie). */
+    function alsTransactie<T extends { ok: boolean }>(f: () => T): T {
+        const terug = momentopname();
+        const uit = f();
+        if (!uit.ok) terug();
+        return uit;
+    }
+
+    /** De regels van artikelen die uit het schap komen (BA-6). */
+    const wegzetRegels = (o: { regels: GeheugenRegel[] }) =>
+        o.regels.filter((r) => g.artikelen.find((a) => a.id === r.artikel_id)?.afhandeling === 'wegzetten');
+
+    /** Het losse vinkje: één regel, één handeling, hooguit één versie omhoog. */
+    function pakIn(regelId: number, ingepakt: boolean): ReturnType<GeheugenStore['pakIn']> {
+        const uit = boekRegel(regelId, ingepakt);
+        if (uit.ok === false) return uit;
+        if (uit.gewijzigd) versieOmhoog();
+        return { ok: true };
+    }
+
+    /* BA-2: dezelfde volgorde als winkel_order_ophalen (zie ophalen.ts). */
+    function haalOp(orgId: string, orderId: number, opties: OphaalOpties = {}): OphaalUitkomst {
+        const o = orders.find((x) => x.id === orderId && x.organization_id === orgId);
+        if (!o) return { uitkomst: 'onbekend', order_id: orderId };
+        const basis = {
+            order_id: o.id, nummer: o.nummer, klant: o.contact_naam,
+            nog_open: nogOpen(o), alcohol: heeftAlcohol(o), rest_cents: restOpen(o) ? o.rest_cents : 0,
+        };
+        const blokkade = ophaalBlokkade(o, { leeftijd: opties.leeftijd, restMethode: opties.restMethode });
+        if (blokkade === 'niet_betaald') return { ...basis, uitkomst: 'niet_betaald', status: o.status };
+        if (blokkade === 'al_opgehaald') {
+            const laatste = o.regels.map((r) => r.opgehaald_at).filter((t): t is string => !!t).sort().at(-1) ?? null;
+            return { ...basis, uitkomst: 'al_opgehaald', opgehaald_at: laatste };
+        }
+        if (blokkade === 'geweigerd') {
+            /* Alleen de weigering vastleggen, verder niets. */
+            const t = nu.toISOString();
+            o.leeftijd_geweigerd_at = t;
+            o.leeftijd_geweigerd_door = opties.doorUserId ?? null;
+            return { ...basis, uitkomst: 'geweigerd', geweigerd_at: t };
+        }
+        if (blokkade === 'rest_nodig') return { ...basis, uitkomst: 'rest_nodig', reeds_cents: o.nu_te_betalen_cents };
+        if (blokkade === 'leeftijd_nodig') return { ...basis, uitkomst: 'leeftijd_nodig' };
+
+        /* Inpakken wat nog niet ingepakt is: alles of niets, net als het blok
+           met EXCEPTION WHEN SQLSTATE 'WV001' in de database. */
+        const terug = momentopname();
+        const boekingen: Boeking[] = [];
+        for (const r of o.regels.filter((x) => !x.opgehaald_at && !x.klaargezet_at).sort((a, b) => a.id - b.id)) {
+            const uit = boekRegel(r.id, true);
+            if (uit.ok === false) {
+                terug();
+                if (uit.code === 'WV001') return { ...basis, uitkomst: 'te_weinig_voorraad', melding: 'te weinig voorraad om in te pakken' };
+                throw new Error(`inpakken mislukt: ${uit.code}`);
+            }
+            for (const b of uit.boekingen) {
+                boekingen.push({ product_id: b.product_id, hoeveelheid: b.hoeveelheid, voorraad: producten.find((p) => p.id === b.product_id)?.voorraad ?? null });
+            }
+        }
+
+        const t = nu.toISOString();
+        let restGeboekt: RestMethode | null = null;
+        if (restOpen(o) && opties.restMethode) {
+            o.rest_betaald_at = t;
+            o.rest_betaalmethode = opties.restMethode;
+            restGeboekt = opties.restMethode;
+        }
+        for (const r of o.regels) {
+            if (r.opgehaald_at) continue;
+            r.opgehaald_at = t;
+            r.opgehaald_door = opties.doorUserId ?? null;
+            r.opgehaald_bron = opties.bron ?? 'ba';
+            r.opgehaald_medewerker_id = opties.medewerkerId ?? null;
+            if (r.alcohol && opties.leeftijd === 'vastgesteld') r.leeftijd_vastgesteld_at = t;
+        }
+        for (const d of dozen) {
+            if (d.order_id === o.id && !d.opgehaald_at) { d.opgehaald_at = t; d.opgehaald_door = opties.doorUserId ?? null; }
+        }
+        /* Inpakken en opgehaald in één transactie: één keer omhoog. */
+        versieOmhoog();
+        return {
+            ...basis, uitkomst: 'opgehaald', opgehaald_at: t, nog_open: 0, regels: basis.nog_open,
+            rest_geboekt: restGeboekt, leeftijd: basis.alcohol ? (opties.leeftijd ?? null) : null, boekingen,
+        };
+    }
+
+    function haalOpTerug(orgId: string, orderId: number): TerugUitkomst {
+        const o = orders.find((x) => x.id === orderId && x.organization_id === orgId);
+        if (!o) return { uitkomst: 'onbekend', order_id: orderId };
+        const opgehaald = o.regels.filter((r) => r.opgehaald_at);
+        if (opgehaald.length === 0) return { uitkomst: 'niet_opgehaald', order_id: o.id, nummer: o.nummer };
+        if (opgehaald.some((r) => !opDezelfdeDag(r.opgehaald_at!, nu))) {
+            const laatste = opgehaald.map((r) => r.opgehaald_at!).sort().at(-1) ?? null;
+            return { uitkomst: 'niet_zelfde_dag', order_id: o.id, nummer: o.nummer, opgehaald_at: laatste };
+        }
+        for (const r of opgehaald) {
+            Object.assign(r, { opgehaald_at: null, opgehaald_door: null, opgehaald_bron: null, opgehaald_medewerker_id: null, leeftijd_vastgesteld_at: null });
+        }
+        let teruggezetteDozen = 0;
+        for (const d of dozen) {
+            if (d.order_id === o.id && d.opgehaald_at && opDezelfdeDag(d.opgehaald_at, nu)) {
+                d.opgehaald_at = null;
+                d.opgehaald_door = null;
+                teruggezetteDozen += 1;
+            }
+        }
+        versieOmhoog();
+        return { uitkomst: 'teruggezet', order_id: o.id, nummer: o.nummer, regels: opgehaald.length, dozen: teruggezetteDozen };
+    }
 
     return {
         orders,
@@ -123,28 +352,58 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         zetNu(d) { nu = d; },
         producten,
         mutaties,
+        voorraadVersie() { return versie; },
+        pakIn,
+        dozen,
+        haalOp,
+        haalOpTerug,
 
-        pakIn(regelId, ingepakt) {
-            const o = orders.find((x) => x.regels.some((r) => r.id === regelId));
-            const r = o?.regels.find((x) => x.id === regelId);
-            if (!o || !r) return { ok: false, code: 'onbekend' };
-            if (ingepakt && o.status !== 'betaald') return { ok: false, code: 'WV006' };
-            const alGeboekt = new Map<string, number>();
-            for (const m of mutaties) if (m.order_regel_id === regelId) alGeboekt.set(m.product_id, (alGeboekt.get(m.product_id) ?? 0) + m.hoeveelheid);
-            const boekingen = regelBoekingen(componenten.filter((c) => c.order_regel_id === regelId), { ingepakt, betaald: o.status === 'betaald' }, alGeboekt,
-                (id) => producten.find((p) => p.id === id)?.voorraad != null);
-            /* Alles of niets, net als de transactie. */
-            for (const b of boekingen) {
-                const p = producten.find((x) => x.id === b.product_id);
-                if (!p || p.voorraad == null || p.voorraad + b.hoeveelheid < 0) return { ok: false, code: 'WV001' };
-            }
-            for (const b of boekingen) {
-                const p = producten.find((x) => x.id === b.product_id)!;
-                p.voorraad = Math.round((p.voorraad! + b.hoeveelheid) * 1000) / 1000;
-                mutaties.push({ ...b, order_regel_id: regelId });
-            }
-            r.klaargezet_at = ingepakt ? (r.klaargezet_at ?? nu.toISOString()) : null;
-            return { ok: true };
+        /* Eén handeling, één transactie: de versie gaat hooguit één keer omhoog. */
+        zetOrderApart(orderId) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return { ok: false, code: 'onbekend' };
+            if (o.status !== 'betaald') return { ok: false, code: 'WV006' };
+            const wegzet = wegzetRegels(o);
+            if (wegzet.length === 0) return { ok: true, uitkomst: 'geen_taak', boekingen: [] };
+            const open = wegzet.filter((r) => !r.klaargezet_at && !r.opgehaald_at);
+            if (open.length === 0) return { ok: true, uitkomst: 'al_apart', boekingen: [] };
+            const ids = new Set(open.map((r) => r.id));
+            const tekorten = tekortenVoorApart(componenten.filter((c) => ids.has(c.order_regel_id)), producten);
+            if (tekorten.length > 0) return { ok: false, code: 'WV010', tekorten };
+            const uit = alsTransactie((): ApartUitkomst => {
+                const boekingen: ApartBoeking[] = [];
+                for (const r of open) {
+                    const b = boekRegel(r.id, true);
+                    if (b.ok === false) return { ok: false, code: b.code };
+                    boekingen.push(...b.boekingen);
+                }
+                return { ok: true, uitkomst: 'apart', boekingen };
+            });
+            if (uit.ok) versieOmhoog();
+            return uit;
+        },
+
+        zetOrderApartTerug(orderId) {
+            const o = orders.find((x) => x.id === orderId);
+            if (!o) return { ok: false, code: 'onbekend' };
+            const wegzet = wegzetRegels(o);
+            if (wegzet.length === 0) return { ok: true, uitkomst: 'geen_taak', boekingen: [] };
+            if (wegzet.some((r) => r.opgehaald_at)) return { ok: false, code: 'WV011' };
+            const apart = wegzet.filter((r) => r.klaargezet_at);
+            if (apart.length === 0) return { ok: true, uitkomst: 'niet_apart', boekingen: [] };
+            const eerste = apart.map((r) => new Date(r.klaargezet_at!)).reduce((a, b) => (b < a ? b : a));
+            if (!zelfdeBedrijfsdag(eerste, nu)) return { ok: true, uitkomst: 'niet_zelfde_dag', boekingen: [] };
+            const uit = alsTransactie((): ApartTerugUitkomst => {
+                const boekingen: ApartBoeking[] = [];
+                for (const r of apart) {
+                    const b = boekRegel(r.id, false);
+                    if (b.ok === false) return { ok: false, code: b.code === 'WV001' ? 'WV001' : 'onbekend' };
+                    boekingen.push(...b.boekingen);
+                }
+                return { ok: true, uitkomst: 'ongedaan', boekingen };
+            });
+            if (uit.ok) versieOmhoog();
+            return uit;
         },
 
         async laadTenant(slug) { return slug === g.tenant.slug ? g.tenant : null; },
@@ -198,18 +457,19 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             /* klaar_op zoals de databasetrigger: het moment op de regel, anders
                het moment van de order, anders vandaag. */
             const datumVan = (id: string | null) => (id ? g.momenten.find((m) => m.id === id)?.datum ?? null : null);
-            const regels: OrderRegelRij[] = n.regels.map((r) => ({
+            const regels: GeheugenRegel[] = n.regels.map((r) => ({
                 id: ++regelTeller, artikel_id: r.artikel_id,
                 slug: r.slug, naam: r.naam, aantal: r.aantal, eenheid: r.eenheid, stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten,
                 btw_pct: r.btw_pct, moment_id: r.moment_id, eenheden: r.eenheden, voorraad_eenheden: r.voorraad_eenheden, afhaalmoment_tekst: r.afhaalmoment,
                 klaar_op: datumVan(r.moment_id) ?? datumVan(n.momentId) ?? vandaagISO(nu), event_id: null, klaargezet_at: null,
                 btw_cents: r.btw_cents, alcohol: r.alcohol,
+                opgehaald_at: null, opgehaald_door: null, opgehaald_bron: null, opgehaald_medewerker_id: null, leeftijd_vastgesteld_at: null,
             }));
             const nieuweComponenten: ComponentRij[] = n.regels.flatMap((r, i) => (r.componenten ?? []).map((c) => ({ ...c, id: ++componentTeller, order_regel_id: regels[i]!.id })));
             const c = controleer(regels, nieuweComponenten, null);
             if (c.ok === false) return { ok: false, code: c.code, detail: c.detail };
             teller += 1;
-            const o: OrderRij & { regels: OrderRegelRij[] } = {
+            const o: OrderRij & { regels: GeheugenRegel[] } = {
                 id: teller,
                 organization_id: n.orgId,
                 nummer: `HB-${nu.getFullYear()}-${String(teller).padStart(4, '0')}`,
@@ -247,6 +507,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             };
             orders.push(o);
             componenten.push(...nieuweComponenten);
+            versieOmhoog();
             return { ok: true, waarde: zonderRegels(o) };
         },
 
@@ -262,6 +523,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             o.reservering_tot = new Date(nu.getTime() + g.instellingen.reservering_minuten * 60_000).toISOString();
             o.betaalpoging += 1;
             o.mypos_order_id = `${o.nummer}-${o.betaalpoging}-${o.token.slice(0, 6)}`;
+            versieOmhoog();
             return { ok: true, waarde: zonderRegels(o) };
         },
 
@@ -273,10 +535,12 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 const c = controleer(o.regels, eigenComponenten(o), o.id);
                 if (!c.ok) {
                     Object.assign(o, { status: 'mislukt', status_reden: 'verlopen-en-vol', mypos_trnref: b.trnref, betaald_cents: b.centen, betaalmethode: b.methode, refund_status: 'nodig' });
+                    versieOmhoog();
                     return 'vol';
                 }
             }
             Object.assign(o, { status: 'betaald', status_reden: null, mypos_trnref: b.trnref, betaald_cents: b.centen, betaald_at: nu.toISOString(), betaalmethode: b.methode });
+            versieOmhoog();
             return 'betaald';
         },
 
@@ -292,7 +556,11 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
 
         async zetStatus(orderId, status, reden = null) {
             const o = orders.find((x) => x.id === orderId);
-            if (o) { o.status = status; o.status_reden = reden; }
+            if (o) {
+                const was = o.status;
+                o.status = status; o.status_reden = reden;
+                if (was !== status) versieOmhoog();
+            }
         },
 
         async registreerBetaalbericht(_orgId, referentie) {
@@ -348,6 +616,26 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
         async noteerPlaatsing(orderId, status, fout = null) {
             const o = orders.find((x) => x.id === orderId);
             if (o) { o.plaatsing_status = status; o.plaatsing_fout = fout; o.plaatsing_at = nu.toISOString(); }
+        },
+
+        /* ── Vrij (BA-5a/5b): dezelfde regels als winkel_vrij_producten en winkel_vrij_artikelen ── */
+        async laadVrij(orgId) {
+            if (orgId !== g.tenant.orgId) return [];
+            return vrijProducten(producten, new Map(producten.map((p) => [p.id, bezetProduct(p.id, null)])));
+        },
+        async laadBeschikbaarheid(orgId) {
+            if (orgId !== g.tenant.orgId) return null;
+            const wachtTot = orders
+                .filter((o) => o.status === 'wacht' && new Date(o.reservering_tot).getTime() > nu.getTime())
+                .map((o) => o.reservering_tot)
+                .sort();
+            const vrij = vrijProducten(producten, new Map(producten.map((p) => [p.id, bezetProduct(p.id, null)])));
+            const artikelen = g.artikelen.map((a) => ({ ...a, voorraad_bezet: a.voorraad == null ? undefined : bezetVoorraad(a.id, null) }));
+            return {
+                stand: { versie, gewijzigd_at: versieAt, vrij_verloopt_at: wachtTot[0] ?? null },
+                grens: g.instellingen.beschikbaar_grens ?? BESCHIKBAAR_GRENS,
+                artikelen: vrijArtikelen(artikelen, g.slots ?? [], vrij),
+            };
         },
     };
 }

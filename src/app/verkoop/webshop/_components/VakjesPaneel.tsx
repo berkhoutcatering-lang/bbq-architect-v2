@@ -10,10 +10,11 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList, Flame, Loader2, MailWarning, MapPin, RotateCcw, Search, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail, ScanLine, Wallet } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList, Flame, IdCard, Loader2, MailWarning, MapPin, RotateCcw, Search, Send, ShoppingCart, Sparkles, TriangleAlert, Truck, AlertTriangle, Mail, ScanLine, Wallet } from 'lucide-react';
 import Button from '@/components/Button';
 import { formatEur } from '@/lib/format';
 import { wensenSamenvatting } from '@/lib/winkel/plaatsing';
+import { restOpen as heeftOpenRest, welkeStapNodig, type Melding as OphaalMelding, type OphaalKeuze } from '@/lib/winkel/ophalen';
 import Drawer from './Drawer';
 import ProductiePaneel, { EtiketKnop, useEtiketPrinter } from './ProductiePaneel';
 import {
@@ -351,6 +352,7 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
                             </div>
                             <div className="ws-order-wat">{regelsKort(o)} · {datumKort(v.datum)}{dozenTekst(v.regels.filter((x) => x.order.id === o.id))}</div>
                             <RestBetaling order={o} herlaad={herlaad} melding={melding} />
+                            <Opgehaald order={o} herlaad={herlaad} melding={melding} />
                             <div className="ws-order-wat"><a href={`mailto:${o.contact_email}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_email}</a>{o.contact_telefoon && <> · <a href={`tel:${o.contact_telefoon}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_telefoon}</a></>}</div>
                             {o.plaatsing_status === 'mislukt' && <span className="ws-merk ws-merk-vuur" style={{ alignSelf: 'flex-start' }}><CircleAlert size={13} />niet geplaatst — {o.plaatsing_fout}</span>}
                             <WensenBlok order={o} herlaad={herlaad} melding={melding} />
@@ -485,42 +487,117 @@ function BalieScan({ herlaad, melding }: { herlaad: () => Promise<void>; melding
     );
 }
 
-/* ── De balie: opgehaald (W3) ────────────────────────────────────────────────
-   Alleen status. De voorraad is bij het inpakken al afgeboekt; ophalen raakt
-   hem niet (docs/voorraad-bouwplan.md W3). */
+/* ── De balie: ophalen (BA-2) ────────────────────────────────────────────────
+   Eén databasefunctie (winkel_order_ophalen) doet alles in één transactie:
+   controleert betaald en al opgehaald, pakt in wat nog niet ingepakt is
+   (verkoop_online), boekt de rest en zet de order op opgehaald. Op het scherm
+   eerst 18+ (ID gezien / Geweigerd), dan de rest (contant / pin), dan
+   Opgehaald. Ongedaan maken kan alleen dezelfde dag en zet alleen de status
+   terug; voorraad en rest blijven staan. */
+
+const linkKnop = { fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 } as const;
 
 function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
     const [bezig, setBezig] = useState(false);
+    const [keuze, setKeuze] = useState<OphaalKeuze>({});
+    const [laatste, setLaatste] = useState<OphaalMelding | null>(null);
     if (o.status !== 'betaald') return null;
     const regels = o.winkel_order_regels;
-    const opgehaald = regels.length > 0 && regels.every((r) => r.opgehaald_at);
-    const ingepakt = regels.length > 0 && regels.every((r) => r.klaargezet_at);
-    async function zet(aan: boolean) {
+    const ophaalOrder = { ...o, regels };
+    const stap = welkeStapNodig(ophaalOrder, keuze);
+    const rest = heeftOpenRest(o);
+    const ingepakt = regels.length > 0 && regels.every((r) => r.klaargezet_at || r.opgehaald_at);
+
+    function toon(m: OphaalMelding) {
+        setLaatste(m);
+        melding(m.tekst, m.soort);
+    }
+
+    async function haalOp(k: OphaalKeuze) {
         setBezig(true);
         try {
-            const r = await zetOpgehaald({ orderId: o.id, opgehaald: aan });
+            const r = await zetOpgehaald({ orderId: o.id, opgehaald: true, restMethode: k.restMethode ?? null, leeftijd: k.leeftijd ?? null });
             if ('error' in r) { melding(r.error, 'error'); return; }
-            melding(aan ? `${o.nummer} opgehaald` : `${o.nummer} weer op niet opgehaald`, 'success');
-            await herlaad();
+            toon(r.data.melding);
+            const u = r.data.uitkomst.uitkomst;
+            /* Vraagt de database toch nog iets (iemand anders was sneller), dan
+               die stap opnieuw; anders schoon beginnen. */
+            if (u === 'leeftijd_nodig') setKeuze({ restMethode: k.restMethode });
+            else if (u === 'rest_nodig') setKeuze({ leeftijd: k.leeftijd === 'vastgesteld' ? 'vastgesteld' : null });
+            else setKeuze({});
+            if (u === 'opgehaald' || u === 'al_opgehaald' || u === 'geweigerd') await herlaad();
         } finally { setBezig(false); }
     }
-    if (opgehaald) {
-        const t = regels[0]?.opgehaald_at;
+
+    async function terug() {
+        setBezig(true);
+        try {
+            const r = await zetOpgehaald({ orderId: o.id, opgehaald: false });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            toon(r.data.melding);
+            if (r.data.uitkomst.uitkomst === 'teruggezet') await herlaad();
+        } finally { setBezig(false); }
+    }
+
+    const uitkomstRegel = laatste && (
+        <div className="ws-order-wat" style={{ color: laatste.soort === 'error' ? 'var(--ws-vuur)' : laatste.soort === 'success' ? 'var(--green)' : 'var(--muted)', textWrap: 'pretty' }}>{laatste.tekst}</div>
+    );
+
+    if (stap === 'al_opgehaald') {
+        const t = regels.map((r) => r.opgehaald_at).filter((x): x is string => !!x).sort().at(-1);
         return (
-            <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Check size={13} style={{ color: 'var(--green)' }} />Opgehaald {t ? new Date(t).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                <button type="button" onClick={() => zet(false)} disabled={bezig} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}>ongedaan</button>
+            <>
+                <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Check size={13} style={{ color: 'var(--green)' }} />Opgehaald {t ? new Date(t).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                    <button type="button" onClick={() => void terug()} disabled={bezig} style={linkKnop} title="Alleen dezelfde dag; voorraad en rest blijven staan">ongedaan</button>
+                </div>
+                {uitkomstRegel}
+            </>
+        );
+    }
+
+    let inhoud: ReactNode;
+    if (stap === 'leeftijd' || stap === 'geweigerd') {
+        inhoud = (
+            <div className="ws-rest">
+                <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><IdCard size={14} /></span>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>18+</b> · controleer de leeftijd (ID) vóór je meegeeft{rest ? <> · daarna rest <b>{eur(o.rest_cents)}</b></> : null}
+                    {o.leeftijd_geweigerd_at && <> · <span style={{ color: 'var(--ws-vuur)' }}>eerder geweigerd {new Date(o.leeftijd_geweigerd_at).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span></>}
+                </div>
+                <Button size="sm" variant="ghost" loading={bezig} disabled={bezig} onClick={() => void haalOp({ leeftijd: 'geweigerd' })}>Geweigerd</Button>
+                <Button size="sm" disabled={bezig} onClick={() => setKeuze({ ...keuze, leeftijd: 'vastgesteld' })}>ID gezien</Button>
+            </div>
+        );
+    } else if (stap === 'rest') {
+        inhoud = (
+            <div className="ws-rest">
+                <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Reeds betaald {eur(o.nu_te_betalen_cents)}</b> · te betalen in de winkel: <b>{eur(o.rest_cents)}</b></div>
+                <Button size="sm" variant="ghost" disabled={bezig} onClick={() => setKeuze({ ...keuze, restMethode: 'contant' })}>Contant</Button>
+                <Button size="sm" disabled={bezig} onClick={() => setKeuze({ ...keuze, restMethode: 'pin' })}>Pin</Button>
+            </div>
+        );
+    } else {
+        const gekozen = keuze.leeftijd === 'vastgesteld' || keuze.restMethode;
+        inhoud = (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {keuze.leeftijd === 'vastgesteld' && <span className="ws-merk" style={{ height: 24 }}><IdCard size={13} />ID gezien</span>}
+                {keuze.restMethode && rest && <span className="ws-merk" style={{ height: 24 }}><Wallet size={13} />rest {eur(o.rest_cents)} {keuze.restMethode}</span>}
+                {gekozen && <button type="button" onClick={() => setKeuze({})} disabled={bezig} style={linkKnop}>wijzig</button>}
+                <Button size="sm" variant={ingepakt ? 'brand' : 'ghost'} icon={<Check size={14} />} loading={bezig} onClick={() => void haalOp(keuze)}
+                    title={ingepakt ? undefined : 'Nog niet alles is ingepakt: dat gebeurt nu, en wordt afgeboekt'}>
+                    Opgehaald
+                </Button>
             </div>
         );
     }
-    return (
-        <Button size="sm" variant={ingepakt ? 'brand' : 'ghost'} icon={<Check size={14} />} loading={bezig} onClick={() => zet(true)} title={ingepakt ? undefined : 'Nog niet alles is ingepakt'}>
-            Opgehaald
-        </Button>
-    );
+    return <>{inhoud}{uitkomstRegel}</>;
 }
 
-/* ── De balie: het restbedrag boeken (S5) ──────────────────────────────────── */
+/* ── De balie: het restbedrag (S5) ───────────────────────────────────────────
+   De rest wordt geboekt bij het ophalen (hierboven), in dezelfde transactie.
+   Los boeken alleen nog voor een order die al is meegegeven zonder rest (van
+   vóór BA-2). */
 
 function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
     const [bezig, setBezig] = useState<'contant' | 'pin' | null>(null);
@@ -528,6 +605,8 @@ function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad
     if (o.rest_betaald_at) {
         return <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={13} style={{ color: 'var(--green)' }} />Reservering {eur(o.nu_te_betalen_cents)} online · rest {eur(o.rest_cents)} {o.rest_betaalmethode ?? ''} betaald {new Date(o.rest_betaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>;
     }
+    const regels = o.winkel_order_regels;
+    if (!heeftOpenRest(o) || !(regels.length > 0 && regels.every((r) => r.opgehaald_at))) return null;
     async function boek(methode: 'contant' | 'pin') {
         setBezig(methode);
         try {
@@ -540,7 +619,7 @@ function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad
     return (
         <div className="ws-rest">
             <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
-            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Reeds betaald {eur(o.nu_te_betalen_cents)}</b> · te betalen in de winkel: <b>{eur(o.rest_cents)}</b></div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Meegegeven zonder rest</b> · reeds betaald {eur(o.nu_te_betalen_cents)} · nog te ontvangen: <b>{eur(o.rest_cents)}</b></div>
             <Button size="sm" variant="ghost" loading={bezig === 'contant'} disabled={bezig != null} onClick={() => boek('contant')}>Contant</Button>
             <Button size="sm" loading={bezig === 'pin'} disabled={bezig != null} onClick={() => boek('pin')}>Pin</Button>
         </div>

@@ -18,6 +18,7 @@ import 'server-only';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { sendServerMail } from '@/lib/serverMail';
 import type { Slot } from '@/lib/winkel/rekenen';
+import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import {
     DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, verschil, winkelProductMeldingen,
     type ArtikelKort, type KeukenItem, type Melding, type Vraag, type WinkelProduct,
@@ -30,17 +31,16 @@ const PRODUCT_KOLOMMEN = 'id, naam, eenheid, voorraad, drempel, actief, par_nive
 const SLOT_KOLOMMEN = 'id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven';
 
 async function laadWinkel(sb: Sb, orgId: string) {
-    const [{ data: producten }, { data: slots }, { data: artikelen }] = await Promise.all([
+    /* Gereserveerd voor alle producten in één aanroep (winkel_vrij_producten),
+       in plaats van winkel_bezetting_product per product. Dezelfde regel. */
+    const [{ data: producten }, { data: slots }, { data: artikelen }, vrij] = await Promise.all([
         sb.from('winkel_producten').select(PRODUCT_KOLOMMEN).eq('organization_id', orgId),
         sb.from('winkel_artikel_slots').select(SLOT_KOLOMMEN).eq('organization_id', orgId),
         sb.from('winkel_artikelen').select('id, naam, actief').eq('organization_id', orgId),
+        maakSupabaseStore(sb).laadVrij(orgId),
     ]);
     const bijgehouden = (producten ?? []).filter((p) => p.voorraad != null);
-    const bezet = new Map<string, number>();
-    await Promise.all(bijgehouden.map(async (p) => {
-        const { data: n } = await sb.rpc('winkel_bezetting_product', { p_product_id: p.id, p_zonder_order: null });
-        bezet.set(p.id as string, Number(n ?? 0));
-    }));
+    const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
 
     /* Vooruitkijken: betaald, nog niet ingepakt, per ophaaldag. */
     let vraag: Vraag[] = [];
