@@ -19,7 +19,7 @@ export const BAKJES_PER_SCHAAL = 6;
 
 export interface ProductieRegel {
     regel: { id: number; artikel_id: string; slug: string; naam: string; aantal: number; alcohol: boolean };
-    order: { id: number; nummer: string; contact_naam: string; betaalwijze: 'volledig' | 'reservering'; nu_te_betalen_cents: number; rest_cents: number; rest_betaald_at: string | null };
+    order: { id: number; nummer: string; contact_naam: string; betaalwijze: 'volledig' | 'reservering' | 'bij_afhalen'; nu_te_betalen_cents: number; rest_cents: number; rest_betaald_at: string | null };
     componenten: Component[];
 }
 
@@ -207,10 +207,14 @@ export function codeUitScan(invoer: string): string | null {
     return m ? m[1]!.toLowerCase() : null;
 }
 
-/** "reeds betaald € 2,50 · rest € 32,50" — alleen bij een reservering die nog openstaat. */
+/**
+ * "reeds betaald € 2,50 · rest € 32,50" bij een reservering, "betalen bij
+ * afhalen € 90,00" bij een Kerst-Box (bij_afhalen). Anders null.
+ */
 export function restTekst(o: Pick<ProductieRegel['order'], 'betaalwijze' | 'nu_te_betalen_cents' | 'rest_cents' | 'rest_betaald_at'>): string | null {
-    if (o.betaalwijze !== 'reservering' || o.rest_cents <= 0) return null;
-    if (o.rest_betaald_at) return 'rest betaald';
+    if ((o.betaalwijze !== 'reservering' && o.betaalwijze !== 'bij_afhalen') || o.rest_cents <= 0) return null;
+    if (o.rest_betaald_at) return o.betaalwijze === 'bij_afhalen' ? 'betaald' : 'rest betaald';
+    if (o.betaalwijze === 'bij_afhalen') return `betalen bij afhalen ${euro(o.rest_cents)}`;
     return `reeds betaald ${euro(o.nu_te_betalen_cents)} · rest ${euro(o.rest_cents)}`;
 }
 

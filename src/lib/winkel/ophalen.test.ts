@@ -10,7 +10,7 @@ import { MYPOS_TEST } from '@/lib/mypos/ipc';
 import { maakGeheugenStore, type GeheugenStore } from './geheugenStore';
 import { _resetControleKlok, plaatsOrder, type KassaContext } from './kassa';
 import {
-    euro, ophaalBlokkade, ophaalMelding, opDezelfdeDag, terugMelding, welkeStapNodig,
+    euro, ophaalBlokkade, ophaalMelding, opDezelfdeDag, restOpen, terugMelding, welkeStapNodig,
     type OphaalOrder, type OphaalUitkomst, type TerugUitkomst,
 } from './ophalen';
 import type { Artikel, Product, Slot } from './rekenen';
@@ -45,6 +45,14 @@ describe('welkeStapNodig — wat de balie eerst moet doen', () => {
         expect(welkeStapNodig(order({ betaalwijze: 'volledig', rest_cents: 500 }))).toBe('ophalen');
     });
 
+    it('Kerst-Box (bij_afhalen): eerst 18+, dan betalen, dan Opgehaald', () => {
+        const o = metAlcohol({ betaalwijze: 'bij_afhalen', rest_cents: 11200 });
+        expect(welkeStapNodig(o)).toBe('leeftijd');
+        expect(welkeStapNodig(o, { leeftijd: 'vastgesteld' })).toBe('rest');
+        expect(welkeStapNodig(o, { leeftijd: 'vastgesteld', restMethode: 'contant' })).toBe('ophalen');
+        expect(welkeStapNodig(order({ betaalwijze: 'bij_afhalen', rest_cents: 9000, rest_betaald_at: '2026-12-24T10:00:00Z' }))).toBe('ophalen');
+    });
+
     it('alcohol in een regel die al (via een doos) is meegegeven telt niet meer', () => {
         const o = order({ regels: [{ alcohol: true, opgehaald_at: '2026-11-20T12:00:00Z' }, { alcohol: false, opgehaald_at: null }] });
         expect(welkeStapNodig(o)).toBe('ophalen');
@@ -61,6 +69,12 @@ describe('ophaalBlokkade — dezelfde volgorde als winkel_order_ophalen', () => 
         expect(ophaalBlokkade(o, { restMethode: 'contant' })).toBe('leeftijd_nodig');
         expect(ophaalBlokkade(o, { restMethode: 'contant', leeftijd: 'vastgesteld' })).toBeNull();
     });
+    it('Kerst-Box (bij_afhalen) zonder betaling: rest_nodig, net als de database (20261013120000)', () => {
+        expect(ophaalBlokkade(order({ betaalwijze: 'bij_afhalen', rest_cents: 9000 }))).toBe('rest_nodig');
+        expect(ophaalBlokkade(order({ betaalwijze: 'bij_afhalen', rest_cents: 9000 }), { restMethode: 'pin' })).toBeNull();
+        expect(restOpen({ betaalwijze: 'bij_afhalen', rest_cents: 9000, rest_betaald_at: null })).toBe(true);
+        expect(restOpen({ betaalwijze: 'volledig', rest_cents: 9000, rest_betaald_at: null })).toBe(false);
+    });
     it('niet betaald vóór al opgehaald', () => {
         expect(ophaalBlokkade(order({ status: 'afgebroken', regels: [{ opgehaald_at: '2026-11-20T12:00:00Z' }] }))).toBe('niet_betaald');
     });
@@ -74,6 +88,7 @@ describe('ophaalMelding — elke uitkomst in mensentaal', () => {
         [{ ...basis, uitkomst: 'al_opgehaald', opgehaald_at: '2026-11-20T12:00:00Z' }, 'info', /al opgehaald om .*niets dubbel geboekt/],
         [{ ...basis, uitkomst: 'geweigerd', geweigerd_at: '2026-11-20T12:00:00Z' }, 'info', /niet meegegeven: leeftijd niet vastgesteld\. De weigering is vastgelegd.*geen rest geboekt/],
         [{ ...basis, uitkomst: 'rest_nodig', rest_cents: 3250, reeds_cents: 250 }, 'info', /Eerst de rest: € 32,50 contant of pin \(reeds betaald € 2,50\)/],
+        [{ ...basis, uitkomst: 'rest_nodig', rest_cents: 9000, reeds_cents: 0 }, 'info', /^Eerst betalen: € 90,00 contant of pin\. Er is nog niets meegegeven\.$/],
         [{ ...basis, uitkomst: 'leeftijd_nodig' }, 'info', /alcohol: eerst de leeftijd vaststellen/],
         [{ ...basis, uitkomst: 'te_weinig_voorraad', melding: 'onder nul: Naober (er is 2, gevraagd 4)' }, 'error', /te weinig om in te pakken\. Er is niets geboekt.*\(onder nul: Naober/],
         [{ ...basis, uitkomst: 'opgehaald', rest_cents: 3250, opgehaald_at: '2026-11-20T12:00:00Z', nog_open: 0, regels: 1, rest_geboekt: 'pin', leeftijd: 'vastgesteld',

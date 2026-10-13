@@ -14,7 +14,7 @@ import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList
 import Button from '@/components/Button';
 import { formatEur } from '@/lib/format';
 import { wensenSamenvatting } from '@/lib/winkel/plaatsing';
-import { restOpen as heeftOpenRest, welkeStapNodig, type Melding as OphaalMelding, type OphaalKeuze } from '@/lib/winkel/ophalen';
+import { betaaltAanBalie, restOpen as heeftOpenRest, welkeStapNodig, type Melding as OphaalMelding, type OphaalKeuze } from '@/lib/winkel/ophalen';
 import Drawer from './Drawer';
 import ProductiePaneel, { EtiketKnop, useEtiketPrinter } from './ProductiePaneel';
 import {
@@ -320,7 +320,7 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
     const top = v.perArtikel.slice(0, 2);
     const { printerId } = useEtiketPrinter();
     const artikelOpId = new Map(artikelen.map((a) => [a.id, a]));
-    const restOpen = v.orders.filter((o) => o.status === 'betaald' && o.betaalwijze === 'reservering' && o.rest_cents > 0 && !o.rest_betaald_at).length;
+    const restOpen = v.orders.filter((o) => o.status === 'betaald' && heeftOpenRest(o)).length;
     return (
         <Drawer title={datumLang(v.datum)} subtitle={`${vakjeNaam(v, artikelen)} · ${soortLabel(v)}${v.moment && tijdvak(v.moment) ? ` · ${tijdvak(v.moment)}` : ''} · ${afstandLabel(dagen).toLowerCase()}`} onClose={onClose} width={600}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -475,7 +475,7 @@ function BalieScan({ herlaad, melding }: { herlaad: () => Promise<void>; melding
                     {u.uitkomst === 'al_opgehaald' && <div style={{ flex: 1, fontSize: 13 }}>Al opgehaald om {new Date(u.opgehaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}: {u.doos} van {u.klant} (<span className="ws-mono">{u.nummer}</span>). Er is niets dubbel geboekt.</div>}
                     {u.uitkomst === 'rest_nodig' && <>
                         <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
-                        <div style={{ flex: 1, fontSize: 13 }}><b>{u.klant}</b> · <span className="ws-mono">{u.nummer}</span> · reeds betaald {eur(u.reeds_cents)} · te betalen: <b>{eur(u.rest_cents)}</b></div>
+                        <div style={{ flex: 1, fontSize: 13 }}><b>{u.klant}</b> · <span className="ws-mono">{u.nummer}</span>{u.reeds_cents > 0 ? ` · reeds betaald ${eur(u.reeds_cents)}` : ''} · te betalen: <b>{eur(u.rest_cents)}</b></div>
                         <Button size="sm" variant="ghost" disabled={bezig} onClick={() => scan(laatste!.invoer, 'contant')}>Contant</Button>
                         <Button size="sm" disabled={bezig} onClick={() => scan(laatste!.invoer, 'pin')}>Pin</Button>
                     </>}
@@ -572,7 +572,9 @@ function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: (
         inhoud = (
             <div className="ws-rest">
                 <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
-                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Reeds betaald {eur(o.nu_te_betalen_cents)}</b> · te betalen in de winkel: <b>{eur(o.rest_cents)}</b></div>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}>{o.betaalwijze === 'bij_afhalen'
+                    ? <>Betalen bij afhalen: <b>{eur(o.rest_cents)}</b></>
+                    : <><b>Reeds betaald {eur(o.nu_te_betalen_cents)}</b> · te betalen in de winkel: <b>{eur(o.rest_cents)}</b></>}</div>
                 <Button size="sm" variant="ghost" disabled={bezig} onClick={() => setKeuze({ ...keuze, restMethode: 'contant' })}>Contant</Button>
                 <Button size="sm" disabled={bezig} onClick={() => setKeuze({ ...keuze, restMethode: 'pin' })}>Pin</Button>
             </div>
@@ -601,9 +603,13 @@ function Opgehaald({ order: o, herlaad, melding }: { order: OrderRij; herlaad: (
 
 function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
     const [bezig, setBezig] = useState<'contant' | 'pin' | null>(null);
-    if (o.betaalwijze !== 'reservering' || o.status !== 'betaald') return null;
+    if (!betaaltAanBalie(o.betaalwijze) || o.status !== 'betaald') return null;
     if (o.rest_betaald_at) {
-        return <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={13} style={{ color: 'var(--green)' }} />Reservering {eur(o.nu_te_betalen_cents)} online · rest {eur(o.rest_cents)} {o.rest_betaalmethode ?? ''} betaald {new Date(o.rest_betaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>;
+        const wanneer = new Date(o.rest_betaald_at).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        if (o.betaalwijze === 'bij_afhalen') {
+            return <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={13} style={{ color: 'var(--green)' }} />{eur(o.rest_cents)} {o.rest_betaalmethode ?? ''} betaald aan de balie {wanneer}</div>;
+        }
+        return <div className="ws-order-wat" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={13} style={{ color: 'var(--green)' }} />Reservering {eur(o.nu_te_betalen_cents)} online · rest {eur(o.rest_cents)} {o.rest_betaalmethode ?? ''} betaald {wanneer}</div>;
     }
     const regels = o.winkel_order_regels;
     if (!heeftOpenRest(o) || !(regels.length > 0 && regels.every((r) => r.opgehaald_at))) return null;
@@ -619,7 +625,7 @@ function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad
     return (
         <div className="ws-rest">
             <span style={{ color: 'var(--ws-warn)', display: 'flex' }}><Wallet size={14} /></span>
-            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Meegegeven zonder rest</b> · reeds betaald {eur(o.nu_te_betalen_cents)} · nog te ontvangen: <b>{eur(o.rest_cents)}</b></div>
+            <div style={{ flex: 1, minWidth: 0, fontSize: 13 }}><b>Meegegeven zonder {o.betaalwijze === 'bij_afhalen' ? 'betaling' : 'rest'}</b>{o.betaalwijze === 'bij_afhalen' ? '' : ` · reeds betaald ${eur(o.nu_te_betalen_cents)}`} · nog te ontvangen: <b>{eur(o.rest_cents)}</b></div>
             <Button size="sm" variant="ghost" loading={bezig === 'contant'} disabled={bezig != null} onClick={() => boek('contant')}>Contant</Button>
             <Button size="sm" loading={bezig === 'pin'} disabled={bezig != null} onClick={() => boek('pin')}>Pin</Button>
         </div>

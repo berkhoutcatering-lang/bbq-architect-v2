@@ -149,9 +149,17 @@ export async function zetKerstGeannuleerd(input: unknown): Promise<ActionResult<
     const t = await tenantVoor(s.orgId);
     if (!t) return { error: 'Organisatie niet gevonden' };
 
-    const { data: o } = await t.sb.from('winkel_orders').select('id, nummer, status, lead_id').eq('id', parsed.data.orderId).eq('organization_id', s.orgId).maybeSingle();
+    const { data: o } = await t.sb.from('winkel_orders')
+        .select('id, nummer, status, lead_id, winkel_order_regels(klaargezet_at, opgehaald_at)')
+        .eq('id', parsed.data.orderId).eq('organization_id', s.orgId).maybeSingle();
     if (!o || o.lead_id == null) return { error: 'Kerst-bestelling niet gevonden' };
     if (parsed.data.geannuleerd && o.status !== 'betaald') return { error: 'Deze bestelling staat niet open.' };
+    /* Ingepakt = afgeboekt (verkoop_online). Annuleren zet de status om, maar
+       boekt niets terug; dan zou de voorraad te laag blijven staan. Eerst het
+       inpakken terugzetten (dat boekt retour), dan annuleren. */
+    const regels = (o.winkel_order_regels ?? []) as { klaargezet_at: string | null; opgehaald_at: string | null }[];
+    if (parsed.data.geannuleerd && regels.some((r) => r.opgehaald_at)) return { error: 'Deze bestelling is al opgehaald.' };
+    if (parsed.data.geannuleerd && regels.some((r) => r.klaargezet_at)) return { error: 'Al ingepakt: zet het inpakken eerst terug in de webshop (dan komt de voorraad terug) en annuleer daarna.' };
     if (!parsed.data.geannuleerd && o.status !== 'geannuleerd') return { error: 'Deze bestelling is niet geannuleerd.' };
 
     const { error } = await t.sb.from('winkel_orders')

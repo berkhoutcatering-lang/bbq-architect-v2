@@ -10,6 +10,7 @@
  * De controles, in dezelfde volgorde als de database:
  *   onbekend → niet_betaald → al_opgehaald → geweigerd → rest_nodig →
  *   leeftijd_nodig → (inpakken: te_weinig_voorraad) → opgehaald.
+ * rest_nodig geldt voor een reservering én voor 'bij_afhalen' (Kerst-Box).
  * Geweigerd komt vóór de rest: wie de order niet meekrijgt, betaalt ook
  * geen rest.
  *
@@ -28,9 +29,9 @@ export type OphaalBron = 'ba' | 'toonbank';
 /** Wat de regels van ophalen van een order nodig hebben. */
 export interface OphaalOrder {
     status: string;
-    /* 'bij_afhalen' (Kerst-Box) kent de rest-stap hier nog niet, net als
-       winkel_order_ophalen in de database: restOpen kijkt alleen naar
-       'reservering'. */
+    /* Een rest staat open bij 'reservering' (€ 2,50 online) en bij
+       'bij_afhalen' (Kerst-Box: niets online, alles aan de balie), net als in
+       winkel_order_ophalen (20261013120000). */
     betaalwijze: Betaalwijze;
     rest_cents: number;
     rest_betaald_at: string | null;
@@ -99,9 +100,14 @@ export function heeftAlcohol(o: Pick<OphaalOrder, 'regels'>): boolean {
     return o.regels.some((r) => !r.opgehaald_at && Boolean(r.alcohol));
 }
 
-/** Een reservering met een rest die nog niet betaald is. */
+/** Betaalwijzen waarbij (een deel van) het bedrag aan de balie wordt betaald. */
+export function betaaltAanBalie(betaalwijze: Betaalwijze): boolean {
+    return betaalwijze === 'reservering' || betaalwijze === 'bij_afhalen';
+}
+
+/** Een reservering of Kerst-Box (bij afhalen) met een rest die nog niet betaald is. */
 export function restOpen(o: Pick<OphaalOrder, 'betaalwijze' | 'rest_cents' | 'rest_betaald_at'>): boolean {
-    return o.betaalwijze === 'reservering' && o.rest_cents > 0 && !o.rest_betaald_at;
+    return betaaltAanBalie(o.betaalwijze) && o.rest_cents > 0 && !o.rest_betaald_at;
 }
 
 /**
@@ -170,7 +176,9 @@ export function ophaalMelding(u: OphaalUitkomst): Melding {
         case 'geweigerd':
             return { soort: 'info', tekst: `${u.nummer} niet meegegeven: leeftijd niet vastgesteld. De weigering is vastgelegd; er is niets meegegeven en geen rest geboekt.` };
         case 'rest_nodig':
-            return { soort: 'info', tekst: `Eerst de rest: ${euro(u.rest_cents)} contant of pin (reeds betaald ${euro(u.reeds_cents)}). Er is nog niets meegegeven.` };
+            return { soort: 'info', tekst: u.reeds_cents > 0
+                ? `Eerst de rest: ${euro(u.rest_cents)} contant of pin (reeds betaald ${euro(u.reeds_cents)}). Er is nog niets meegegeven.`
+                : `Eerst betalen: ${euro(u.rest_cents)} contant of pin. Er is nog niets meegegeven.` };
         case 'leeftijd_nodig':
             return { soort: 'info', tekst: `In ${u.nummer} zit alcohol: eerst de leeftijd vaststellen (ID gezien of geweigerd). Er is nog niets meegegeven.` };
         case 'te_weinig_voorraad':
