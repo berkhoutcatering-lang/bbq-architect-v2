@@ -977,11 +977,15 @@ export default function DashboardPage() {
         ) : null}
       </AnimatePresence>
 
-      <EventWizard
-        isOpen={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        onComplete={() => ev.refetch?.()}
-      />
+      {/* Pas mounten als hij open gaat: dicht vroeg hij toch al vijf hele
+          tabellen op (instellingen, gerechten, gangen, offertes, voorraad). */}
+      {wizardOpen && (
+        <EventWizard
+          isOpen={wizardOpen}
+          onClose={() => setWizardOpen(false)}
+          onComplete={() => ev.refetch?.()}
+        />
+      )}
 
       <AIPromptDrawer prompt={aiPrompt} onClose={() => setAiPrompt(null)} />
     </div>

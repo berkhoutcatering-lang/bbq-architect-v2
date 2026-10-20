@@ -4,7 +4,6 @@
 import React, { useState, useEffect } from 'react';
 import { Flame, ChevronRight, Check, ChefHat, Calendar, ArrowRight } from 'lucide-react';
 import { useApp } from '@/lib/AppContext';
-import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from './Toast';
 import { today } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -12,7 +11,6 @@ import { useOrg } from '@/lib/OrgContext';
 
 export default function OnboardingWizard() {
   const { loaded, upcomingEvents } = useApp();
-  const { data: gerechten } = useSupabase('gerechten', []);
   const showToast = useToast();
   const { orgId } = useOrg();
 
@@ -25,13 +23,23 @@ export default function OnboardingWizard() {
   const [gerecht, setGerecht] = useState({ naam: '', categorie: 'hoofdgerecht', kostprijs_pp: 15 });
   const [event, setEvent] = useState({ name: '', date: today(), guests: 50, location: '' });
 
+  /* Alleen tonen bij een lege database. Deze check draait op élke pagina, dus
+     de goedkoopste vragen eerst: al weggeklikt (lokaal) → klaar; er zijn
+     komende events (al geladen) → klaar; pas dan één tel-vraag op gerechten.
+     Vroeger haalde dit de héle gerechtentabel op elke pagina (meting 2026-10-20). */
   useEffect(() => {
-    if (!loaded || dismissed) return;
-    // Show onboarding only when database is empty
-    const isEmpty = upcomingEvents.length === 0 && gerechten.length === 0;
-    const alreadyDismissed = typeof window !== 'undefined' && localStorage.getItem('bbq_onboarding_done');
-    setShow(isEmpty && !alreadyDismissed);
-  }, [loaded, upcomingEvents, gerechten, dismissed]);
+    if (!loaded || dismissed || !orgId) return;
+    if (typeof window !== 'undefined' && localStorage.getItem('bbq_onboarding_done')) return;
+    if (upcomingEvents.length > 0) { setShow(false); return; }
+    if (!supabase) return;
+    let cancelled = false;
+    supabase.from('gerechten').select('id', { count: 'exact', head: true }).eq('organization_id', orgId)
+      .then(({ count, error }) => {
+        if (cancelled || error) return;
+        setShow((count ?? 0) === 0);
+      });
+    return () => { cancelled = true; };
+  }, [loaded, upcomingEvents, dismissed, orgId]);
 
   function dismiss() {
     setDismissed(true);

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useOrg } from '@/lib/OrgContext';
 import { useAuth } from '@/lib/AuthContext';
 import MetallicCard from '@/components/MetallicCard';
@@ -19,6 +19,13 @@ export default function Gebruikers() {
     const [inviteRole, setInviteRole] = useState<string>('Medewerker');
     const [inviting, setInviting] = useState(false);
     const [inviteMsg, setInviteMsg] = useState('');
+    /* Teamleden laadt OrgContext niet meer vanzelf (scheelde twee vragen op
+       elke pagina); deze pagina vraagt ze zelf op. */
+    const [membersLoaded, setMembersLoaded] = useState(false);
+    useEffect(function () {
+        if (!orgId) return;
+        Promise.resolve(refetchMembers()).finally(function () { setMembersLoaded(true); });
+    }, [orgId, refetchMembers]);
 
     async function handleInvite() {
         if (!inviteEmail || !orgId) return;
@@ -72,7 +79,7 @@ export default function Gebruikers() {
         inactive: 'Inactief',
     };
 
-    if (!members && !orgId) {
+    if (!orgId || !membersLoaded) {
         return (
             <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
                 <Flame size={24} className="text-[var(--color-accent-gold)] animate-pulse" />

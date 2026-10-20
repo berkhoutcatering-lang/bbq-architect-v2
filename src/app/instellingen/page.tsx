@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useSettings, useSupabase } from '@/lib/useSupabase';
+import { useSettings, useSupabase, refreshSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
@@ -87,6 +87,9 @@ export default function Instellingen() {
         }
 
         showToast('Instellingen opgeslagen', 'success');
+        /* De instellingen zijn één gedeelde kopie per bedrijf (thema, logo,
+           offertes); vers ophalen zodat de wijziging overal meteen doorkomt. */
+        if (orgId) void refreshSettings(orgId);
         // Detect huisstijl change → ask the user whether to also update existing templates
         const changed: { primary?: string; accent?: string } = {};
         if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;

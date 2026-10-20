@@ -13,7 +13,7 @@ interface OrgContextValue {
   members: OrganizationMember[];
   loading: boolean;
   switchOrg: (orgId: string) => void;
-  refetchMembers: () => void;
+  refetchMembers: () => Promise<void>;
   isAdmin: boolean;
 }
 
@@ -24,7 +24,7 @@ const OrgContext = createContext<OrgContextValue>({
   members: [],
   loading: true,
   switchOrg: () => {},
-  refetchMembers: () => {},
+  refetchMembers: async () => {},
   isAdmin: false,
 });
 
@@ -133,9 +133,9 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     }));
   }, [orgId]);
 
-  useEffect(function () {
-    loadMembers();
-  }, [loadMembers]);
+  /* Teamleden worden níet meer automatisch geladen: dat waren twee vragen op
+     élke pagina, terwijl alleen /gebruikers ze toont. Die pagina roept
+     refetchMembers() zelf aan (meting 2026-10-20). */
 
   const switchOrg = useCallback(function (newOrgId: string) {
     setOrgId(newOrgId);

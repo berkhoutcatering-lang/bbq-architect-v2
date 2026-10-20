@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { clearDataCache } from '@/lib/dataCache';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextValue {
@@ -52,7 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         setUser(function (vorige) {
           const nieuw = s?.user ?? null;
-          return vorige?.id === nieuw?.id ? vorige : nieuw;
+          if (vorige?.id === nieuw?.id) return vorige;
+          /* Andere gebruiker (of uitgelogd): het geheugen tussen pagina's
+             hoort bij de vorige en mag niet blijven staan. */
+          clearDataCache();
+          return nieuw;
         });
         setLoading(false);
       }
@@ -66,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async function () {
     if (!supabase) return;
     await supabase.auth.signOut();
+    clearDataCache();
     setUser(null);
     setSession(null);
     window.location.href = '/login';

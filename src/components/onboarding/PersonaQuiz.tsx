@@ -6,6 +6,7 @@ import { track } from '@/lib/track';
 import { useOrg } from '@/lib/OrgContext';
 import { seedDemoData } from '@/lib/onboardingSeed';
 import { supabase } from '@/lib/supabase';
+import { fetchSettingsShared } from '@/lib/useSupabase';
 
 const STORAGE_KEY = 'bbq_persona_quiz_v1';
 
@@ -70,12 +71,8 @@ export default function PersonaQuiz({ forceShow, onComplete }: Props) {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved && saved !== '{}') return; // al ingevuld
         // Cross-device check: heeft deze tenant elders al ingevuld?
-        if (orgId && supabase) {
-          const { data } = await supabase
-            .from('settings')
-            .select('persona_result')
-            .eq('organization_id', orgId)
-            .maybeSingle();
+        if (orgId) {
+          const data = await fetchSettingsShared(orgId) as { persona_result?: unknown } | null;
           /* APK v3 #30: check op IS NOT NULL ipv Object.keys > 0 zodat een
              expliciete skip (opgeslagen als { skipped_at: ... }) ook in
              volgende browser/incognito niet opnieuw triggert. */

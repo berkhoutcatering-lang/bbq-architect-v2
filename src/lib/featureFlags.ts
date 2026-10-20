@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useMemo } from 'react';
 import { useOrg } from '@/lib/OrgContext';
-import { dedupe } from '@/lib/requestDedupe';
 
 // ═══════════════════════════════════════════════════════════════
 // TIERS & LIMITS
@@ -142,23 +140,17 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
 };
 
 export function useFeatureFlags() {
-  const { orgId } = useOrg();
-  const [flags, setFlags] = useState<Record<string, boolean>>(DEFAULT_FLAGS);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(function () {
-    if (!supabase || !orgId) return;
-
-    dedupe('flags:' + orgId, function () {
-      return supabase!.from('organizations').select('feature_flags').eq('id', orgId).single();
-    })
-      .then(function ({ data }) {
-        if (data?.feature_flags && typeof data.feature_flags === 'object') {
-          setFlags({ ...DEFAULT_FLAGS, ...(data.feature_flags as Record<string, boolean>) });
-        }
-        setLoaded(true);
-      });
-  }, [orgId]);
+  /* De organisatie (incl. feature_flags) haalt OrgContext al op bij het
+     opstarten; hier nog eens `organizations` bevragen was een dubbele vraag
+     op elke pagina (meting 2026-10-20). */
+  const { organization } = useOrg();
+  const raw = organization?.feature_flags;
+  const flags = useMemo<Record<string, boolean>>(function () {
+    return raw && typeof raw === 'object'
+      ? { ...DEFAULT_FLAGS, ...(raw as Record<string, boolean>) }
+      : DEFAULT_FLAGS;
+  }, [raw]);
+  const loaded = organization !== null;
 
   function isEnabled(flag: string): boolean {
     return flags[flag] ?? DEFAULT_FLAGS[flag] ?? true;
