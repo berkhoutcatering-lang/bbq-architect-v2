@@ -195,18 +195,11 @@ export function useSupabase<T extends { id: number | string }>(
        tabs/devices komen alsnog binnen. */
     useEffect(function () {
         if (skipInitialFetch) return;
-        if (!offlineMode && key) {
-            const hit = tableCache.get(key);
-            if (hit && Date.now() - hit.at < VERS_MS) {
-                /* Net opgehaald (andere component of vorige pagina): tonen,
-                   niet opnieuw vragen. Realtime houdt het hierna bij. */
-                setData(hit.rows as T[]);
-                syncedRef.current = true;
-                hasRowsRef.current = true;
-                setLoading(false);
-                return;
-            }
-        }
+        /* Altijd verversen bij openen, ook als er iets in het geheugen staat:
+           dat geheugen wordt alleen getoond (geen laadicoon), niet vertrouwd.
+           Een pagina die net iets opsloeg buiten deze hook om (server-actie,
+           wizard) mag hier nooit een oude stand achterlaten. Gelijktijdige
+           identieke vragen deelt dedupe() al. */
         fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchData, skipInitialFetch]);
@@ -401,9 +394,9 @@ export function useSupabase<T extends { id: number | string }>(
 /* ── Instellingen: één rij per bedrijf, gedeeld ─────────────────────────
    Werd per component apart opgehaald: thema, logo, persona-quiz, offertes en
    de afspraak-wizard vroegen allemaal `settings` — 3 à 4 keer per pagina
-   (meting 2026-10-20). Nu één gedeelde kopie per bedrijf. Iedere nieuwe
-   gebruiker toont die direct en ververst op de achtergrond als hij ouder is
-   dan VERS_MS, zodat een wijziging op Instellingen elders snel doorkomt. */
+   (meting 2026-10-20). Nu één gedeelde kopie per bedrijf: iedere nieuwe
+   gebruiker toont die direct en ververst op de achtergrond; gelijktijdige
+   vragen gaan als één de deur uit (dedupe). */
 type SettingsRow = import('@/types').Settings;
 const settingsListeners = new Set<(orgId: string) => void>();
 
@@ -456,7 +449,9 @@ export function useSettings(): {
             setLoading(false);
         }
         settingsListeners.add(onPublish);
-        fetchSettingsShared(orgId).then(function (value) {
+        /* Bij openen altijd vers (gelijktijdige vragen deelt dedupe); het
+           geheugen zorgt alleen dat er meteen iets staat. */
+        fetchSettingsShared(orgId, true).then(function (value) {
             setSettings(value);
             setLoading(false);
         });
