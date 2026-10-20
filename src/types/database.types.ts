@@ -81,6 +81,8 @@ export interface Settings {
   menukaart_overrides: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  /** Onderdelen die dit bedrijf uitzette (werkruimte-slug of tab-href). Migratie 20261020120000. */
+  verborgen_onderdelen?: string[];
 }
 
 export interface Recept {

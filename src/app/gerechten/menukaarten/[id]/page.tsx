@@ -13,7 +13,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabase } from '@/lib/supabase-server';
 import MenuComposer from '@/components/menu/MenuComposer';
 import { getMenuTemplate } from '@/lib/dal/menuTemplates';
-/* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered. */
+/* De Keuken-tabbladen staan in de werkruimtebalk (AppShell). */
 
 export const dynamic = 'force-dynamic';
 

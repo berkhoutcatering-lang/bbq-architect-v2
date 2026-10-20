@@ -14,8 +14,8 @@ import { listMenuTemplatesShallow } from '@/lib/dal/menuTemplates';
 import { formatEur } from '@/lib/format';
 
 import HubHeader from '@/components/chassis/HubHeader';
-/* GerechtenTabs wordt al door src/app/gerechten/layout.tsx gerendered —
-   niet opnieuw mounten hier (gaf dubbele tablist). */
+/* De Keuken-tabbladen staan in de werkruimtebalk (AppShell) — hier geen
+   eigen tablist. */
 
 export const dynamic = 'force-dynamic';
 

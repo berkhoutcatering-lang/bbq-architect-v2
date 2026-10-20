@@ -7241,26 +7241,7 @@ aside[style*="background: var(--card)"]:not(.no-glow) {
   }
 }
 
-/* Breadcrumb: extra top padding on mobile for hamburger, less on desktop.
-   Mobile: forceer full-width zodat de dark backdrop niet als raar half-blok
-   over de pagina valt (was 184px breed) — pakt nu de hele bovenkant. */
-.breadcrumb-nav {
-  padding-top: 52px;
-}
-@media (max-width: 767px) {
-  .breadcrumb-nav {
-    width: 100%;
-    flex-basis: 100%;
-    padding-left: 56px; /* ruimte voor hamburger linksboven */
-    padding-top: 14px;
-    padding-bottom: 12px;
-  }
-}
-@media (min-width: 768px) {
-  .breadcrumb-nav {
-    padding-top: 10px;
-  }
-}
+/* Kruimelpad: zie src/styles/werkruimte.css (.wr-kruimels). */
 
 /* ==========================================================================
    UX REFACTOR — Page Layout Patterns
@@ -8428,18 +8409,6 @@ textarea:focus-visible,
     border-radius: 22px;
     opacity: 0.85;
   }
-  /* Reserveer ruimte links voor de fixed hamburger (44px @ left:12px → 56px).
-     Anders schuift Breadcrumbs of de ActiveResourcePill onder de hamburger. */
-  .app-main-header {
-    padding-left: 60px;
-    padding-top: 4px;
-    min-height: 52px;
-  }
-  /* Breadcrumbs op kleine schermen: niet wrappen tot 2 regels door lange paden. */
-  .app-main-header > nav {
-    min-width: 0;
-    overflow: hidden;
-  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -8891,16 +8860,10 @@ html, body { max-width: 100vw; overflow-x: clip; }
   }
 }
 
-/* FAB component — hide on phone (mobile heeft MobileCmdKTrigger + BottomNav).
+/* FAB component — hide on phone (mobile heeft de zoekknop in de werkruimtebalk + BottomNav).
    styled-jsx :global() werkt niet altijd in Turbopack; vandaar override in globals. */
 @media (max-width: 767px) {
   .fab-root {
-    display: none !important;
-  }
-  /* Pages met een eigen sticky-bottom-CTA kunnen MobileCmdKTrigger verbergen
-     door class `has-sticky-cta` op body te zetten. Voorkomt overlap met
-     wizard "Volgende" of soortgelijke conversie-knoppen. */
-  body.has-sticky-cta .mobile-cmdk-trigger {
     display: none !important;
   }
   /* HACCP-instap cards: op smal mobile 1-koloms zodat tekst niet elke 2
@@ -8915,36 +8878,7 @@ html, body { max-width: 100vw; overflow-x: clip; }
   }
 }
 
-/* Breadcrumb — laat ruimte voor de mobile hamburger (44px op left:12px = eindigt 56px).
-   Zonder deze regel valt PLANNEN > Agenda onder de hamburger op /agenda etc. */
-@media (max-width: 767px) {
-  .breadcrumb-nav {
-    padding-left: 68px !important;
-    padding-top: 14px !important;
-    padding-bottom: 14px !important;
-    min-height: 44px;
-    /* Stond op wrap: "PLANNEN > Events > cor Berkhout - 16 aug" viel op een
-       telefoon over drie regels en at 95 van de 812 px op vóór de pagina begon.
-       Nu één regel die zijwaarts schuift; het staartje is het belangrijkst en
-       staat rechts, dus we scrollen daar standaard naartoe. */
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    scrollbar-width: none;
-    white-space: nowrap;
-  }
-
-  .breadcrumb-nav::-webkit-scrollbar { display: none; }
-  .breadcrumb-nav > * { flex-shrink: 0; }
-}
-
-/* Heeft de pagina zelf al een terug-knop van 44 px met een label, dan zegt de
-   kruimelbalk erboven hetzelfde in 11 px naast de hamburger. Op een telefoon
-   kost dat 73 van de 812 px voor iets wat je slechter kunt raken. Eén van de
-   twee is genoeg, en dat is de knop. */
-@media (max-width: 767px) {
-  /* !important omdat het component zelf `display: flex` inline zet. */
-  body:has(.chassis-terug) .breadcrumb-nav { display: none !important; }
-}
+/* (Kruimelpad-regels voor de oude hamburger zijn vervallen met de werkruimtebalk, 2026-10-20.) */
 
 /* Price-intelligence inbox banner: button onder email-block stacken op mobile
    omdat email-adres lang is en de Kopieer-knop anders rechts buiten viewport valt. */
@@ -9005,22 +8939,17 @@ html, body { max-width: 100vw; overflow-x: clip; }
 }
 
 /* Bottom-clearance helper (used by <MobileSafeBottom>).
-   On phone: pad the bottom of the page so de BottomNav (60px) + de
-   MobileCmdKTrigger (bottom:72 + height:48 = top is 120px van onder) niet
-   over content valt. De --mobile-safe-bottom-extra var laat een page extra
-   clearance toevoegen voor een StickyMobileCTA op de BottomNav. */
+   On phone: pad the bottom of the page zodat de BottomNav (60px) niet over
+   de laatste regels valt. De zwevende zoekknop (MobileCmdKTrigger) is weg
+   sinds de werkruimtebalk een zoekknop heeft (2026-10-20). De
+   --mobile-safe-bottom-extra var laat een page extra clearance toevoegen
+   voor een StickyMobileCTA op de BottomNav. */
 .mobile-safe-bottom {
   /* desktop: noop */
 }
 @media (max-width: 767px) {
   .mobile-safe-bottom {
-    /* 136 = 72 (CmdK offset) + 48 (CmdK size) + 16 (buffer). Vermijdt dat
-       de oranje vergrootglas de laatste inhouds-regels of CTA verbergt. */
-    padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
-  }
-  /* Pages die has-sticky-cta zetten verbergen CmdK al — terug naar oude waarde. */
-  body.has-sticky-cta .mobile-safe-bottom {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px) + var(--mobile-safe-bottom-extra, 0px));
   }
 }
 

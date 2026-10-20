@@ -1,0 +1,456 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Werkruimtes (2026-10-20) — balk bovenin, tegelscherm, gebruikersmenu.
+   Vervangt de zijbalk. Zie docs/werkruimtes-en-snelheid.md.
+   Alleen thema-tokens (--card-solid, --border, --text, --muted, --brand),
+   zodat elk white-label-thema en licht/donker vanzelf klopt.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.wr-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.wr-hoofd {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.wr-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* Zelfde als de oude <main>: pagina's zijn hierop gebouwd (brede tabellen
+     schuiven binnen hun eigen kaart, niet de hele pagina). */
+  overflow: hidden;
+}
+
+/* ── De balk ─────────────────────────────────────────────────────────── */
+
+.wr-balk {
+  position: sticky;
+  top: 0;
+  /* Onder schermvullende editors (z 50) en modals, boven de pagina. */
+  z-index: 40;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "tegel titel tabs acties";
+  align-items: center;
+  column-gap: 8px;
+  padding: 0 12px 0 10px;
+  min-height: 56px;
+  background: var(--card-solid);
+  border-bottom: 1px solid var(--border);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.wr-tegelknop {
+  grid-area: tegel;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md, 10px);
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.wr-tegelknop:hover,
+.wr-tegelknop[aria-expanded="true"] {
+  background: var(--hover-strong, rgba(127, 127, 127, .12));
+  color: var(--text);
+}
+
+.wr-titel {
+  grid-area: titel;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px 0 4px;
+  border-radius: var(--radius-md, 10px);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.wr-titel:hover { background: var(--hover, rgba(127, 127, 127, .07)); }
+
+.wr-icoon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.wr-icoon svg { width: 17px; height: 17px; }
+
+.wr-org {
+  display: block;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.1;
+}
+
+/* Tabbladen: één rij, schuift zijwaarts als hij niet past. */
+.wr-tabs {
+  grid-area: tabs;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  align-self: stretch;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+  margin-left: 2px;
+}
+.wr-tabs::-webkit-scrollbar { display: none; }
+
+.wr-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  min-height: 44px;
+  white-space: nowrap;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13.5px;
+  font-weight: 500;
+  border-radius: 8px 8px 0 0;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.wr-tab svg { width: 15px; height: 15px; flex-shrink: 0; }
+.wr-tab:hover { color: var(--text); background: var(--hover, rgba(127, 127, 127, .07)); }
+.wr-tab[aria-current="page"] { color: var(--text); font-weight: 650; }
+.wr-tab[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--wr-kleur, var(--brand));
+}
+
+.wr-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger, #ef4444);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.wr-acties {
+  grid-area: acties;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wr-zoek {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wr-zoek:hover { color: var(--text); border-color: var(--border-strong, var(--border)); }
+.wr-zoek kbd {
+  font-family: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.wr-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand);
+  color: var(--bg);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.wr-avatar:focus-visible,
+.wr-tegelknop:focus-visible,
+.wr-tab:focus-visible,
+.wr-titel:focus-visible,
+.wr-zoek:focus-visible,
+.wr-tegel:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Smalle laptop: zoekknop zonder tekst. */
+@media (max-width: 1180px) {
+  .wr-zoek-tekst, .wr-zoek kbd { display: none; }
+  .wr-zoek { width: 36px; justify-content: center; padding: 0; }
+}
+
+/* Telefoon: tabbladen op een eigen regel onder de titel. */
+@media (max-width: 767px) {
+  .wr-balk {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "tegel titel acties"
+      "tabs  tabs  tabs";
+    padding: 0 8px;
+    padding-top: env(safe-area-inset-top, 0px);
+    min-height: 52px;
+  }
+  .wr-titel { min-width: 0; overflow: hidden; }
+  .wr-titel-tekst { overflow: hidden; text-overflow: ellipsis; }
+  .wr-tabs {
+    border-left: none;
+    margin: 0 -8px;
+    padding: 0 8px;
+    border-top: 1px solid var(--border);
+  }
+  .wr-tabs:empty { display: none; }
+  .wr-tab { padding: 0 11px; font-size: 13px; }
+}
+
+/* ── Kruimelpad (alleen op detailpagina's) ───────────────────────────── */
+
+.wr-kruimels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 32px 0;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wr-kruimels::-webkit-scrollbar { display: none; }
+.wr-kruimels a { color: var(--muted); text-decoration: none; }
+.wr-kruimels a:hover { color: var(--text); }
+.wr-kruimels [aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 767px) {
+  .wr-kruimels { padding: 10px var(--space-mobile-edge, 16px) 0; }
+  /* Heeft de pagina zelf een terug-knop, dan is het kruimelpad dubbel. */
+  body:has(.chassis-terug) .wr-kruimels { display: none; }
+}
+
+/* ── Gebruikersmenu ──────────────────────────────────────────────────── */
+
+.wr-menu-anker { position: relative; }
+
+.wr-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 280px;
+  max-width: calc(100vw - 16px);
+  padding: 8px;
+  border-radius: var(--radius-lg, 14px);
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .35);
+  z-index: 70;
+  animation: wr-in 140ms ease-out;
+}
+.wr-menu-kop {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.wr-menu-naam { font-size: 14px; font-weight: 650; color: var(--text); }
+.wr-menu-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.wr-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13.5px;
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+.wr-menu-item:hover { background: var(--hover, rgba(127, 127, 127, .07)); }
+.wr-menu-item svg { width: 16px; height: 16px; color: var(--muted); }
+.wr-menu-item--gevaar { color: var(--danger, #ef4444); }
+.wr-menu-item--gevaar svg { color: currentColor; }
+.wr-menu-meter { padding: 4px 2px 6px; }
+
+/* ── Tegelscherm ─────────────────────────────────────────────────────── */
+
+.wr-tegels-achtergrond {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow-y: auto;
+  animation: wr-vervaag 160ms ease-out;
+  padding: calc(env(safe-area-inset-top, 0px) + 24px) 16px calc(env(safe-area-inset-bottom, 0px) + 96px);
+}
+
+.wr-tegels {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.wr-tegels-kop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.wr-tegels-titel { font-size: 22px; font-weight: 700; color: var(--text); margin: 0; }
+.wr-tegels-sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.wr-sluit {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card-solid);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.wr-tegel-raster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.wr-tegel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  min-height: 150px;
+  border-radius: var(--radius-xl, 18px);
+  background: var(--card-solid);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  animation: wr-tegel-in 260ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.wr-tegel:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--wr-kleur) 55%, var(--border));
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--wr-kleur) 18%, transparent);
+}
+.wr-tegel[aria-current="page"] {
+  border-color: color-mix(in srgb, var(--wr-kleur) 70%, var(--border));
+}
+.wr-tegel-icoon {
+  width: 52px;
+  height: 52px;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--wr-kleur);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .12);
+}
+.wr-tegel-icoon svg { width: 26px; height: 26px; }
+.wr-tegel-naam { font-size: 16px; font-weight: 650; }
+.wr-tegel-uitleg { font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.wr-tegel .wr-badge { position: absolute; top: 14px; right: 14px; }
+
+.wr-tegels-voet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.wr-tegels-voet a,
+.wr-tegels-voet button {
+  color: var(--text);
+  background: none;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: 44px;
+}
+
+@media (max-width: 767px) {
+  .wr-tegel-raster { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .wr-tegel { min-height: 0; padding: 14px; gap: 8px; }
+  .wr-tegel-icoon { width: 44px; height: 44px; border-radius: 13px; }
+  .wr-tegel-icoon svg { width: 22px; height: 22px; }
+  .wr-tegel-uitleg { display: none; }
+  .wr-tegel-naam { font-size: 14.5px; }
+}
+
+@keyframes wr-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes wr-vervaag { from { opacity: 0; } to { opacity: 1; } }
+@keyframes wr-tegel-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-menu, .wr-tegels-achtergrond, .wr-tegel { animation: none; }
+  .wr-tegel { transition: none; }
+}
+
+/* Onderbalk: werkruimte-iconen (18 px in de bron) op onderbalk-maat. */
+.bottom-nav__icon--groot svg { width: 22px; height: 22px; }

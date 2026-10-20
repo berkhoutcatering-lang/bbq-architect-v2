@@ -2,13 +2,13 @@
  * /systeem — control-room hub.
  *
  * Server Component: haalt system-health data op (AI-spend, gebruikers,
- * gerechten) en rendert SystemHealthStrip + hub-cards. SysteemTabs en
- * PageGuideNote zijn client components binnen deze server shell.
+ * gerechten) en rendert SystemHealthStrip + hub-cards. PageGuideNote is een
+ * client component binnen deze server shell; de tabbladen staan in de
+ * werkruimtebalk.
  */
 
 import { createServerSupabase } from '@/lib/supabase-server';
 import PageHeader from '@/components/PageHeader';
-import SysteemTabs from '@/components/SysteemTabs';
 import SystemHealthStrip, { type SystemHealthData } from './_components/SystemHealthStrip';
 import SysteemHubCards from './_components/SysteemHubCards';
 import SysteemGuide from './_components/SysteemGuide';
@@ -54,7 +54,6 @@ export default async function SysteemHub() {
 
     return (
         <div className="main-content">
-            <SysteemTabs />
             <PageHeader
                 title="Systeem"
                 description="Instellingen, gebruikers, mailbox, website en hulp — het bouwbord van de app."

@@ -3,123 +3,67 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-    LayoutDashboard,
-    Calendar,
-    ChefHat,
-    Receipt,
-    MoreHorizontal,
-} from "lucide-react";
+import { LayoutDashboard, LayoutGrid } from "lucide-react";
+import { vindWerkruimte, werkruimteStart } from "@/lib/navigation";
+import { useOnderdelen } from "@/lib/useOnderdelen";
+import { openTegelscherm } from "@/components/werkruimte/events";
 
-interface Tab {
-    label: string;
-    icon: React.ReactNode;
-    href?: string;
-    action?: "meer";
-    match: (pathname: string) => boolean;
-}
+/* Onderbalk op de telefoon: Vandaag, drie werkruimtes, en Meer (= het
+   tegelscherm met alle onderdelen). Labels en kleuren komen uit dezelfde
+   bron als de werkruimtebalk (navigation.tsx), zodat telefoon en laptop
+   dezelfde kaart van de app hebben.
 
-/* Labels matchen de desktop-sidebar (navigation.tsx) zodat een tenant tussen
-   tablet en laptop dezelfde mentale kaart houdt. Hrefs verwijzen naar de
-   canonical hub-URL — geen dode redirects (/inspiratie is dood). */
-const tabs: Tab[] = [
-    {
-        label: "Vandaag",
-        icon: <LayoutDashboard size={22} />,
-        href: "/",
-        match: (p) => p === "/",
-    },
-    {
-        label: "Plannen",
-        icon: <Calendar size={22} />,
-        href: "/agenda",
-        match: (p) =>
-            p === "/agenda" ||
-            p.startsWith("/agenda/") ||
-            p === "/events" ||
-            p.startsWith("/events/"),
-    },
-    /* Verkoop = dagelijkse Pro-tier flow (nieuwe offerte/klant). Geld is
-       wekelijks-admin-tier en zit nu achter Meer → sidebar. Past bij
-       persona-volgorde Lars > Pro-tier > Mathijs uit feedback_three_personas. */
-    {
-        label: "Verkoop",
-        icon: <Receipt size={22} />,
-        href: "/offertes",
-        match: (p) =>
-            p === "/offertes" ||
-            p.startsWith("/offertes/") ||
-            p === "/klanten" ||
-            p.startsWith("/klanten/") ||
-            p === "/verkoop" ||
-            p.startsWith("/verkoop/"),
-    },
-    {
-        label: "Menu",
-        icon: <ChefHat size={22} />,
-        href: "/gerechten",
-        match: (p) =>
-            p === "/gerechten" ||
-            p.startsWith("/gerechten/") ||
-            p === "/bedenker" ||
-            p.startsWith("/bedenker/") ||
-            p === "/marges" ||
-            p.startsWith("/keuken/") ||
-            // Backwards-compat: /inspiratie redirect → /gerechten
-            p === "/inspiratie" ||
-            p.startsWith("/inspiratie/"),
-    },
-    {
-        label: "Meer",
-        icon: <MoreHorizontal size={22} />,
-        action: "meer",
-        match: () => false,
-    },
-];
+   Volgorde = hoe vaak iemand het nodig heeft (Lars > Pro-tier > Mathijs):
+   Plannen en Verkoop dagelijks, Keuken op event-dagen. Staat een van die
+   drie uit, dan schuift de volgende werkruimte op. */
+const VOORKEUR = ["plannen", "verkoop", "gerechten", "voorraad", "geld", "team"];
+/* Vijf vakken op 375 px: lange namen passen niet onder een icoon. */
+const KORT: Record<string, string> = { "Inkoop & Voorraad": "Voorraad", "Team & Operatie": "Team" };
 
 export default function BottomNav() {
     const pathname = usePathname();
+    const { werkruimtes } = useOnderdelen();
+    const huidige = vindWerkruimte(pathname)?.section.slug ?? null;
 
-    function handleMeer() {
-        window.dispatchEvent(new CustomEvent("toggle-mobile-sidebar"));
-    }
+    const vakken = VOORKEUR
+        .map(function (slug) { return werkruimtes.find(function (w) { return w.slug === slug; }); })
+        .filter(function (w): w is NonNullable<typeof w> { return !!w; })
+        .slice(0, 3);
+    const meerActief = huidige !== null && !vakken.some(function (v) { return v.slug === huidige; });
 
     return (
-        <nav
-            className="bottom-nav"
-            role="navigation"
-            aria-label="Mobiele navigatie"
-        >
-            {tabs.map((tab) => {
-                const isActive = tab.match(pathname);
-
-                if (tab.action === "meer") {
-                    return (
-                        <button
-                            key={tab.label}
-                            type="button"
-                            onClick={handleMeer}
-                            className="bottom-nav__tab"
-                            aria-label="Open menu"
-                        >
-                            <span className="bottom-nav__icon">{tab.icon}</span>
-                            <span className="bottom-nav__label">{tab.label}</span>
-                        </button>
-                    );
-                }
-
+        <nav className="bottom-nav" role="navigation" aria-label="Mobiele navigatie">
+            <Link
+                href="/"
+                className={"bottom-nav__tab" + (pathname === "/" ? " bottom-nav__tab--active" : "")}
+                aria-current={pathname === "/" ? "page" : undefined}
+            >
+                <span className="bottom-nav__icon"><LayoutDashboard size={22} /></span>
+                <span className="bottom-nav__label">Vandaag</span>
+            </Link>
+            {vakken.map(function (w) {
+                const actief = huidige === w.slug;
                 return (
                     <Link
-                        key={tab.label}
-                        href={tab.href!}
-                        className={`bottom-nav__tab ${isActive ? "bottom-nav__tab--active" : ""}`}
-                        aria-current={isActive ? "page" : undefined}
+                        key={w.slug}
+                        href={werkruimteStart(w)}
+                        className={"bottom-nav__tab" + (actief ? " bottom-nav__tab--active" : "")}
+                        aria-current={actief ? "page" : undefined}
                     >
-                        <span className="bottom-nav__icon">{tab.icon}</span>
-                        <span className="bottom-nav__label">{tab.label}</span>
+                        <span className="bottom-nav__icon bottom-nav__icon--groot">{w.icon}</span>
+                        <span className="bottom-nav__label">{KORT[w.title] ?? w.title}</span>
                     </Link>
                 );
             })}
+            <button
+                type="button"
+                onClick={openTegelscherm}
+                className={"bottom-nav__tab" + (meerActief ? " bottom-nav__tab--active" : "")}
+                aria-label="Alle onderdelen"
+            >
+                <span className="bottom-nav__icon"><LayoutGrid size={22} /></span>
+                <span className="bottom-nav__label">Meer</span>
+            </button>
         </nav>
     );
 }

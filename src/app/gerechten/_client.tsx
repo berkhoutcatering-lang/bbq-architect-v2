@@ -827,7 +827,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
     return (
         <div className="main-content mobile-safe-bottom">
-            {/* RichKeukenTabs verwijderd — vervangen door HubTabs in /gerechten/layout.tsx (Menu & Recepten unify). */}
+            {/* Keuken-tabbladen: in de werkruimtebalk (AppShell). */}
             {/* Compacte 1-line header: titel + view-toggle (Gerechten / Menu's) + add-CTA.
                 Vervangt PageGuideNote + GerechtenPageHero + SignatureSpotlight + DietAllergensOverview
                 — Sam's "te speels" feedback. Density-doel: gerechten boven de fold. */}

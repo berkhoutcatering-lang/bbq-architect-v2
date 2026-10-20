@@ -4,7 +4,6 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase';
 import { useConfirm } from '@/components/ConfirmDialog';
 import EmptyState from '@/components/EmptyState';
-import RichKeukenTabs from '@/components/RichKeukenTabs';
 import PageGuideNote from '@/components/PageGuideNote';
 import { CheckSquare, CheckCheck, Trash2, Loader2, Search, ArrowRight, Sparkles, Plus, X, BarChart3, LayoutGrid, Wand2, UtensilsCrossed } from 'lucide-react';
 import { RequireTier } from '@/components/PaywallPrompt';
@@ -398,8 +397,6 @@ export default function MenuEngineering() {
           {toast}
         </div>
       )}
-
-      <RichKeukenTabs />
 
       <PageGuideNote
         id="marges"

@@ -1,12 +1,14 @@
 'use client';
 
 /**
- * SysteemHubCards — de 6 hub-card-grid. Client component voor hover-states.
+ * SysteemHubCards — de hub-card-grid van Systeem. Client component voor hover-states.
  * Pure presentation; geen data-fetching.
  */
 
 import Link from 'next/link';
-import { Settings, Users, Inbox, Globe, HelpCircle, Building2, ArrowRight } from 'lucide-react';
+import { Settings, Users, Inbox, Globe, HelpCircle, Building2, ArrowRight, ToggleRight } from 'lucide-react';
+import { useOrg } from '@/lib/OrgContext';
+import { useIsPlatformAdmin } from '@/lib/useOnderdelen';
 
 const HUB_CARDS = [
     {
@@ -50,10 +52,28 @@ const HUB_CARDS = [
         title: 'Platform Beheer',
         desc: 'Organisaties en klanten beheren (alleen voor admins).',
         cta: 'Open admin',
+        alleenPlatform: true,
+    },
+    {
+        href: '/instellingen/onderdelen',
+        icon: ToggleRight,
+        title: 'Onderdelen',
+        desc: 'Zet onderdelen die je bedrijf niet gebruikt uit. Er gaat niets verloren.',
+        cta: 'Onderdelen kiezen',
+        alleenBedrijfsAdmin: true,
     },
 ];
 
 export default function SysteemHubCards() {
+    const { isAdmin } = useOrg();
+    const isPlatformAdmin = useIsPlatformAdmin();
+    /* Platform Beheer stond hier voor iedereen ("alleen voor admins" stond er
+       alleen bij in tekst); Onderdelen alleen voor de Admin-rol van het bedrijf. */
+    const kaarten = HUB_CARDS.filter(function (c) {
+        if ('alleenPlatform' in c && c.alleenPlatform) return isPlatformAdmin;
+        if ('alleenBedrijfsAdmin' in c && c.alleenBedrijfsAdmin) return isAdmin;
+        return true;
+    });
     return (
         <div
             style={{
@@ -63,7 +83,7 @@ export default function SysteemHubCards() {
                 marginTop: 16,
             }}
         >
-            {HUB_CARDS.map((card) => {
+            {kaarten.map((card) => {
                 const Icon = card.icon;
                 return (
                     <Link
