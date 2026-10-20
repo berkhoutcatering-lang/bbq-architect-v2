@@ -88,7 +88,7 @@ export default function EventLogistiekPage() {
 
     return (
         <div className="redesign-root">
-            <div className="main" style={{ padding: '24px 0 40px' }}>
+            <div className="main">
                 {/* Dezelfde stapel als de event-hub had: terug-knop, tabs met
                     eyebrow, dan pas een eigen kop. Nu: kop, dan tabs. */}
                 <HubHeader

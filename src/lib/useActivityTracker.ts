@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { useOrg } from '@/lib/OrgContext';
+import { whenIdle } from '@/lib/whenIdle';
 
 // Tracks page visits and logs activity for health score computation
 export function useActivityTracker() {
@@ -23,8 +24,9 @@ export function useActivityTracker() {
     if (lastPageRef.current === pathname) return;
     lastPageRef.current = pathname;
 
-    // Log page visit (fire-and-forget, non-blocking)
-    fetch('/api/activity', {
+    // Log page visit (fire-and-forget, non-blocking) — pas als de pagina
+    // zelf binnen is, zodat hij niet met haar eigen vragen concurreert.
+    whenIdle(function () { fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -32,7 +34,8 @@ export function useActivityTracker() {
         page: pathname,
         organizationId: orgId,
       }),
-    }).catch(function () { /* silent */ });
+      keepalive: true,
+    }).catch(function () { /* silent */ }); });
   }, [pathname, orgId]);
 
   // Log session start once
@@ -40,15 +43,17 @@ export function useActivityTracker() {
     if (!orgId || sessionLoggedRef.current) return;
     sessionLoggedRef.current = true;
 
-    fetch('/api/activity', {
+    const page = pathname;
+    whenIdle(function () { fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'session_start',
-        page: pathname,
+        page,
         organizationId: orgId,
       }),
-    }).catch(function () { /* silent */ });
+      keepalive: true,
+    }).catch(function () { /* silent */ }); });
   }, [orgId, pathname]);
 }
 

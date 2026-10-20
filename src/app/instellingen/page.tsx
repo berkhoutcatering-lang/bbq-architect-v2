@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { useSettings, useSupabase } from '@/lib/useSupabase';
+import { useSettings, useSupabase, refreshSettings } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { supabase } from '@/lib/supabase';
 import type { DbEvent, Factuur, Offerte, Recept, Materieel } from '@/types';
 import PageHeader from '@/components/PageHeader';
+import Link from 'next/link';
 import { Building2, Check, ChevronDown, CloudUpload, Database, Eye, FileText, Layout, Loader2, Palette, Pen, RotateCcw, Save, Settings, Sliders } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { updateSettings } from './actions';
@@ -87,6 +88,9 @@ export default function Instellingen() {
         }
 
         showToast('Instellingen opgeslagen', 'success');
+        /* De instellingen zijn één gedeelde kopie per bedrijf (thema, logo,
+           offertes); vers ophalen zodat de wijziging overal meteen doorkomt. */
+        if (orgId) void refreshSettings(orgId);
         // Detect huisstijl change → ask the user whether to also update existing templates
         const changed: { primary?: string; accent?: string } = {};
         if (data.brand_primary && data.brand_primary !== beforePrimary) changed.primary = data.brand_primary;
@@ -116,8 +120,19 @@ export default function Instellingen() {
     if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
 
     return (
-        <>
-            <PageHeader title="Instellingen" description="Beheer bedrijfsgegevens, huisstijl en systeeminstellingen" />
+        /* Paginarand: deze pagina heeft zelf geen zijmarge (stond tegen de zijbalk). */
+        <div className="pagina-rand">
+            <PageHeader
+                title="Instellingen"
+                description="Beheer bedrijfsgegevens, huisstijl en systeeminstellingen"
+                actions={
+                    /* Onderdelen aan/uit (werkruimtes, 2026-10-20): wat je bedrijf
+                       niet gebruikt verdwijnt uit tegelscherm, balk en zoeken. */
+                    <Link href="/instellingen/onderdelen" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', minHeight: 44 }}>
+                        <Sliders size={15} /> Onderdelen aan/uit
+                    </Link>
+                }
+            />
 
             <PageGuideNote
                 id="instellingen"
@@ -340,7 +355,7 @@ export default function Instellingen() {
                     }}
                 />
             )}
-        </>
+        </div>
     );
 }
 

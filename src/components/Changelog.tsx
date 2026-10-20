@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X, Sparkles, Wrench, Bug, AlertTriangle, Bell } from 'lucide-react';
 import type { ChangelogEntry } from '@/types/database.types';
+import { whenIdle } from '@/lib/whenIdle';
 
 const CATEGORY_CONFIG: Record<string, { icon: typeof Sparkles; color: string; label: string }> = {
   feature: { icon: Sparkles, color: 'var(--purple)', label: 'Nieuw' },
@@ -42,7 +43,8 @@ export default function Changelog() {
       .catch(function () { setLoaded(true); });
   }, []);
 
-  useEffect(function () { fetchChangelog(); }, [fetchChangelog]);
+  /* Het nieuws-belletje is bijzaak: ophalen als de pagina zelf binnen is. */
+  useEffect(function () { return whenIdle(fetchChangelog); }, [fetchChangelog]);
 
   function handleOpen() {
     setOpen(true);

@@ -860,7 +860,7 @@ export default function ComponentenPage() {
 
     return (
         <div className="redesign-root">
-            <div className="main" style={{ padding: '8px 0 40px' }}>
+            <div className="main" style={{ paddingTop: 8 }}>
                 {/* ── Kop ──────────────────────────────────────────────────────
                     Overgenomen van /gerechten (_client.tsx r.800-856), want die
                     pagina is de maatstaf: mr-page-header met titel + telling

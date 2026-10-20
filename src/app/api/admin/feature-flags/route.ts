@@ -54,11 +54,30 @@ export async function POST(request: NextRequest) {
   const { orgId, flags } = await request.json();
   if (!orgId || !flags) return NextResponse.json({ error: 'orgId en flags zijn verplicht' }, { status: 400 });
 
+  if (typeof flags !== 'object' || Array.isArray(flags)) {
+    return NextResponse.json({ error: 'flags moet een object zijn' }, { status: 400 });
+  }
+
   const sb = createServiceSupabase();
+
+  /* Samenvoegen, niet overschrijven. feature_flags bevat méér dan deze acht
+     schakelaars: de Moneybird-koppeling (tokens), market_pulse_opt_in,
+     ai_unlimited. Het hele object wegschrijven met wat het beheerscherm toen
+     kende, kon die wissen. Nu passen we alleen de bekende sleutels aan, met
+     alleen true/false. */
+  const bekend = new Set(AVAILABLE_FLAGS.map(f => f.key));
+  const wijziging: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(flags as Record<string, unknown>)) {
+    if (bekend.has(k) && typeof v === 'boolean') wijziging[k] = v;
+  }
+
+  const { data: org, error: leesFout } = await sb.from('organizations').select('feature_flags').eq('id', orgId).single();
+  if (leesFout || !org) return NextResponse.json({ error: leesFout?.message || 'Org niet gevonden' }, { status: 404 });
+  const huidig = (org.feature_flags && typeof org.feature_flags === 'object' ? org.feature_flags : {}) as Record<string, unknown>;
 
   const { error } = await sb
     .from('organizations')
-    .update({ feature_flags: flags })
+    .update({ feature_flags: { ...huidig, ...wijziging } })
     .eq('id', orgId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -91,7 +91,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     });
     const [gangen, setGangen] = useState<Gang[]>(initial?.gangen ?? []);
     const [gerechten, setGerechten] = useState<Gerecht[]>(initial?.gerechten ?? []);
-    const [activeGang, setActiveGang] = useState<string | null>(null);
+    const [activeGang, setActiveGang] = useState<string | null>(initial?.gangen?.[0]?.slug ?? null);
     const [editing, setEditing] = useState<string | number | null>(null);
     /* Tab binnen de edit-drawer — spiegelt de tabs van GerechtDetailDrawer
        (Wat/Bouw/Compliance/Service) zodat toevoegen/bewerken en bekijken
@@ -119,7 +119,10 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const [aiFotoOpen, setAiFotoOpen] = useState(false);
     const [stats, setStats] = useState<Record<string, any> | null>(null);
     const [hwInput, setHwInput] = useState<Record<string, any>>({ naam: '', ratio: 1, buffer_pct: 10, min_extra: 0, categorie: 'servies' });
-    const [dataLoading, setDataLoading] = useState(true);
+    /* Met een server-snapshot is er niets te laden: meteen tonen. Vroeger
+       stond dit altijd op true, waardoor de pagina de servergegevens achter
+       een laadicoon verstopte en alles opnieuw vroeg (meting 2026-10-20). */
+    const [dataLoading, setDataLoading] = useState(!initial);
     const [followUpActions, setFollowUpActions] = useState<FollowUpAction[] | null>(null);
     const [followUpTitle, setFollowUpTitle] = useState('');
     /* Was een schakelaar Gerechten/Menu's. De Menu's-kant is verhuisd naar de
@@ -155,18 +158,25 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
     const WINKELS = ['Sligro', 'Crisp', 'PLUS', 'Overig'];
     const HW_CATS = ['servies', 'apparatuur', 'branding', 'meubilair'];
 
-    useEffect(function () { loadData().finally(function () { setDataLoading(false); }); }, []);
+    useEffect(function () {
+        if (initial) return;
+        loadData().finally(function () { setDataLoading(false); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     /* Bucket C — ⌘K opent de Menu Command Palette. */
     useCmdKShortcut(useCallback(() => setCmdkOpen(true), []));
 
+    /* Beide tabellen tegelijk; ook gebruikt als verversing na een wijziging. */
     async function loadData() {
-        const g = await supabase.from('gangen').select('*').order('volgorde');
+        const [g, r] = await Promise.all([
+            supabase.from('gangen').select('*').order('volgorde'),
+            supabase.from('gerechten').select('*').order('volgorde'),
+        ]);
         if (g.data) {
             setGangen(g.data);
             if (!activeGang && g.data.length > 0) setActiveGang(g.data[0].slug);
         }
-        const r = await supabase.from('gerechten').select('*').order('volgorde');
         if (r.data) setGerechten(r.data);
     }
 
@@ -817,7 +827,7 @@ export default function Gerechten({ initial }: { initial?: GerechtenInitial } = 
 
     return (
         <div className="main-content mobile-safe-bottom">
-            {/* RichKeukenTabs verwijderd — vervangen door HubTabs in /gerechten/layout.tsx (Menu & Recepten unify). */}
+            {/* Keuken-tabbladen: in de werkruimtebalk (AppShell). */}
             {/* Compacte 1-line header: titel + view-toggle (Gerechten / Menu's) + add-CTA.
                 Vervangt PageGuideNote + GerechtenPageHero + SignatureSpotlight + DietAllergensOverview
                 — Sam's "te speels" feedback. Density-doel: gerechten boven de fold. */}

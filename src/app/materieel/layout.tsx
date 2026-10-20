@@ -1,13 +1,7 @@
 import type { ReactNode } from 'react';
-import TeamTabs from '@/components/TeamTabs';
 
-export default function MaterieelLayout({ children }: { children: ReactNode }) {
-  return (
-    <>
-      <div style={{ padding: '16px 32px 0' }}>
-        <TeamTabs />
-      </div>
-      {children}
-    </>
-  );
+/* Paginarand: deze pagina heeft zelf geen zijmarge (stond tegen de zijbalk
+   aan). Zie .pagina-rand in src/styles/werkruimte.css. */
+export default function Layout({ children }: { children: ReactNode }) {
+  return <div className="pagina-rand">{children}</div>;
 }

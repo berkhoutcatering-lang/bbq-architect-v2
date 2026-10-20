@@ -27,4 +27,3 @@ export {
 
 export { default as MobileSafeBottom } from './MobileSafeBottom';
 export { default as StickyMobileCTA } from './StickyMobileCTA';
-export { default as MobileCmdKTrigger } from './MobileCmdKTrigger';

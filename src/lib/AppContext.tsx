@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import type { DbEvent, Offerte, InventoryItem, Factuur, Notification, KPIs, AppContextValue } from '@/types';
 import { isVervallen } from '@/lib/factuurStatus';
+import { whenIdle } from '@/lib/whenIdle';
 
 const AppContext = createContext<AppContextValue | null>(null);
 
@@ -27,7 +28,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             supabase.from('events').select('id,name,date,guests,status,client_naam,location').eq('organization_id', orgId).gte('date', today).order('date').limit(10),
             supabase.from('offertes').select('id,nummer,status,client_naam,datum,aantal_gasten,basis_prijs_pp,items,korting,event_id,geldig_tot').eq('organization_id', orgId).in('status', ['concept', 'geaccepteerd', 'verzonden']).order('datum', { ascending: false }).limit(20),
             supabase.from('inventory').select('id,naam,current_stock,min_stock,unit').eq('organization_id', orgId),
-            supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').eq('organization_id', orgId).in('status', ['concept', 'verzonden', 'verlopen']).limit(10),
+            /* Oudste vervaldatum eerst: zonder volgorde gaf limit(10) een
+               willekeurige greep, en kon de teller voor achterstallige
+               facturen er net de verkeerde tien uitpikken. */
+            supabase.from('facturen').select('id,nummer,status,client_naam,vervaldatum,items').eq('organization_id', orgId).in('status', ['concept', 'verzonden', 'verlopen']).order('vervaldatum', { ascending: true, nullsFirst: false }).limit(10),
         ]);
 
         setUpcomingEvents((evRes.data || []) as DbEvent[]);
@@ -39,9 +43,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLoaded(true);
     }, [orgId]);
 
+    /* Tellers en meldingen zijn bijzaak: eerst krijgt de pagina zelf de lijn
+       naar de database, dan pas deze vier vragen. Ze gingen tegelijk met de
+       vragen van de pagina de deur uit en vertraagden die (meting 2026-10-20). */
     useEffect(function () {
-        loadGlobalData();
-    }, [loadGlobalData]);
+        if (!orgId) return;
+        return whenIdle(loadGlobalData);
+    }, [orgId, loadGlobalData]);
 
     /* Vijf realtime-kanalen op élke pagina. Zonder rem deed iedere losse
        wijziging meteen een volledige loadGlobalData() — vier queries. Bij een
@@ -61,7 +69,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
             }, 400);
         }
 
-        const tables = ['events', 'offertes', 'facturen', 'inventory', 'prep_tasks'];
+        /* prep_tasks stond hier ook, maar wordt hierboven niet opgehaald —
+           elke wijziging daar herlaadde de vier tabellen voor niets. */
+        const tables = ['events', 'offertes', 'facturen', 'inventory'];
         const channels = tables.map(function (table) {
             return supabase
                 .channel('global_rt_' + table + '_' + orgId.slice(0, 8))

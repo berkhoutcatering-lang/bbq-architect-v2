@@ -603,7 +603,8 @@ export default function OfferteViewPage() {
 
   return (
     <div className="redesign-root">
-      <div className="main" style={{ padding: '24px 0 40px' }}>
+      {/* Zijmarge uit .redesign-root .main (was inline op 0: inhoud plakte tegen de rand). */}
+      <div className="main">
         <div style={{ marginBottom: 12 }}>
           <button className="btn btn-ghost btn-sm" onClick={() => router.push('/offertes')}>
             <ArrowLeft size={14} />Terug naar offertes

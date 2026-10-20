@@ -1064,12 +1064,21 @@
 .redesign-root .doc-primary-tag { font-size: 9px; letter-spacing: .15em; text-transform: uppercase; font-weight: 700; padding: 3px 8px; border-radius: 4px; }
 .redesign-root .doc-primary-tag.sent { background: rgba(59,130,246,.15); color: var(--blue); border: 1px solid rgba(59,130,246,.3); }
 .redesign-root .doc-primary-tag.ready { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
-.redesign-root .doc-primary-actions { display: flex; gap: 6px; margin-top: 2px; }
+/* flex-wrap: op een telefoon is de kaart ±115 px breed en passen vier knoppen
+   van 44 px niet naast elkaar (liepen buiten beeld, gezien 2026-10-20). */
+.redesign-root .doc-primary-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .redesign-root .doc-primary-actions button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 600; border: 1px solid var(--border); background: rgba(0,0,0,.2); color: var(--text); cursor: pointer; font-family: inherit; transition: .15s; }
 .redesign-root .doc-primary-actions button.primary { background: var(--brand); color: var(--brand-background, #000); border-color: var(--brand); }
 .redesign-root .doc-primary-actions button:hover { filter: brightness(1.15); }
 
 .redesign-root .doc-secondary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+/* Telefoon: Offerte- en Menukaart-kaart onder elkaar i.p.v. naast elkaar
+   (twee kolommen van 156 px waren te smal voor hun knoppen). */
+@media (max-width: 767px) {
+  .redesign-root .doc-primary-row { grid-template-columns: minmax(0, 1fr); }
+  /* Factuur · Prep-lijst · Laadlijst · HACCP: twee per rij i.p.v. vier. */
+  .redesign-root .doc-secondary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .redesign-root .doc-secondary {
   padding: 12px 12px 12px 14px;
   border: 1px solid var(--border); border-radius: 10px;
