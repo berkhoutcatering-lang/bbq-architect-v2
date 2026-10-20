@@ -105,7 +105,7 @@ export default function WerkruimteBalk() {
                     <span className="wr-zoek-tekst">Zoeken</span>
                     <kbd>⌘K</kbd>
                 </button>
-                <Changelog />
+                <span className="wr-nieuws"><Changelog /></span>
                 <GebruikerMenu />
             </div>
         </header>

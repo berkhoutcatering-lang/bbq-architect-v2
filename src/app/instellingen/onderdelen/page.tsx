@@ -57,7 +57,17 @@ export default function OnderdelenPagina() {
     }
 
     const werkruimtes = navSections;
-    const aantalUit = werkruimtes.filter(function (s) { return !s.vast && verborgen.includes(s.slug); }).length;
+    /* Tellen wat de gebruiker merkt: uitgezette onderdelen, en losse
+       tabbladen die uit staan binnen een onderdeel dat nog aan is. */
+    const onderdelenUit = werkruimtes.filter(function (s) { return !s.vast && verborgen.includes(s.slug); });
+    const tabsUit = werkruimtes
+        .filter(function (s) { return !onderdelenUit.includes(s); })
+        .flatMap(function (s) { return s.children; })
+        .filter(function (c) { return verborgen.includes(c.href); }).length;
+    const delen: string[] = [];
+    if (onderdelenUit.length > 0) delen.push(onderdelenUit.length + (onderdelenUit.length === 1 ? ' onderdeel' : ' onderdelen'));
+    if (tabsUit > 0) delen.push(tabsUit + (tabsUit === 1 ? ' tabblad' : ' tabbladen'));
+    const stand = delen.length > 0 ? delen.join(' en ') + ' uit' : 'Alles staat aan';
 
     return (
         <div className="main-content od-pagina">
@@ -67,7 +77,7 @@ export default function OnderdelenPagina() {
             <PageHeader
                 title="Onderdelen"
                 description="Zet uit wat je bedrijf niet gebruikt. Het verdwijnt uit het tegelscherm, de balk en het zoekvenster — er gaat niets verloren, en aanzetten zet alles terug."
-                actions={<span className="od-status" aria-live="polite">{bezig ? 'Opslaan…' : aantalUit > 0 ? aantalUit + ' onderdeel' + (aantalUit === 1 ? '' : 'en') + ' uit' : 'Alles staat aan'}</span>}
+                actions={<span className="od-status" aria-live="polite">{bezig ? 'Opslaan…' : stand}</span>}
             />
 
             {!isAdmin && (

@@ -120,7 +120,8 @@ export default function Instellingen() {
     if (loading || !form) return <div className="empty-state"><Loader2 size={14} className="animate-spin" /><p>Laden...</p></div>;
 
     return (
-        <>
+        /* Paginarand: deze pagina heeft zelf geen zijmarge (stond tegen de zijbalk). */
+        <div className="pagina-rand">
             <PageHeader
                 title="Instellingen"
                 description="Beheer bedrijfsgegevens, huisstijl en systeeminstellingen"
@@ -354,7 +355,7 @@ export default function Instellingen() {
                     }}
                 />
             )}
-        </>
+        </div>
     );
 }
 

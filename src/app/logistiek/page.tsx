@@ -79,7 +79,8 @@ function eventDateLabel(d: string | null): string {
 export default function LogistiekPage() {
     return (
         <RequireTier feature="logistiek">
-            <LogistiekInner />
+            {/* Paginarand: de pagina heeft zelf geen zijmarge (stond tegen de zijbalk). */}
+            <div className="pagina-rand"><LogistiekInner /></div>
         </RequireTier>
     );
 }

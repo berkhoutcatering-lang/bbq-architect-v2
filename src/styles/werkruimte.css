@@ -166,6 +166,8 @@
   line-height: 1;
 }
 
+.wr-nieuws { display: inline-flex; }
+
 .wr-acties {
   grid-area: acties;
   display: flex;
@@ -237,8 +239,17 @@
     padding-top: env(safe-area-inset-top, 0px);
     min-height: 52px;
   }
-  .wr-titel { min-width: 0; overflow: hidden; }
-  .wr-titel-tekst { overflow: hidden; text-overflow: ellipsis; }
+  .wr-titel { min-width: 0; overflow: hidden; gap: 8px; padding: 0 4px; font-size: 14.5px; }
+  .wr-titel-tekst { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .wr-icoon { width: 26px; height: 26px; border-radius: 8px; }
+  .wr-icoon svg { width: 15px; height: 15px; }
+  /* Bedrijfsnaam staat al in het gebruikersmenu; op 375 px telt elke pixel
+     voor de naam van het onderdeel. */
+  .wr-org { display: none; }
+  .wr-acties { gap: 2px; }
+  /* Nieuws-belletje niet op de telefoon: de naam van het onderdeel past
+     anders niet naast zoeken en het menu (375 px). */
+  .wr-nieuws { display: none; }
   .wr-tabs {
     border-left: none;
     margin: 0 -8px;
@@ -330,8 +341,10 @@
 .wr-tegels-achtergrond {
   position: fixed;
   inset: 0;
-  z-index: 90;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  /* Boven zwevende knoppen (scan-camera 100, plusknop) en de onderbalk;
+     onder toasts en bevestigingsvensters (9999+). */
+  z-index: 300;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   overflow-y: auto;
@@ -454,3 +467,13 @@
 
 /* Onderbalk: werkruimte-iconen (18 px in de bron) op onderbalk-maat. */
 .bottom-nav__icon--groot svg { width: 22px; height: 22px; }
+
+/* ── Paginarand ──────────────────────────────────────────────────────────
+   Een deel van de pagina's had geen eigen zijmarge en stond tegen de zijbalk
+   aan. Zonder zijbalk plakten ze tegen de vensterrand. Deze class (via de
+   layout van zo'n onderdeel) geeft dezelfde rand als .main-content, maar
+   zonder max-breedte: brede tabellen blijven breed. Op de telefoon geeft
+   #main-content al 16 px. */
+@media (min-width: 768px) {
+  .pagina-rand { padding: 24px 32px 0; }
+}

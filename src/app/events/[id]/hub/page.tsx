@@ -643,7 +643,10 @@ export default function EventHubPage() {
 
   return (
     <div className="redesign-root">
-      <div className="main" style={{ padding: '24px 0 40px' }}>
+      {/* Geen eigen padding meer: '24px 0 40px' zette de zijmarge op 0, zodat
+          de inhoud tegen de rand plakte (zonder zijbalk ernaast viel dat op).
+          .redesign-root .main geeft 28 px op de computer, 16 px op de telefoon. */}
+      <div className="main">
         {/* Hier stonden vijf navigatierijen vóór de eerste inhoud: kruimelbalk,
             de hub-tabs, een knop "Terug naar events", een eyebrow "EVENT #10"
             en dan pas de eigen tabrij. Plus acht knoppen in drie stijlen naast
