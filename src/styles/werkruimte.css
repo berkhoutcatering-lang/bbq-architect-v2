@@ -168,6 +168,12 @@
 
 .wr-nieuws { display: inline-flex; }
 
+/* Het "waar werk je aan"-knopje (event, offerte) deelt de rij met de
+   tabbladen: smal houden, de naam kapt af met … (volledige naam = tooltip
+   en het kruimelpad). */
+.wr-acties .active-resource-pill { max-width: 210px; }
+@media (min-width: 1500px) { .wr-acties .active-resource-pill { max-width: 300px; } }
+
 .wr-acties {
   grid-area: acties;
   display: flex;
@@ -250,6 +256,9 @@
   /* Nieuws-belletje niet op de telefoon: de naam van het onderdeel past
      anders niet naast zoeken en het menu (375 px). */
   .wr-nieuws { display: none; }
+  /* Op de telefoon past het niet naast de naam van het onderdeel; daar
+     staat het actieve item al in het kruimelpad en de pagina zelf. */
+  .wr-acties .active-resource-pill { display: none; }
   .wr-tabs {
     border-left: none;
     margin: 0 -8px;

@@ -21,7 +21,7 @@ export default function TegelschermHost() {
     /* Het stukje JavaScript alvast ophalen als de browser niets te doen heeft,
        zodat de eerste tik op ⊞ meteen opent in plaats van eerst te laden. */
     useEffect(function () {
-        return whenIdle(function () { void import('./Tegelscherm'); }, 4000);
+        return whenIdle(function () { void import('./Tegelscherm'); }, 4000, 3000);
     }, []);
 
     useEffect(function () {

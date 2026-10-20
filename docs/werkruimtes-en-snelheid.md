@@ -72,3 +72,38 @@ Eén functie `vindWerkruimte(pad)` bepaalt overal welk onderdeel en welk tabblad
 - Onderdelen aan/uit werkt end-to-end en overleeft herladen.
 - Meting na afloop: minder verzoeken per pagina dan vooraf, tweede bezoek aan een pagina toont direct inhoud.
 - Typecheck, tests en productiebuild groen.
+
+---
+
+## Uitvoering en meting na afloop (2026-10-20)
+
+Gebouwd op `feat/werkruimtes-snelheid`. Gemeten op dezelfde manier als het rapport vooraf: productiebouw (`next build` + `next start`), ingelogd als Mathijs op de echte Hop & Bites-gegevens, zelfde Mac, browserpaneel 1280×820. Elke pagina drie keer volledig geladen; "klaar" = tekst verandert 1,5 s niet meer en er staat geen laadicoon.
+
+### Volledig laden
+
+| Pagina | Databasevragen voor → na | Klaar (mediaan) voor → na | Wat veranderde |
+|---|---|---|---|
+| `/` Vandaag | 29 → **22** | 0,55 → **0,39 s** | rondleiding, wizard en dubbele instellingen weg |
+| `/agenda` | 16 → **11** | 0,48 → **0,49 s** | |
+| `/offertes` | 19 → **7** | 0,69 → **0,66 s** | lijst komt mee met de pagina (server); tellers pas na 1,5 s |
+| `/gerechten` | 13 → **6** | 0,75 → **0,65 s** | geen laadicoon meer, servergegevens gebruikt |
+| `/voorraad` | 13 → **7** | ≤0,63 → **0,69 s** | alleen minder vragen; tijd binnen de meetruis |
+
+De eerste keer na een pauze is nog steeds trager (1,3–1,5 s): dat is de database die "wakker" wordt, niet de app.
+
+### Klikken tussen werkruimtes (app blijft open, via het tegelscherm)
+
+| Klik naar | Databasevragen voor → na | Klaar voor → na |
+|---|---|---|
+| `/offertes` | 8 tabellen → **1** | 0,56 → **0,54 s** |
+| `/gerechten` | 2 (na elkaar, met laadicoon) → **0** | 0,64 → **0,49 s** |
+| `/voorraad` | → **2** | 0,57 → **0,50 s** |
+| `/` (net geweest) | 20 → 15, **maar inhoud staat er meteen** (verversen gebeurt op de achtergrond) | 0,30 → 0,39 s |
+| tweede keer `/offertes` | — → **2** | — → **0,43 s** |
+| tweede keer `/gerechten` | — → **0** | — → **0,47 s** |
+
+### Wat bewust niet gedaan is
+
+- **A12 — kolommen op Vandaag inperken.** Gemeten in de database: alle veertien tabellen samen zijn voor Hop & Bites ongeveer 70 KB (gerechten 28 KB, de rest 1–7 KB). Kolommen schrappen levert hier bijna niets op, en een vergeten kolom breekt stilletjes een functie. De winst zat in het áántal vragen en het geheugen tussen pagina's.
+- **Vandaag in één servervraag** (rapport: 2–4 dagen) en **servergegevens voor /agenda** — nu niet nodig: Vandaag en Agenda zijn klaar in ±0,4–0,5 s. Wordt interessant als de data groeit.
+- **JavaScript-omvang vergelijken**: in deze meting op een andere manier geteld dan in het rapport (browser in plaats van bouwoverzicht), dus geen eerlijke voor/na. Wel zeker: AI-chat, AI-studio, zoekvenster, rondleiding, hulp, plusknop, tegelscherm en het nieuws-belletje zitten niet meer in de gedeelde bundel maar komen na de pagina.
