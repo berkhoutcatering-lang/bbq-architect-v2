@@ -93,7 +93,7 @@ export const navSections: NavSection[] = [
             { label: "Webshop", icon: <ShoppingBag size={16} />, href: "/verkoop/webshop", description: "Artikelen, vakjes en ophaalmomenten van je webshop" },
             { label: "Kerst", icon: <Gift size={16} />, href: "/verkoop/kerst", description: "Kerstpakketten: inhoud, bestellingen en overzicht" },
             { label: "Arrangementen", icon: <Layers size={16} />, href: "/verkoop/arrangementen", description: "Wat klanten zelf kunnen samenstellen — categorieën, niveaus, indicatieprijs" },
-            { label: "Website", icon: <Globe size={16} />, href: "/verkoop/website", description: "Je website bijsturen: dicht, afwijkende tijden, weekaanbod, uitverkocht" },
+            { label: "Site bijsturen", icon: <Globe size={16} />, href: "/verkoop/website", description: "Je website bijsturen: dicht, afwijkende tijden, weekaanbod, uitverkocht. (Website opbouwen = Systeem → Website.)" },
             { label: "Offertes", icon: <FileText size={16} />, href: "/offertes", description: "Offertes opstellen en versturen" },
             { label: "Klanten", icon: <Users size={16} />, href: "/klanten", description: "Klantenbestand en historie" },
         ],

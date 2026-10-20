@@ -39,7 +39,9 @@ export default function OnboardingWizard() {
         setShow((count ?? 0) === 0);
       });
     return () => { cancelled = true; };
-  }, [loaded, upcomingEvents, dismissed, orgId]);
+  /* Op de lengte, niet de lijst: die krijgt bij elke herlading van de
+     tellers een nieuwe identiteit en zou de tel-vraag steeds opnieuw doen. */
+  }, [loaded, upcomingEvents.length, dismissed, orgId]);
 
   function dismiss() {
     setDismissed(true);

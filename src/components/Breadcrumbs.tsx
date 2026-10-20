@@ -91,7 +91,9 @@ export default function Breadcrumbs() {
                 <span aria-current="page">{basisLabel}</span>
             ) : (
                 <>
-                    <Link href={match.prefix}>{basisLabel}</Link>
+                    {/* Alleen een tabblad is zeker een pagina; een ook-voorvoegsel
+                        (/labels, /scan, /sectie) bestaat vaak niet los. */}
+                    {basis ? <Link href={basis.href}>{basisLabel}</Link> : <span>{basisLabel}</span>}
                     {kruimels.map(function (k, i) {
                         const laatste = i === kruimels.length - 1;
                         return (

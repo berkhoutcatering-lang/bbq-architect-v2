@@ -32,7 +32,8 @@ export function useOnderdelen(): {
     werkruimtes: NavSection[];
     loading: boolean;
 } {
-    const { settings, loading } = useSettings();
+    /* Gedeelde kopie volstaat; niet bij elke mount opnieuw vragen. */
+    const { settings, loading } = useSettings({ altijdVers: false });
     const isPlatformAdmin = useIsPlatformAdmin();
     const raw: unknown = settings?.verborgen_onderdelen;
     const verborgen = useMemo(function () {

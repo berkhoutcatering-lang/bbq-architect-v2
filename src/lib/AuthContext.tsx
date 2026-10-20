@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { clearDataCache } from '@/lib/dataCache';
 import type { User, Session } from '@supabase/supabase-js';
@@ -53,11 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         setUser(function (vorige) {
           const nieuw = s?.user ?? null;
-          if (vorige?.id === nieuw?.id) return vorige;
-          /* Andere gebruiker (of uitgelogd): het geheugen tussen pagina's
-             hoort bij de vorige en mag niet blijven staan. */
-          clearDataCache();
-          return nieuw;
+          return vorige?.id === nieuw?.id ? vorige : nieuw;
         });
         setLoading(false);
       }
@@ -67,6 +63,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  /* Andere gebruiker (of uitgelogd): het geheugen tussen pagina's hoort bij
+     de vorige en mag niet blijven staan. In een effect, niet in de setState-
+     updater: die hoort zuiver te zijn. */
+  const vorigeIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(function () {
+    const id = user?.id ?? null;
+    if (vorigeIdRef.current !== undefined && vorigeIdRef.current !== id) clearDataCache();
+    vorigeIdRef.current = id;
+  }, [user]);
 
   const signOut = useCallback(async function () {
     if (!supabase) return;

@@ -121,6 +121,13 @@
   margin-left: 2px;
 }
 .wr-tabs::-webkit-scrollbar { display: none; }
+/* Vandaag heeft geen tabbladen: dan ook geen scheidingslijn. */
+.wr-tabs:empty { border-left: none; }
+
+/* Gebruikersmenu open: de balk tijdelijk boven pagina-lagen (popovers en
+   lades op z 50), anders valt het menu eronder. Dicht weer 40, zodat lades
+   die bovenaan beginnen de balk blijven bedekken. */
+.wr-balk:has(.wr-menu) { z-index: 75; }
 
 .wr-tab {
   position: relative;

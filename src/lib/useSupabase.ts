@@ -175,10 +175,15 @@ export function useSupabase<T extends { id: number | string }>(
             });
     }, [table, orgId, offlineMode, activeOffline, columns]);
 
-    /* Optimistische wijzigingen (insert/update/remove/setData) ook in het
-       geheugen zetten, zodat een volgende pagina niet de oude stand toont.
-       Het ophaal-tijdstip blijft staan: een wijziging is geen verse fetch. */
+    /* Optimistische wijzigingen (insert/update/remove) ook in het geheugen
+       zetten, zodat een volgende pagina niet de oude stand toont. Alleen na
+       een eigen wijziging (mutatieRef) — niet bij elke data-verandering, want
+       dan kon een instantie met oudere rijen het verse resultaat van een
+       andere instantie overschrijven. Het ophaal-tijdstip blijft staan. */
+    const mutatieRef = useRef(false);
     useEffect(function () {
+        if (!mutatieRef.current) return;
+        mutatieRef.current = false;
         if (!key || offlineMode || !syncedRef.current) return;
         const prev = tableCache.get(key);
         tableCache.set(key, { rows: data as unknown[], at: prev?.at ?? Date.now() });
@@ -255,7 +260,7 @@ export function useSupabase<T extends { id: number | string }>(
         const tempId = -(Date.now());
         const rowWithOrg = { ...row, id: tempId, organization_id: orgId } as unknown as T;
         // Optimistic: add temp row immediately
-        setData(function (prev) { return prev.concat([rowWithOrg]); });
+        mutatieRef.current = true; setData(function (prev) { return prev.concat([rowWithOrg]); });
 
         // Offline-mode pad: queue + apply lokaal, geen Supabase-call.
         if (offlineMode && activeOffline) {
@@ -275,7 +280,7 @@ export function useSupabase<T extends { id: number | string }>(
                     return rowWithOrg;
                 })
                 .catch(function (e) {
-                    setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
+                    mutatieRef.current = true; setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
                     console.error('[offline] enqueue insert failed', table, e);
                     throw e;
                 });
@@ -283,11 +288,11 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).insert({ ...row, organization_id: orgId } as Record<string, unknown>).select().single()).then(function (res) {
             if (res.error) {
-                setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
+                mutatieRef.current = true; setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
                 console.error('[DB] Insert error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
-            setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
+            mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
             return res.data as T;
         });
     }, [table, orgId, offlineMode, activeOffline, columns]);
@@ -297,7 +302,7 @@ export function useSupabase<T extends { id: number | string }>(
         let previousRow: T | undefined;
         let merged: T | undefined;
         // Optimistic: apply update immediately
-        setData(function (prev) {
+        mutatieRef.current = true; setData(function (prev) {
             return prev.map(function (item) {
                 if (item.id === id) {
                     previousRow = item;
@@ -327,7 +332,7 @@ export function useSupabase<T extends { id: number | string }>(
                     return merged ?? null;
                 })
                 .catch(function (e) {
-                    if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
+                    if (previousRow) mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
                     console.error('[offline] enqueue update failed', table, e);
                     throw e;
                 });
@@ -335,12 +340,12 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).update(row as Record<string, unknown>).eq('id', id).eq('organization_id', orgId).select().single()).then(function (res) {
             if (res.error) {
-                if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
+                if (previousRow) mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
                 console.error('[DB] Update error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
             if (res.data) {
-                setData(function (prev) {
+                mutatieRef.current = true; setData(function (prev) {
                     return prev.map(function (item) { return item.id === id ? res.data as T : item; });
                 });
             }
@@ -352,7 +357,7 @@ export function useSupabase<T extends { id: number | string }>(
         if (!supabase || !orgId) return Promise.resolve();
         let removedRow: T | undefined;
         // Optimistic: remove immediately
-        setData(function (prev) {
+        mutatieRef.current = true; setData(function (prev) {
             removedRow = prev.find(function (item) { return item.id === id; });
             return prev.filter(function (item) { return item.id !== id; });
         });
@@ -373,7 +378,7 @@ export function useSupabase<T extends { id: number | string }>(
                     emitQueueChange();
                 })
                 .catch(function (e) {
-                    if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
+                    if (removedRow) mutatieRef.current = true; setData(function (prev) { return prev.concat([removedRow!]); });
                     console.error('[offline] enqueue delete failed', table, e);
                     throw e;
                 });
@@ -381,7 +386,7 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).delete().eq('id', id).eq('organization_id', orgId)).then(function (res) {
             if (res.error) {
-                if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
+                if (removedRow) mutatieRef.current = true; setData(function (prev) { return prev.concat([removedRow!]); });
                 console.error('[DB] Delete error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
@@ -428,7 +433,14 @@ export function refreshSettings(orgId: string): Promise<SettingsRow | null> {
 }
 
 // Single-row table (settings) — scoped by organization
-export function useSettings(): {
+/**
+ * @param opties.altijdVers  standaard true: bij openen vers ophalen. De
+ *   app-schil (balk, onderbalk, tegelscherm, zoekvenster) zet dit uit: die
+ *   heeft alleen de gedeelde kopie nodig en krijgt wijzigingen toch binnen via
+ *   publishSettings — anders gaat er bij elke keer tegelscherm openen een
+ *   extra vraag uit.
+ */
+export function useSettings(opties?: { altijdVers?: boolean }): {
     settings: SettingsRow | null;
     loading: boolean;
     save: (data: Partial<SettingsRow>) => Promise<SettingsRow | null>;
@@ -451,11 +463,12 @@ export function useSettings(): {
         settingsListeners.add(onPublish);
         /* Bij openen altijd vers (gelijktijdige vragen deelt dedupe); het
            geheugen zorgt alleen dat er meteen iets staat. */
-        fetchSettingsShared(orgId, true).then(function (value) {
+        fetchSettingsShared(orgId, opties?.altijdVers ?? true).then(function (value) {
             setSettings(value);
             setLoading(false);
         });
         return function () { settingsListeners.delete(onPublish); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orgId]);
 
     const save = useCallback(function (data: Partial<SettingsRow>): Promise<SettingsRow | null> {
