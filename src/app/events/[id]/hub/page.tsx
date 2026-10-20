@@ -932,7 +932,7 @@ export default function EventHubPage() {
                 <div className="hstack"><Flag size={15} color="var(--brand-gold)" /><span style={{ fontSize: 14, fontWeight: 600 }}>Workflow · 5 stappen</span></div>
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{stages.filter(s => s.status === 'done').length} / {stages.length} afgerond</span>
               </div>
-              <div style={{ padding: 20, display: 'grid', gridTemplateColumns: `repeat(${stages.length}, 1fr)`, gap: 10, position: 'relative' }}>
+              <div style={{ padding: 20, display: 'grid', gridTemplateColumns: `repeat(${stages.length}, minmax(0, 1fr))`, gap: 10, position: 'relative' }}>
                 <div style={{ position: 'absolute', left: '8%', right: '8%', top: 36, height: 2, background: 'linear-gradient(90deg, rgba(196,163,90,.35), rgba(196,163,90,.08))', zIndex: 0 }} />
                 {stages.map(s => {
                   const color = s.status === 'done' ? 'var(--green)' : s.status === 'active' ? 'var(--brand)' : 'var(--muted)';

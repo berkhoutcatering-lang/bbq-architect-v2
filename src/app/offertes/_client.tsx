@@ -1369,7 +1369,9 @@ export default function Offertes({ begin }: { begin?: BeginGegevens | null } = {
                                     return opmerking ? <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{opmerking.length > 80 ? opmerking.substring(0, 80) + '...' : opmerking}</div> : null;
                                 })()}
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {/* flexWrap: op een telefoon (375 px) was deze rij 14 px te breed
+                                en viel de status-badge rechts weg. */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', minWidth: 0 }}>
                                 <button
                                     className="btn btn-ghost btn-sm"
                                     onClick={function (e) { e.stopPropagation(); window.location.href = '/offertes/' + o.id + '/menukaart-editor'; }}

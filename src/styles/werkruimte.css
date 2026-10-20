@@ -21,8 +21,11 @@
 .wr-main {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+  /* Gewoon blok, geen flexbox: als flex-item kon een pagina met een breed
+     raster (Voorraad op 768 px) breder uitvallen dan het scherm en werd hij
+     rechts afgeknipt. Zo zat de pagina ook in de oude opbouw (#main-content
+     was een blok). */
+  display: block;
   position: relative;
   /* Zelfde als de oude <main>: pagina's zijn hierop gebouwd (brede tabellen
      schuiven binnen hun eigen kaart, niet de hele pagina). */
@@ -235,19 +238,44 @@
   outline-offset: 2px;
 }
 
+/* Laptopbreedte: Verkoop heeft acht tabbladen en Inkoop & Voorraad negen.
+   Met icoontjes viel het laatste (Klanten) op 1280 px half achter de
+   zoekknop (gezien in de browser). Zonder icoon en iets smaller passen ze. */
+@media (min-width: 768px) and (max-width: 1440px) {
+  .wr-tab svg { display: none; }
+  .wr-tab { padding: 0 10px; }
+}
+
 /* Smalle laptop: zoekknop zonder tekst. */
 @media (max-width: 1180px) {
   .wr-zoek-tekst, .wr-zoek kbd { display: none; }
   .wr-zoek { width: 36px; justify-content: center; padding: 0; }
 }
 
-/* Telefoon: tabbladen op een eigen regel onder de titel. */
-@media (max-width: 767px) {
+/* Tablet en telefoon: tabbladen op een eigen regel onder de titel. Op een
+   tablet (768 px) kregen ze naast titel en knoppen maar 335 px en waren
+   vier van de negen tabbladen van Inkoop & Voorraad zichtbaar. */
+@media (max-width: 1023px) {
   .wr-balk {
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "tegel titel acties"
       "tabs  tabs  tabs";
+  }
+  .wr-tabs {
+    border-left: none;
+    margin: 0 -12px 0 -10px;
+    padding: 0 12px 0 10px;
+    border-top: 1px solid var(--border);
+  }
+  .wr-tabs:empty { display: none; }
+  /* Negen tabbladen (Inkoop & Voorraad) passen dan net op 768 px. */
+  .wr-tab { padding: 0 8px; font-size: 13px; }
+}
+
+/* Telefoon. */
+@media (max-width: 767px) {
+  .wr-balk {
     padding: 0 8px;
     padding-top: env(safe-area-inset-top, 0px);
     min-height: 52px;
@@ -266,13 +294,7 @@
   /* Op de telefoon past het niet naast de naam van het onderdeel; daar
      staat het actieve item al in het kruimelpad en de pagina zelf. */
   .wr-acties .active-resource-pill { display: none; }
-  .wr-tabs {
-    border-left: none;
-    margin: 0 -8px;
-    padding: 0 8px;
-    border-top: 1px solid var(--border);
-  }
-  .wr-tabs:empty { display: none; }
+  .wr-tabs { margin: 0 -8px; padding: 0 8px; }
   .wr-tab { padding: 0 11px; font-size: 13px; }
 }
 
