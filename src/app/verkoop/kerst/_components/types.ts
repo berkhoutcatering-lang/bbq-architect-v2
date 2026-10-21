@@ -10,6 +10,8 @@ export interface KerstRegelRij {
     opgehaald_at: string | null;
     klaargezet_at: string | null;
     event_id: number | null;
+    /* 18+: crémant, champagne en de proeverijen. */
+    alcohol: boolean | null;
 }
 
 export interface KerstOrderRij {
@@ -35,6 +37,8 @@ export interface KerstOrderRij {
     navraag_verstuurd_at: string | null;
     herinnering_verstuurd_at: string | null;
     geannuleerd_at: string | null;
+    /* De laatste 18+-weigering aan de balie (BA-2). */
+    leeftijd_geweigerd_at: string | null;
     winkel_order_regels: KerstRegelRij[];
 }
 
