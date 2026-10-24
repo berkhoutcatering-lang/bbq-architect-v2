@@ -6,7 +6,7 @@ import {
     HelpCircle, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive, MonitorPlay, LayoutDashboard,
-    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug,
+    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Tags,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -129,6 +129,7 @@ export const navSections: NavSection[] = [
             { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
             { label: "Partijen", icon: <Tag size={16} />, href: "/voorraad/partijen", description: "Wat je zelf maakt en invriest, met sticker en houdbaarheid" },
             { label: "Winkel", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Winkelvoorraad tellen en bijbestellen" },
+            { label: "Prijskaartjes", icon: <Tags size={16} />, href: "/voorraad/prijskaartjes", description: "Kaartjes voor de schaphouders, tien per A4" },
             { label: "Ontvangst", icon: <PackagePlus size={16} />, href: "/voorraad/ontvangst", description: "Leveringen binnenboeken" },
             { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bestelvoorstellen" },
             { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
