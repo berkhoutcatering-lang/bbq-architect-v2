@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = {
     title: 'Winkel · Prijskaartjes',
-    description: 'Prijskaartjes van 90 × 55 mm voor de schaphouders in de winkel, tien per A4.',
+    description: 'Prijskaartjes van 85 × 55 mm voor de schaphouders in de winkel, tien per A4.',
 };
 
 /**

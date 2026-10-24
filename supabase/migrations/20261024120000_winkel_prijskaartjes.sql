@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS public.winkel_prijskaartjes (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE public.winkel_prijskaartjes IS
-    'De teksten van het prijskaartje per winkelproduct (90 × 55 mm, schaphouder). De prijs is winkel_producten.winkelprijs_incl_cents.';
+    'De teksten van het prijskaartje per winkelproduct (85 × 55 mm, schaphouder). De prijs is winkel_producten.winkelprijs_incl_cents.';
 CREATE INDEX IF NOT EXISTS winkel_prijskaartjes_org_idx ON public.winkel_prijskaartjes(organization_id);
 
 DROP TRIGGER IF EXISTS trg_winkel_prijskaartjes_updated_at ON public.winkel_prijskaartjes;

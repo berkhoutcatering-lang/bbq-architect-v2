@@ -153,7 +153,7 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
                 <div style={{ flex: 1, minWidth: 220 }}>
                     <h1 className="chassis-titel" style={{ margin: 0 }}>Prijskaartjes</h1>
                     <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                        Kaartjes van 90 × 55 mm voor de schaphouder. De onderste 7 mm valt in de gleuf. Tien per A4.
+                        Kaartjes van 85 × 55 mm, de maat van een visitekaartje. De onderste 7 mm valt in de gleuf. Tien per A4.
                     </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -245,7 +245,7 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
                 <aside aria-label="Voorbeeld" className="prijskaartjes-voorbeeld" style={{ display: 'grid', gap: 14 }}>
                     <div style={{ ...kaart, padding: 14, display: 'grid', gap: 10 }}>
                         <div className="kf-eyebrow">Kaartje</div>
-                        <canvas ref={kaartCanvas} width={1080} height={660} aria-label="Voorbeeld van het gekozen kaartje"
+                        <canvas ref={kaartCanvas} width={1020} height={660} aria-label="Voorbeeld van het gekozen kaartje"
                             style={{ display: 'block', width: '100%', height: 'auto', borderRadius: 3, boxShadow: '0 6px 18px rgba(0,0,0,.18)' }} />
                         <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                             Gearceerd: valt in de houder.{huidig && !kanPrinten(huidig) ? ' Dit kaartje komt niet op het vel (geen prijs, geen naam of niet aangevinkt).' : ''}

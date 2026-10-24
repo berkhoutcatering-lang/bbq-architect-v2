@@ -7,7 +7,10 @@
  * product — één plek voor een prijswijziging.
  *
  * Maten (niet aanpassen zonder de houder aan te passen):
- *  - kaartje 90 × 55 mm; de onderste 7 mm valt in de gleuf;
+ *  - kaartje 85 × 55 mm, de maat van een visitekaartje (24 oktober 2026,
+ *    Mathijs: de houders zijn klaar, het kaartje moet vallen als een
+ *    visitekaartje; het systeempje had 90 × 55); de onderste 7 mm valt in
+ *    de gleuf;
  *  - A4: 2 kolommen × 5 rijen = 10 kaartjes, gecentreerd, grijze snijlijnen;
  *  - printen op 100 % / werkelijke grootte.
  *
@@ -15,7 +18,7 @@
  * en de twee lettertypen (Bitter, Barlow Semi Condensed) mee.
  */
 
-export const CARD_W = 90;
+export const CARD_W = 85;
 export const CARD_H = 55;
 export const INSERT = 7;
 export const VIS_H = CARD_H - INSERT;
