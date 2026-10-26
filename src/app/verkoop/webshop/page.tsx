@@ -22,7 +22,7 @@ import ArtikelenPaneel, { type GerechtKeuze, type VoorraadKeuze } from './_compo
 import MomentenPaneel from './_components/MomentenPaneel';
 import ProductenPaneel from './_components/ProductenPaneel';
 import InstellingenPaneel, { type InstellingenRij } from './_components/InstellingenPaneel';
-import type { ArtikelRij, ComponentRij, MomentRij, OrderRij, ProductRij, SlotRij } from './_lib/vakjes';
+import type { ArtikelRij, ComponentRij, MomentRij, OptieRij, OrderRij, ProductRij, SlotRij } from './_lib/vakjes';
 import '@/styles/menu-hub.css';
 import './webshop.css';
 
@@ -57,6 +57,7 @@ export default function WebshopPagina() {
     const [voorraad, setVoorraad] = useState<VoorraadKeuze[]>([]);
     const [producten, setProducten] = useState<ProductRij[]>([]);
     const [slots, setSlots] = useState<SlotRij[]>([]);
+    const [opties, setOpties] = useState<OptieRij[]>([]);
     const [componenten, setComponenten] = useState<ComponentRij[]>([]);
     const [wegzetTaken, setWegzetTaken] = useState<WegzetTaak[]>([]);
     const vandaag = useMemo(() => vandaagISO(), []);
@@ -76,7 +77,7 @@ export default function WebshopPagina() {
     const melding = useCallback((tekst: string, soort: 'success' | 'error' | 'info' = 'info') => toast(tekst, soort), [toast]);
 
     const laad = useCallback(async () => {
-        const [o, a, m, i, g, v, p, sl, c, w] = await Promise.all([
+        const [o, a, m, i, g, v, p, sl, c, w, op] = await Promise.all([
             supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief').order('datum'),
@@ -91,6 +92,9 @@ export default function WebshopPagina() {
                de view (migratie 20261005140000 nog niet gedraaid) blijft de
                pagina gewoon werken, alleen het paneel Apart zetten is leeg. */
             supabase.from('winkel_wegzet_taken').select('order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels').order('afhaalmoment'),
+            /* De opties van de kies-vakken. Net als hierboven niet in `fout`: zonder
+               migratie 20261026120000 zijn er gewoon geen kies-vakken. */
+            supabase.from('winkel_slot_opties').select('id, slot_id, product_id, meerprijs_cents, volgorde').order('volgorde'),
         ]);
         const fout = [o, a, m, i, g, v, p, sl, c].find((r) => r.error)?.error;
         if (fout) { melding(fout.message, 'error'); return; }
@@ -103,6 +107,7 @@ export default function WebshopPagina() {
         setInstellingen((i.data as InstellingenRij | null) ?? null);
         setGerechten((g.data ?? []) as GerechtKeuze[]);
         setVoorraad(((v.data ?? []) as VoorraadKeuze[]).map((x) => ({ ...x, id: Number(x.id) })));
+        setOpties(op.error ? [] : ((op.data ?? []) as OptieRij[]));
         setWegzetTaken(w.error ? [] : (w.data ?? []).map(taakUitRij).filter((t): t is WegzetTaak => t !== null));
     }, [melding]);
 
@@ -142,7 +147,7 @@ export default function WebshopPagina() {
             ) : paneel === 'apartzetten' ? (
                 <ApartZettenPaneel taken={wegzetTaken} orders={orders} artikelen={artikelen} herlaad={laad} melding={melding} />
             ) : paneel === 'artikelen' ? (
-                <ArtikelenPaneel artikelen={artikelen} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={slots} herlaad={laad} melding={melding} />
+                <ArtikelenPaneel artikelen={artikelen} gerechten={gerechten} voorraad={voorraad} producten={producten} slots={slots} opties={opties} herlaad={laad} melding={melding} />
             ) : paneel === 'producten' ? (
                 <ProductenPaneel producten={producten} slots={slots} artikelen={artikelen} componenten={componenten} orders={orders} herlaad={laad} melding={melding} />
             ) : paneel === 'momenten' ? (
