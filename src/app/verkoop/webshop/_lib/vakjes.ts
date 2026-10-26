@@ -111,8 +111,8 @@ export interface OrderRij {
     wensen_bron: 'geen' | 'ai' | 'handmatig' | 'mislukt' | null;
     plaatsing_status: 'geplaatst' | 'vaste_bak' | 'mislukt' | null;
     plaatsing_fout: string | null;
-    /* Sinterklaas S5. */
-    betaalwijze: 'volledig' | 'reservering';
+    /* Sinterklaas S5; bij_afhalen = Kerst-Box (alles aan de balie). */
+    betaalwijze: 'volledig' | 'reservering' | 'bij_afhalen';
     nu_te_betalen_cents: number;
     rest_cents: number;
     rest_betaald_at: string | null;

@@ -23,6 +23,7 @@ import MomentenPaneel from './_components/MomentenPaneel';
 import ProductenPaneel from './_components/ProductenPaneel';
 import InstellingenPaneel, { type InstellingenRij } from './_components/InstellingenPaneel';
 import type { ArtikelRij, ComponentRij, MomentRij, OrderRij, ProductRij, SlotRij } from './_lib/vakjes';
+import { dagenTerug, inStukken, ontbrekend, samenvoegen } from './_lib/laden';
 import '@/styles/menu-hub.css';
 import './webshop.css';
 
@@ -37,6 +38,54 @@ const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
 ];
 
 const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode, leeftijd_geweigerd_at, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, opgehaald_at, afhaalmoment_tekst, alcohol, btw_cents)';
+
+const COMPONENT_SELECT = 'id, order_regel_id, product_id, slot_type, naam, hoeveelheid, eenheid';
+
+/** Zoveel rijen geeft PostgREST per keer (max-rows van Supabase). */
+const PAGINA = 1000;
+
+/** Alle rijen van een query, in pagina's van 1000 (anders kapt PostgREST stil af). */
+async function alles<T>(query: (van: number, tot: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<{ rijen: T[]; fout: string | null }> {
+    const rijen: T[] = [];
+    for (let van = 0; ; van += PAGINA) {
+        const { data, error } = await query(van, van + PAGINA - 1);
+        if (error) return { rijen, fout: error.message };
+        const deel = (data ?? []) as T[];
+        rijen.push(...deel);
+        if (deel.length < PAGINA) return { rijen, fout: null };
+    }
+}
+
+/**
+ * De orders: de laatste 500, plus elke order met een regel die vanaf een week
+ * geleden klaar moet zijn — ook als hij al lang geleden is geplaatst (een
+ * Kerst-Box in oktober voor december). Daarna de componenten van precies die
+ * regels. Zie _lib/laden.ts.
+ */
+async function laadOrders(vandaag: string): Promise<{ orders: OrderRij[]; componenten: ComponentRij[]; fout: string | null }> {
+    const [recent, komend] = await Promise.all([
+        supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
+        alles<{ order_id: number }>((van, tot) => supabase.from('winkel_order_regels').select('order_id').gte('klaar_op', dagenTerug(vandaag, 7)).order('id').range(van, tot)),
+    ]);
+    const fout1 = recent.error?.message ?? komend.fout;
+    if (fout1) return { orders: [], componenten: [], fout: fout1 };
+    const basis = (recent.data ?? []) as unknown as OrderRij[];
+    const nog = ontbrekend(komend.rijen.map((r) => Number(r.order_id)), basis);
+    /* 150 orders per keer: elk met hun regels in één rij, dus ruim onder de 1000. */
+    const extra = await Promise.all(inStukken(nog).map((ids) => supabase.from('winkel_orders').select(ORDER_SELECT).in('id', ids)));
+    const fout2 = extra.find((r) => r.error)?.error;
+    if (fout2) return { orders: [], componenten: [], fout: fout2.message };
+    const orders = samenvoegen(basis, ...extra.map((r) => (r.data ?? []) as unknown as OrderRij[]));
+
+    /* Per 150 regels kunnen er meer dan 1000 componenten zijn (een plank heeft er veel): ook hier in pagina's. */
+    const regelIds = orders.flatMap((o) => o.winkel_order_regels.map((r) => r.id));
+    const comp = await Promise.all(inStukken(regelIds).map((ids) =>
+        alles<ComponentRij>((van, tot) => supabase.from('winkel_order_regel_componenten').select(COMPONENT_SELECT).in('order_regel_id', ids).order('id').range(van, tot))));
+    const fout3 = comp.find((r) => r.fout)?.fout;
+    if (fout3) return { orders: [], componenten: [], fout: fout3 };
+    const componenten = comp.flatMap((r) => r.rijen).sort((a, b) => a.id - b.id);
+    return { orders, componenten, fout: null };
+}
 
 function paneelUitHash(): Paneel {
     if (typeof window === 'undefined') return 'vakjes';
@@ -76,8 +125,8 @@ export default function WebshopPagina() {
     const melding = useCallback((tekst: string, soort: 'success' | 'error' | 'info' = 'info') => toast(tekst, soort), [toast]);
 
     const laad = useCallback(async () => {
-        const [o, a, m, i, g, v, p, sl, c, w] = await Promise.all([
-            supabase.from('winkel_orders').select(ORDER_SELECT).order('created_at', { ascending: false }).limit(500),
+        const [o, a, m, i, g, v, p, sl, w] = await Promise.all([
+            laadOrders(vandaag),
             supabase.from('winkel_artikelen').select('*').order('naam'),
             supabase.from('winkel_momenten').select('id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief').order('datum'),
             supabase.from('winkel_instellingen').select('verzendkosten_cents, gratis_verzenden_vanaf_cents, verzendkosten_btw_pct, reservering_minuten, offerte_geldig_minuten, nummer_prefix, nummer_jaar, nummer_laatste, kassa_open, site_url, reservering_bedrag_cents, qr_basis_url, melding_email, kassa_sleutel').maybeSingle(),
@@ -85,26 +134,25 @@ export default function WebshopPagina() {
             supabase.from('inventory').select('id, naam, unit, current_stock').order('naam'),
             supabase.from('winkel_producten').select('*').order('type').order('naam'),
             supabase.from('winkel_artikel_slots').select('*').order('volgorde'),
-            /* De componenten van de regels (S7): wat er precies in elk pakket en op elke plank ligt. */
-            supabase.from('winkel_order_regel_componenten').select('id, order_regel_id, product_id, slot_type, naam, hoeveelheid, eenheid').order('id').limit(5000),
             /* De wegzet-taken (BA-6). Telt niet mee in `fout` hieronder: zonder
                de view (migratie 20261005140000 nog niet gedraaid) blijft de
                pagina gewoon werken, alleen het paneel Apart zetten is leeg. */
             supabase.from('winkel_wegzet_taken').select('order_id, nummer, naam, afhaalmoment, ophalen_binnen_24u, regels').order('afhaalmoment'),
         ]);
-        const fout = [o, a, m, i, g, v, p, sl, c].find((r) => r.error)?.error;
-        if (fout) { melding(fout.message, 'error'); return; }
+        /* De componenten van de regels (S7) komen mee met de orders: wat er precies in elk pakket en op elke plank ligt. */
+        const fout = o.fout ?? [a, m, i, g, v, p, sl].find((r) => r.error)?.error?.message;
+        if (fout) { melding(fout, 'error'); return; }
         setProducten(((p.data ?? []) as ProductRij[]).map((x) => ({ ...x, prijs_per: Number(x.prijs_per), voorraad: x.voorraad == null ? null : Number(x.voorraad) })));
         setSlots(((sl.data ?? []) as SlotRij[]).map((x) => ({ ...x, hoeveelheid: Number(x.hoeveelheid), alternatieven: x.alternatieven ?? [] })));
-        setComponenten(((c.data ?? []) as ComponentRij[]).map((x) => ({ ...x, hoeveelheid: Number(x.hoeveelheid) })));
-        setOrders((o.data ?? []) as unknown as OrderRij[]);
+        setComponenten(o.componenten.map((x) => ({ ...x, hoeveelheid: Number(x.hoeveelheid) })));
+        setOrders(o.orders);
         setArtikelen((a.data ?? []) as unknown as ArtikelRij[]);
         setMomenten((m.data ?? []) as MomentRij[]);
         setInstellingen((i.data as InstellingenRij | null) ?? null);
         setGerechten((g.data ?? []) as GerechtKeuze[]);
         setVoorraad(((v.data ?? []) as VoorraadKeuze[]).map((x) => ({ ...x, id: Number(x.id) })));
         setWegzetTaken(w.error ? [] : (w.data ?? []).map(taakUitRij).filter((t): t is WegzetTaak => t !== null));
-    }, [melding]);
+    }, [melding, vandaag]);
 
     useEffect(() => {
         if (!organization) return;
