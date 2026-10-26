@@ -74,6 +74,9 @@ export async function GET(req: NextRequest) {
         return {
             kwartaal: q,
             rubrieken: r,
+            /* Elke kassadag van het kwartaal — ook uitgesloten dagen — zodat
+               testbestellingen zichtbaar zijn en Mathijs zelf kiest. */
+            kassa_dagen: bronnen.kassa_dagen.filter(d => d.datum >= period.start_date && d.datum <= period.end_date),
             /* Wachtende bonnen die op slot zitten kunnen pas na heropenen van de maand bevestigd worden. */
             wachtend_vergrendeld: wachtend.filter(b => !!b.locked_at).length,
             vastgezet: vastgezet.has(q),
@@ -84,6 +87,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
         year, maanden, kwartalen,
         kassa_fout: bronnen.kassa_fout,
+        kassa_uitsluiten_beschikbaar: bronnen.kassa_uitsluiten_beschikbaar,
         verlegd_beschikbaar: bronnen.verlegd_beschikbaar,
     });
 }

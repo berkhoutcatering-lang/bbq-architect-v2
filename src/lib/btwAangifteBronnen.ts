@@ -33,6 +33,10 @@ export interface AangifteBronnen {
     kassa_fout: string | null;
     /** Aantal kassabonnen per status (ook de niet-meegetelde), ter controle. */
     kassa_statussen: Record<string, number>;
+    /** Kassa per verkoopdag, inclusief dagen die op "telt niet mee" staan. */
+    kassa_dagen: KassaDag[];
+    /** False zolang migratie 20261026130000_btw_kassa_uitsluitingen nog niet gedraaid is. */
+    kassa_uitsluiten_beschikbaar: boolean;
     /** False zolang migratie 20261026120000_bonnen_btw_verlegd nog niet gedraaid is. */
     verlegd_beschikbaar: boolean;
 }
@@ -108,46 +112,89 @@ export async function laadBonnen(
     return { bonnen, verlegd_beschikbaar, fout: null };
 }
 
+/** Eén verkoopdag van de kassa, zoals Mathijs hem in het aangiftescherm ziet. */
+export interface KassaDag {
+    datum: string;
+    /** Meegetelde bonnen (niet geannuleerd/terugbetaald). */
+    orders: number;
+    /** Waarvan met een betaaltijdstip (paid_at). */
+    betaald: number;
+    omzet: number;
+    btw: number;
+    /** Handmatig op "telt niet mee" gezet (bv. testbestellingen). */
+    uitgesloten: boolean;
+}
+
 /**
  * Kassaverkoop (pos_orders + pos_order_items) in de periode, als losse regels.
  *
- * De kassa-tabellen zijn buiten deze repo aangemaakt. Daarom worden ze met `*`
- * gelezen en wordt per veld gecontroleerd of het er is; ontbreekt er iets,
- * dan komt dat als fout terug in plaats van als stille nul.
+ * De kassa-tabellen komen uit de kassa-app (andere repo). Live schema,
+ * vastgesteld op 2026-10-26: pos_orders(id, org_id, status, created_at,
+ * paid_at, voided_at, refunded_at, …) en pos_order_items(order_id, org_id,
+ * btw_rate int, line_excl_cents, line_btw_cents, name, …). Let op: `org_id`,
+ * níet `organization_id`.
+ *
+ * Er wordt niets automatisch weggefilterd behalve geannuleerde en
+ * terugbetaalde bonnen. Testbestellingen blijven staan; Mathijs kan per dag
+ * kiezen dat een dag niet meetelt (btw_kassa_uitsluitingen). Uitgesloten
+ * dagen staan wel in `dagen`, maar hun regels niet in `regels`.
+ *
+ * Ontbreekt er een veld of tabel, dan komt dat als fout terug in plaats van
+ * als stille nul.
  */
 export async function laadKassa(
     sb: SupabaseClient,
     orgId: string,
     start: string,
     eind: string,
-): Promise<{ regels: KassaRegel[]; fout: string | null; statussen: Record<string, number> }> {
+): Promise<{
+    regels: KassaRegel[];
+    dagen: KassaDag[];
+    fout: string | null;
+    statussen: Record<string, number>;
+    uitsluiten_beschikbaar: boolean;
+}> {
     const statussen: Record<string, number> = {};
+    const leeg = (fout: string | null, uitsluiten_beschikbaar = true) =>
+        ({ regels: [], dagen: [], fout, statussen, uitsluiten_beschikbaar });
 
     /* Ruimer ophalen dan de periode (tijdzone), daarna per NL-dag filteren. */
-    const ordersRes = await alles<Record<string, unknown>>((van, tot) =>
-        sb.from('pos_orders').select('*')
+    const [ordersRes, uitRes] = await Promise.all([
+        alles<Record<string, unknown>>((van, tot) =>
+            sb.from('pos_orders').select('*')
+                .eq('org_id', orgId)
+                .gte('created_at', `${dagErbij(start, -1)}T00:00:00Z`)
+                .lt('created_at', `${dagErbij(eind, 2)}T00:00:00Z`)
+                .order('id', { ascending: true })
+                .range(van, tot) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string; code?: string } | null }>),
+        sb.from('btw_kassa_uitsluitingen').select('datum')
             .eq('organization_id', orgId)
-            .gte('created_at', `${dagErbij(start, -1)}T00:00:00Z`)
-            .lt('created_at', `${dagErbij(eind, 2)}T00:00:00Z`)
-            .order('id', { ascending: true })
-            .range(van, tot) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string; code?: string } | null }>);
-    if (ordersRes.error) {
-        return { regels: [], fout: `Kassa niet te lezen: ${ordersRes.error.message}`, statussen };
-    }
+            .gte('datum', start).lte('datum', eind) as unknown as PromiseLike<{ data: Array<{ datum: string }> | null; error: { message: string; code?: string } | null }>,
+    ]);
+    if (ordersRes.error) return leeg(`Kassa niet te lezen: ${ordersRes.error.message}`);
+
+    /* Tabel bestaat nog niet (migratie niet gedraaid) → niets uitgesloten. */
+    const uitsluiten_beschikbaar = !uitRes.error;
+    const uitgesloten = new Set((uitRes.data ?? []).map(r => String(r.datum)));
 
     const dagPerOrder = new Map<number | string, string>();
+    const dagen = new Map<string, KassaDag>();
     for (const o of ordersRes.data) {
         if (!('status' in o)) {
-            return { regels: [], fout: 'Kassa: geen statuskolom op pos_orders — kan niet zien welke bonnen geannuleerd zijn.', statussen };
+            return leeg('Kassa: geen statuskolom op pos_orders — kan niet zien welke bonnen geannuleerd zijn.');
         }
         const dag = typeof o.created_at === 'string' ? nlDatum(o.created_at) : null;
         if (!dag || dag < start || dag > eind) continue;
         const status = String(o.status ?? '(leeg)');
         statussen[status] = (statussen[status] ?? 0) + 1;
-        if (KASSA_NIET_MEETELLEN.has(status.toLowerCase())) continue;
+        if (KASSA_NIET_MEETELLEN.has(status.toLowerCase()) || o.voided_at || o.refunded_at) continue;
         dagPerOrder.set(o.id as number | string, dag);
+        const d = dagen.get(dag) ?? { datum: dag, orders: 0, betaald: 0, omzet: 0, btw: 0, uitgesloten: uitgesloten.has(dag) };
+        d.orders += 1;
+        if (o.paid_at) d.betaald += 1;
+        dagen.set(dag, d);
     }
-    if (dagPerOrder.size === 0) return { regels: [], fout: null, statussen };
+    if (dagPerOrder.size === 0) return { regels: [], dagen: [], fout: null, statussen, uitsluiten_beschikbaar };
 
     const ids = [...dagPerOrder.keys()];
     const regels: KassaRegel[] = [];
@@ -155,30 +202,41 @@ export async function laadKassa(
         const blok = ids.slice(i, i + 200);
         const itemsRes = await alles<Record<string, unknown>>((van, tot) =>
             sb.from('pos_order_items').select('*')
+                .eq('org_id', orgId)
                 .in('order_id', blok)
                 .order('id', { ascending: true })
                 .range(van, tot) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string; code?: string } | null }>);
-        if (itemsRes.error) {
-            return { regels: [], fout: `Kassaregels niet te lezen: ${itemsRes.error.message}`, statussen };
-        }
+        if (itemsRes.error) return leeg(`Kassaregels niet te lezen: ${itemsRes.error.message}`);
         for (const it of itemsRes.data) {
             if (!('line_excl_cents' in it) || !('line_btw_cents' in it) || !('btw_rate' in it)) {
-                return { regels: [], fout: 'Kassaregels missen line_excl_cents, line_btw_cents of btw_rate.', statussen };
+                return leeg('Kassaregels missen line_excl_cents, line_btw_cents of btw_rate.');
             }
             const ruw = it.btw_rate === null || it.btw_rate === undefined ? null : Number(it.btw_rate);
             /* Sommige kassa's schrijven 0.09 i.p.v. 9. */
             const pct = ruw === null || !Number.isFinite(ruw) ? null : (ruw > 0 && ruw < 1 ? Math.round(ruw * 100) : ruw);
+            const datum = dagPerOrder.get(it.order_id as number | string)!;
+            const omzet = (Number(it.line_excl_cents) || 0) / 100;
+            const btw = (Number(it.line_btw_cents) || 0) / 100;
+            const d = dagen.get(datum)!;
+            d.omzet += omzet;
+            d.btw += btw;
+            if (d.uitgesloten) continue;
+            const naam = it.name ?? it.product_name;
             regels.push({
-                datum: dagPerOrder.get(it.order_id as number | string)!,
+                datum,
                 btw_pct: pct,
-                omzet: (Number(it.line_excl_cents) || 0) / 100,
-                btw: (Number(it.line_btw_cents) || 0) / 100,
-                omschrijving: typeof it.product_name === 'string' ? it.product_name : undefined,
+                omzet,
+                btw,
+                omschrijving: typeof naam === 'string' ? naam : undefined,
                 referentie: `kassa #${String(it.order_id)}`,
             });
         }
     }
-    return { regels, fout: null, statussen };
+    const rond = (n: number) => Math.round(n * 100) / 100;
+    const dagLijst = [...dagen.values()]
+        .map(d => ({ ...d, omzet: rond(d.omzet), btw: rond(d.btw) }))
+        .sort((x, y) => x.datum.localeCompare(y.datum));
+    return { regels, dagen: dagLijst, fout: null, statussen, uitsluiten_beschikbaar };
 }
 
 export async function laadAangifteBronnen(
@@ -204,6 +262,8 @@ export async function laadAangifteBronnen(
         kassa: kassaRes.regels,
         kassa_fout: kassaRes.fout,
         kassa_statussen: kassaRes.statussen,
+        kassa_dagen: kassaRes.dagen,
+        kassa_uitsluiten_beschikbaar: kassaRes.uitsluiten_beschikbaar,
         verlegd_beschikbaar: bonRes.verlegd_beschikbaar,
         fout: factRes.error?.message || bonRes.fout || null,
     };

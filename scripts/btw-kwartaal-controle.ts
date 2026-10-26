@@ -69,6 +69,10 @@ async function main() {
         console.log(`1b   9%   omzet ${eur(r.rubriek_1b.omzet)}   btw ${eur(r.rubriek_1b.btw)}`);
         console.log(`    waarvan kassa: ${r.kassa.regels} regels, 9% ${eur(r.kassa.omzet_laag)} + ${eur(r.kassa.btw_laag)}, 21% ${eur(r.kassa.omzet_hoog)} + ${eur(r.kassa.btw_hoog)}`);
         console.log(`    kassabonnen per status: ${JSON.stringify(bronnen.kassa_statussen)}${bronnen.kassa_fout ? `   FOUT: ${bronnen.kassa_fout}` : ''}`);
+        for (const d of bronnen.kassa_dagen) {
+            console.log(`      ${d.datum}  ${String(d.orders).padStart(3)} bonnen (${d.betaald} betaald)  ${eur(d.omzet)} + ${eur(d.btw)} btw${d.uitgesloten ? '   [telt niet mee]' : ''}`);
+        }
+        if (!bronnen.kassa_uitsluiten_beschikbaar) console.log('      (tabel btw_kassa_uitsluitingen bestaat nog niet — alle kassadagen tellen mee)');
         console.log(`4a  verlegd buiten EU   ${eur(r.rubriek_4a.omzet)}   btw ${eur(r.rubriek_4a.btw)}${bronnen.verlegd_beschikbaar ? '' : '   (kolom btw_verlegd bestaat nog niet — migratie draaien)'}`);
         console.log(`4b  verlegd binnen EU   ${eur(r.rubriek_4b.omzet)}   btw ${eur(r.rubriek_4b.btw)}`);
         console.log(`5a  verschuldigd        ${eur(r.rubriek_5a)}`);
@@ -86,6 +90,13 @@ async function main() {
             console.log('\nVergelijking met de handmatige aangifte:');
             check('1b omzet', r.rubriek_1b.omzet, 4042.16);
             check('1b btw', r.rubriek_1b.btw, 363.84);
+            const verschil = Math.round((r.rubriek_1b.omzet - 4042.16) * 100) / 100;
+            if (verschil !== 0) {
+                /* De handmatige aangifte telde de kleine testbestellingen niet mee. Laat zien welke
+                   kassadagen (naast 29-30 aug) meetellen, zodat duidelijk is waar het verschil zit. */
+                const overig = bronnen.kassa_dagen.filter(d => !d.uitgesloten && d.datum !== '2026-08-29' && d.datum !== '2026-08-30');
+                console.log(`    verschil 1b omzet: ${eur(verschil)}; meetellende kassadagen buiten de zomerfair: ${overig.map(d => `${d.datum} ${eur(d.omzet)}`).join(', ') || 'geen'}`);
+            }
             check('4a omzet', r.rubriek_4a.omzet, 144);
             check('4a btw', r.rubriek_4a.btw, 30.24);
             if (r.rubriek_4a.btw === 0) {

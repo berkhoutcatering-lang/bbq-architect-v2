@@ -27,7 +27,8 @@ interface Rubrieken {
     voorbelasting_onbevestigd_count: number;
 }
 interface Maand { maand: number; heeft_data: boolean; afgesloten: boolean; }
-interface Kwartaal { kwartaal: number; rubrieken: Rubrieken; vastgezet: boolean; alle_maanden_afgesloten: boolean; wachtend_vergrendeld: number; }
+interface KassaDag { datum: string; orders: number; betaald: number; omzet: number; btw: number; uitgesloten: boolean; }
+interface Kwartaal { kwartaal: number; rubrieken: Rubrieken; vastgezet: boolean; alle_maanden_afgesloten: boolean; wachtend_vergrendeld: number; kassa_dagen: KassaDag[]; }
 
 export default function AfsluitenTab() {
     const [year, setYear] = useState(new Date().getFullYear());
@@ -38,6 +39,9 @@ export default function AfsluitenTab() {
     const [copied, setCopied] = useState<string | null>(null);
     const [fout, setFout] = useState<string | null>(null);
     const [kassaFout, setKassaFout] = useState<string | null>(null);
+    const [uitsluitenKan, setUitsluitenKan] = useState(true);
+    /* Kwartaal waarvan de kassadagen open staan. */
+    const [kassaQ, setKassaQ] = useState<number | null>(null);
     /* Kwartaal waarvan de lijst met wachtende bonnen open staat. */
     const [lijstQ, setLijstQ] = useState<number | null>(null);
     /* Vastzetten geweigerd omdat er nog iets openstaat — vraag bevestiging. */
@@ -49,11 +53,11 @@ export default function AfsluitenTab() {
         try {
             const r = await fetch(`/api/boekhouder/afsluiten?year=${year}`, { credentials: 'include' });
             const j = await r.json().catch(() => ({}));
-            if (r.ok) { setMaanden(j.maanden || []); setKwartalen(j.kwartalen || []); setKassaFout(j.kassa_fout || null); }
+            if (r.ok) { setMaanden(j.maanden || []); setKwartalen(j.kwartalen || []); setKassaFout(j.kassa_fout || null); setUitsluitenKan(j.kassa_uitsluiten_beschikbaar !== false); }
             else setFout(j.error || 'Cijfers laden mislukt');
         } finally { setLoading(false); }
     }, [year]);
-    useEffect(() => { laad(); setLijstQ(null); setOpenPunten(null); }, [laad]);
+    useEffect(() => { laad(); setLijstQ(null); setOpenPunten(null); setKassaQ(null); }, [laad]);
 
     async function maandActie(maand: number, action: 'sluit' | 'heropen') {
         setBusy(true); setFout(null);
@@ -79,6 +83,18 @@ export default function AfsluitenTab() {
                 if (r.status === 409 && Array.isArray(j.open_punten)) setOpenPunten({ kwartaal, punten: j.open_punten });
                 else setFout(j.error || 'Mislukt');
             } else setOpenPunten(null);
+            await laad(true);
+        } finally { setBusy(false); }
+    }
+
+    async function kassaDag(datum: string, teltMee: boolean) {
+        setBusy(true); setFout(null);
+        try {
+            const r = await fetch('/api/boekhouder/kassa-dag', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ datum, telt_mee: teltMee }),
+            });
+            if (!r.ok) { const j = await r.json().catch(() => ({})); setFout(j.error || 'Mislukt'); }
             await laad(true);
         } finally { setBusy(false); }
     }
@@ -125,8 +141,8 @@ export default function AfsluitenTab() {
             </div>
 
             {kassaFout && (
-                <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, background: 'rgba(217,119,6,.08)', border: '1px solid rgba(217,119,6,.3)', color: 'var(--amber, #d97706)' }}>
-                    <strong>Kassaverkoop ontbreekt in deze cijfers.</strong> {kassaFout}
+                <div style={{ padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--red, #ef4444)' }}>
+                    <strong>Kassaverkoop ontbreekt in deze cijfers — 1a/1b bevatten alleen facturen.</strong> {kassaFout}
                 </div>
             )}
 
@@ -178,11 +194,49 @@ export default function AfsluitenTab() {
                                     <div style={{ padding: '4px 16px 12px' }}>
                                         <RubriekRij code="1a" label="Hoog tarief (21%)" omzet={r.rubriek_1a.omzet} btw={r.rubriek_1a.btw} keyPrefix={`q${q.kwartaal}-1a`} />
                                         <RubriekRij code="1b" label="Laag tarief (9%)" omzet={r.rubriek_1b.omzet} btw={r.rubriek_1b.btw} keyPrefix={`q${q.kwartaal}-1b`} />
-                                        {r.kassa.regels > 0 && (
+                                        {kassaFout && (
+                                            <div style={{ fontSize: 12, color: 'var(--red, #ef4444)', padding: '6px 0 6px 56px', borderBottom: '1px solid var(--border, rgba(255,255,255,.08))', lineHeight: 1.45, fontWeight: 600 }}>
+                                                <AlertTriangle size={12} style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
+                                                Kassaverkoop NIET meegeteld — 1a/1b zijn alleen facturen.
+                                            </div>
+                                        )}
+                                        {q.kassa_dagen.length > 0 && (
                                             <div style={{ fontSize: 11, color: 'var(--muted)', padding: '6px 0 6px 56px', borderBottom: '1px solid var(--border, rgba(255,255,255,.08))', lineHeight: 1.5 }}>
-                                                Waarvan kassa ({r.kassa.regels} {r.kassa.regels === 1 ? 'regel' : 'regels'}):
-                                                {r.kassa.omzet_laag !== 0 && <> 9% {fmt(r.kassa.omzet_laag)} + {fmt(r.kassa.btw_laag)} btw</>}
-                                                {r.kassa.omzet_hoog !== 0 && <> · 21% {fmt(r.kassa.omzet_hoog)} + {fmt(r.kassa.btw_hoog)} btw</>}
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
+                                                    <span>
+                                                        Waarvan kassa ({r.kassa.regels} {r.kassa.regels === 1 ? 'regel' : 'regels'}):
+                                                        {r.kassa.omzet_laag !== 0 && <> 9% {fmt(r.kassa.omzet_laag)} + {fmt(r.kassa.btw_laag)} btw</>}
+                                                        {r.kassa.omzet_hoog !== 0 && <> · 21% {fmt(r.kassa.omzet_hoog)} + {fmt(r.kassa.btw_hoog)} btw</>}
+                                                        {r.kassa.regels === 0 && <> niets</>}
+                                                    </span>
+                                                    <button onClick={() => setKassaQ(kassaQ === q.kwartaal ? null : q.kwartaal)} className="bh-btn" style={{ minHeight: 24, fontSize: 11, padding: '0 8px', whiteSpace: 'nowrap' }}>
+                                                        {kassaQ === q.kwartaal ? 'Verberg' : `${q.kassa_dagen.length} ${q.kassa_dagen.length === 1 ? 'dag' : 'dagen'}`}
+                                                    </button>
+                                                </div>
+                                                {kassaQ === q.kwartaal && (
+                                                    <div style={{ marginTop: 6 }}>
+                                                        <div style={{ marginBottom: 4 }}>
+                                                            Zitten er testbestellingen tussen? Zet die dag op &ldquo;telt niet mee&rdquo;. Er wordt niets vanzelf weggelaten.
+                                                            {!uitsluitenKan && <span style={{ color: 'var(--amber, #d97706)' }}> (Kan pas na migratie 20261026130000_btw_kassa_uitsluitingen.sql.)</span>}
+                                                        </div>
+                                                        {q.kassa_dagen.map(d => (
+                                                            <div key={d.datum} style={{ display: 'grid', gridTemplateColumns: '58px 1fr auto auto', gap: 8, alignItems: 'center', padding: '3px 0', opacity: d.uitgesloten ? 0.55 : 1 }}>
+                                                                <span>{new Date(`${d.datum}T00:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}</span>
+                                                                <span>{d.orders} {d.orders === 1 ? 'bon' : 'bonnen'}, {d.betaald} betaald</span>
+                                                                <span style={{ fontVariantNumeric: 'tabular-nums', textDecoration: d.uitgesloten ? 'line-through' : 'none' }}>{fmt(d.omzet)} + {fmt(d.btw)}</span>
+                                                                <button
+                                                                    onClick={() => kassaDag(d.datum, d.uitgesloten)}
+                                                                    disabled={busy || q.vastgezet || !uitsluitenKan}
+                                                                    className="bh-btn"
+                                                                    style={{ minHeight: 22, fontSize: 10, padding: '0 6px', whiteSpace: 'nowrap' }}
+                                                                    title={d.uitgesloten ? 'Weer meetellen' : 'Deze dag niet meetellen'}
+                                                                >
+                                                                    {d.uitgesloten ? 'telt niet mee' : 'telt mee'}
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                         {(r.rubriek_4a.btw !== 0 || r.rubriek_4a.omzet !== 0) && (
