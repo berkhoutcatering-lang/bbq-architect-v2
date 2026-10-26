@@ -237,9 +237,122 @@ export async function confirmVoorbelastingAction(input: unknown) {
 
         revalidatePath('/archief');
         revalidatePath('/financien');
+        revalidatePath('/geld/boekhouder');
         return { ok: true as const };
     } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : 'Kon voorbelasting niet bijwerken' };
+    }
+}
+
+// ── Voorbelasting in één keer bevestigen (BTW-aangifte) ───────────────
+//
+// Zelfde regels als confirmVoorbelastingAction, maar voor een lijst bonnen
+// tegelijk vanuit het aangiftescherm. Vergrendelde bonnen worden overgeslagen
+// en teruggemeld — niet stil genegeerd.
+
+const voorbelastingBatchSchema = z.object({
+    items: z.array(z.object({
+        bonId: z.number().int().positive(),
+        zakelijkPct: z.number().int().min(0).max(100).default(100),
+    })).min(1).max(500),
+});
+
+export async function confirmVoorbelastingBatchAction(input: unknown) {
+    try {
+        const { items } = voorbelastingBatchSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+
+        const ids = items.map((i) => i.bonId);
+        const { data: rows, error: readErr } = await sb
+            .from('bonnen')
+            .select('id, locked_at')
+            .eq('organization_id', orgId)
+            .in('id', ids);
+        if (readErr) throw new Error(readErr.message);
+        const status = new Map((rows ?? []).map((r) => [r.id as number, r.locked_at as string | null]));
+
+        let bevestigd = 0;
+        const overgeslagen: Array<{ bonId: number; reden: string }> = [];
+        for (const { bonId, zakelijkPct } of items) {
+            if (!status.has(bonId)) {
+                overgeslagen.push({ bonId, reden: 'Bon niet gevonden' });
+                continue;
+            }
+            if (status.get(bonId)) {
+                overgeslagen.push({ bonId, reden: 'Bon zit in een afgesloten periode' });
+                continue;
+            }
+            const { error } = await sb
+                .from('bonnen')
+                .update({ voorbelasting_bevestigd: true, zakelijk_pct: zakelijkPct })
+                .eq('id', bonId)
+                .eq('organization_id', orgId)
+                .is('locked_at', null);
+            if (error) {
+                overgeslagen.push({ bonId, reden: error.message });
+                continue;
+            }
+            bevestigd += 1;
+            await logBonAction(sb, bonId, 'voorbelasting_bevestigd');
+        }
+
+        revalidatePath('/archief');
+        revalidatePath('/financien');
+        revalidatePath('/geld/boekhouder');
+        return { ok: true as const, bevestigd, overgeslagen };
+    } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Kon voorbelasting niet bijwerken' };
+    }
+}
+
+// ── BTW verlegd (rubriek 4a/4b) ───────────────────────────────────────
+//
+// Een buitenlandse leverancier rekent geen Nederlandse BTW; die geven we zelf
+// aan (4a buiten de EU, 4b binnen de EU) en trekken hem weer af in 5b.
+// Omdat het BTW-bedrag van de bon hierdoor verandert, vervalt een eerdere
+// bevestiging van de voorbelasting — die moet opnieuw.
+
+const btwVerlegdSchema = z.object({
+    bonId: z.number().int().positive(),
+    verlegd: z.enum(['buiten_eu', 'binnen_eu']).nullable(),
+});
+
+export async function setBtwVerlegdAction(input: unknown) {
+    try {
+        const { bonId, verlegd } = btwVerlegdSchema.parse(input);
+        const { sb, orgId } = await getAuthContext();
+
+        const { data: bon, error: readErr } = await sb
+            .from('bonnen')
+            .select('locked_at')
+            .eq('id', bonId)
+            .eq('organization_id', orgId)
+            .single();
+        if (readErr) throw new Error(readErr.message);
+        if (bon?.locked_at) {
+            throw new Error('Bon zit in een afgesloten periode en kan niet meer gewijzigd worden');
+        }
+
+        const { error } = await sb
+            .from('bonnen')
+            .update({ btw_verlegd: verlegd, voorbelasting_bevestigd: false, zakelijk_pct: 100 })
+            .eq('id', bonId)
+            .eq('organization_id', orgId);
+        if (error) {
+            if (error.message.includes('btw_verlegd')) {
+                throw new Error('De database kent "BTW verlegd" nog niet — draai eerst migratie 20261026120000_bonnen_btw_verlegd.sql');
+            }
+            throw new Error(error.message);
+        }
+
+        await logBonAction(sb, bonId, 'btw_verlegd', verlegd ?? 'geen');
+
+        revalidatePath('/archief');
+        revalidatePath('/financien');
+        revalidatePath('/geld/boekhouder');
+        return { ok: true as const };
+    } catch (e) {
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Kon BTW verlegd niet opslaan' };
     }
 }
 

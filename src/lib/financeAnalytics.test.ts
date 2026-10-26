@@ -8,6 +8,10 @@ import {
     computeBoekhoudChecks,
     computeResultatenrekening,
     computeBalans,
+    quarterPeriod,
+    bonBtwBedrag,
+    bonWachtOpVoorbelasting,
+    type KassaRegel,
 } from './financeAnalytics';
 
 const TODAY = new Date('2026-05-27T12:00:00Z');
@@ -241,6 +245,159 @@ describe('computeBtwAangifte', () => {
         ], [], period);
         expect(r.gaten).toHaveLength(0);
         expect(r.gaten_bedrag).toBe(0);
+    });
+});
+
+describe('computeBtwAangifte — kassaverkoop', () => {
+    const q3 = quarterPeriod(2026, 3, new Date('2026-10-26'));
+    const kassa = (datum: string, btw_pct: number | null, omzet: number, btw: number): KassaRegel =>
+        ({ datum, btw_pct, omzet, btw });
+
+    it('kassaregels tellen mee in 1b (9%) en 1a (21%) op de verkoopdag', () => {
+        const r = computeBtwAangifte([], [], q3, [
+            kassa('2026-08-29', 9, 600, 54),
+            kassa('2026-08-30', 21, 100, 21),
+        ]);
+        expect(r.rubriek_1b).toEqual({ omzet: 600, btw: 54 });
+        expect(r.rubriek_1a).toEqual({ omzet: 100, btw: 21 });
+        expect(r.rubriek_5a).toBe(75);
+        expect(r.kassa).toEqual({ omzet_laag: 600, btw_laag: 54, omzet_hoog: 100, btw_hoog: 21, regels: 2 });
+    });
+
+    it('neemt de BTW van de kassa over in plaats van hem te herrekenen', () => {
+        /* De kassa rondt per regel af: 176 × (5,96 excl + 0,54 btw) is meer dan 9% van het totaal. */
+        const r = computeBtwAangifte([], [], q3, [kassa('2026-08-29', 9, 1049.5, 94.5)]);
+        expect(r.rubriek_1b.btw).toBe(94.5);
+    });
+
+    it('kassaverkoop buiten het kwartaal telt niet mee', () => {
+        const r = computeBtwAangifte([], [], q3, [
+            kassa('2026-06-30', 9, 100, 9),
+            kassa('2026-10-01', 9, 100, 9),
+        ]);
+        expect(r.rubriek_1b.omzet).toBe(0);
+        expect(r.kassa.regels).toBe(0);
+    });
+
+    it('kassaregel zonder bruikbaar tarief komt in de gatenlijst, niet stil in 1a', () => {
+        const r = computeBtwAangifte([], [], q3, [kassa('2026-08-29', null, 10, 0), kassa('2026-08-29', 0, 5, 0)]);
+        expect(r.rubriek_1a.omzet).toBe(0);
+        expect(r.gaten).toHaveLength(2);
+        expect(r.gaten.every(g => g.bron === 'kassa')).toBe(true);
+        expect(r.gaten_bedrag).toBe(15);
+    });
+
+    it('kassa en facturen tellen samen op in dezelfde rubriek', () => {
+        const r = computeBtwAangifte(
+            [{ status: 'verzonden', datum: '2026-09-12', items: [{ qty: 1, prijs: 2992.66, btw: 9 }] }],
+            [], q3,
+            [kassa('2026-08-29', 9, 1049.5, 94.5)],
+        );
+        expect(r.rubriek_1b.omzet).toBe(4042.16);
+        expect(r.rubriek_1b.btw).toBe(363.84);
+    });
+});
+
+describe('computeBtwAangifte — verlegde BTW (4a/4b)', () => {
+    const q3 = quarterPeriod(2026, 3, new Date('2026-10-26'));
+
+    it('buiten EU: 21% over het bedrag in 4a én (bevestigd) in 5b — saldo-neutraal', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-08-04', totaal_bedrag: 144, netto_bedrag: 144, btw_verlegd: 'buiten_eu', voorbelasting_bevestigd: true },
+        ], q3);
+        expect(r.rubriek_4a).toEqual({ omzet: 144, btw: 30.24 });
+        expect(r.rubriek_4b).toEqual({ omzet: 0, btw: 0 });
+        expect(r.rubriek_5a).toBe(30.24);
+        expect(r.rubriek_5b).toBe(30.24);
+        expect(r.rubriek_5b_detail.verlegd).toBe(30.24);
+        expect(r.saldo).toBe(0);
+    });
+
+    it('binnen EU gaat naar 4b', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-08-04', totaal_bedrag: 100, btw_verlegd: 'binnen_eu', voorbelasting_bevestigd: true },
+        ], q3);
+        expect(r.rubriek_4b).toEqual({ omzet: 100, btw: 21 });
+        expect(r.rubriek_4a.btw).toBe(0);
+    });
+
+    it('verlegd maar nog niet bevestigd: wel verschuldigd in 4a, niet afgetrokken in 5b', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-08-04', totaal_bedrag: 144, btw_verlegd: 'buiten_eu' },
+        ], q3);
+        expect(r.rubriek_4a.btw).toBe(30.24);
+        expect(r.rubriek_5b).toBe(0);
+        expect(r.voorbelasting_onbevestigd).toBe(30.24);
+        expect(r.voorbelasting_onbevestigd_count).toBe(1);
+        expect(r.saldo).toBe(30.24);
+    });
+
+    it('zakelijk_pct kort alleen de aftrek in, niet de verschuldigde BTW', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-08-04', totaal_bedrag: 100, btw_verlegd: 'buiten_eu', voorbelasting_bevestigd: true, zakelijk_pct: 50 },
+        ], q3);
+        expect(r.rubriek_4a.btw).toBe(21);
+        expect(r.rubriek_5b).toBe(10.5);
+    });
+
+    it('gewone bon zonder BTW levert niets op en wacht ook niet', () => {
+        const bon = { datum: '2026-08-04', totaal_bedrag: 144 };
+        expect(bonBtwBedrag(bon)).toBe(0);
+        expect(bonWachtOpVoorbelasting(bon)).toBe(false);
+        expect(bonWachtOpVoorbelasting({ ...bon, btw_verlegd: 'buiten_eu' })).toBe(true);
+    });
+
+    it('5b-opbouw splitst 9%, 21% en verlegd', () => {
+        const r = computeBtwAangifte([], [
+            { datum: '2026-07-10', btw_laag_bedrag: 9, voorbelasting_bevestigd: true },
+            { datum: '2026-07-11', btw_hoog_bedrag: 21, voorbelasting_bevestigd: true },
+            { datum: '2026-07-12', totaal_bedrag: 100, btw_verlegd: 'buiten_eu', voorbelasting_bevestigd: true },
+        ], q3);
+        expect(r.rubriek_5b_detail).toEqual({ laag: 9, hoog: 21, verlegd: 21 });
+        expect(r.rubriek_5b).toBe(51);
+    });
+});
+
+describe('computeBtwAangifte — Q3 2026 zoals handmatig nagerekend', () => {
+    /* Nagespeeld naar de live-controle van 2026-10-26. Uit die controle komen
+       alleen de TOTALEN: facturen F2026-016 + -017 samen € 2.992,66 excl. op 9%,
+       kassa zomerfair 29-30 aug € 1.049,50 + € 94,50, Wispr € 144 zonder BTW
+       uit de VS, en dat F2026-011 en -018 niet meetellen. De verdeling per
+       factuur, de statussen en de overige bonnen hieronder zijn verzonnen
+       testdata om die regels te raken. */
+    const q3 = quarterPeriod(2026, 3, new Date('2026-10-26'));
+    const r = computeBtwAangifte(
+        [
+            { nummer: 'F2026-016', status: 'betaald', datum: '2026-07-20', items: [{ qty: 1, prijs: 1500, btw: 9 }] },
+            { nummer: 'F2026-017', status: 'verzonden', datum: '2026-09-05', items: [{ qty: 1, prijs: 1492.66, btw: 9 }] },
+            { nummer: 'F2026-011', status: 'geannuleerd', datum: '2026-08-01', items: [{ qty: 1, prijs: 999, btw: 9 }] },
+            { nummer: 'F2026-018', status: 'concept', datum: '2026-09-28', items: [{ qty: 1, prijs: 999, btw: 9 }] },
+        ],
+        [
+            { datum: '2026-08-04', totaal_bedrag: 144, netto_bedrag: 144, btw_verlegd: 'buiten_eu', voorbelasting_bevestigd: true },
+            { datum: '2026-08-20', btw_hoog_bedrag: 10, voorbelasting_bevestigd: true },
+            { datum: '2026-08-21', btw_hoog_bedrag: 99 /* nog niet bevestigd */ },
+        ],
+        q3,
+        [
+            { datum: '2026-08-29', btw_pct: 9, omzet: 600, btw: 54 },
+            { datum: '2026-08-30', btw_pct: 9, omzet: 449.5, btw: 40.5 },
+        ],
+    );
+
+    it('1b = € 4.042,16 omzet / € 363,84 btw', () => {
+        expect(r.rubriek_1b).toEqual({ omzet: 4042.16, btw: 363.84 });
+    });
+    it('4a = € 144 / € 30,24', () => {
+        expect(r.rubriek_4a).toEqual({ omzet: 144, btw: 30.24 });
+    });
+    it('5b = som van de bevestigde bonnen', () => {
+        expect(r.rubriek_5b).toBe(40.24);
+        expect(r.voorbelasting_onbevestigd).toBe(99);
+    });
+    it('saldo = 5a − 5b', () => {
+        expect(r.rubriek_5a).toBe(394.08);
+        expect(r.saldo).toBe(353.84);
     });
 });
 

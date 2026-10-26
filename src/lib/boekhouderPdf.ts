@@ -78,6 +78,11 @@ export interface PdfPakketInput {
     btw_verschuldigd_9: number;
     btw_verschuldigd_21: number;
     btw_af_te_dragen: number;
+    /** Verlegde BTW (buitenlandse leveranciers) — rubriek 4a / 4b. */
+    btw_verlegd_4a?: number;
+    btw_verlegd_4b?: number;
+    /** BTW op bonnen die nog op bevestiging wacht — niet in 5b. */
+    voorbelasting_onbevestigd?: number;
     voorraadwaarde_eur?: number;
   };
 }
@@ -135,12 +140,28 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
 
   y = 180;
 
+  // BTW-tabel — rubrieken zoals op het aangiftescherm (1a = 21%, 1b = 9%).
+  const btwLines: string[][] = [
+    ['Rubriek 1a — Verschuldigd BTW 21% (hoog tarief)', fmtEur(input.totals.btw_verschuldigd_21)],
+    ['Rubriek 1b — Verschuldigd BTW 9% (laag tarief)', fmtEur(input.totals.btw_verschuldigd_9)],
+  ];
+  if (input.totals.btw_verlegd_4a) btwLines.push(['Rubriek 4a — Verlegde BTW, buiten EU', fmtEur(input.totals.btw_verlegd_4a)]);
+  if (input.totals.btw_verlegd_4b) btwLines.push(['Rubriek 4b — Verlegde BTW, binnen EU', fmtEur(input.totals.btw_verlegd_4b)]);
+  btwLines.push(
+    ['Rubriek 5b — Voorbelasting 9% (bevestigde bonnen)', fmtEur(input.totals.btw_voorbelasting_9)],
+    ['Rubriek 5b — Voorbelasting 21% (bevestigde bonnen, incl. verlegd)', fmtEur(input.totals.btw_voorbelasting_21)],
+  );
+  const notitie = input.totals.voorbelasting_onbevestigd
+    ? `Niet meegeteld: € ${fmtEur(input.totals.voorbelasting_onbevestigd)} BTW op bonnen die nog op bevestiging wachten.`
+    : null;
+  const blokHoogte = Math.max(200, 58 + btwLines.length * 16 + (notitie ? 16 : 0) + 50);
+
   // ─── BTW-aangifte-blok (de killer-feature) ─────────────
   doc.setFillColor(245, 245, 240);
-  doc.rect(margin, y, W - margin * 2, 200, 'F');
+  doc.rect(margin, y, W - margin * 2, blokHoogte, 'F');
   doc.setDrawColor(GOLD);
   doc.setLineWidth(1);
-  doc.line(margin, y, margin, y + 200);
+  doc.line(margin, y, margin, y + blokHoogte);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
@@ -155,13 +176,6 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     margin + 14, y + 36
   );
 
-  // BTW-tabel
-  const btwLines = [
-    ['Rubriek 1a — Verschuldigd BTW 9% (leveringen food)', fmtEur(input.totals.btw_verschuldigd_9)],
-    ['Rubriek 1b — Verschuldigd BTW 21% (leveringen overig)', fmtEur(input.totals.btw_verschuldigd_21)],
-    ['Rubriek 5b — Voorbelasting BTW 9% (inkoop food)', fmtEur(input.totals.btw_voorbelasting_9)],
-    ['Rubriek 5b — Voorbelasting BTW 21% (inkoop overig)', fmtEur(input.totals.btw_voorbelasting_21)],
-  ];
   let by = y + 58;
   doc.setFontSize(10);
   doc.setTextColor(INK);
@@ -172,6 +186,15 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     doc.text(`€ ${val}`, W - margin - 14, by, { align: 'right' });
     by += 16;
   });
+  if (notitie) {
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9);
+    doc.setTextColor(MUTED);
+    doc.text(notitie, margin + 14, by);
+    doc.setFontSize(10);
+    doc.setTextColor(INK);
+    by += 16;
+  }
 
   // Totaal-regel
   doc.setDrawColor(200, 200, 200);
@@ -187,7 +210,7 @@ export function generateBoekhouderPdf(input: PdfPakketInput): { base64: string; 
     W - margin - 14, by, { align: 'right' }
   );
 
-  y += 220;
+  y += blokHoogte + 20;
 
   // ─── Samenvatting ─────────────────────────────────────
   doc.setTextColor(INK);
