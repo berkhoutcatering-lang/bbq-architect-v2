@@ -18,7 +18,7 @@ Mathijs wil:
 | Btw per onderdeel | Werkt al (`btwVerdeling`, naar rato van de onderdelen). Bier 21% + worst 9% splitst correct. |
 | Website-koppeling | `/api/public-winkel/[slug]/*` (offerte, order, momenten, kerst…). De website stuurt al keuzes mee; die worden nu geweigerd. |
 | Catalogus (productkaart, foto's, allergenen, productpagina) | Gebouwd op tak `feat/catalogus`. **Staat alleen op deze laptop, nooit gepusht**, loopt 48 commits achter op main. De migratie is volgens de commit live gezet, en 58 producten + 348 foto's zijn geïmporteerd. Groot risico als de laptop iets overkomt. |
-| Kassa aan de toonbank | **Bestaat niet.** Er is alleen een koppeling die voorraad afboekt (`/api/kassa/[slug]/verkoop`): geen bon, geld, dagafsluiting, journaal of cadeaubon. myPOS is in de code alleen online betalen, geen terminal. Dat botst met §6.1 van het contextdocument ("bestaande koppeling met de eigen kassa"). |
+| Kassa aan de toonbank | **Niet in main, wel grotendeels gebouwd.** Main heeft alleen een koppeling die voorraad afboekt (`/api/kassa/[slug]/verkoop`). De kassa-koppeling, het kassajournaal, de bonnen en de dagafsluiting staan op de tak `feat/ecosysteem-m2` (stil sinds 8 oktober). De kassa-app zelf staat in de aparte repo `hopbites-toonbank`. Dat werk was gepland voor een opening op 1 maart 2027. Er komt een eigen kassaplan (`docs/context/kassa-plan.md`). |
 | Locaties | `opslag_locaties` bestaat (plekken in een apparaat), maar zonder scherm en zonder koppeling aan producten. `voorraad_plekken` kent alleen "makerij" en "winkel". |
 | Plattegrond tekenen | Een Konva-editor bestaat voor events (`src/app/keuken/board/_components/floor-plan/`), maar zit vast aan een event. Het vorm-patroon (x/y/breedte/hoogte in %) is herbruikbaar. |
 | Onderdelen verbergen | `settings.verborgen_onderdelen` bestaat al, dus catering kan uit de navigatie zonder te slopen. |
@@ -130,7 +130,7 @@ Gevuld met de Tramstraat-ruimtes uit §2: winkel, doorloopkoelcel, koelcel, vrie
 
 ## Buiten dit plan, maar het grootste risico voor 21 november
 
-**De kassa aan de toonbank.** Nodig zijn: bon, btw per tarief, pin/contant/gemengd, 18+-bevestiging, journaal dat niet te wijzigen is, Z-rapport en cadeaubon. Het voorstel is daar een eigen plan voor te maken, dat parallel loopt aan fase 2–3 en hetzelfde rekenwerk gebruikt. Open punten daar: welke myPOS-terminal (de code kent alleen online betalen), Epson-printen vanuit de browser en een btw-tarieventabel.
+**De kassa aan de toonbank.** Het werk bestaat al grotendeels (tak `feat/ecosysteem-m2` en repo `hopbites-toonbank`), maar was gepland voor 1 maart 2027 in plaats van 21 november. Het kassaplan zoekt uit wat er nog moet gebeuren om het samen te voegen en naar voren te halen. De kassa moet straks dezelfde `valideerKeuzes` en `componentenVan` gebruiken als de website. Open punten: welke myPOS-terminal, Epson-printen vanuit de browser en een btw-tarieventabel.
 
 ## Bestanden die het meest geraakt worden
 
