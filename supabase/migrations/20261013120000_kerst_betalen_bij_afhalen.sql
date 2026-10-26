@@ -23,6 +23,8 @@
 --  'reservering'-regel. Daar moet 'bij_afhalen' ook bij.
 --
 --  Toepassen: npx supabase db query --linked -f <dit bestand> (nooit db push).
+--  Twee keer draaien kan geen kwaad: de pre-flight accepteert ook de versie
+--  uit dit bestand, en CREATE OR REPLACE zet dezelfde functie terug.
 --  Terugdraaien: 20261005120000 §2 en 20261005120100 §2 opnieuw draaien.
 
 
@@ -48,9 +50,19 @@ BEGIN
     IF v_def NOT LIKE '%v_rest_open := v_order.betaalwijze%' OR v_def NOT LIKE '%leeftijd_nodig%' OR v_def NOT LIKE '%winkel_zet_klaargezet%' THEN
         RAISE EXCEPTION 'kerst betalen: winkel_order_ophalen is niet de versie uit 20261005120000; eerst vergelijken';
     END IF;
+    -- De rest-regel zelf: de oude (alleen reservering) of al de nieuwe uit dit
+    -- bestand. Iets anders = een versie die we niet kennen.
+    IF v_def NOT LIKE '%v_rest_open := v_order.betaalwijze = ''reservering'' AND v_order.rest_cents > 0%'
+       AND v_def NOT LIKE '%v_rest_open := v_order.betaalwijze IN (''reservering'', ''bij_afhalen'') AND v_order.rest_cents > 0%' THEN
+        RAISE EXCEPTION 'kerst betalen: de rest-regel in winkel_order_ophalen is niet die uit de repo; eerst vergelijken';
+    END IF;
     v_def := pg_get_functiondef('public.winkel_doos_ophalen(uuid, text, text)'::REGPROCEDURE);
     IF v_def NOT LIKE '%FOR NO KEY UPDATE%' OR v_def NOT LIKE '%regels_zonder_etiket%' OR v_def NOT LIKE '%rest_nodig%' THEN
         RAISE EXCEPTION 'kerst betalen: winkel_doos_ophalen is niet de versie uit 20261005120100; eerst vergelijken';
+    END IF;
+    IF v_def NOT LIKE '%IF v_order.betaalwijze = ''reservering'' AND v_order.rest_cents > 0%'
+       AND v_def NOT LIKE '%IF v_order.betaalwijze IN (''reservering'', ''bij_afhalen'') AND v_order.rest_cents > 0%' THEN
+        RAISE EXCEPTION 'kerst betalen: de rest-regel in winkel_doos_ophalen is niet die uit de repo; eerst vergelijken';
     END IF;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint con JOIN pg_class rel ON rel.oid = con.conrelid
                     WHERE rel.relname = 'winkel_orders' AND con.contype = 'c'

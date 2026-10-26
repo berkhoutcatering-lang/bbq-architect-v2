@@ -19,6 +19,9 @@
 --                          rest_nodig meer en niets dubbel geboekt
 --   winkel_doos_ophalen    bij_afhalen zonder methode = rest_nodig, doos niet
 --                          opgehaald; met contant = opgehaald en rest geboekt
+--   rest één keer          nog een keer ophalen met een andere methode = al_opgehaald;
+--                          tweede doos van dezelfde order met pin = mee zonder
+--                          tweede rest; de eerste betaalmethode blijft staan
 --   volledig               ongewijzigd: geen rest-stap
 
 do $$
@@ -88,6 +91,17 @@ begin
     if not exists (select 1 from public.winkel_orders where id = v_k1 and rest_betaald_at is not null and rest_betaalmethode = 'pin') then
         v_fouten := v_fouten || 'K1 rest niet geboekt; ';
     end if;
+    -- Nog een keer, nu met contant: al opgehaald, de pin-betaling blijft staan.
+    v_r := public.winkel_order_ophalen(v_org, v_k1, 'contant');
+    if v_r->>'uitkomst' is distinct from 'al_opgehaald' or v_r ? 'rest_geboekt' then
+        v_fouten := v_fouten || 'K1 tweede keer gaf ' || v_r::text || '; ';
+    end if;
+    if not exists (select 1 from public.winkel_orders where id = v_k1 and rest_betaalmethode = 'pin') then
+        v_fouten := v_fouten || 'K1 rest tweede keer geboekt; ';
+    end if;
+    if (select count(*) from public.winkel_voorraad_mutaties where order_id = v_k1) <> 1 then
+        v_fouten := v_fouten || 'K1 niet precies één afboeking; ';
+    end if;
 
     -- ── K2: met crémant, al betaald op het Kerst-scherm (winkel_boek_rest) ────
     v_o := public.winkel_plaats_order(v_org, 'test-sleutel-' || gen_random_uuid(), 'test-token-' || gen_random_uuid(), 'afhalen', null,
@@ -120,7 +134,7 @@ begin
     v_k3 := v_o.id;
     update public.winkel_orders set status = 'betaald', betaald_at = now() where id = v_k3;
     select id into v_r1 from public.winkel_order_regels where order_id = v_k3;
-    v_codes := public.winkel_dozen_voor_regel(v_org, v_r1, array['TEST kerstdoos']);
+    v_codes := public.winkel_dozen_voor_regel(v_org, v_r1, array['TEST kerstdoos 1', 'TEST kerstdoos 2']);
 
     v_r := public.winkel_doos_ophalen(v_org, v_codes->0->>'code');
     if v_r->>'uitkomst' is distinct from 'rest_nodig' or (v_r->>'rest_cents')::int is distinct from 9000 then
@@ -136,6 +150,18 @@ begin
     end if;
     if not exists (select 1 from public.winkel_orders where id = v_k3 and rest_betaald_at is not null and rest_betaalmethode = 'contant') then
         v_fouten := v_fouten || 'K3 rest niet geboekt bij doosscan; ';
+    end if;
+    -- Tweede doos van dezelfde order, met pin: gaat mee, geen tweede rest.
+    v_r := public.winkel_doos_ophalen(v_org, v_codes->1->>'code', 'pin');
+    if v_r->>'uitkomst' is distinct from 'opgehaald' or v_r->>'rest_geboekt' is not null or (v_r->>'nog_open')::int is distinct from 0 then
+        v_fouten := v_fouten || 'K3 tweede doos gaf ' || v_r::text || '; ';
+    end if;
+    if not exists (select 1 from public.winkel_orders where id = v_k3 and rest_betaalmethode = 'contant') then
+        v_fouten := v_fouten || 'K3 rest bij tweede doos opnieuw geboekt; ';
+    end if;
+    v_r := public.winkel_order_ophalen(v_org, v_k3, 'pin');
+    if v_r->>'uitkomst' is distinct from 'al_opgehaald' then
+        v_fouten := v_fouten || 'K3 balie na twee dozen gaf ' || v_r::text || '; ';
     end if;
 
     -- ── K4: geweigerd bij een Kerst-Box met alcohol: geen rest geboekt ────────
@@ -161,5 +187,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: Kerst-Box bij_afhalen zonder betaling = rest_nodig (balie en doosscan, niets gewijzigd); met pin of contant opgehaald en rest geboekt in één transactie; al betaald via winkel_boek_rest = geen dubbele rest, wel 18+; geweigerd boekt geen rest; volledig ongewijzigd — alles teruggedraaid';
+    raise exception 'GESLAAGD: Kerst-Box bij_afhalen zonder betaling = rest_nodig (balie en doosscan, niets gewijzigd); met pin of contant opgehaald en rest geboekt in één transactie; al betaald via winkel_boek_rest = geen dubbele rest, wel 18+; rest maar één keer geboekt (tweede ophaalpoging en tweede doos); geweigerd boekt geen rest; volledig ongewijzigd — alles teruggedraaid';
 end $$;
