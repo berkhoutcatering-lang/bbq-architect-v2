@@ -14,7 +14,7 @@ import {
 import type { Mand } from './types';
 import { MYPOS_TEST } from '@/lib/mypos/ipc';
 import { maakGeheugenStore, type GeheugenStore } from './geheugenStore';
-import { _resetControleKlok, plaatsOrder, type KassaContext } from './kassa';
+import { _resetControleKlok, haalKeuzes, plaatsOrder, type KassaContext, type KeuzeArtikel } from './kassa';
 import { vrijArtikel, type VrijProduct } from './vrij';
 
 const product = (id: string, naam: string, btw_pct: number, winkelprijs_incl_cents: number, extra: Partial<Product> = {}): Product =>
@@ -236,5 +236,37 @@ describe('beschikbaarheid van een kies-vak', () => {
 
     it('een kies-vak zonder opties is leeg: 0', () => {
         expect(vrijArtikel(combi, slots, bijgehouden(9, 9), opties.filter((o) => o.slot_id !== 's-kaas'))).toMatchObject({ vrij: 0 });
+    });
+});
+
+/* ── Wat de website te zien krijgt ────────────────────────────────────────── */
+describe('haalKeuzes — de keuzes voor de website', () => {
+    const tenant = { orgId: 'org-kz', slug: 'kz-hop-en-bites', bedrijfsnaam: 'Hop & Bites', email: null, telefoon: null, brandColor: null, ondertitel: null };
+    const ctx = (): KassaContext => ({
+        store: maakGeheugenStore({
+            tenant, artikelen: [combi], momenten: [], instellingen, nu: new Date('2026-11-25T12:00:00Z'), slots, opties,
+            producten: lijst.map((p) => (p.id === 'p-stout' ? { ...p, voorraad: 0 } : p.id === 'p-ipa' ? { ...p, voorraad: 12 } : p)),
+        }),
+        mypos: MYPOS_TEST, appUrl: 'http://localhost:3000', mail: async () => ({ success: true }), nu: () => new Date('2026-11-25T12:00:00Z'),
+    });
+
+    it('vakken met id\'s, meerprijs en een stand zonder getal; een uitgezet product staat er niet in', async () => {
+        const uit = await haalKeuzes(ctx(), 'kz-hop-en-bites');
+        expect(uit.status).toBe(200);
+        const a = (uit.body as { artikelen: KeuzeArtikel[] }).artikelen[0]!;
+        expect(a).toMatchObject({ slug: combi.slug, prijsCenten: 2500, verkoopbaar: true });
+        const bier = a.vakken.find((v) => v.slot === 's-bier')!;
+        expect(bier).toMatchObject({ keuze: 'kies', keuzes: 2, verschillend: false, voorkeuze: null });
+        expect(bier.opties.map((o) => `${o.naam} ${o.meerprijsCenten} ${o.stand}`)).toEqual([
+            'IPA 0 ja', 'Stout 0 op', 'Alcoholvrij 0.0 0 onbeperkt', 'Tripel 150 onbeperkt',
+        ]);
+        const worst = a.vakken.find((v) => v.slot === 's-worst')!;
+        expect(worst.opties.map((o) => o.product)).not.toContain('p-worst-bock');
+        expect(a.vakken.find((v) => v.slot === 's-kaas')!.voorkeuze).toBe('p-kaas-jong');
+        expect(JSON.stringify(uit.body)).not.toMatch(/voorraad|inkoop/);
+    });
+
+    it('een onbekende winkel is 404', async () => {
+        expect((await haalKeuzes(ctx(), 'bestaat-niet')).status).toBe(404);
     });
 });
