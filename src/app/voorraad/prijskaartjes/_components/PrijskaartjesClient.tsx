@@ -56,6 +56,7 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
     const showToast = useToast();
     const [lijst, setLijst] = useState<Kaartje[]>(() => regels.map((r) => r.kaartje));
     const [prijzen, setPrijzen] = useState<Record<string, string>>(() => Object.fromEntries(regels.map((r) => [r.kaartje.productId, prijsInvoer(r.kaartje.prijsCents)])));
+    const [statiegeld, setStatiegeld] = useState<Record<string, string>>(() => Object.fromEntries(regels.map((r) => [r.kaartje.productId, prijsInvoer(r.kaartje.statiegeldCents)])));
     const [gewijzigd, setGewijzigd] = useState<Set<string>>(new Set());
     const [actief, setActief] = useState<string | null>(regels[0]?.kaartje.productId ?? null);
     const [zoek, setZoek] = useState('');
@@ -69,6 +70,7 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
     useEffect(() => {
         setLijst(regels.map((r) => r.kaartje));
         setPrijzen(Object.fromEntries(regels.map((r) => [r.kaartje.productId, prijsInvoer(r.kaartje.prijsCents)])));
+        setStatiegeld(Object.fromEntries(regels.map((r) => [r.kaartje.productId, prijsInvoer(r.kaartje.statiegeldCents)])));
         setGewijzigd(new Set());
     }, [regels]);
     useEffect(() => { lettersKlaar().then(() => setLetters(true)); }, []);
@@ -107,6 +109,13 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
         const n = tekst.trim() === '' ? null : leesGetal(tekst);
         if (tekst.trim() !== '' && (n == null || n < 0)) return;
         wijzig(id, { prijsCents: n == null ? null : Math.round(n * 100) });
+    };
+
+    const zetStatiegeld = (id: string, tekst: string) => {
+        setStatiegeld((p) => ({ ...p, [id]: tekst }));
+        const n = tekst.trim() === '' ? null : leesGetal(tekst);
+        if (tekst.trim() !== '' && (n == null || n < 0)) return;
+        wijzig(id, { statiegeldCents: n ? Math.round(n * 100) : null });
     };
 
     async function opslaan() {
@@ -219,6 +228,13 @@ export default function PrijskaartjesClient({ regels }: { regels: KaartjeRegel[]
                                     <Veld id={`prijs-${id}`} label={k.inhoudEenheid === 'los' ? 'Prijs € per 100 g' : 'Prijs €'} breed={2}>
                                         <input id={`prijs-${id}`} className="kf-input" inputMode="decimal" value={prijzen[id] ?? ''} placeholder="geen prijs"
                                             onChange={(e) => zetPrijs(id, e.target.value)} style={{ fontVariantNumeric: 'tabular-nums' }} />
+                                    </Veld>
+                                    <Veld id={`statiegeld-${id}`} label="Statiegeld €" breed={2}>
+                                        <input id={`statiegeld-${id}`} className="kf-input" inputMode="decimal" value={statiegeld[id] ?? ''} placeholder="geen"
+                                            onChange={(e) => zetStatiegeld(id, e.target.value)} style={{ fontVariantNumeric: 'tabular-nums' }} />
+                                    </Veld>
+                                    <Veld id={`actie-${id}`} label="Actie (mag leeg)" breed={4}>
+                                        <input id={`actie-${id}`} className="kf-input" value={k.actie} placeholder="bijvoorbeeld 3 voor € 12" onChange={(e) => wijzig(id, { actie: e.target.value })} />
                                     </Veld>
                                     <Veld id={`bij-${id}`} label="Lekker bij (mag leeg)" breed={4}>
                                         <input id={`bij-${id}`} className="kf-input" value={k.bij} onChange={(e) => wijzig(id, { bij: e.target.value })} />

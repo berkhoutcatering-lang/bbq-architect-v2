@@ -32,7 +32,26 @@ const MARGIN_Y = (A4_H - ROWS * CARD_H) / 2;
 const PT = 0.3528; // 1 pt in mm
 const PAPIER = { bg: '#FFFFFF', ink: '#1F1F1C', soft: '#56574C', olive: '#5B6236', gold: '#A3833F', cut: '#BDBDB6' };
 
-export const SOORTEN = ['Speciaalbier', 'Alcoholvrij', 'Wijn · rood', 'Wijn · wit', 'Wijn · rosé', 'Bubbels', 'Noten', 'Borrel', 'Kaas', 'Rubs & sauzen'] as const;
+/**
+ * Drie lijnen, elk een eigen kleur kopbalk (26 oktober 2026): zo vind je in de
+ * winkel het bier, de wijn en de noten en het zoet op kleur. Bier olijf, wijn
+ * donker, de rest antiek goud — wit op de balk, leesbaar op papier.
+ */
+export type Lijn = 'bier' | 'wijn' | 'deli';
+export const BALK: Record<Lijn, string> = { bier: '#5B6236', wijn: '#1F1F1C', deli: '#8A6A2A' };
+
+export function lijnVanType(type: string): Lijn {
+    return type === 'bier' ? 'bier' : type === 'wijn' ? 'wijn' : 'deli';
+}
+
+/**
+ * De soort in de kopbalk. Bij bier de stijlgroep van de website (Blond, tripel
+ * en saison · Donker en zwaar · Hop en IPA · …): de balk helpt zoeken.
+ */
+export const SOORTEN = [
+    'Blond, tripel en saison', 'Donker en zwaar', 'Hop en IPA', 'Zuur en fruit', 'Weizen', 'Pils en amber', 'Alcoholvrij',
+    'Wijn · rood', 'Wijn · wit', 'Wijn · rosé', 'Bubbels', 'Zoet', 'Noten', 'Borrel', 'Droge worst', 'Kaas',
+] as const;
 
 export const INHOUD_EENHEDEN = ['cl', 'ml', 'l', 'g', 'kg', 'los'] as const;
 export type InhoudEenheid = (typeof INHOUD_EENHEDEN)[number];
@@ -47,9 +66,15 @@ export interface Kaartje {
     inhoud: number | null;
     inhoudEenheid: InhoudEenheid;
     prijsCents: number | null;
+    /** Statiegeld per stuk (blik € 0,15); komt als "+ € 0,15 statiegeld" onder de prijs. null: geen. */
+    statiegeldCents: number | null;
+    /** Een actie boven de prijs, zoals "3 voor € 12". Leeg: geen. */
+    actie: string;
     bij: string;
     aantal: number;
     printen: boolean;
+    /** De kleur van de kopbalk, uit het type van het product. */
+    lijn: Lijn;
 }
 
 /** Het product uit winkel_producten, voor zover het kaartje het nodig heeft. */
@@ -71,6 +96,8 @@ export interface KaartjeOpgeslagen {
     details: string | null;
     inhoud: number | null;
     inhoud_eenheid: string | null;
+    statiegeld_cents: number | null;
+    actie: string | null;
     bij: string | null;
     aantal: number;
     printen: boolean;
@@ -82,7 +109,7 @@ export const GEEN_KAARTJE = new Set(['doos', 'verpakking']);
 const SOORT_VAN_TYPE: Record<string, string> = {
     wijn: 'Wijn · rood',
     amandelen: 'Noten',
-    worst: 'Borrel',
+    worst: 'Droge worst',
     vleeswaar: 'Borrel',
     kaas: 'Kaas',
     crackers: 'Borrel',
@@ -92,7 +119,7 @@ const SOORT_VAN_TYPE: Record<string, string> = {
 };
 
 export function soortVanProduct(p: Pick<KaartjeProduct, 'type' | 'alcohol'>): string {
-    if (p.type === 'bier') return p.alcohol ? 'Speciaalbier' : 'Alcoholvrij';
+    if (p.type === 'bier') return p.alcohol ? 'Bier' : 'Alcoholvrij';
     return SOORT_VAN_TYPE[p.type] ?? '';
 }
 
@@ -129,9 +156,12 @@ export function kaartjeVoorProduct(p: KaartjeProduct, k: KaartjeOpgeslagen | nul
         inhoud: k ? k.inhoud : losGewogen ? 100 : null,
         inhoudEenheid: isInhoudEenheid(k?.inhoud_eenheid) ? k.inhoud_eenheid : losGewogen ? 'los' : 'cl',
         prijsCents: kaartPrijsCents(p),
+        statiegeldCents: k?.statiegeld_cents ?? null,
+        actie: k?.actie ?? '',
         bij: k?.bij ?? '',
         aantal: k?.aantal ?? 1,
         printen: k?.printen ?? true,
+        lijn: lijnVanType(p.type),
     };
 }
 
@@ -164,11 +194,35 @@ export function prijsDelen(cents: number): [string, string] {
     return [euro ?? '0', cent ?? '00'];
 }
 
-/** Alleen de inhoud; geen prijs per liter of kilo op het kaartje (bewuste keuze). */
-export function inhoudTekst(k: Pick<Kaartje, 'inhoud' | 'inhoudEenheid'>): { onderPrijs: string; links: string } {
-    if (k.inhoudEenheid === 'los') return { onderPrijs: 'per 100 gram', links: '' };
+/** '€ 0,15' — met een vaste spatie. */
+export function euroTekst(cents: number): string {
+    return `€\u00a0${nl2.format(cents / 100)}`;
+}
+
+const PER_LITER: Partial<Record<InhoudEenheid, number>> = { cl: 100, ml: 1000, l: 1 };
+const PER_KILO: Partial<Record<InhoudEenheid, number>> = { g: 1000, kg: 1 };
+
+/**
+ * De prijs per liter of per kilo. Voorverpakt verplicht naast de verkoopprijs
+ * (Besluit prijsaanduiding producten); het systeempje liet hem weg, sinds 26
+ * oktober 2026 staat hij er klein naast de inhoud. Zonder statiegeld. Los
+ * gewogen is de prijs al per 100 gram: dan geen tweede.
+ */
+export function eenheidsprijsTekst(k: Pick<Kaartje, 'inhoud' | 'inhoudEenheid' | 'prijsCents'>): string {
+    if (k.prijsCents == null || !k.inhoud || k.inhoud <= 0) return '';
+    const liter = PER_LITER[k.inhoudEenheid], kilo = PER_KILO[k.inhoudEenheid];
+    if (liter) return `${euroTekst(Math.round((k.prijsCents * liter) / k.inhoud))} per liter`;
+    if (kilo) return `${euroTekst(Math.round((k.prijsCents * kilo) / k.inhoud))} per kilo`;
+    return '';
+}
+
+/** Wat onder de prijs staat (per 100 gram, statiegeld) en links onderaan (inhoud en prijs per liter of kilo). */
+export function inhoudTekst(k: Pick<Kaartje, 'inhoud' | 'inhoudEenheid' | 'prijsCents' | 'statiegeldCents'>): { onderPrijs: string; links: string } {
+    const statiegeld = k.statiegeldCents ? `+ ${euroTekst(k.statiegeldCents)} statiegeld` : '';
+    if (k.inhoudEenheid === 'los') return { onderPrijs: ['per 100 gram', statiegeld].filter(Boolean).join(' · '), links: '' };
     const label = ({ l: 'liter', g: 'gram' } as Record<string, string>)[k.inhoudEenheid] ?? k.inhoudEenheid;
-    return { onderPrijs: '', links: k.inhoud && k.inhoud > 0 ? `${nlQ.format(k.inhoud)} ${label}` : '' };
+    const inhoud = k.inhoud && k.inhoud > 0 ? `${nlQ.format(k.inhoud)} ${label}` : '';
+    return { onderPrijs: statiegeld, links: [inhoud, eenheidsprijsTekst(k)].filter(Boolean).join(' · ') };
 }
 
 /* ── tekenen ──────────────────────────────────────────────────────────────── */
@@ -185,7 +239,7 @@ function font(weight: number, sizePt: number, family: string, s: number, italic 
 }
 
 /** Letterafstand met de hand, zodat het in elke browser hetzelfde oogt. */
-function gespatieerd(ctx: CanvasRenderingContext2D, tekst: string, x: number, y: number, spatie: number, rechts = false): void {
+function gespatieerd(ctx: CanvasRenderingContext2D, tekst: string, x: number, y: number, spatie: number, rechts = false): number {
     const tekens = [...tekst];
     const w = tekens.reduce((a, c) => a + ctx.measureText(c).width, 0) + spatie * (tekens.length - 1);
     let cx = rechts ? x - w : x;
@@ -196,6 +250,7 @@ function gespatieerd(ctx: CanvasRenderingContext2D, tekst: string, x: number, y:
         cx += ctx.measureText(c).width + spatie;
     }
     ctx.textAlign = vorige;
+    return w;
 }
 
 function pasIn(ctx: CanvasRenderingContext2D, tekst: string, maxW: number): string {
@@ -230,8 +285,8 @@ export function tekenKaartje(ctx: CanvasRenderingContext2D, k: Kaartje, ox: numb
     ctx.fillRect(X(0), Y(0), CW * s, CH * s);
     ctx.textBaseline = 'alphabetic';
 
-    // olijfgroene kopbalk tot de rand: soort links, HOP & BITES rechts
-    ctx.fillStyle = PAPIER.olive;
+    // kopbalk tot de rand in de kleur van de lijn: soort links, HOP & BITES rechts
+    ctx.fillStyle = BALK[k.lijn] ?? PAPIER.olive;
     ctx.fillRect(X(0), Y(0), CW * s, 7.2 * s);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = font(600, 7, UI, s);
@@ -260,6 +315,20 @@ export function tekenKaartje(ctx: CanvasRenderingContext2D, k: Kaartje, ox: numb
     const prijsLinks = (X(CW - pad) - prijsW) / s - ox / s; // in mm, kaartcoördinaat
     const smalW = (prijsLinks - 2.2 - pad) * s, volW = binnenW * s;
 
+    // actie boven de prijs, in de kleur van de balk: "3 VOOR € 12"
+    const actie = k.actie.trim().toUpperCase();
+    const actieY = basisY - 9.4;
+    let actieLinks = CW;
+    if (actie) {
+        ctx.fillStyle = BALK[k.lijn] ?? PAPIER.olive;
+        ctx.font = font(700, 7.6, UI, s);
+        const w = gespatieerd(ctx, actie, X(CW - pad), Y(actieY), 0.08 * 7.6 * PT * s, true);
+        actieLinks = CW - pad - w / s;
+    }
+    // vanaf welke hoogte de regels links smal moeten (naast de actie of de prijs)
+    const smalVanaf = actie ? actieY - 3.2 : 25.5;
+    const smalActieW = Math.min(smalW, (actieLinks - 2.2 - pad) * s);
+
     // naam: één regel 14 pt, anders twee regels 12 pt
     ctx.fillStyle = PAPIER.ink;
     let y = 14.0;
@@ -282,7 +351,7 @@ export function tekenKaartje(ctx: CanvasRenderingContext2D, k: Kaartje, ox: numb
     for (const r of klein) {
         if (ly > 30.6) break;
         ctx.font = r.f; ctx.fillStyle = r.c;
-        ctx.fillText(pasIn(ctx, r.t, ly > 25.5 ? smalW : volW), X(pad), Y(ly));
+        ctx.fillText(pasIn(ctx, r.t, ly > smalVanaf ? smalActieW : volW), X(pad), Y(ly));
         ly += 3.9;
     }
     // inhoud linksonder

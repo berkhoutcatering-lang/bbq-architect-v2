@@ -29,6 +29,8 @@ const KaartjeInvoer = z.object({
     inhoudEenheid: z.enum(INHOUD_EENHEDEN),
     /** Per stuk, of per 100 gram bij los gewogen waar. null = geen prijs. */
     prijsCents: z.number().int().min(0, 'Een prijs is 0 of meer').max(1000000).nullable(),
+    statiegeldCents: z.number().int().min(0).max(1000).nullable(),
+    actie: Tekst(30),
     bij: Tekst(60),
     aantal: z.number().int().min(1).max(50),
     printen: z.boolean(),
@@ -74,6 +76,8 @@ export async function bewaarPrijskaartjes(input: unknown): Promise<ActionResult<
             details: k.details || null,
             inhoud: k.inhoud,
             inhoud_eenheid: k.inhoudEenheid,
+            statiegeld_cents: k.statiegeldCents || null,
+            actie: k.actie || null,
             bij: k.bij || null,
             aantal: k.aantal,
             printen: k.printen,

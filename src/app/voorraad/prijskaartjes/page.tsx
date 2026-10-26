@@ -23,7 +23,7 @@ export default async function PrijskaartjesPage() {
             .eq('actief', true)
             .order('type').order('naam'),
         supabase.from('winkel_prijskaartjes')
-            .select('winkel_product_id, soort, naam, maker, details, inhoud, inhoud_eenheid, bij, aantal, printen'),
+            .select('winkel_product_id, soort, naam, maker, details, inhoud, inhoud_eenheid, statiegeld_cents, actie, bij, aantal, printen'),
     ]);
 
     const bewaard = new Map<string, KaartjeOpgeslagen>((kaartjes ?? []).map((k) => [k.winkel_product_id as string, {
@@ -33,6 +33,8 @@ export default async function PrijskaartjesPage() {
         details: (k.details as string | null) ?? null,
         inhoud: k.inhoud == null ? null : Number(k.inhoud),
         inhoud_eenheid: (k.inhoud_eenheid as string | null) ?? null,
+        statiegeld_cents: (k.statiegeld_cents as number | null) ?? null,
+        actie: (k.actie as string | null) ?? null,
         bij: (k.bij as string | null) ?? null,
         aantal: Number(k.aantal ?? 1),
         printen: k.printen !== false,
