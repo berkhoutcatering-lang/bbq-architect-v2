@@ -24,6 +24,21 @@ Mathijs wil:
 | Onderdelen verbergen | `settings.verborgen_onderdelen` bestaat al, dus catering kan uit de navigatie zonder te slopen. |
 | Btw-tarieven | Staan in `src/lib/btw-rules.ts` plus een controle op 0/9/21 in de tabellen. Er is geen tarieventabel, en het document vraagt daar wel om (§7.1). Dat komt bij de kassa aan bod, niet in dit plan. |
 
+## Herziening 26 oktober, na een tweede controle over álle takken
+
+De eerste versie keek alleen naar main. Er staan drie niet-samengevoegde takken die dit plan raken. Geen van hun migraties staat live, dus er is geen conflict in de database, wel in het plan.
+
+| Tak | Wat erop staat | Gevolg voor dit plan |
+|---|---|---|
+| `feat/ecosysteem-m2` (41 commits, 8 okt) | De kassa-kant: Toonbank-API, apparaten en sessies, journaal, bonnen, dagstaten, afhalen. Bevat de hele catalogus al (samengevoegd op 4 okt). Voegt toe: `winkel_artikelen.kanalen` (`webshop`/`toonbank`/`event`), `toonbank_groep`, `toonbank_volgorde`, `toonbank_favoriet`, `winkel_producten.statiegeld_cents`, `winkel_catalogus_versie`. | **Kanalen worden niet opnieuw bedacht**: fase 1 neemt het m2-ontwerp over. De kassaknoppen-groep (`toonbank_groep`) bestaat al. Fase 1 voegt alleen toe wat ontbreekt: `geldig_van`/`geldig_tot`, en een productgroep voor rapportage en marge als `toonbank_groep` daar niet volstaat (eerst met Mathijs afstemmen). |
+| `claude/focused-wright-xpvnrj` (24–26 okt) | Prijskaartjes voor de schaphouders (85 × 55 mm), kleur per lijn, statiegeld, acties. Nieuwe tabel `winkel_prijskaartjes` met een eigen `statiegeld_cents`. | Statiegeld staat dan op twee plekken (product én prijskaartje). Dat botst met "één bron per gegeven" en moet vóór het samenvoegen recht. "Kleur per lijn" overlapt met productgroepen. |
+| `claude/kerst-balie-betalen-18plus` (13 okt) | Kerst-balie: betalen en 18+ afdwingen vóór meegeven. | Valt buiten dit plan, maar is nodig vóór 23 december. |
+
+**Gevolgen:**
+- **Fase 0:** PR #249 is veilig, maar m2 heeft dezelfde catalogus als eigen kopie. Bij het samenvoegen van m2 later geven de catalogusbestanden die m2 daarna nog aanpaste een conflict. Daar wint de m2-versie.
+- **Volgorde:** eerst de kassa (m2 + `hopbites-toonbank`, zie het kassaplan), dan de keuzevakken, dan de winkelvloer. Het rekenwerk van de keuzevakken (`rekenen.ts`, `types.ts`) raakt m2 niet en kan al beginnen.
+- **26 dagen** is te kort voor kassa, keuzevakken én een volledige winkelvloer. De winkelvloer vóór de opening wordt de kleinste versie (plekken + planken + tellen), of schuift naar na de opening.
+
 ## Het idee in één zin
 
 **Eén product → één aanbod → één plek.** Het product (de kaart met foto, prijs, allergenen) bestaat één keer. Het aanbod bepaalt hoe je het verkoopt: los, als pakket, of als combideal met keuzevakken, per kanaal en eventueel tijdelijk. De winkelvloer laat zien waar het ligt. Website, kassa, etiket en voorraad lezen alle drie uit dezelfde rijen.
@@ -49,9 +64,9 @@ Mathijs wil:
 - `winkel_producten.groep_id` wordt gevuld vanuit het oude soort-veld. Sinterklaas blijft ongemoeid.
 - Het soort-veld blijft technisch en krijgt er `vlees`, `saus`, `rub` en `zoet` bij, ook op `winkel_artikel_slots.slot_type`.
 
-**Kanalen.** `winkel_artikelen.kanalen` wordt een lijst met `toonbank` en/of `webshop`.
+**Kanalen.** Overnemen uit `feat/ecosysteem-m2` (`20261006120000_toonbank_catalogus.sql`), niet opnieuw bouwen: `winkel_artikelen.kanalen` met `webshop`, `toonbank` en `event`, plus `toonbank_groep`/`toonbank_volgorde`/`toonbank_favoriet`.
 - "Alleen op bestelling" = een afhaalmoment nodig, niet direct aan te slaan.
-- `berekenOfferte` eist dat `webshop` in de lijst staat.
+- `berekenOfferte` eist dat `webshop` in de lijst staat (controleren of m2 dat al doet).
 
 **Tijdelijke acties.** `geldig_van`/`geldig_tot` op `winkel_artikelen`, gecontroleerd naast `actief` (bijvoorbeeld vaderdag of de woensdagmarkt). De bestelsluiting blijft op `winkel_momenten.sluit_op` (Kerst: 10 december).
 
