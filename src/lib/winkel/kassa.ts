@@ -73,7 +73,7 @@ const MandSchema = z.object({
         slug: z.string().regex(/^[a-z0-9-]{1,80}$/),
         aantal: z.number().int().min(1).max(9999),
         moment: z.string().max(80).nullable().optional().transform((v) => v ?? null),
-        /* De pakketten zijn vast (S1): keuzes horen er nog niet bij. Meesturen = validatie. */
+        /* Keuzes voor kies-vakken; rekenen.ts (valideerKeuzes) controleert de vorm. Bij een vast pakket = validatie. */
         keuzes: z.unknown().optional(),
     })).max(50),
 });

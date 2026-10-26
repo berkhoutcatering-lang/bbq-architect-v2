@@ -12,6 +12,10 @@ import {
     type Artikel, type Product, type Slot, type SlotOptie,
 } from './rekenen';
 import type { Mand } from './types';
+import { MYPOS_TEST } from '@/lib/mypos/ipc';
+import { maakGeheugenStore, type GeheugenStore } from './geheugenStore';
+import { _resetControleKlok, plaatsOrder, type KassaContext } from './kassa';
+import { vrijArtikel, type VrijProduct } from './vrij';
 
 const product = (id: string, naam: string, btw_pct: number, winkelprijs_incl_cents: number, extra: Partial<Product> = {}): Product =>
     ({ id, naam, type: 'overig', eenheid: 'stuk', prijs_per: 1, winkelprijs_incl_cents, inkoop_excl_cents: null, btw_pct, alcohol: false, voorraad: null, actief: true, ...extra });
@@ -173,5 +177,64 @@ describe('berekenOfferte met kies-vakken', () => {
         expect(berekenOfferte({ ...bron(), opties: [] }, mand(standaard), 'afhalen', null)).toMatchObject({
             ok: false, soort: 'validatie', fouten: ['Combideal kan op dit moment niet besteld worden.'],
         });
+    });
+});
+
+/* ── Van mand tot order, tegen de geheugen-opslag ──────────────────────────── */
+describe('een order met keuzes', () => {
+    const tenant = { orgId: 'org-kv', slug: 'kv-hop-en-bites', bedrijfsnaam: 'Hop & Bites', email: null, telefoon: null, brandColor: null, ondertitel: null };
+    const nieuweStore = (voorraadStout: number | null) => maakGeheugenStore({
+        tenant, artikelen: [combi], momenten: [], instellingen, nu: new Date('2026-11-25T12:00:00Z'), slots, opties,
+        producten: lijst.map((p) => (p.id === 'p-stout' ? { ...p, voorraad: voorraadStout } : p)),
+    });
+    const bestel = (ctx: KassaContext, sleutel: string, keuzes: unknown, totaal: number) => plaatsOrder(ctx, 'kv-hop-en-bites', {
+        mand: { versie: 1, regels: [{ slug: combi.slug, aantal: 1, moment: null, keuzes }] }, leverwijze: 'afhalen', momentId: null,
+        contact: { naam: 'Jansen', email: 'jansen@voorbeeld.nl', telefoon: '' }, adres: null, opmerking: '', sleutel,
+        terugUrl: '/bestelling', verwachtTotaalCenten: totaal,
+    });
+    const ctxVan = (store: GeheugenStore): KassaContext => ({ store, mypos: MYPOS_TEST, appUrl: 'http://localhost:3000', mail: async () => ({ success: true }), nu: () => new Date('2026-11-25T12:00:00Z') });
+
+    it('de inhoud onthoudt het vak en dat de klant koos', async () => {
+        _resetControleKlok();
+        const store = nieuweStore(null);
+        const keuzes = [{ slot: 's-bier', producten: ['p-tripel', 'p-stout'] }, standaard[1]];
+        const uit = await bestel(ctxVan(store), 'sleutel-keuzevak-een', keuzes, 2650);
+        expect(uit.status).toBe(200);
+        expect(store.componenten.map((c) => `${c.product_id} ${c.hoeveelheid} ${c.slot_id} ${c.gekozen}`)).toEqual([
+            'p-tripel 1 s-bier true', 'p-stout 1 s-bier true',
+            'p-worst-appel 1 s-worst true', 'p-worst-peper 1 s-worst true',
+            'p-kaas-jong 1 s-kaas true',
+        ]);
+        expect(store.orders[0]!.totaal_cents).toBe(2650);
+    });
+
+    it('een gekozen product dat op is, houdt de order tegen; een ander bier gaat wel', async () => {
+        _resetControleKlok();
+        const store = nieuweStore(0);
+        const metStout = [{ slot: 's-bier', producten: ['p-stout', 'p-ipa'] }, standaard[1]];
+        expect((await bestel(ctxVan(store), 'sleutel-keuzevak-twee', metStout, 2500)).status).not.toBe(200);
+        const zonder = [{ slot: 's-bier', producten: ['p-ipa', 'p-ipa'] }, standaard[1]];
+        expect((await bestel(ctxVan(store), 'sleutel-keuzevak-drie', zonder, 2500)).status).toBe(200);
+    });
+});
+
+describe('beschikbaarheid van een kies-vak', () => {
+    const vrij = (id: string, ligt_er: number | null): VrijProduct =>
+        ({ product_id: id, naam: id, eenheid: 'stuk', ligt_er, gereserveerd: 0, vrij: ligt_er, bijgehouden: ligt_er != null });
+    const bijgehouden = (stout: number, ipa: number) =>
+        lijst.map((p) => vrij(p.id, p.id === 'p-stout' ? stout : p.id === 'p-ipa' ? ipa : null));
+
+    it('één niet-bijgehouden optie: het vak begrenst niets', () => {
+        expect(vrijArtikel(combi, slots, bijgehouden(1, 1), opties)).toMatchObject({ vrij: null, bijgehouden: false });
+    });
+
+    it('alle opties bijgehouden: samen ÷ (hoeveelheid × keuzes), zonder beperkend product', () => {
+        const alleenStoutEnIpa = opties.filter((o) => o.slot_id !== 's-bier' || ['p-stout', 'p-ipa'].includes(o.product_id));
+        expect(vrijArtikel(combi, slots, bijgehouden(3, 2), alleenStoutEnIpa)).toMatchObject({ vrij: 2, beperkend_product_id: null });
+        expect(vrijArtikel(combi, slots, bijgehouden(1, 0), alleenStoutEnIpa)).toMatchObject({ vrij: 0 });
+    });
+
+    it('een kies-vak zonder opties is leeg: 0', () => {
+        expect(vrijArtikel(combi, slots, bijgehouden(9, 9), opties.filter((o) => o.slot_id !== 's-kaas'))).toMatchObject({ vrij: 0 });
     });
 });

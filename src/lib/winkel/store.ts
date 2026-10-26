@@ -9,7 +9,7 @@
  * (plaatsen, betaalpoging starten, betaling bevestigen) is hier één aanroep,
  * zodat de route nooit "eerst lezen, dan schrijven" hoeft te doen.
  */
-import type { Artikel, Component, Instellingen, MomentRij, Product, Regelintern, Slot } from './rekenen';
+import type { Artikel, Component, Instellingen, MomentRij, Product, Regelintern, Slot, SlotOptie } from './rekenen';
 import type { Betaalwijze, Leverwijze, Orderstatussoort } from './types';
 import type { VoorraadStand, VrijArtikel, VrijProduct } from './vrij';
 
@@ -29,6 +29,8 @@ export interface Bronnen {
     /** Producten (met bezetting) en slots — de templates van pakketten en plank. */
     producten: Product[];
     slots: Slot[];
+    /** Opties van de kies-vakken; leeg zolang de tabel er niet is. */
+    opties: SlotOptie[];
     instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null };
 }
 

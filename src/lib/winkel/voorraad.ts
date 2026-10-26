@@ -12,7 +12,7 @@
  *
  * null betekent overal: niet bijgehouden. Een getal wordt nooit geraden.
  */
-import type { Product, Slot } from './rekenen';
+import { isKiesvak, keuzesVan, optiesVan, type Product, type Slot, type SlotOptie } from './rekenen';
 import { tekortTekst } from './wegzetten';
 
 /** Hoeveel pakketten van het voorstel voor de drempel (antwoord Mathijs, 26 sep). */
@@ -67,10 +67,20 @@ export function beschikbaar(p: Pick<Product, 'voorraad' | 'voorraad_bezet'>): nu
 function vraagPerStuk(artikelId: string, slots: Slot[]): Map<string, number> {
     const m = new Map<string, number>();
     for (const s of slots) {
-        if (s.artikel_id !== artikelId || !s.standaard_product_id) continue;
+        if (s.artikel_id !== artikelId || !s.standaard_product_id || isKiesvak(s)) continue;
         m.set(s.standaard_product_id, (m.get(s.standaard_product_id) ?? 0) + s.hoeveelheid);
     }
     return m;
+}
+
+/**
+ * Een vak dat niet te vullen is: een vast vak zonder product, of een kies-vak
+ * zonder opties (of met te weinig voor "elk een andere").
+ */
+export function leegVak(s: Slot, opties: SlotOptie[] | undefined): boolean {
+    if (!isKiesvak(s)) return !s.standaard_product_id;
+    const n = optiesVan(s.id, opties).length;
+    return s.verschillend ? n < keuzesVan(s) : n === 0;
 }
 
 /**
@@ -78,18 +88,39 @@ function vraagPerStuk(artikelId: string, slots: Slot[]): Map<string, number> {
  * kleinste over de producten in de slots. null = geen enkel slot wordt
  * bijgehouden (of er zijn geen slots), dus er is geen grens bekend.
  * Een slot zonder product maakt het artikel onverkoopbaar: 0.
+ *
+ * Een kies-vak telt zijn opties samen: ⌊Σ beschikbaar ÷ (hoeveelheid × keuzes)⌋.
+ * Is één optie niet bijgehouden, dan begrenst dat vak niets — de klant kan
+ * altijd die kiezen. (Bij "elk een andere" is het een bovengrens; de
+ * voorraadcontrole bij het plaatsen telt per gekozen product.)
  */
-export function pakkettenTeMaken(artikelId: string, slots: Slot[], producten: Pick<Product, 'id' | 'voorraad' | 'voorraad_bezet'>[]): number | null {
+export function pakkettenTeMaken(
+    artikelId: string,
+    slots: Slot[],
+    producten: Pick<Product, 'id' | 'voorraad' | 'voorraad_bezet'>[],
+    opties?: SlotOptie[],
+): number | null {
     const eigen = slots.filter((s) => s.artikel_id === artikelId);
     if (eigen.length === 0) return null;
-    if (eigen.some((s) => !s.standaard_product_id)) return 0;
+    if (eigen.some((s) => leegVak(s, opties))) return 0;
     let kleinste: number | null = null;
+    const neem = (n: number) => { kleinste = kleinste == null ? n : Math.min(kleinste, n); };
     for (const [productId, perStuk] of vraagPerStuk(artikelId, slots)) {
         const p = producten.find((x) => x.id === productId);
         const b = p ? beschikbaar(p) : null;
         if (b == null) continue;
-        const n = Math.max(0, Math.floor(rond(b / perStuk)));
-        kleinste = kleinste == null ? n : Math.min(kleinste, n);
+        neem(Math.max(0, Math.floor(rond(b / perStuk))));
+    }
+    for (const s of eigen.filter(isKiesvak)) {
+        let som = 0;
+        let onbeperkt = false;
+        for (const o of optiesVan(s.id, opties)) {
+            const p = producten.find((x) => x.id === o.product_id);
+            const b = p ? beschikbaar(p) : null;
+            if (b == null) { onbeperkt = true; break; }
+            som += Math.max(0, b);
+        }
+        if (!onbeperkt) neem(Math.max(0, Math.floor(rond(som / (s.hoeveelheid * keuzesVan(s))))));
     }
     return kleinste;
 }
