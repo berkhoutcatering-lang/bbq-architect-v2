@@ -23,7 +23,7 @@ import { useToast } from '@/components/Toast';
 import VoorraadBel from '@/components/voorraad/VoorraadBel';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import { formatEur } from '@/lib/format';
-import type { Product, Slot } from '@/lib/winkel/rekenen';
+import { isKiesvak, type Product, type Slot, type SlotOptie } from '@/lib/winkel/rekenen';
 import {
     AFWIJKINGSREDENEN, REDEN_LABEL, TYPE_LABEL, beperkendProduct, beschikbaar, geldendeDrempel, gereserveerd,
     hoeveelheidKort, pakkettenTeMaken, voorraadstatus, waardeCenten, type Afwijkingsreden, type Mutatietype, type Reden, type Voorraadstatus,
@@ -50,6 +50,8 @@ export interface WinkelData {
     plekNaam: string;
     producten: WinkelProductRij[];
     slots: Slot[];
+    /** Opties van de kies-vakken (leeg zolang de migratie niet live is). */
+    opties: SlotOptie[];
     artikelen: { id: string; naam: string; slug: string; actief: boolean; telt: string }[];
     keuken: { id: number; naam: string; unit: string | null; current_stock: number | null }[];
     leveranciers: { id: number; naam: string }[];
@@ -127,9 +129,14 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
 
     const pakketten = useMemo(() => data.artikelen
         .filter((a) => a.actief && data.slots.some((s) => s.artikel_id === a.id))
-        .map((a) => ({ a, n: pakkettenTeMaken(a.id, data.slots, data.producten), door: beperkendProduct(a.id, data.slots, data.producten) }))
+        .map((a) => {
+            const n = pakkettenTeMaken(a.id, data.slots, data.producten, data.opties);
+            /* Een kies-vak heeft geen één beperkend product: alleen een vast product noemen als dat de grens is. */
+            const vast = pakkettenTeMaken(a.id, data.slots.filter((s) => s.artikel_id === a.id && !isKiesvak(s)), data.producten);
+            return { a, n, door: vast === n ? beperkendProduct(a.id, data.slots, data.producten) : null };
+        })
         .sort((x, y) => (x.n ?? 1e9) - (y.n ?? 1e9)),
-    [data.artikelen, data.slots, data.producten]);
+    [data.artikelen, data.slots, data.opties, data.producten]);
     const maxPakket = Math.max(1, ...pakketten.map((x) => x.n ?? 0));
 
     const open = openId ? data.producten.find((p) => p.id === openId) ?? null : null;

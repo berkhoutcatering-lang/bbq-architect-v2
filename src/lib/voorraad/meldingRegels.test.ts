@@ -4,7 +4,7 @@
  * product, wat er nog is en wat er besteld staat.
  */
 import { describe, expect, it } from 'vitest';
-import type { Slot } from '@/lib/winkel/rekenen';
+import type { Slot, SlotOptie } from '@/lib/winkel/rekenen';
 import {
     artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, verschil, winkelProductMeldingen,
     type Melding, type WinkelProduct,
@@ -117,5 +117,34 @@ describe('één melding per keer dat hij eronder zakt', () => {
     it('alleen bekeken items verdwijnen uit de staat', () => {
         const aan = [{ bron: 'winkel' as const, item_id: 'p-andere', soort: 'voorraad_laag' as const }];
         expect(verschil(aan, [], (m) => m.item_id === 'p-bier').weg).toHaveLength(0);
+    });
+});
+
+/* ── Combideals: een kies-vak (plan winkel-aanbod fase 2) ───────────────────── */
+describe('combideal met een kies-vak', () => {
+    const kies: Slot[] = [
+        { ...slot('k1', 'combi', 'Bier', 1, 'p-ipa'), keuze: 'kies', keuzes: 2 },
+        slot('k2', 'combi', 'Worst', 1, 'p-worst'),
+    ];
+    const opties: SlotOptie[] = [
+        { id: 'o1', slot_id: 'k1', product_id: 'p-ipa', meerprijs_cents: 0, volgorde: 1 },
+        { id: 'o2', slot_id: 'k1', product_id: 'p-stout', meerprijs_cents: 0, volgorde: 2 },
+    ];
+    const combi = [{ id: 'combi', naam: 'Combideal', actief: true }];
+
+    it('één bier op is geen dicht pakket: de klant kiest het andere', () => {
+        const producten = [prod('p-ipa', 'IPA', 0), prod('p-stout', 'Stout', 6), prod('p-worst', 'Worst', 10)];
+        expect(artikelDichtMeldingen(combi, producten, kies, opties)).toHaveLength(0);
+    });
+
+    it('alle keuzes samen op: dicht, met het vak als reden — niet een willekeurig vast product', () => {
+        const producten = [prod('p-ipa', 'IPA', 1), prod('p-stout', 'Stout', 0), prod('p-worst', 'Worst', 10)];
+        expect(artikelDichtMeldingen(combi, producten, kies, opties).map((x) => x.titel))
+            .toEqual(['Combideal kan niet meer besteld worden: alle keuzes bij Bier zijn op']);
+    });
+
+    it('een kies-vak verzint geen drempel voor zijn voorkeuze; een eigen drempel kan wel', () => {
+        expect(winkelProductMeldingen([prod('p-ipa', 'IPA', 3)], kies, new Set(['combi']))).toHaveLength(0);
+        expect(winkelProductMeldingen([prod('p-ipa', 'IPA', 3, 0, 4)], kies, new Set(['combi']))[0]!.soort).toBe('voorraad_laag');
     });
 });

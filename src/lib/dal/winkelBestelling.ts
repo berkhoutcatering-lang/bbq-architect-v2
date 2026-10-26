@@ -30,7 +30,8 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
 
     const ids = producten.map((p) => p.id as string);
     const [{ data: slots }, { data: artikelen }, { data: lijnen }] = await Promise.all([
-        supabase.from('winkel_artikel_slots').select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven').eq('organization_id', orgId),
+        /* `*`: de kolom keuze (migratie 20261026120000) mag er nog niet zijn; een kies-vak geeft geen drempelvoorstel. */
+        supabase.from('winkel_artikel_slots').select('*').eq('organization_id', orgId),
         supabase.from('winkel_artikelen').select('id, actief').eq('organization_id', orgId),
         supabase.from('inkoop_order_lines')
             .select('winkel_product_id, qty_ordered, qty_received, concept_inkoop_orders!inner(status)')

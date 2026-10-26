@@ -145,7 +145,8 @@ export function beperkendProduct<P extends Pick<Product, 'id' | 'naam' | 'voorra
 export function drempelVoorstel(productId: string, slots: Slot[], actieveArtikelIds?: Set<string>): number | null {
     const perArtikel = new Map<string, number>();
     for (const s of slots) {
-        if (s.standaard_product_id !== productId) continue;
+        /* Een kies-vak verdeelt de vraag over zijn opties: geen voorstel verzinnen, een eigen drempel kan altijd. */
+        if (s.standaard_product_id !== productId || isKiesvak(s)) continue;
         if (actieveArtikelIds && !actieveArtikelIds.has(s.artikel_id)) continue;
         perArtikel.set(s.artikel_id, (perArtikel.get(s.artikel_id) ?? 0) + s.hoeveelheid);
     }
