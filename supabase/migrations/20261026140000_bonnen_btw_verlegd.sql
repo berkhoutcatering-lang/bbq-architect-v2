@@ -15,7 +15,7 @@
 --  Additief: geen kolom verdwijnt, geen bestaande waarde verandert.
 --  De app werkt ook zonder deze kolom (dan ontbreekt alleen 4a/4b).
 --
---  Draaien:  npx supabase db query --linked -f supabase/migrations/20261026120000_bonnen_btw_verlegd.sql
+--  Draaien:  npx supabase db query --linked -f supabase/migrations/20261026140000_bonnen_btw_verlegd.sql
 -- =============================================================
 
 alter table public.bonnen

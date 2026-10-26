@@ -211,7 +211,7 @@ export default function VoorbelastingLijst({ year, quarter, onSluit, onGewijzigd
                             </div>
                             {!verlegdBeschikbaar && (
                                 <div style={{ fontSize: 12, color: 'var(--amber, #d97706)', marginTop: 6 }}>
-                                    Nog niet beschikbaar: draai eerst migratie 20261026120000_bonnen_btw_verlegd.sql.
+                                    Nog niet beschikbaar: draai eerst migratie 20261026140000_bonnen_btw_verlegd.sql.
                                 </div>
                             )}
                             {toonZonderBtw && (

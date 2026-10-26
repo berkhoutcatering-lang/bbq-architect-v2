@@ -400,7 +400,7 @@ export function quarterPeriod(year: number, quarter: 1 | 2 | 3 | 4, today: Date 
  * Nederlandse BTW, wij geven die zelf aan (4a/4b) en trekken hem weer af (5b).
  *   'buiten_eu' → rubriek 4a (bv. software-abonnement van een Amerikaans bedrijf)
  *   'binnen_eu' → rubriek 4b (leveringen/diensten van een ondernemer uit een EU-land)
- * Zie migratie 20261026120000_bonnen_btw_verlegd.sql.
+ * Zie migratie 20261026140000_bonnen_btw_verlegd.sql.
  */
 export type BtwVerlegd = 'buiten_eu' | 'binnen_eu';
 

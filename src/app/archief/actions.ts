@@ -340,7 +340,7 @@ export async function setBtwVerlegdAction(input: unknown) {
             .eq('organization_id', orgId);
         if (error) {
             if (error.message.includes('btw_verlegd')) {
-                throw new Error('De database kent "BTW verlegd" nog niet — draai eerst migratie 20261026120000_bonnen_btw_verlegd.sql');
+                throw new Error('De database kent "BTW verlegd" nog niet — draai eerst migratie 20261026140000_bonnen_btw_verlegd.sql');
             }
             throw new Error(error.message);
         }

@@ -37,7 +37,7 @@ export interface AangifteBronnen {
     kassa_dagen: KassaDag[];
     /** False zolang migratie 20261026130000_btw_kassa_uitsluitingen nog niet gedraaid is. */
     kassa_uitsluiten_beschikbaar: boolean;
-    /** False zolang migratie 20261026120000_bonnen_btw_verlegd nog niet gedraaid is. */
+    /** False zolang migratie 20261026140000_bonnen_btw_verlegd nog niet gedraaid is. */
     verlegd_beschikbaar: boolean;
 }
 
