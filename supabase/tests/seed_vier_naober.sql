@@ -23,7 +23,7 @@
 --     (migratie 20261005140000_winkel_wegzetten). Op de Toonbank (kanalen
 --     webshop en toonbank, groep Bier, favoriet) met 15 ct statiegeld en
 --     test-EAN 2000000000015 (winkelcode, GS1-prefix 20) zodra die kolommen
---     bestaan (migratie 20261006120000_toonbank_catalogus).
+--     bestaan (migratie 20261028120000_toonbank_catalogus).
 -- Geen personen, geen e-mailadressen, geen sleutels.
 --
 -- Guard: weigert als er winkelartikelen of events van een andere organisatie

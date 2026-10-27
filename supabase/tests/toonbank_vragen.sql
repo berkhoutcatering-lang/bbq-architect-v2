@@ -1,4 +1,4 @@
--- Test voor BA-8 (migratie 20261006150000_toonbank_vragen): toonbank_catalogus,
+-- Test voor BA-8 (migratie 20261028150000_toonbank_vragen): toonbank_catalogus,
 -- toonbank_vrij, toonbank_wegzet_vraag (met journaal en idempotentie),
 -- toonbank_afhaallijst en scan_resolve. Draait in één transactie die aan het
 -- eind wordt teruggedraaid.

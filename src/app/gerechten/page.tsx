@@ -22,10 +22,11 @@ export default async function GerechtenPage() {
         supabase.from('gerechten').select('*').order('volgorde').limit(1000),
     ]);
 
-    const initial: GerechtenInitial = {
-        gangen: gangenRes.data ?? [],
-        gerechten: gerechtenRes.data ?? [],
-    };
+    /* Mislukt één van de twee, dan géén snapshot meegeven: de client haalt dan
+       zelf op in plaats van een lege lijst te tonen alsof er niets is. */
+    const initial: GerechtenInitial | undefined = gangenRes.error || gerechtenRes.error
+        ? undefined
+        : { gangen: gangenRes.data ?? [], gerechten: gerechtenRes.data ?? [] };
 
     return <GerechtenClient initial={initial} />;
 }

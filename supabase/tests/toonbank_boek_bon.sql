@@ -1,4 +1,4 @@
--- Test voor BA-9 (migratie 20261007120000_toonbank_bonnen): toonbank_boek_bon
+-- Test voor BA-9 (migratie 20261028160000_toonbank_bonnen): toonbank_boek_bon
 -- volgens contract §4.2, de voorraad en vrij_overschreden. Draait in één
 -- transactie die aan het eind wordt teruggedraaid.
 --

@@ -8,8 +8,46 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
 ];
 
+/**
+ * De Toonbank (de kassa-app, eigen repo hopbites-toonbank) verschijnt onder
+ * het adres van BBQ Architect: /toonbank. Het blijft een apart programma op
+ * een eigen Vercel-project; BBQ Architect geeft /toonbank/* alleen door
+ * (besluit Mathijs, 27 oktober 2026). TOONBANK_UPSTREAM_URL is het adres van
+ * dat Vercel-project, bijvoorbeeld https://hopbites-toonbank.vercel.app. Niet
+ * gezet: geen doorgifte en geen tegel. Alleen https telt.
+ */
+export function toonbankUpstream(ruw = process.env.TOONBANK_UPSTREAM_URL) {
+  const tekst = (ruw || '').trim();
+  if (!tekst) return null;
+  try {
+    const adres = new URL(tekst);
+    const lokaal = adres.hostname === 'localhost' || adres.hostname === '127.0.0.1';
+    if (adres.protocol !== 'https:' && !(adres.protocol === 'http:' && lokaal)) return null;
+    return adres.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function toonbankDoorgifte(upstream = toonbankUpstream()) {
+  if (!upstream) return [];
+  return [
+    { source: '/toonbank', destination: upstream + '/' },
+    { source: '/toonbank/', destination: upstream + '/' },
+    { source: '/toonbank/:pad*', destination: upstream + '/:pad*' },
+  ];
+}
+
+const toonbankAan = toonbankUpstream() !== null;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /* Met een Toonbank-adres wijst de tegel "Winkel-kassa" naar /toonbank,
+     tenzij NEXT_PUBLIC_TOONBANK_URL zelf al gezet is. */
+  ...(toonbankAan && !process.env.NEXT_PUBLIC_TOONBANK_URL
+    ? { env: { NEXT_PUBLIC_TOONBANK_URL: '/toonbank' } }
+    : {}),
+
   /**
    * Server-only CJS packages die Turbopack niet schoon kan bundelen.
    * archiver heeft `module.exports = archiver` (geen ESM default-export),
@@ -54,6 +92,10 @@ const nextConfig = {
   images: {
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+  },
+
+  async rewrites() {
+    return { beforeFiles: toonbankDoorgifte() };
   },
 
   async headers() {

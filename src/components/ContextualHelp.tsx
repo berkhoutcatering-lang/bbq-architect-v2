@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { HelpCircle, X, ChevronRight, ThumbsUp, ThumbsDown, ExternalLink } from 'lucide-react';
+import { whenIdle } from '@/lib/whenIdle';
 
 interface Article {
   id: number;
@@ -44,6 +45,8 @@ export default function ContextualHelp() {
 
     let cancelled = false;
     const pad = pathname;
+    /* Pas als de pagina zelf binnen is: het hulpknopje is bijzaak. */
+    const stopIdle = whenIdle(function () {
     let belofte = helpInFlight.get(pad);
     if (!belofte) {
       belofte = fetch('/api/help/contextual?page=' + encodeURIComponent(pad))
@@ -59,8 +62,9 @@ export default function ContextualHelp() {
     belofte
       .then(function (list) { if (!cancelled) setArticles(list); })
       .catch(function () { /* silent */ });
+    });
 
-    return function () { cancelled = true; };
+    return function () { cancelled = true; stopIdle(); };
   }, [pathname]);
 
   function handleFeedback(articleId: number, helpful: boolean) {

@@ -1,6 +1,6 @@
 # BBQ Architect — UX Master Document
 
-**Laatst bijgewerkt:** 2026-06-12
+**Laatst bijgewerkt:** 2026-10-20
 **Doel:** één plek waar status, principes, KPI's, personas en open items bij elkaar staan. Lees deze als eerste bij een nieuwe sessie.
 
 ---
@@ -22,6 +22,7 @@
 | **5C — Admin dashboard** | /admin/funnel met alle 5 KPI's (Activation-rate, AI-adoptie, first_offerte_concept/sent, ai_wizard_used) + Pro-tier baseline-uitleg | ✅ Af | 447r live; data verzamelt sinds 2026-05-01 |
 | **6 — Volledige app-test (2026-06-12)** | Hele app getest incl. Golden Flow end-to-end; **17 kapotte opslag-plekken gefixt** (RLS-klasse: insert zonder org-id — o.a. inklokken, AI-wizard, Nieuw event, onboarding, klanten, facturen); rapport [2026-06-12-test-campagne.md](audits/2026-06-12-test-campagne.md) | ✅ Af | Top-10 verbeterplan in rapport; #1 wizard-items[] ✅ zelfde dag gefixt; #2 = AI-menu naar <8s (71s na schema-fix) |
 | **7 — Operatie Overzicht (gepland)** | App weer begrijpelijk: sidebar 26→8, één-deur-regel (bonnen ×3 → 1, marge ×3 → 1, gerechten+recepten merge), Team & Operatie-hub, anatomie-canon, nieuwe-persoon-test als meetlat — plan in [operatie-overzicht.md](operatie-overzicht.md) | 📋 Plan klaar | Uitvoering ná weekendtest 13-14 jun, 4 sessies; weekendtest levert zoek-momenten als munitie |
+| **8 — Werkruimtes + snelheid (2026-10-20)** | Zijbalk vervangen door werkruimtebalk per onderdeel + tegelscherm (Odoo-model), één navigatiebron, onderdelen aan/uit per bedrijf; minder vaste vragen per pagina en geheugen tussen pagina's — plan + voor/na-meting in [werkruimtes-en-snelheid.md](werkruimtes-en-snelheid.md) | ✅ Gebouwd | Vandaag-overzicht in één servervraag (2–4 dagen) en servergegevens voor /offertes en /agenda staan open |
 
 ---
 
@@ -69,35 +70,35 @@ Vastgelegd in `~/.claude/projects/-Users-mathi-Documents-GitHub-bbq-architect-v2
 
 ---
 
-## 5. IA-overzicht (sidebar + hub-and-spoke)
+## 5. IA-overzicht (werkruimtes, sinds 2026-10-20)
 
-Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijziging daar.
+Canonical bron is `src/lib/navigation.tsx` — de **enige** plek waar tabbladen staan. Werkruimtebalk, tegelscherm, onderbalk, kruimelpad, zoekvenster (⌘K) en sitemap lezen allemaal deze lijst. Plan en meting: [werkruimtes-en-snelheid.md](werkruimtes-en-snelheid.md).
+
+Geen zijbalk meer. Elk onderdeel is een **werkruimte** (zoals een Odoo-app): bovenin een balk met alléén de tabbladen van dat onderdeel. Wisselen via het **tegelscherm** (⊞ linksboven, "Meer" in de onderbalk, gebruikersmenu) of ⌘K.
 
 ```
-🏠 Vandaag          → /          (hardcoded bovenaan Sidebar.tsx, control-tower)
-📅 Plannen          → /agenda    (children: Agenda · Events)
-🛒 Verkoop          → /offertes  (children: Offertes · Klanten)
-🍳 Menu              → /gerechten (sidebar children: Gerechten · Componenten · Kookbord)
-                                  + hub-tabs (GerechtenTabs.tsx): Gerechten · Componenten · Menukaarten · Analyse
-📦 Voorraad         → /voorraad  (children: Voorraad · Inkoop · Leveranciers)
-💰 Geld             → /financien (children: Financiën · Uren · Bonnen & Facturen · Boekhouder · Rittenregistratie)
-⚙️ Systeem          → /systeem   (secondary; children: Instellingen · Gebruikers · Integraties · Mailbox · Website · Foto-archief · Help Center · Platform Beheer)
+Vandaag            → /            (geen tabbladen)
+Plannen            → /agenda      Agenda · Events                        (+ klantgesprek, prep-counter, haccp)
+Verkoop            → /offertes    Aanvragen · Bestellingen · Webshop · Kerst · Arrangementen · Website · Offertes · Klanten
+Keuken             → /gerechten   Gerechten · Componenten · Menukaarten · Kookbord · Keukenscherm · Analyse  (+ marges, ai-chat)
+Inkoop & Voorraad  → /voorraad    Voorraad · Partijen · Winkel · Ontvangst · Inkoop · Leveranciers · Bonnen · Bonnenkistje · Inkoopprijzen
+Geld               → /financien   Financiën · Facturen · Boekhouder
+Team & Operatie    → /uren        Uren · Materieel · Ritten · Logistiek
+Systeem            → /systeem     Instellingen · Gebruikers · Koppelingen · Mailbox · Website · Hulp · Platform Beheer (alleen platformbeheerders)
 ```
-
-**Naam-historie** (voor wie oude docs leest):
-- "Inspiratie Bibliotheek" → vervangen door "Menu & Recepten" (2026-05-16, `/inspiratie` is dood-redirect)
-- "Menu & Recepten" → ingekort tot "Menu" (2026-06-02)
-- "Instellingen & Hulp" → vervangen door "Systeem"
-- "Plannen & Events" / "Verkoop & Klanten" / "Geld & Boekhouding" / "Voorraad & Beheer" → ingekort
-- Hub-URL `/sectie/systeem` (dynamic) → `/systeem` (statisch via navigation)
-- Sidebar-link "Ingrediënten" verwijderd (2026-06-02) — was dubbele redirect naar `/voorraad?context=menu`. Middleware-stub blijft voor backwards-compat.
 
 **Patroon**:
-- Klik hub-naam in sidebar → ga naar `hubHref` (default tab van die hub)
-- Tabs altijd zichtbaar boven elke sub-pagina via `layout.tsx` per folder
-- Bestaande URLs blijven canonical (geen broken magic-links naar offertes)
+- `vindWerkruimte(pad)` bepaalt overal welk onderdeel en tabblad actief is (langste voorvoegsel wint; `ook`-routes horen bij een werkruimte zonder eigen tab).
+- Kruimelpad alleen op pagina's díeper dan een tabblad (bv. een event).
+- Pagina's zonder eigen zijmarge krijgen `.pagina-rand` (via hun layout).
+- **Onderdelen aan/uit per bedrijf**: `/instellingen/onderdelen`, kolom `settings.verborgen_onderdelen`. Alleen rol Admin. Uitzetten verbergt — er wordt niets verwijderd en een directe link blijft werken. Vandaag en Instellingen kunnen niet uit.
+- Bestaande URL's blijven canonical; routes zijn niet veranderd, alleen de indeling.
 
-**Configuratie**: `src/lib/navigation.tsx` (NavSection met `hubHref` + `tabs[]`).
+**Naam-historie** (voor wie oude docs leest):
+- Zijbalk (hub-and-spoke, 2026-05-01 → 2026-06-12 ingeklapt tot 8) → vervangen door werkruimtebalk + tegelscherm (2026-10-20). De negen `*Tabs.tsx`-componenten zijn weg; alleen `UrenTabs` (Klok/Personeel) en `EventTabs` (binnen één event) bestaan nog.
+- "Menu" → "Keuken" (2026-06-12; onderbalk volgt sinds 2026-10-20)
+- "Integraties" → "Koppelingen" als tabnaam
+- "Inspiratie Bibliotheek" → "Menu & Recepten" → "Menu" → "Keuken"
 
 ---
 
@@ -105,10 +106,12 @@ Canonical bron is `src/lib/navigation.tsx`. Update deze sectie bij elke wijzigin
 
 | Component | Locatie | Wat |
 |---|---|---|
-| `HubTabs` | `src/components/HubTabs.tsx` | Generiek tab-bar; gebruikt door 6 wrappers (PlannenTabs, VerkoopTabs, KeukenTabs, VoorraadTabs, GeldTabs, SysteemTabs) |
-| `Sidebar` | `src/components/Sidebar.tsx` | Hub-link mode (heeft `hubHref` ondersteuning + `min-h-[44px]`) |
-| `BottomNav` | `src/components/BottomNav.tsx` | Mobile-only, 5 items (Vandaag · Plannen · Verkoop · Menu · Meer) — Meer triggert sidebar-overlay |
-| `CommandPalette` | `src/components/CommandPalette.tsx` | ⌘K met 35+ routes + Supabase-search (events/offertes/etc.) |
+| `WerkruimteBalk` | `src/components/werkruimte/WerkruimteBalk.tsx` | Balk bovenin: ⊞, onderdeel, tabbladen, zoeken, nieuws, gebruikersmenu |
+| `Tegelscherm` | `src/components/werkruimte/Tegelscherm.tsx` | Odoo-startscherm; geladen via `TegelschermHost` pas bij openen |
+| `GebruikerMenu` | `src/components/werkruimte/GebruikerMenu.tsx` | Naam, bedrijf, AI-verbruik (pas bij openen), Instellingen, Onderdelen, Uitloggen |
+| `HubTabs` | `src/components/HubTabs.tsx` | Generiek tab-bar; nog gebruikt door `UrenTabs` (derde niveau) |
+| `BottomNav` | `src/components/BottomNav.tsx` | Mobile-only: Vandaag + 3 werkruimtes uit navigation.tsx + Meer (= tegelscherm) |
+| `CommandPalette` | `src/components/CommandPalette.tsx` | ⌘K; pagina's uit navigation.tsx (+ een handvol extra's) + Supabase-search |
 | `Button` | `src/components/Button.tsx` | Variants: brand · ghost · red · green · cyan · gold · gold-outline; size: default/sm/icon |
 | `EmptyState` | `src/components/EmptyState.tsx` | Per-page config in `EMPTY_STATE_CONFIG` (20 pages al gedekt) |
 | `ActiveEventCard` | `src/components/dashboard/ActiveEventCard.tsx` | Vandaag-HERO; 5 actie-knoppen + empty-state CTA |

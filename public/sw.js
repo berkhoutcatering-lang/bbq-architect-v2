@@ -1,7 +1,7 @@
 // ─── BBQ Architect Service Worker ─────────────────────────────────────────────
 // Offline support, background sync for HACCP records, push notifications
 
-const CACHE_VERSION = '105d1865c265';
+const CACHE_VERSION = 'b7a4a47e640e';
 const STATIC_CACHE = 'bbq-static-' + CACHE_VERSION;
 const DYNAMIC_CACHE = 'bbq-dynamic-' + CACHE_VERSION;
 const HACCP_STORE = 'haccp-offline-queue';
@@ -184,6 +184,13 @@ self.addEventListener('fetch', function (event) {
   // worden: de printer is er wel of niet, en dat moet de app zelf zien.
   var reqUrl = new URL(request.url);
   if (reqUrl.hostname === '127.0.0.1' || reqUrl.hostname === 'localhost') {
+    return;
+  }
+
+  // /toonbank is de kassa-app (eigen programma, eigen service worker met
+  // scope /toonbank/). Daar bemoeit deze service worker zich nooit mee.
+  if (reqUrl.origin === self.location.origin &&
+      (reqUrl.pathname === '/toonbank' || reqUrl.pathname.indexOf('/toonbank/') === 0)) {
     return;
   }
 

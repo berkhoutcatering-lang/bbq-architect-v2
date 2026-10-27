@@ -1,4 +1,4 @@
--- Test voor BA-7a (migratie 20261006130000_toonbank_apparaten): apparaten,
+-- Test voor BA-7a (migratie 20261028130000_toonbank_apparaten): apparaten,
 -- koppelen, intrekken, sessies, de inlogteller, het journaal (append-only en
 -- uniek) en RLS. Draait in één transactie die aan het eind wordt
 -- teruggedraaid: er blijft niets achter.

@@ -1,4 +1,4 @@
--- Test voor BA-7b (migratie 20261006140000_toonbank_status): de instellingen
+-- Test voor BA-7b (migratie 20261028140000_toonbank_status): de instellingen
 -- voor de Toonbank en toonbank_status (GET /api/toonbank/v1/status). Draait in
 -- één transactie die aan het eind wordt teruggedraaid.
 --

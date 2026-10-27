@@ -11,7 +11,7 @@
  * al slots heeft houdt die. Foto's: de bestanden die de website al heeft
  * ({basis}-{w}.avif en .webp) gaan ongewijzigd naar de bucket winkel-fotos.
  *
- * Vereist: de migratie 20261003120000_winkel_catalogus en .env.local met
+ * Vereist: de migratie 20261003153616_winkel_catalogus en .env.local met
  * NEXT_PUBLIC_SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY.
  */
 import { createClient } from '@supabase/supabase-js';

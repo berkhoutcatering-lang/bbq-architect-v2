@@ -1,6 +1,6 @@
 /**
  * De Toonbank-opslag in het geheugen, voor de tests van de logica en de
- * routes. Doet wat de databasefuncties doen (20261006130000_toonbank_
+ * routes. Doet wat de databasefuncties doen (20261028130000_toonbank_
  * apparaten), zonder database: koppelen met 5 pogingen per bron en 25 per
  * code, de inlogteller met blokkade, sessies op hash.
  * supabase/tests/toonbank_apparaten.sql bewaakt dat de echte functies

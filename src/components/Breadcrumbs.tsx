@@ -2,53 +2,46 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChevronRight, Home } from 'lucide-react';
-import { navSections, getSectionBySlug, getSectionSlugByTitle } from '@/lib/navigation';
+import { ChevronRight } from 'lucide-react';
+import { vindWerkruimte } from '@/lib/navigation';
 import { useActiveResource, type ActiveResourceKind } from '@/lib/ActiveResourceContext';
 
 /* Welke detail-route hoort bij welke active-resource-kind — zodat de breadcrumb
    de entiteit-naam ("Bruiloft Veldhoven") toont i.p.v. de kale id-segmenten
    ("11 > View"). Alleen op detail-routes (sub-pages), niet op de lijst. */
 const KIND_BASEPATH: Record<ActiveResourceKind, string> = {
-  event: '/events',
-  offerte: '/offertes',
-  klant: '/klanten',
-  klantgesprek: '/klantgesprek',
+    event: '/events',
+    offerte: '/offertes',
+    klant: '/klanten',
+    klantgesprek: '/klantgesprek',
 };
 
-/* Eén-bron-principe (Operatie Overzicht 2026-06-12): de hub per route komt
-   uit navSections — het kruimelpad kan niet meer uit de pas lopen met de
-   sidebar (zoals "GELD › Uren" terwijl Uren naar Team & Operatie verhuisde).
-   fallbackRouteMap dekt alleen routes die bewust níet in de sidebar staan. */
-const fallbackRouteMap: Record<string, { label: string; section: string }> = {
-    '/marges': { label: 'Marges & analyse', section: 'Keuken' },
-    '/recepten': { label: 'Recepten', section: 'Keuken' },
-    '/bedenker': { label: 'Bedenker', section: 'Keuken' },
-    '/ai-chat': { label: 'AI Pitmaster', section: 'Keuken' },
-    '/prep-counter': { label: 'Prep Counter', section: 'Plannen' },
-    '/klantgesprek': { label: 'Klantgesprek', section: 'Plannen' },
-    '/haccp': { label: 'HACCP', section: 'Plannen' },
-    '/foto-archief': { label: 'Foto-archief', section: 'Systeem' },
-    '/faq': { label: 'FAQ', section: 'Systeem' },
-    '/contact': { label: 'Contact', section: 'Systeem' },
+/* Labels voor routes zonder eigen tabblad (de `ook`-routes in navigation.tsx)
+   en voor sub-segmenten waar een mooiere naam bij hoort dan de slug. */
+const LABELS: Record<string, string> = {
+    '/marges': 'Marges & analyse',
+    '/ai-chat': 'AI Pitmaster',
+    '/klantgesprek': 'Klantgesprek',
+    '/prep-counter': 'Prep Counter',
+    '/haccp': 'HACCP',
+    '/labels': 'Labels',
+    '/scan': 'Scan',
+    '/systeem': 'Overzicht',
+    '/administratie': 'Administratie',
+    '/template-editor': 'Sjablonen',
+    '/menu-templates': 'Menu-sjablonen',
 };
-
-const routeMap: Record<string, { label: string; section: string }> = { ...fallbackRouteMap };
-for (const section of navSections) {
-    for (const child of section.children) {
-        routeMap[child.href] = { label: child.label, section: section.title };
-    }
-}
-
-/* Expliciete labels voor sub-route segments — beter dan auto-format
-   (zoals "Allergen queue") wanneer de tab/UI een andere naam hanteert. */
-const subRouteLabels: Record<string, string> = {
-    'componenten':      'Componenten',
-    'ingredienten':     'Ingrediënten',
-    'allergen-queue':   'Allergenen',
-    'insights':         'Insights',
-    'menu-analyse':     'Menu-analyse',
-    'ai-pitmaster':     'AI Pitmaster',
+const SEGMENT_LABELS: Record<string, string> = {
+    componenten: 'Componenten',
+    ingredienten: 'Ingrediënten',
+    'allergen-queue': 'Allergenen',
+    insights: 'Insights',
+    'menu-analyse': 'Menu-analyse',
+    'ai-pitmaster': 'AI Pitmaster',
+    nieuw: 'Nieuw',
+    bewerken: 'Bewerken',
+    view: 'Bekijken',
+    hub: 'Overzicht',
 };
 
 /* Detail-routes hebben niet altijd een geregistreerde active-resource, en dan
@@ -56,141 +49,62 @@ const subRouteLabels: Record<string, string> = {
    of "Facturen › 64 › View". Een UUID laten we weg, een nummer tonen we als
    "#64" zodat het als verwijzing leest en niet als woord. */
 function segmentLabel(seg: string): string | null {
+    if (SEGMENT_LABELS[seg]) return SEGMENT_LABELS[seg];
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(seg)) return null;
     if (/^\d+$/.test(seg)) return '#' + seg;
     return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
 }
 
+/**
+ * Kruimelpad — sinds de werkruimtes (2026-10-20) alleen nog op pagina's
+ * díeper dan een tabblad. Op een tabblad zelf zegt de werkruimtebalk al waar
+ * je bent ("Verkoop", tab Offertes onderstreept); een tweede regel die
+ * hetzelfde zegt kost alleen ruimte.
+ *
+ *   /events/11/hub        → Events › Bruiloft Veldhoven
+ *   /voorraad/winkel/tellen → Winkel › Tellen
+ *   /klantgesprek         → Klantgesprek   (hoort bij Plannen, geen eigen tab)
+ */
 export default function Breadcrumbs() {
     const pathname = usePathname();
     const { active } = useActiveResource();
+    const match = vindWerkruimte(pathname);
 
-    if (pathname === '/') return null;
+    if (!match || !pathname) return null;
+    /* Precies een tabblad: de balk zegt het al. */
+    if (match.tab && pathname === match.tab.href) return null;
 
-    // Handle section overview pages (/sectie/[slug])
-    if (pathname.startsWith('/sectie/')) {
-        const slug = pathname.split('/')[2];
-        const section = getSectionBySlug(slug);
-        if (!section) return null;
+    const basis = match.tab ?? null;
+    const basisLabel = basis ? basis.label : (LABELS[match.prefix] ?? segmentLabel(match.prefix.slice(1)) ?? '');
+    const rest = pathname.slice(match.prefix.length).split('/').filter(Boolean);
 
-        return (
-            <nav
-                aria-label="Breadcrumb"
-                className="breadcrumb-nav"
-                style={{
-                    paddingBottom: 10,
-                    paddingLeft: 16,
-                    paddingRight: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    fontSize: 11,
-                    flexWrap: 'wrap' as const,
-                    color: 'var(--muted)',
-                    borderBottom: '1px solid var(--border)',
-                    background: 'rgba(18,18,21,0.6)',
-                    backdropFilter: 'blur(8px)',
-                }}
-            >
-                <Link href="/" style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-                    <Home size={13} />
-                </Link>
-                <ChevronRight size={11} style={{ opacity: 0.4 }} />
-                <span style={{ color: 'var(--text)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: 10 }}>
-                    {section.title}
-                </span>
-            </nav>
-        );
-    }
+    /* Entiteit-naam i.p.v. id-segmenten, als de actieve resource bij deze
+       route hoort (bv. het event dat je open hebt). */
+    const entiteit = active && rest.length > 0 && KIND_BASEPATH[active.kind] === match.prefix ? active.label : null;
+    const kruimels = entiteit ? [entiteit] : rest.map(segmentLabel).filter(function (l): l is string { return l !== null; });
 
-    const basePath = '/' + pathname.split('/').filter(Boolean)[0];
-    const route = routeMap[basePath];
-
-    if (!route) return null;
-
-    const sectionSlug = getSectionSlugByTitle(route.section);
-    const isSubPage = pathname !== basePath;
-    const subSegments = pathname.split('/').filter(Boolean).slice(1);
-
-    /* Entity-breadcrumb: op een detail-route waar de active-resource matcht met
-       deze sectie, tonen we de entiteit-naam ("Bruiloft Veldhoven") als laatste
-       crumb i.p.v. de kale id/segment-tail. Maakt detail-pagina's onderdeel van
-       het ecosysteem-pad i.p.v. losse "11 > View"-eilanden. */
-    const entityCrumb = (active && isSubPage && KIND_BASEPATH[active.kind] === basePath)
-        ? active.label
-        : null;
-
+    /* Een ook-route zonder sub-pad (bv. /klantgesprek): één kruimel is
+       genoeg om te zeggen waar je bent binnen de werkruimte. */
     return (
-        <nav
-            aria-label="Breadcrumb"
-            className="breadcrumb-nav"
-            style={{
-                paddingBottom: 10,
-                paddingLeft: 16,
-                paddingRight: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 11,
-                flexWrap: 'wrap' as const,
-                color: 'var(--muted)',
-                borderBottom: '1px solid var(--border)',
-                background: 'rgba(18,18,21,0.6)',
-                backdropFilter: 'blur(8px)',
-            }}
-        >
-            <Link href="/" style={{ color: 'var(--muted)', display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-                <Home size={13} />
-            </Link>
-            <ChevronRight size={11} style={{ opacity: 0.4 }} />
-            <Link
-                href={sectionSlug ? `/sectie/${sectionSlug}` : '/'}
-                className="breadcrumb-section-link"
-                style={{
-                    color: 'var(--muted-light)',
-                    fontWeight: 500,
-                    letterSpacing: '0.05em',
-                    textTransform: 'uppercase',
-                    fontSize: 10,
-                    textDecoration: 'none',
-                    transition: 'color 0.2s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--muted-light)'; }}
-            >
-                {route.section}
-            </Link>
-            <ChevronRight size={11} style={{ opacity: 0.4 }} />
-            {isSubPage ? (
-                <Link href={basePath} style={{ color: 'var(--muted)', textDecoration: 'none' }}>
-                    {route.label}
-                </Link>
+        <nav aria-label="Kruimelpad" className="wr-kruimels">
+            {kruimels.length === 0 ? (
+                <span aria-current="page">{basisLabel}</span>
             ) : (
-                <span style={{ color: 'var(--text)', fontWeight: 600 }}>{route.label}</span>
+                <>
+                    {/* Alleen een tabblad is zeker een pagina; een ook-voorvoegsel
+                        (/labels, /scan, /sectie) bestaat vaak niet los. */}
+                    {basis ? <Link href={basis.href}>{basisLabel}</Link> : <span>{basisLabel}</span>}
+                    {kruimels.map(function (k, i) {
+                        const laatste = i === kruimels.length - 1;
+                        return (
+                            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <ChevronRight size={12} style={{ opacity: 0.5 }} aria-hidden="true" />
+                                <span aria-current={laatste ? 'page' : undefined}>{k}</span>
+                            </span>
+                        );
+                    })}
+                </>
             )}
-            {isSubPage && entityCrumb ? (
-                /* Entiteit-naam i.p.v. id-segmenten ("11 > View" → "hopp") */
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <ChevronRight size={11} style={{ opacity: 0.4 }} />
-                    <span style={{ color: 'var(--text)', fontWeight: 600, maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {entityCrumb}
-                    </span>
-                </span>
-            ) : isSubPage && subSegments.map(function (seg, i) {
-                // Lookup explicit label, fallback op auto-formatted slug
-                const label = subRouteLabels[seg] ?? segmentLabel(seg);
-                /* Een UUID zegt een mens niets; die laten we weg in plaats van
-                   "F3A9C1B2-..." als kruimel te tonen. */
-                if (label === null) return null;
-                return (
-                    <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <ChevronRight size={11} style={{ opacity: 0.4 }} />
-                        <span style={{ color: 'var(--text)', fontWeight: 600 }}>
-                            {label}
-                        </span>
-                    </span>
-                );
-            })}
         </nav>
     );
 }

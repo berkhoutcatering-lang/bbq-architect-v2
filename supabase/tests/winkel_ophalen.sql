@@ -31,6 +31,11 @@
 -- blijven), alleen op dezelfde dag; niet_opgehaald en onbekend.
 -- En: ongeldige invoer = 22023; anon mag niet; een lid mag alleen de eigen
 -- organisatie (42501 voor een vreemde).
+--
+-- Betaalwijze 'bij_afhalen' (Kerst-Box: niets online, alles aan de balie) staat
+-- in supabase/tests/kerst_betalen.sql (migratie 20261013120000): rest_nodig
+-- zonder methode, opgehaald met methode, de rest één keer geboekt, ook via de
+-- doosscan.
 
 do $$
 declare

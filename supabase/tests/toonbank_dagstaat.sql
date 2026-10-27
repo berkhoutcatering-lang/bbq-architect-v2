@@ -1,4 +1,4 @@
--- Test voor BA-10 (migratie 20261007130000_toonbank_afhalen_dagstaten): de
+-- Test voor BA-10 (migratie 20261028170000_toonbank_afhalen_dagstaten): de
 -- dagstaat. De herberekende dagstaat is de som van de bonnen (bon-btw per
 -- tarief opgeteld, nooit opnieuw afgerond), een restbetaling via een bon telt
 -- niet (dubbel) als omzet, verschillen gaan naar Te controleren, een late bon

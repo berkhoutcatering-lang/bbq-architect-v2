@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { fetchSettingsShared } from '@/lib/useSupabase';
 import { useOrg } from '@/lib/OrgContext';
 
 const STORE_KEY = 'bbq_brand_logo_v1';
@@ -39,12 +39,9 @@ export function useBrandLogo(): BrandLogo {
     useEffect(() => {
         if (!orgId) return;
         let cancelled = false;
-        (async () => {
-            const { data } = await supabase
-                .from('settings')
-                .select('logo_url, logo_dark_url, bedrijfsnaam')
-                .eq('organization_id', orgId)
-                .maybeSingle();
+        /* Via de gedeelde instellingen-kopie: dezelfde rij die het thema al
+           ophaalt, geen eigen vraag meer (meting 2026-10-20). */
+        fetchSettingsShared(orgId).then((data) => {
             if (cancelled || !data) return;
             const next: BrandLogo = {
                 logoUrl: (data as any).logo_url || null,
@@ -53,7 +50,7 @@ export function useBrandLogo(): BrandLogo {
             };
             setBrand(next);
             writeCache(next);
-        })();
+        });
         return () => { cancelled = true; };
     }, [orgId]);
 

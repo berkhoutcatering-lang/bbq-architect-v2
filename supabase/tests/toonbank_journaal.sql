@@ -1,4 +1,4 @@
--- Test voor BA-9 (migratie 20261007120000_toonbank_bonnen): het journaal.
+-- Test voor BA-9 (migratie 20261028160000_toonbank_bonnen): het journaal.
 -- toonbank_journaal_opslaan (nieuw/bestond, gat_voor, bevestigd_tot,
 -- nooit weigeren op inhoud), toonbank_verwerk_wachtrij (elke melding apart:
 -- een fout blokkeert de rest niet), toonbank_journaal_markeer,

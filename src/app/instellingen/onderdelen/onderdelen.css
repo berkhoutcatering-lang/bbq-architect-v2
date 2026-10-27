@@ -1,0 +1,127 @@
+/* /instellingen/onderdelen — schakelaars per werkruimte en tabblad. */
+
+.od-pagina { max-width: 880px; }
+
+.od-terug {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+}
+.od-terug:hover { color: var(--text); }
+
+.od-status { font-size: 13px; color: var(--muted); }
+
+.od-melding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border);
+  background: var(--card-solid);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.od-laden { padding: 32px 0; color: var(--muted); font-size: 13px; }
+
+.od-lijst { display: flex; flex-direction: column; gap: 12px; }
+
+.od-kaart {
+  border-radius: var(--radius-lg, 14px);
+  border: 1px solid var(--border);
+  background: var(--card-solid);
+  padding: 16px;
+  transition: opacity 160ms ease;
+}
+.od-kaart--uit .od-tabs { opacity: 0.45; }
+
+.od-kop { display: flex; align-items: center; gap: 14px; }
+.od-icoon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--wr-kleur);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.od-icoon svg { width: 21px; height: 21px; }
+.od-kaart--uit .od-icoon { filter: grayscale(1); opacity: 0.6; }
+.od-tekst { flex: 1; min-width: 0; }
+.od-naam { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--text); }
+.od-uitleg { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+
+.od-tabs {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 0 0 56px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 2px 16px;
+}
+.od-tab { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.od-tab-icoon { color: var(--muted); display: inline-flex; }
+.od-tab-icoon svg { width: 15px; height: 15px; }
+.od-tab-naam { flex: 1; font-size: 13.5px; color: var(--text); }
+
+.od-vast {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Schakelaar: 44 px raakvlak, ook als hij er kleiner uitziet. */
+.od-schakelaar {
+  position: relative;
+  width: 46px;
+  height: 28px;
+  padding: 0;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--hover-strong, rgba(127, 127, 127, .2));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.od-schakelaar::before { content: ""; position: absolute; inset: -8px; }
+.od-schakelaar-knop {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  transition: transform 160ms ease;
+}
+.od-schakelaar--aan {
+  background: var(--wr-kleur, var(--brand));
+  border-color: transparent;
+}
+.od-schakelaar--aan .od-schakelaar-knop { transform: translateX(18px); }
+.od-schakelaar--klein { width: 38px; height: 22px; border-radius: 11px; }
+.od-schakelaar--klein .od-schakelaar-knop { width: 16px; height: 16px; top: 2px; left: 2px; }
+.od-schakelaar--klein.od-schakelaar--aan .od-schakelaar-knop { transform: translateX(16px); }
+.od-schakelaar:disabled { cursor: not-allowed; opacity: 0.55; }
+.od-schakelaar:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+
+@media (max-width: 767px) {
+  .od-tabs { padding-left: 0; grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .od-schakelaar, .od-schakelaar-knop, .od-kaart { transition: none; }
+}

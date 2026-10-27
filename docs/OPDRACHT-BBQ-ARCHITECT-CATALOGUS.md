@@ -24,7 +24,7 @@ ingrediënten). Zonder foto staat het er met de kaart in letters.
 
 | Blok | BBQ Architect (`feat/catalogus`) | Website (`catalogus`) |
 | --- | --- | --- |
-| C1 datamodel | migratie `20261003120000_winkel_catalogus.sql`: `slug`, `kenmerken`, `alcohol_pct`, `allergenen`, `ingredienten`, `bewaren`, `lekker_bij`, `foto` (jsonb met breedtes), `pagina_status` (geen · concept · live), `goedgekeurd`, `bronnen`; poort WC001/WC003; bucket `winkel-fotos`. Vorm per soort: `src/lib/winkel/productsoorten.ts` | — |
+| C1 datamodel | migratie `20261003153616_winkel_catalogus.sql`: `slug`, `kenmerken`, `alcohol_pct`, `allergenen`, `ingredienten`, `bewaren`, `lekker_bij`, `foto` (jsonb met breedtes), `pagina_status` (geen · concept · live), `goedgekeurd`, `bronnen`; poort WC001/WC003; bucket `winkel-fotos`. Vorm per soort: `src/lib/winkel/productsoorten.ts` | — |
 | C2 catalogus-route | `GET /api/public-winkel/{slug}/catalogus[?voorbeeld=<token>]` — alleen live, nooit inkoop/leverancier/marge; voorbeeldtoken HMAC 24 uur | `lib/content/catalogus-vorm.ts` (het contract) |
 | C3 lezen | — | `scripts/haal-catalogus.mjs` vóór dev/build/test; `bier.ts`, `wijn.ts`, `vlees.ts` en de proefkaarten lezen `lib/content/catalogus.ts`; foto's uit de bucket als `CAT-<slug>` |
 | C4 overzetten | `scripts/importeer-catalogus.ts` (droog; `--echt` schrijft) | `tests/fixtures/catalogus.json`: 32 bier, 20 wijn, 6 vlees |
@@ -37,7 +37,7 @@ Alles staat **uit** tot de stappen hieronder gedaan zijn. Er is niets naar `main
 
 ## Livegang — in deze volgorde
 
-1. **Migratie** `20261003120000_winkel_catalogus.sql` op Supabase (eerst op een branch, dan live). *Ja van Mathijs.*
+1. **Migratie** `20261003153616_winkel_catalogus.sql` op Supabase (eerst op een branch, dan live). *Ja van Mathijs.*
 2. **Import droog**, dan echt (vanuit de map van BBQ Architect):
    `npx tsx scripts/importeer-catalogus.ts <website>/tests/fixtures/catalogus.json <website>/public/beeld`
    en daarna hetzelfde met `--echt`. Bestaande prijzen en actief-standen blijven staan.

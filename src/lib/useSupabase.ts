@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { dedupe } from '@/lib/requestDedupe';
+import { VERS_MS, tableCache, settingsCache, cacheKey } from '@/lib/dataCache';
 import {
   getActiveOfflineEvent,
   readLocal,
@@ -87,14 +88,31 @@ export function useSupabase<T extends { id: number | string }>(
 } {
     const skipInitialFetch = options?.skipInitialFetch ?? false;
     const columns = options?.columns ?? '*';
-    const [data, setData] = useState<T[]>(defaultVal || []);
-    /* Loading start false als Server Component al data leverde — geen flash. */
-    const [loading, setLoading] = useState(!skipInitialFetch);
-    const [error, setError] = useState<string | null>(null);
     const { orgId } = useOrg();
+    const key = orgId ? cacheKey(table, orgId, columns) : null;
+    /* Volgorde van voorrang bij de eerste weergave: servergegevens (vers,
+       meegegeven met skipInitialFetch) → geheugen van een vorige pagina →
+       de meegegeven standaardwaarde. */
+    const [data, setData] = useState<T[]>(function () {
+        if (skipInitialFetch && defaultVal) return defaultVal;
+        const hit = key ? tableCache.get(key) : undefined;
+        return hit ? (hit.rows as T[]) : (defaultVal || []);
+    });
+    /* Laden alleen als er nog níets te tonen is: geen servergegevens en niets
+       in het geheugen. Anders tonen we wat er is en verversen we stil. */
+    const [loading, setLoading] = useState(function () {
+        if (skipInitialFetch) return false;
+        return !(key && tableCache.has(key));
+    });
+    const [error, setError] = useState<string | null>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const activeOffline = useActiveOfflineState();
     const offlineMode = activeOffline !== null && isOfflineEnabledTable(table);
+    /* Mag `data` naar het geheugen? Pas na een echte fetch of servergegevens —
+       anders zou de lege standaardwaarde als "opgehaald" in het geheugen
+       belanden en toont de volgende pagina ten onrechte een lege lijst. */
+    const syncedRef = useRef<boolean>(skipInitialFetch && !!defaultVal);
+    const hasRowsRef = useRef<boolean>(!loading);
 
     const fetchData = useCallback(function () {
         // Offline-mode pad: lees uit IndexedDB ipv Supabase REST.
@@ -117,7 +135,7 @@ export function useSupabase<T extends { id: number | string }>(
         }
 
         if (!supabase || !orgId) { setLoading(false); return; }
-        setLoading(true);
+        if (!hasRowsRef.current) setLoading(true);
         setError(null);
         /* Meerdere componenten op dezelfde pagina vragen dezelfde tabel op
            zonder van elkaar te weten — op de startpagina gingen `gerechten` en
@@ -147,10 +165,29 @@ export function useSupabase<T extends { id: number | string }>(
                    de rij-vorm niet afleiden en valt hij terug op
                    GenericStringError[]. De echte vorm bewaakt de consumer via
                    het type-argument van useSupabase<T>. */
-                if (res.data) setData(res.data as unknown as T[]);
+                if (res.data) {
+                    tableCache.set(cacheKey(table, orgId, columns), { rows: res.data as unknown[], at: Date.now() });
+                    syncedRef.current = true;
+                    hasRowsRef.current = true;
+                    setData(res.data as unknown as T[]);
+                }
                 setLoading(false);
             });
     }, [table, orgId, offlineMode, activeOffline, columns]);
+
+    /* Optimistische wijzigingen (insert/update/remove) ook in het geheugen
+       zetten, zodat een volgende pagina niet de oude stand toont. Alleen na
+       een eigen wijziging (mutatieRef) — niet bij elke data-verandering, want
+       dan kon een instantie met oudere rijen het verse resultaat van een
+       andere instantie overschrijven. Het ophaal-tijdstip blijft staan. */
+    const mutatieRef = useRef(false);
+    useEffect(function () {
+        if (!mutatieRef.current) return;
+        mutatieRef.current = false;
+        if (!key || offlineMode || !syncedRef.current) return;
+        const prev = tableCache.get(key);
+        tableCache.set(key, { rows: data as unknown[], at: prev?.at ?? Date.now() });
+    }, [data, key, offlineMode]);
 
     // Debounced refetch — coalesces rapid-fire realtime events (e.g. bulk inserts)
     const debouncedFetch = useCallback(function () {
@@ -163,7 +200,13 @@ export function useSupabase<T extends { id: number | string }>(
        tabs/devices komen alsnog binnen. */
     useEffect(function () {
         if (skipInitialFetch) return;
+        /* Altijd verversen bij openen, ook als er iets in het geheugen staat:
+           dat geheugen wordt alleen getoond (geen laadicoon), niet vertrouwd.
+           Een pagina die net iets opsloeg buiten deze hook om (server-actie,
+           wizard) mag hier nooit een oude stand achterlaten. Gelijktijdige
+           identieke vragen deelt dedupe() al. */
         fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [fetchData, skipInitialFetch]);
 
     // Supabase Realtime — shared channel per table+org, debounced refresh.
@@ -217,7 +260,7 @@ export function useSupabase<T extends { id: number | string }>(
         const tempId = -(Date.now());
         const rowWithOrg = { ...row, id: tempId, organization_id: orgId } as unknown as T;
         // Optimistic: add temp row immediately
-        setData(function (prev) { return prev.concat([rowWithOrg]); });
+        mutatieRef.current = true; setData(function (prev) { return prev.concat([rowWithOrg]); });
 
         // Offline-mode pad: queue + apply lokaal, geen Supabase-call.
         if (offlineMode && activeOffline) {
@@ -237,7 +280,7 @@ export function useSupabase<T extends { id: number | string }>(
                     return rowWithOrg;
                 })
                 .catch(function (e) {
-                    setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
+                    mutatieRef.current = true; setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
                     console.error('[offline] enqueue insert failed', table, e);
                     throw e;
                 });
@@ -245,11 +288,11 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).insert({ ...row, organization_id: orgId } as Record<string, unknown>).select().single()).then(function (res) {
             if (res.error) {
-                setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
+                mutatieRef.current = true; setData(function (prev) { return prev.filter(function (item) { return item.id !== tempId; }); });
                 console.error('[DB] Insert error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
-            setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
+            mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === tempId ? res.data as T : item; }); });
             return res.data as T;
         });
     }, [table, orgId, offlineMode, activeOffline, columns]);
@@ -259,7 +302,7 @@ export function useSupabase<T extends { id: number | string }>(
         let previousRow: T | undefined;
         let merged: T | undefined;
         // Optimistic: apply update immediately
-        setData(function (prev) {
+        mutatieRef.current = true; setData(function (prev) {
             return prev.map(function (item) {
                 if (item.id === id) {
                     previousRow = item;
@@ -289,7 +332,7 @@ export function useSupabase<T extends { id: number | string }>(
                     return merged ?? null;
                 })
                 .catch(function (e) {
-                    if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
+                    if (previousRow) mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
                     console.error('[offline] enqueue update failed', table, e);
                     throw e;
                 });
@@ -297,12 +340,12 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).update(row as Record<string, unknown>).eq('id', id).eq('organization_id', orgId).select().single()).then(function (res) {
             if (res.error) {
-                if (previousRow) setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
+                if (previousRow) mutatieRef.current = true; setData(function (prev) { return prev.map(function (item) { return item.id === id ? previousRow! : item; }); });
                 console.error('[DB] Update error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
             if (res.data) {
-                setData(function (prev) {
+                mutatieRef.current = true; setData(function (prev) {
                     return prev.map(function (item) { return item.id === id ? res.data as T : item; });
                 });
             }
@@ -314,7 +357,7 @@ export function useSupabase<T extends { id: number | string }>(
         if (!supabase || !orgId) return Promise.resolve();
         let removedRow: T | undefined;
         // Optimistic: remove immediately
-        setData(function (prev) {
+        mutatieRef.current = true; setData(function (prev) {
             removedRow = prev.find(function (item) { return item.id === id; });
             return prev.filter(function (item) { return item.id !== id; });
         });
@@ -335,7 +378,7 @@ export function useSupabase<T extends { id: number | string }>(
                     emitQueueChange();
                 })
                 .catch(function (e) {
-                    if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
+                    if (removedRow) mutatieRef.current = true; setData(function (prev) { return prev.concat([removedRow!]); });
                     console.error('[offline] enqueue delete failed', table, e);
                     throw e;
                 });
@@ -343,7 +386,7 @@ export function useSupabase<T extends { id: number | string }>(
 
         return Promise.resolve(supabase.from(table).delete().eq('id', id).eq('organization_id', orgId)).then(function (res) {
             if (res.error) {
-                if (removedRow) setData(function (prev) { return prev.concat([removedRow!]); });
+                if (removedRow) mutatieRef.current = true; setData(function (prev) { return prev.concat([removedRow!]); });
                 console.error('[DB] Delete error on ' + table + ':', res.error.message, res.error);
                 throw res.error;
             }
@@ -353,34 +396,88 @@ export function useSupabase<T extends { id: number | string }>(
     return { data, loading, error, refetch: fetchData, insert, update, remove, setData };
 }
 
+/* ── Instellingen: één rij per bedrijf, gedeeld ─────────────────────────
+   Werd per component apart opgehaald: thema, logo, persona-quiz, offertes en
+   de afspraak-wizard vroegen allemaal `settings` — 3 à 4 keer per pagina
+   (meting 2026-10-20). Nu één gedeelde kopie per bedrijf: iedere nieuwe
+   gebruiker toont die direct en ververst op de achtergrond; gelijktijdige
+   vragen gaan als één de deur uit (dedupe). */
+type SettingsRow = import('@/types').Settings;
+const settingsListeners = new Set<(orgId: string) => void>();
+
+function publishSettings(orgId: string, value: SettingsRow | null) {
+    settingsCache.set(orgId, { value, at: Date.now() });
+    settingsListeners.forEach(function (fn) { fn(orgId); });
+}
+
+/** Haalt de instellingen-rij op via de gedeelde kopie. Voor code buiten
+ *  React-hooks (bv. een eenmalige check); `force` slaat het geheugen over. */
+export function fetchSettingsShared(orgId: string, force = false): Promise<SettingsRow | null> {
+    const hit = settingsCache.get(orgId);
+    if (hit && !force && Date.now() - hit.at < VERS_MS) return Promise.resolve(hit.value);
+    if (!supabase) return Promise.resolve(hit?.value ?? null);
+    return dedupe('settings:' + orgId, function () {
+        return supabase!.from('settings').select('*').eq('organization_id', orgId).maybeSingle();
+    }).then(function (res) {
+        if (res.error) return hit?.value ?? null;
+        const value = (res.data as SettingsRow | null) ?? null;
+        publishSettings(orgId, value);
+        return value;
+    });
+}
+
+/** Na een wijziging buiten useSettings().save om (bv. een server-actie):
+ *  vers ophalen en alle gebruikers bijwerken. */
+export function refreshSettings(orgId: string): Promise<SettingsRow | null> {
+    return fetchSettingsShared(orgId, true);
+}
+
 // Single-row table (settings) — scoped by organization
-export function useSettings(): {
-    settings: import('@/types').Settings | null;
+/**
+ * @param opties.altijdVers  standaard true: bij openen vers ophalen. De
+ *   app-schil (balk, onderbalk, tegelscherm, zoekvenster) zet dit uit: die
+ *   heeft alleen de gedeelde kopie nodig en krijgt wijzigingen toch binnen via
+ *   publishSettings — anders gaat er bij elke keer tegelscherm openen een
+ *   extra vraag uit.
+ */
+export function useSettings(opties?: { altijdVers?: boolean }): {
+    settings: SettingsRow | null;
     loading: boolean;
-    save: (data: Partial<import('@/types').Settings>) => Promise<import('@/types').Settings | null>;
+    save: (data: Partial<SettingsRow>) => Promise<SettingsRow | null>;
 } {
-    const [settings, setSettings] = useState<import('@/types').Settings | null>(null);
-    const [loading, setLoading] = useState(true);
     const { orgId } = useOrg();
+    const [settings, setSettings] = useState<SettingsRow | null>(function () {
+        return orgId ? settingsCache.get(orgId)?.value ?? null : null;
+    });
+    const [loading, setLoading] = useState(function () {
+        return !(orgId && settingsCache.has(orgId));
+    });
 
     useEffect(function () {
         if (!supabase || !orgId) { setLoading(false); return; }
-        dedupe('settings:' + orgId, function () {
-            return supabase!.from('settings').select('*').eq('organization_id', orgId).single();
-        })
-            .then(function (res) {
-                if (res.data) setSettings(res.data as import('@/types').Settings);
-                setLoading(false);
-            });
+        function onPublish(changed: string) {
+            if (changed !== orgId) return;
+            setSettings(settingsCache.get(changed)?.value ?? null);
+            setLoading(false);
+        }
+        settingsListeners.add(onPublish);
+        /* Bij openen altijd vers (gelijktijdige vragen deelt dedupe); het
+           geheugen zorgt alleen dat er meteen iets staat. */
+        fetchSettingsShared(orgId, opties?.altijdVers ?? true).then(function (value) {
+            setSettings(value);
+            setLoading(false);
+        });
+        return function () { settingsListeners.delete(onPublish); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [orgId]);
 
-    const save = useCallback(function (data: Partial<import('@/types').Settings>): Promise<import('@/types').Settings | null> {
+    const save = useCallback(function (data: Partial<SettingsRow>): Promise<SettingsRow | null> {
         if (!supabase || !orgId) return Promise.resolve(null);
         return Promise.resolve(
             supabase.from('settings').update(data).eq('organization_id', orgId).select().single()
         ).then(function (res) {
-            if (res.data) setSettings(res.data as import('@/types').Settings);
-            return res.data as import('@/types').Settings;
+            if (res.data) publishSettings(orgId, res.data as SettingsRow);
+            return res.data as SettingsRow;
         });
     }, [orgId]);
 

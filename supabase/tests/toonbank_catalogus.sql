@@ -1,4 +1,4 @@
--- Test voor BA-4a (migratie 20261006120000_toonbank_catalogus): statiegeld,
+-- Test voor BA-4a (migratie 20261028120000_toonbank_catalogus): statiegeld,
 -- unieke EAN per organisatie, kanalen en de Toonbank-velden op artikelen, en
 -- de teller winkel_catalogus_versie. Draait in één transactie die aan het
 -- eind wordt teruggedraaid: er blijft niets achter.

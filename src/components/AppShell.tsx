@@ -5,31 +5,34 @@ import { Flame, Building2 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { useOrg } from '@/lib/OrgContext';
 import { AppProvider } from '@/lib/AppContext';
-import Sidebar from '@/components/Sidebar';
-import AiStudioOverlay from '@/components/AiStudioOverlay';
-import ChatPanel from '@/components/ai/ChatPanel';
+import dynamic from 'next/dynamic';
 import { AiStudioProvider } from '@/lib/AiStudioContext';
 import { ActiveResourceProvider } from '@/lib/ActiveResourceContext';
-import ActiveResourcePill from '@/components/ActiveResourcePill';
 import Breadcrumbs from '@/components/Breadcrumbs';
-import CommandPalette from '@/components/CommandPalette';
-import OnboardingWizard from '@/components/OnboardingWizard';
 import BottomNav from '@/components/BottomNav';
 import OfflineIndicator from '@/components/OfflineIndicator';
-import Changelog from '@/components/Changelog';
-import ContextualHelp from '@/components/ContextualHelp';
-import FAB from '@/components/FAB';
-// Rechtstreeks uit het bestand, niet uit de barrel: '@/components/mobile'
-// re-exporteert ook Sheet, en dat sleept vaul (58 KB) mee in de gedeelde
-// bundel op élke pagina terwijl AppShell alleen deze trigger nodig heeft.
-import MobileCmdKTrigger from '@/components/mobile/MobileCmdKTrigger';
+import WerkruimteBalk from '@/components/werkruimte/WerkruimteBalk';
+import TegelschermHost from '@/components/werkruimte/TegelschermHost';
 import ErrorBoundaryLogger from '@/components/ErrorBoundaryLogger';
 import { useActivityTracker } from '@/lib/useActivityTracker';
+import '@/styles/werkruimte.css';
 import { useOrg as useOrgInner } from '@/lib/OrgContext';
 import type { ReactNode } from 'react';
 
+/* Extra's die je niet nodig hebt om de pagina te zien: AI-chat, AI-studio,
+   zoekvenster, rondleiding, hulpknop, plusknop. Elk een eigen stukje
+   JavaScript dat ná de pagina binnenkomt, in plaats van in de gedeelde
+   bundel van élke pagina (43 KB, meting 2026-10-20). Ze luisteren daarna
+   gewoon naar hun sneltoetsen en events (⌘K, open-chat, …). */
+const ChatPanel = dynamic(() => import('@/components/ai/ChatPanel'), { ssr: false });
+const AiStudioOverlay = dynamic(() => import('@/components/AiStudioOverlay'), { ssr: false });
+const CommandPalette = dynamic(() => import('@/components/CommandPalette'), { ssr: false });
+const OnboardingWizard = dynamic(() => import('@/components/OnboardingWizard'), { ssr: false });
+const ContextualHelp = dynamic(() => import('@/components/ContextualHelp'), { ssr: false });
+const FAB = dynamic(() => import('@/components/FAB'), { ssr: false });
+
 const AUTH_PAGES = ['/login', '/signup', '/auth/', '/onboarding'];
-const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/bestellen/', '/welkom', '/pricing', '/legal/', '/share/', '/m/'];
+const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/bestellen/', '/welkom', '/pricing', '/legal/', '/share/', '/m/', '/toonbank/'];
 
 // KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
 // Match:
@@ -219,30 +222,24 @@ function AppShellInner({ children }: { children: ReactNode }) {
           <a href="#main-content" className="sr-only">
             Ga naar hoofdinhoud
           </a>
-          <div className="flex min-h-screen bg-[var(--bg)]">
-            <Sidebar />
-            <main className="flex-1 flex flex-col min-h-screen relative overflow-hidden" role="main">
-              <header role="banner" className="app-main-header" style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                gap: 12, flexWrap: 'wrap',
-              }}>
+          {/* Werkruimtes (2026-10-20): geen zijbalk meer. Bovenin de balk
+              met alleen de tabbladen van het onderdeel waar je bent; wisselen
+              via het tegelscherm (⊞), de onderbalk of ⌘K. */}
+          <div className="wr-app">
+            <WerkruimteBalk />
+            <div className="wr-hoofd">
+              <main id="main-content" role="main" className="wr-main mobile-safe-bottom">
                 <Breadcrumbs />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingRight: 16, minWidth: 0 }}>
-                  <ActiveResourcePill />
-                  <Changelog />
-                </div>
-              </header>
-              <div id="main-content" className="flex-1 w-full mobile-safe-bottom">
                 {children}
-              </div>
-            </main>
-            <ChatPanel />
-            <AiStudioOverlay />
+              </main>
+              <ChatPanel />
+              <AiStudioOverlay />
+            </div>
           </div>
           <BottomNav />
+          <TegelschermHost />
           <CommandPalette />
           <FAB />
-          <MobileCmdKTrigger />
           <OnboardingWizard />
           <OfflineIndicator />
           <ContextualHelp />

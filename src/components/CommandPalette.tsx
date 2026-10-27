@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
+import { VANDAAG, zichtbareWerkruimtes, type ZichtbaarheidOpties } from '@/lib/navigation';
+import { useOnderdelen } from '@/lib/useOnderdelen';
 import { useRouter } from 'next/navigation';
 import { useIsPhone } from '@/hooks/useIsMobile';
 import { supabase } from '@/lib/supabase';
@@ -19,75 +21,53 @@ interface SearchResult {
     subtitle: string;
     href: string;
     icon: typeof Calendar;
+    /** Icoon uit navigation.tsx (al een element); wint van `icon`. */
+    iconNode?: ReactNode;
     accent: string;
 }
 
-/* Hub-accent kleuren (gelijk aan sidebar). */
-const HUB_ACCENT = {
-    vandaag: '#c4a35a',
-    plannen: '#10b981',
-    verkoop: '#3b82f6',
-    geld: '#f59e0b',
-    keuken: '#8b5cf6',
-    voorraad: '#06b6d4',
-    systeem: '#828282',
-};
+/* Pagina's komen uit de werkruimtes (src/lib/navigation.tsx) — dezelfde bron
+   als de balk en het tegelscherm. Deze lijst stond hier eerder los, en liep
+   achter: Facturen stond onder Verkoop, Uren onder Geld, Logistiek onder
+   Voorraad. Uitgezette onderdelen verschijnen hier ook niet.
 
-const pages: SearchResult[] = [
-    /* Vandaag */
-    { id: 'p_home', type: 'pagina', title: 'Vandaag', subtitle: 'Startpagina', href: '/', icon: Flame, accent: HUB_ACCENT.vandaag },
-
-    /* Plannen & Events */
-    { id: 'p_plannen', type: 'pagina', title: 'Plannen-hub', subtitle: 'Plannen & Events', href: '/plannen', icon: Calendar, accent: HUB_ACCENT.plannen },
-    { id: 'p_agenda', type: 'pagina', title: 'Agenda', subtitle: 'Plannen & Events', href: '/agenda', icon: Calendar, accent: HUB_ACCENT.plannen },
-    { id: 'p_events', type: 'pagina', title: 'Events', subtitle: 'Plannen & Events', href: '/events', icon: Calendar, accent: HUB_ACCENT.plannen },
-    { id: 'p_klantgesprek', type: 'pagina', title: 'Klantgesprek', subtitle: 'Plannen & Events', href: '/klantgesprek', icon: MessageSquare, accent: HUB_ACCENT.plannen },
-    { id: 'p_prep', type: 'pagina', title: 'Prep Counter', subtitle: 'Plannen & Events', href: '/prep-counter', icon: ClipboardList, accent: HUB_ACCENT.plannen },
-    { id: 'p_haccp_plannen', type: 'pagina', title: 'HACCP', subtitle: 'Plannen & Events', href: '/haccp', icon: ShieldCheck, accent: HUB_ACCENT.plannen },
-
-    /* Verkoop & Klanten */
-    { id: 'p_offertes', type: 'pagina', title: 'Offertes', subtitle: 'Verkoop & Klanten', href: '/offertes', icon: FileText, accent: HUB_ACCENT.verkoop },
-    { id: 'p_facturen', type: 'pagina', title: 'Facturen', subtitle: 'Verkoop & Klanten', href: '/facturen', icon: Receipt, accent: HUB_ACCENT.verkoop },
-    { id: 'p_klanten', type: 'pagina', title: 'Klanten', subtitle: 'Verkoop & Klanten', href: '/klanten', icon: Users, accent: HUB_ACCENT.verkoop },
-
-    /* Geld & Boekhouding */
-    { id: 'p_financien', type: 'pagina', title: 'Financiën', subtitle: 'Geld & Boekhouding', href: '/financien', icon: Euro, accent: HUB_ACCENT.geld },
-    { id: 'p_uren', type: 'pagina', title: 'Uren', subtitle: 'Geld & Boekhouding', href: '/uren', icon: Clock, accent: HUB_ACCENT.geld },
-    { id: 'p_boekhouding', type: 'pagina', title: 'Boekhouding (alias)', subtitle: 'Geld & Boekhouding', href: '/financien?tab=wv', icon: Euro, accent: HUB_ACCENT.geld },
-
-    /* Keuken */
-    { id: 'p_gerechten', type: 'pagina', title: 'Gerechten', subtitle: 'Keuken', href: '/gerechten', icon: ChefHat, accent: HUB_ACCENT.keuken },
-    { id: 'p_menus', type: 'pagina', title: 'Menu\u2019s', subtitle: 'Keuken \u00b7 opgeslagen menu-templates', href: '/gerechten?view=menus', icon: UtensilsCrossed, accent: HUB_ACCENT.keuken },
-    { id: 'p_marges', type: 'pagina', title: 'Marges & analyse', subtitle: 'Keuken \u00b7 BCG en foodcost', href: '/marges', icon: Sparkles, accent: HUB_ACCENT.keuken },
-    { id: 'p_pitmaster', type: 'pagina', title: 'AI Pitmaster', subtitle: 'Keuken \u00b7 AI chat (power)', href: '/ai-chat', icon: Sparkles, accent: HUB_ACCENT.keuken },
-
-    /* Voorraad & Beheer */
-    { id: 'p_voorraad', type: 'pagina', title: 'Voorraad', subtitle: 'Voorraad & Beheer', href: '/voorraad', icon: Package, accent: HUB_ACCENT.voorraad },
-    { id: 'p_inkoop', type: 'pagina', title: 'Inkoop', subtitle: 'Voorraad & Beheer', href: '/inkoop', icon: ShoppingCart, accent: HUB_ACCENT.voorraad },
-    { id: 'p_logistiek', type: 'pagina', title: 'Logistiek', subtitle: 'Voorraad & Beheer', href: '/logistiek', icon: Truck, accent: HUB_ACCENT.voorraad },
-    { id: 'p_materieel', type: 'pagina', title: 'Materieel', subtitle: 'Voorraad & Beheer', href: '/materieel', icon: Wrench, accent: HUB_ACCENT.voorraad },
-    { id: 'p_haccp_field', type: 'pagina', title: 'HACCP Field (mobiel)', subtitle: 'Plannen & Events · power', href: '/haccp/field', icon: ShieldCheck, accent: HUB_ACCENT.plannen },
-    { id: 'p_prijzen', type: 'pagina', title: 'Inkoopprijzen', subtitle: 'Voorraad & Beheer', href: '/price-intelligence', icon: DollarSign, accent: HUB_ACCENT.voorraad },
-
-    /* Power-features (verstopt — vindbaar via ⌘K) */
-    { id: 'p_sitemap', type: 'pagina', title: 'Sitemap (alle pagina\'s)', subtitle: 'Power · overzicht', href: '/hulp/sitemap', icon: Map, accent: '#c4a35a' },
-    { id: 'p_margin', type: 'pagina', title: 'Margin Doctor', subtitle: 'Power · open offerte → tab', href: '/offertes', icon: Sparkles, accent: '#3b82f6' },
-    { id: 'p_admin_funnel', type: 'pagina', title: 'Funnel-analytics', subtitle: 'Admin · power', href: '/admin/funnel', icon: Building2, accent: '#828282' },
-
-    /* Instellingen & Hulp */
-    { id: 'p_instellingen', type: 'pagina', title: 'Instellingen', subtitle: 'Instellingen & Hulp', href: '/instellingen', icon: Settings, accent: HUB_ACCENT.systeem },
-    { id: 'p_integraties', type: 'pagina', title: 'Integraties', subtitle: 'Instellingen & Hulp', href: '/instellingen/integraties', icon: Settings, accent: HUB_ACCENT.systeem },
-    { id: 'p_printers', type: 'pagina', title: 'Labelprinters (Zebra)', subtitle: 'Instellingen & Hulp', href: '/instellingen/printers', icon: Settings, accent: HUB_ACCENT.systeem },
-    { id: 'p_los_label', type: 'pagina', title: 'Los label printen', subtitle: 'Keuken · sticker op een doos of bak', href: '/labels/los', icon: Settings, accent: HUB_ACCENT.keuken },
-    { id: 'p_export', type: 'pagina', title: 'Data export', subtitle: 'Instellingen & Hulp', href: '/instellingen/data-export', icon: Settings, accent: HUB_ACCENT.systeem },
-    { id: 'p_referral', type: 'pagina', title: 'Referral', subtitle: 'Instellingen & Hulp', href: '/instellingen/referral', icon: Settings, accent: HUB_ACCENT.systeem },
-    { id: 'p_gebruikers', type: 'pagina', title: 'Gebruikers', subtitle: 'Instellingen & Hulp', href: '/gebruikers', icon: Users, accent: HUB_ACCENT.systeem },
-    { id: 'p_mailbox', type: 'pagina', title: 'Mailbox', subtitle: 'Instellingen & Hulp', href: '/mailbox', icon: Mail, accent: HUB_ACCENT.systeem },
-    { id: 'p_website', type: 'pagina', title: 'Website', subtitle: 'Instellingen & Hulp', href: '/website', icon: Globe, accent: HUB_ACCENT.systeem },
-    { id: 'p_foto', type: 'pagina', title: 'Foto-archief', subtitle: 'Menu · media', href: '/foto-archief', icon: Camera, accent: HUB_ACCENT.keuken },
-    { id: 'p_help', type: 'pagina', title: 'Help Center', subtitle: 'Instellingen & Hulp', href: '/hulp', icon: HelpCircle, accent: HUB_ACCENT.systeem },
-    { id: 'p_admin', type: 'pagina', title: 'Platform Beheer', subtitle: 'Admin · power', href: '/admin', icon: Building2, accent: HUB_ACCENT.systeem },
+   Hieronder alleen pagina's die géén tabblad zijn maar wel vindbaar moeten
+   zijn via ⌘K ("dagelijks zichtbaar, zeldzaam vindbaar"). `hub` = slug van de
+   werkruimte; staat die uit, dan valt de pagina ook weg. */
+const EXTRA_PAGINAS: Array<Omit<SearchResult, 'accent' | 'type'> & { hub: string; adminOnly?: boolean }> = [
+    { id: 'p_klantgesprek', title: 'Klantgesprek', subtitle: 'Plannen', href: '/klantgesprek', icon: MessageSquare, hub: 'plannen' },
+    { id: 'p_prep', title: 'Prep Counter', subtitle: 'Plannen', href: '/prep-counter', icon: ClipboardList, hub: 'plannen' },
+    { id: 'p_haccp', title: 'HACCP', subtitle: 'Plannen', href: '/haccp', icon: ShieldCheck, hub: 'plannen' },
+    { id: 'p_haccp_field', title: 'HACCP Field (mobiel)', subtitle: 'Plannen', href: '/haccp/field', icon: ShieldCheck, hub: 'plannen' },
+    { id: 'p_marges', title: 'Marges & analyse', subtitle: 'Keuken · BCG en foodcost', href: '/marges', icon: Sparkles, hub: 'gerechten' },
+    { id: 'p_pitmaster', title: 'AI Pitmaster', subtitle: 'Keuken · AI chat', href: '/ai-chat', icon: Bot, hub: 'gerechten' },
+    { id: 'p_los_label', title: 'Los label printen', subtitle: 'Inkoop & Voorraad · sticker op een doos of bak', href: '/labels/los', icon: Settings, hub: 'voorraad' },
+    { id: 'p_printers', title: 'Labelprinters (Zebra)', subtitle: 'Systeem', href: '/instellingen/printers', icon: Settings, hub: 'systeem' },
+    { id: 'p_onderdelen', title: 'Onderdelen aan/uit', subtitle: 'Systeem · wat je bedrijf gebruikt', href: '/instellingen/onderdelen', icon: Settings, hub: 'systeem' },
+    { id: 'p_export', title: 'Data export', subtitle: 'Systeem', href: '/instellingen/data-export', icon: Settings, hub: 'systeem' },
+    { id: 'p_referral', title: 'Referral', subtitle: 'Systeem', href: '/instellingen/referral', icon: Settings, hub: 'systeem' },
+    { id: 'p_sitemap', title: "Sitemap (alle pagina's)", subtitle: 'Systeem · overzicht', href: '/hulp/sitemap', icon: Map, hub: 'systeem' },
+    { id: 'p_admin_funnel', title: 'Funnel-analytics', subtitle: 'Platform Beheer', href: '/admin/funnel', icon: Building2, hub: 'systeem', adminOnly: true },
 ];
+
+function bouwPaginas(opties: ZichtbaarheidOpties): SearchResult[] {
+    const werkruimtes = zichtbareWerkruimtes(opties);
+    const uit: SearchResult[] = [
+        { id: 'p_home', type: 'pagina', title: VANDAAG.title, subtitle: 'Startpagina', href: VANDAAG.href, icon: Flame, accent: VANDAAG.kleur },
+    ];
+    for (const w of werkruimtes) {
+        for (const c of w.children) {
+            uit.push({ id: 'p_' + c.href, type: 'pagina', title: c.label, subtitle: w.title, href: c.href, icon: ArrowRight, iconNode: c.icon, accent: w.kleur });
+        }
+    }
+    for (const e of EXTRA_PAGINAS) {
+        const w = werkruimtes.find(function (x) { return x.slug === e.hub; });
+        if (!w) continue;
+        if (e.adminOnly && !opties.isPlatformAdmin) continue;
+        uit.push({ id: e.id, type: 'pagina', title: e.title, subtitle: e.subtitle, href: e.href, icon: e.icon, accent: w.kleur });
+    }
+    return uit;
+}
 
 const typeConfig: Record<string, { icon: typeof Calendar; accent: string; label: string }> = {
     event: { icon: Calendar, accent: '#10b981', label: 'Event' },
@@ -111,6 +91,10 @@ export default function CommandPalette() {
     const inputRef = useRef<HTMLInputElement>(null);
     const router = useRouter();
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const { opties } = useOnderdelen();
+    const pages = useMemo(function () { return bouwPaginas(opties); }, [opties]);
+    const pagesRef = useRef<SearchResult[]>(pages);
+    useEffect(function () { pagesRef.current = pages; }, [pages]);
 
     /* G-prefix sneltoetsen (Linear-stijl): druk 'g' dan een letter om naar een hub te springen.
        G H = Vandaag, G P = Plannen, G V = Verkoop, G K = Keuken, G W = Voorraad,
@@ -150,7 +134,6 @@ export default function CommandPalette() {
                     e: '/events',
                     r: '/gerechten',         // Recepten (canonical URL = /gerechten)
                     f: '/archief',
-                    d: '/administratie',     // aDministratie
                     s: '/systeem',
                     // Veelgebruikte sub-pages
                     o: '/offertes',
@@ -169,7 +152,7 @@ export default function CommandPalette() {
             }
         }
         // External open trigger (e.g. mobile FAB, AppShell button).
-        // Same pattern as `toggle-mobile-sidebar` in BottomNav.
+        // Zelfde patroon als `open-tegelscherm` (werkruimte/events.ts).
         function handleOpenEvent() { setOpen(true); }
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('open-command-palette', handleOpenEvent);
@@ -188,7 +171,7 @@ export default function CommandPalette() {
 
     const searchData = useCallback(async function (q: string) {
         if (!q || q.length < 2) {
-            setResults(pages.filter(function (p) { return p.title.toLowerCase().includes(q.toLowerCase()); }).slice(0, 6));
+            setResults(pagesRef.current.filter(function (p) { return p.title.toLowerCase().includes(q.toLowerCase()); }).slice(0, 6));
             setLoading(false);
             return;
         }
@@ -283,7 +266,7 @@ export default function CommandPalette() {
             });
 
             // Also include matching pages
-            const matchingPages = pages.filter(function (p) {
+            const matchingPages = pagesRef.current.filter(function (p) {
                 return p.title.toLowerCase().includes(q.toLowerCase());
             });
 
@@ -445,7 +428,9 @@ export default function CommandPalette() {
                                     border: '1px solid ' + result.accent + '25',
                                     flexShrink: 0,
                                 }}>
-                                    <Icon size={15} style={{ color: result.accent }} />
+                                    {result.iconNode
+                                        ? <span style={{ color: result.accent, display: 'inline-flex' }}>{result.iconNode}</span>
+                                        : <Icon size={15} style={{ color: result.accent }} />}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

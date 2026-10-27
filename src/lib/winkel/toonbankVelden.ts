@@ -1,6 +1,6 @@
 /**
  * BA-4a — de catalogusvelden voor de Toonbank, zonder scherm of database.
- * Migratie: supabase/migrations/20261006120000_toonbank_catalogus.sql.
+ * Migratie: supabase/migrations/20261028120000_toonbank_catalogus.sql.
  * Contract: hopbites-toonbank/docs/datacontract-toonbank-v1.md §2 en §3.3.
  *
  * - kanalen: waar een artikel verkocht wordt (webshop, toonbank, event);

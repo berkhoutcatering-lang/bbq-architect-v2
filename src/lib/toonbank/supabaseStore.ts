@@ -4,7 +4,7 @@
  * Service_role gaat langs RLS. Daarom filtert elke query hier zelf op
  * organization_id (die van de apparaatsleutel), en lopen schrijfacties die
  * atomair moeten zijn via de databasefuncties uit
- * 20261006130000_toonbank_apparaten (koppelen, inlogteller, apparaat gezien).
+ * 20261028130000_toonbank_apparaten (koppelen, inlogteller, apparaat gezien).
  * Gooit bij een databasefout: de route maakt er 500 serverfout van; een getal
  * of uitkomst wordt nooit geraden.
  */

@@ -2,7 +2,7 @@
  * BA-8 — de lees- en vraagroutes van de Toonbank: catalogus, vrij,
  * wegzetten, afhaallijst en scannen. Contract §1.9, §1.10, §3.2, §3.3, §3.5.
  *
- * De databasefuncties (20261006150000_toonbank_vragen) leveren de rijen; hier
+ * De databasefuncties (20261028150000_toonbank_vragen) leveren de rijen; hier
  * komt de vorm van het contract: tijden als ISO met Z, foto-URL's, en de
  * vertaling van een uitkomst of SQLSTATE naar een HTTP-antwoord volgens de
  * tabel "Van databasefunctie naar antwoord" (§3.2):

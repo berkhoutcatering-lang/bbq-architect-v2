@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
+import { clearDataCache } from '@/lib/dataCache';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextValue {
@@ -63,9 +64,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  /* Andere gebruiker (of uitgelogd): het geheugen tussen pagina's hoort bij
+     de vorige en mag niet blijven staan. In een effect, niet in de setState-
+     updater: die hoort zuiver te zijn. */
+  const vorigeIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(function () {
+    const id = user?.id ?? null;
+    if (vorigeIdRef.current !== undefined && vorigeIdRef.current !== id) clearDataCache();
+    vorigeIdRef.current = id;
+  }, [user]);
+
   const signOut = useCallback(async function () {
     if (!supabase) return;
     await supabase.auth.signOut();
+    clearDataCache();
     setUser(null);
     setSession(null);
     window.location.href = '/login';

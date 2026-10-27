@@ -1,4 +1,4 @@
--- Test voor BA-10 (migratie 20261007130000_toonbank_afhalen_dagstaten): ophalen
+-- Test voor BA-10 (migratie 20261028170000_toonbank_afhalen_dagstaten): ophalen
 -- vanaf de Toonbank. toonbank_ophaal_vraag (order en doos, idempotent,
 -- restbedrag vooraf vergeleken, rest_bon_id, dubbel betaald → bon te
 -- controleren), de vernieuwde winkel_doos_ophalen (leeftijd_nodig, geweigerd,
@@ -47,6 +47,7 @@ declare
     v_e        bigint;  -- volledig betaald, doos met alcohol
     v_f        bigint;  -- reservering met een doos
     v_g        bigint;  -- doos met te weinig voorraad
+    v_k        bigint;  -- Kerst-Box: bij_afhalen, het hele bedrag is rest
     v_rid      bigint;
     v_doos_e   text;
     v_doos_f   text;
@@ -55,6 +56,7 @@ declare
     v_b2       uuid := gen_random_uuid();
     v_b3       uuid := gen_random_uuid();
     v_bf       uuid := gen_random_uuid();
+    v_bk       uuid := gen_random_uuid();
     v_g1       uuid := gen_random_uuid();
     v_r        jsonb;
     v_r2       jsonb;
@@ -112,7 +114,11 @@ begin
     v_o := public.winkel_plaats_order(v_org, 'test-sleutel-' || gen_random_uuid(), 'test-token-' || gen_random_uuid(), 'afhalen', null,
         'Mulder', 'm@example.invalid', null, null, null, 1000, 0, 1000, '{}'::jsonb, 'https://example.invalid', jsonb_build_array(v_regel_k));
     v_g := v_o.id;
-    update public.winkel_orders set status = 'betaald', betaald_at = now() where id in (v_a, v_c, v_d, v_e, v_f, v_g);
+    v_o := public.winkel_plaats_order(v_org, 'test-sleutel-' || gen_random_uuid(), 'test-token-' || gen_random_uuid(), 'afhalen', null,
+        'Kok', 'k@example.invalid', null, null, null, 1380, 0, 1380, '{}'::jsonb, 'https://example.invalid', jsonb_build_array(v_regel),
+        p_betaalwijze => 'bij_afhalen', p_nu_te_betalen_cents => 0, p_rest_cents => 1380);
+    v_k := v_o.id;
+    update public.winkel_orders set status = 'betaald', betaald_at = now() where id in (v_a, v_c, v_d, v_e, v_f, v_g, v_k);
     select id into v_rid from public.winkel_order_regels where order_id = v_e;
     v_doos_e := public.winkel_dozen_voor_regel(v_org, v_rid, array['TEST Bierpakket'])->0->>'code';
     select id into v_rid from public.winkel_order_regels where order_id = v_f;
@@ -163,6 +169,18 @@ begin
        or (select btw from public.toonbank_bonnen where id = v_b1) <> '{}'::jsonb
        or (select order_rest_cents from public.toonbank_bonnen where id = v_b1) <> 1130 then
         v_fouten := v_fouten || 'restbon A: ' || coalesce((select row_to_json(j)::text from public.toonbank_journaal j where gebeurtenis_id = v_b1), 'ontbreekt') || '; ';
+    end if;
+
+    -- ── 1b. Kerst-Box (bij_afhalen, 20261013120000): ook de Toonbank vraagt eerst om het hele bedrag.
+    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_k, null, gen_random_uuid(), now(), v_mw);
+    if v_r->'resultaat'->>'uitkomst' <> 'rest_nodig' or (v_r->'resultaat'->>'rest_cents')::int <> 1380
+       or exists (select 1 from public.winkel_order_regels where order_id = v_k and opgehaald_at is not null) then
+        v_fouten := v_fouten || 'K (bij_afhalen) zonder betaling: ' || v_r::text || '; ';
+    end if;
+    v_r := public.toonbank_ophaal_vraag(v_org, v_app, 'order', v_k, null, gen_random_uuid(), now(), v_mw, v_bk, 'pin', 1380, 'vastgesteld');
+    if v_r->'resultaat'->>'uitkomst' <> 'opgehaald' or v_r->'resultaat'->>'rest_geboekt' <> 'pin'
+       or not exists (select 1 from public.winkel_orders where id = v_k and rest_betaald_at is not null and rest_betaalmethode = 'pin' and rest_bon_id = v_bk) then
+        v_fouten := v_fouten || 'K (bij_afhalen) met pin: ' || v_r::text || '; ';
     end if;
 
     -- ── 2. Dubbel betaald: order C. Bon B2 eerst (rest nog open: goed), dan boekt BA de rest,
@@ -293,5 +311,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie, ook via de tijdelijke oude handtekening; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker; leeftijd op de tijd van de tablet (order en doos), een klok in de toekomst begrensd op nu, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
+    raise exception 'GESLAAGD: order ophalen rest_nodig (ook bij een ander bedrag, niets geboekt), Kerst-Box (bij_afhalen) eerst het hele bedrag en dan opgehaald met de pin, leeftijd_nodig, opgehaald met rest_bon_id en medewerker, herhaling = zelfde antwoord; restbon zonder omzet en zonder conflict; dubbel betaald → geen rest en de bon te controleren (ook als de bon later komt); boek_rest alleen in de eigen organisatie, ook via de tijdelijke oude handtekening; doos met alcohol zonder leeftijd → leeftijd_nodig, geweigerd vastgelegd, opgehaald met medewerker; leeftijd op de tijd van de tablet (order en doos), een klok in de toekomst begrensd op nu, al_opgehaald, onbekend; doos met rest op de bon; te weinig voorraad = niets geboekt — alles teruggedraaid';
 end $$;

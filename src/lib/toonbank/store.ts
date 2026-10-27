@@ -3,7 +3,7 @@
  * (zoals src/lib/winkel/store.ts):
  *
  *   supabaseStore.ts   de echte: service-role client + de databasefuncties
- *                      uit 20261006130000_toonbank_apparaten (en later BA-8)
+ *                      uit 20261028130000_toonbank_apparaten (en later BA-8)
  *   geheugenStore.ts   in het geheugen, voor de tests van de routes en logica
  *
  * De logica (koppelen.ts, sessie.ts, …) kent alleen deze interface. De

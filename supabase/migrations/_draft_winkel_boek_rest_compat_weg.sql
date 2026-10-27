@@ -12,7 +12,7 @@
 DO $$
 BEGIN
     IF to_regprocedure('public.winkel_boek_rest(uuid, bigint, text, uuid)') IS NULL THEN
-        RAISE EXCEPTION 'compat_weg: de nieuwe winkel_boek_rest(uuid, bigint, text, uuid) ontbreekt; eerst 20261007130000 (BA-10)';
+        RAISE EXCEPTION 'compat_weg: de nieuwe winkel_boek_rest(uuid, bigint, text, uuid) ontbreekt; eerst 20261028170000 (BA-10)';
     END IF;
     IF to_regprocedure('public.winkel_boek_rest(bigint, text)') IS NOT NULL
        AND pg_get_functiondef('public.winkel_boek_rest(bigint, text)'::REGPROCEDURE) NOT LIKE '%winkel_boek_rest(v_org, p_order_id, p_methode%' THEN

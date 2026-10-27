@@ -9,7 +9,7 @@
  * pagina's daar niet veranderen: alleen hun bron.
  *
  * Zuiver: geen database, geen Next. De database-poort
- * (`winkel_catalogus_poort`, migratie 20261003120000) weigert hetzelfde als
+ * (`winkel_catalogus_poort`, migratie 20261003153616) weigert hetzelfde als
  * `watOntbreekt()` hieronder — de app zegt het eerst in gewone taal.
  */
 import { z } from 'zod';
