@@ -6,7 +6,7 @@ import {
     HelpCircle, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive, MonitorPlay, LayoutDashboard,
-    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug,
+    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -62,6 +62,66 @@ export const VANDAAG = {
     description: "Wat speelt er nu: events, taken en wat aandacht vraagt.",
     kleur: "#C4A35A",
 };
+
+/* ── De Toonbank: de kassa-app voor de winkel ──────────────────────────
+   Een aparte web-app (eigen repo hopbites-toonbank) op een eigen adres, dus
+   geen werkruimte met tabbladen: alleen een tegel die de Toonbank in een
+   nieuw tabblad opent. Het zichtbare label is "Winkel-kassa"; in code heet
+   alles `toonbank`, omdat "kassa" in BBQ Architect de online checkout van
+   de webshop is (src/lib/winkel/kassa.ts).
+
+   Het adres komt uit NEXT_PUBLIC_TOONBANK_URL. Is die niet gezet, dan is er
+   geen tegel: hij mag nooit naar een lege pagina leiden. (Komt het
+   Toonbank-beheer /instellingen/toonbank uit M2 op main, dan kan de tegel
+   zonder adres daarheen gaan.) Aan/uit zoals een werkruimte, met de sleutel
+   `toonbank` in Instellingen → Onderdelen. */
+export const TOONBANK = {
+    slug: "toonbank",
+    title: "Winkel-kassa",
+    icon: <Calculator size={18} />,
+    description: "De kassa voor de winkel en events. Opent in een nieuw tabblad.",
+    /* Olijf uit de huisstijl van de Toonbank zelf. */
+    kleur: "#52632C",
+};
+
+export interface ToonbankTegel {
+    slug: string;
+    title: string;
+    icon: ReactNode;
+    description: string;
+    kleur: string;
+    /** Volledig adres van de Toonbank; opent in een nieuw tabblad. */
+    href: string;
+}
+
+/** Alleen een echt webadres: https, of http op deze computer (lokaal testen). */
+function toonbankAdres(ruw: string | undefined): string | null {
+    const tekst = (ruw ?? "").trim();
+    if (!tekst) return null;
+    let adres: URL;
+    try {
+        adres = new URL(tekst);
+    } catch {
+        return null;
+    }
+    const lokaal = adres.hostname === "localhost" || adres.hostname === "127.0.0.1";
+    if (adres.protocol === "https:" || (adres.protocol === "http:" && lokaal)) return adres.href;
+    return null;
+}
+
+/**
+ * De tegel "Winkel-kassa", of null als hij er niet hoort: geen (geldig)
+ * adres, of het bedrijf zette hem uit.
+ */
+export function toonbankTegel(
+    opties: ZichtbaarheidOpties,
+    url: string | undefined = process.env.NEXT_PUBLIC_TOONBANK_URL,
+): ToonbankTegel | null {
+    if (opties.verborgen.includes(TOONBANK.slug)) return null;
+    const href = toonbankAdres(url);
+    if (!href) return null;
+    return { ...TOONBANK, href };
+}
 
 export const navSections: NavSection[] = [
     {
@@ -282,10 +342,11 @@ export function werkruimteStart(section: NavSection): string {
 }
 
 /** Alle sleutels die een bedrijf mag uitzetten: werkruimte-slugs (behalve
- *  vaste) en tab-hrefs (behalve vaste en platform-only). De server-actie
+ *  vaste), tab-hrefs (behalve vaste en platform-only) en de tegel van de
+ *  Toonbank. De server-actie
  *  laat alleen deze door. */
 export function uitzetbareSleutels(): Set<string> {
-    const sleutels = new Set<string>();
+    const sleutels = new Set<string>([TOONBANK.slug]);
     for (const s of navSections) {
         if (!s.vast) sleutels.add(s.slug);
         for (const c of s.children) {

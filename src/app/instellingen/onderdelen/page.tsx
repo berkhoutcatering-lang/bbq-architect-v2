@@ -8,7 +8,7 @@ import { useToast } from '@/components/Toast';
 import { useOrg } from '@/lib/OrgContext';
 import { refreshSettings } from '@/lib/useSupabase';
 import { useOnderdelen } from '@/lib/useOnderdelen';
-import { VASTE_TABS, navSections } from '@/lib/navigation';
+import { TOONBANK, VASTE_TABS, navSections, toonbankTegel } from '@/lib/navigation';
 import { zetVerborgenOnderdelen } from './actions';
 import './onderdelen.css';
 
@@ -60,12 +60,16 @@ export default function OnderdelenPagina() {
     /* Tellen wat de gebruiker merkt: uitgezette onderdelen, en losse
        tabbladen die uit staan binnen een onderdeel dat nog aan is. */
     const onderdelenUit = werkruimtes.filter(function (s) { return !s.vast && verborgen.includes(s.slug); });
+    const toonbankAan = !verborgen.includes(TOONBANK.slug);
+    /* Zonder adres verschijnt de tegel nergens, ook als hij aan staat. */
+    const toonbankAdres = toonbankTegel({ verborgen: [], isPlatformAdmin: false })?.href ?? null;
     const tabsUit = werkruimtes
         .filter(function (s) { return !onderdelenUit.includes(s); })
         .flatMap(function (s) { return s.children; })
         .filter(function (c) { return verborgen.includes(c.href); }).length;
     const delen: string[] = [];
-    if (onderdelenUit.length > 0) delen.push(onderdelenUit.length + (onderdelenUit.length === 1 ? ' onderdeel' : ' onderdelen'));
+    const aantalUit = onderdelenUit.length + (toonbankAan ? 0 : 1);
+    if (aantalUit > 0) delen.push(aantalUit + (aantalUit === 1 ? ' onderdeel' : ' onderdelen'));
     if (tabsUit > 0) delen.push(tabsUit + (tabsUit === 1 ? ' tabblad' : ' tabbladen'));
     const stand = delen.length > 0 ? delen.join(' en ') + ' uit' : 'Alles staat aan';
 
@@ -138,6 +142,25 @@ export default function OnderdelenPagina() {
                             </section>
                         );
                     })}
+                    <section className={'od-kaart' + (toonbankAan ? '' : ' od-kaart--uit')} style={{ ['--wr-kleur' as string]: TOONBANK.kleur }}>
+                        <div className="od-kop">
+                            <span className="od-icoon" aria-hidden="true">{TOONBANK.icon}</span>
+                            <div className="od-tekst">
+                                <h2 className="od-naam">{TOONBANK.title}</h2>
+                                <p className="od-uitleg">
+                                    {toonbankAdres
+                                        ? TOONBANK.description
+                                        : 'De tegel verschijnt zodra het adres van de kassa is ingesteld.'}
+                                </p>
+                            </div>
+                            <Schakelaar
+                                aan={toonbankAan}
+                                label={TOONBANK.title}
+                                uitgeschakeld={!isAdmin}
+                                onWissel={function () { wissel(TOONBANK.slug); }}
+                            />
+                        </div>
+                    </section>
                 </div>
             )}
         </div>
