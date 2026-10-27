@@ -153,6 +153,19 @@ describe('tegel Winkel-kassa (de Toonbank)', () => {
         expect(toonbankTegel(iedereen, 'toonbank.hopbites.nl')).toBeNull();
     });
 
+    it('onder BBQ Architect: /toonbank opent in hetzelfde scherm', () => {
+        const tegel = toonbankTegel(iedereen, '/toonbank');
+        expect(tegel!.href).toBe('/toonbank');
+        expect(tegel!.nieuwTabblad).toBe(false);
+        expect(toonbankTegel(iedereen, 'https://toonbank.hopbites.nl')!.nieuwTabblad).toBe(true);
+    });
+
+    it('een pad moet een gewoon pad zijn', () => {
+        expect(toonbankTegel(iedereen, '//elders.nl')).toBeNull();
+        expect(toonbankTegel(iedereen, '/')).toBeNull();
+        expect(toonbankTegel(iedereen, '/toonbank?x=1')).toBeNull();
+    });
+
     it('verdwijnt als het bedrijf hem uitzet, ook met adres', () => {
         expect(toonbankTegel({ ...iedereen, verborgen: ['toonbank'] }, 'https://toonbank.hopbites.nl')).toBeNull();
     });

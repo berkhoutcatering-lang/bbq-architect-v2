@@ -187,6 +187,13 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
+  // /toonbank is de kassa-app (eigen programma, eigen service worker met
+  // scope /toonbank/). Daar bemoeit deze service worker zich nooit mee.
+  if (reqUrl.origin === self.location.origin &&
+      (reqUrl.pathname === '/toonbank' || reqUrl.pathname.indexOf('/toonbank/') === 0)) {
+    return;
+  }
+
   // Navigation requests: Network-first with offline fallback
   if (isNavigationRequest(request)) {
     event.respondWith(

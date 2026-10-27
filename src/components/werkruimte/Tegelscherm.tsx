@@ -129,13 +129,15 @@ export default function Tegelscherm({ onClose }: { onClose: () => void }) {
                         );
                     })}
                     {toonbank ? (
-                        /* De Toonbank is een aparte app: nieuw tabblad, geen
-                           Link (die blijft binnen BBQ Architect). */
+                        /* De Toonbank is een aparte app, ook onder /toonbank:
+                           een gewone link die de pagina echt laadt, geen Link
+                           (die blijft binnen de Next-app). Alleen een adres
+                           buiten BBQ Architect opent in een nieuw tabblad. */
                         <a
                             key={toonbank.slug}
                             href={toonbank.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            target={toonbank.nieuwTabblad ? '_blank' : undefined}
+                            rel={toonbank.nieuwTabblad ? 'noopener noreferrer' : undefined}
                             className="wr-tegel"
                             onClick={onClose}
                             style={{ ['--wr-kleur' as string]: toonbank.kleur, animationDelay: (tegels.length * 25) + 'ms' }}
