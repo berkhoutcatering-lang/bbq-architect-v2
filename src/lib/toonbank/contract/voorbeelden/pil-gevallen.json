@@ -1,0 +1,26 @@
+{
+  "uitleg": "Gedeelde gevallen van de voorraadpil (datacontract 1.9). pil() in packages/kern en kassaPil in BBQ Architect geven voor elk geval precies deze soort, tekst en aria. Getallen in de eenheid van het product (stuk of gram), afgerond op 3 decimalen, met een komma.",
+  "gevallen": [
+    { "ligt_er": 0, "gereserveerd": 0, "grens": 5, "soort": "op", "tekst": "op", "aria": "op" },
+    { "ligt_er": -2, "gereserveerd": 0, "grens": 5, "soort": "op", "tekst": "op", "aria": "op" },
+    { "ligt_er": 0, "gereserveerd": 4, "grens": 5, "soort": "op", "tekst": "op", "aria": "op" },
+    { "ligt_er": 3, "gereserveerd": 4, "grens": 5, "soort": "tekort", "tekst": "4 webshop · 1 tekort", "aria": "0 vrij · 4 webshop · 1 tekort" },
+    { "ligt_er": 6, "gereserveerd": 4, "grens": 5, "soort": "webshop", "tekst": "2 vrij · 4 webshop", "aria": "2 vrij · 4 webshop" },
+    { "ligt_er": 4, "gereserveerd": 4, "grens": 5, "soort": "webshop", "tekst": "0 vrij · 4 webshop", "aria": "0 vrij · 4 webshop" },
+    { "ligt_er": 30, "gereserveerd": 2, "grens": 5, "soort": "webshop", "tekst": "28 vrij · 2 webshop", "aria": "28 vrij · 2 webshop" },
+    { "ligt_er": 4, "gereserveerd": 0, "grens": 5, "soort": "nog", "tekst": "nog 4", "aria": "nog 4" },
+    { "ligt_er": 5, "gereserveerd": 0, "grens": 5, "soort": "nog", "tekst": "nog 5", "aria": "nog 5" },
+    { "ligt_er": 6, "gereserveerd": 0, "grens": 5, "soort": "ruim", "tekst": "ruim", "aria": "ruim" },
+    { "ligt_er": 30, "gereserveerd": 0, "grens": 5, "soort": "ruim", "tekst": "ruim", "aria": "ruim" },
+    { "ligt_er": 10, "gereserveerd": 0, "grens": 10, "soort": "nog", "tekst": "nog 10", "aria": "nog 10" },
+    { "ligt_er": 11, "gereserveerd": 0, "grens": 10, "soort": "ruim", "tekst": "ruim", "aria": "ruim" },
+    { "ligt_er": 4, "gereserveerd": -1, "grens": 5, "soort": "nog", "tekst": "nog 4", "aria": "nog 4" },
+    { "ligt_er": 2.5, "gereserveerd": 0, "grens": 5, "soort": "nog", "tekst": "nog 2,5", "aria": "nog 2,5" },
+    { "ligt_er": 0.30000000000000004, "gereserveerd": 0, "grens": 5, "soort": "nog", "tekst": "nog 0,3", "aria": "nog 0,3" },
+    { "ligt_er": 1.23456, "gereserveerd": 0, "grens": 5, "soort": "nog", "tekst": "nog 1,235", "aria": "nog 1,235" },
+    { "ligt_er": 1250, "gereserveerd": 0, "grens": 5, "soort": "ruim", "tekst": "ruim", "aria": "ruim" },
+    { "ligt_er": 1250, "gereserveerd": 400, "grens": 5, "soort": "webshop", "tekst": "850 vrij · 400 webshop", "aria": "850 vrij · 400 webshop" },
+    { "ligt_er": 150.5, "gereserveerd": 200, "grens": 5, "soort": "tekort", "tekst": "200 webshop · 49,5 tekort", "aria": "0 vrij · 200 webshop · 49,5 tekort" },
+    { "ligt_er": 0.6, "gereserveerd": 0.2, "grens": 5, "soort": "webshop", "tekst": "0,4 vrij · 0,2 webshop", "aria": "0,4 vrij · 0,2 webshop" }
+  ]
+}

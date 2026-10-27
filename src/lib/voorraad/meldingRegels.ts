@@ -9,10 +9,10 @@ import type { Product, Slot } from '@/lib/winkel/rekenen';
 import { beperkendProduct, beschikbaar, geldendeDrempel, hoeveelheidKort, pakkettenTeMaken } from '@/lib/winkel/voorraad';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
-export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit';
+export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit' | 'voorraad_tellen';
 export type Meldingbron = 'winkel' | 'keuken' | 'artikel';
 
-export const MELDINGSOORTEN: Meldingsoort[] = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit'];
+export const MELDINGSOORTEN: Meldingsoort[] = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen'];
 
 /** Direct mailen; de rest gaat mee in het overzicht van 8:00 (besluit Mathijs, 26 sep). */
 export const DIRECT_MAILEN: Meldingsoort[] = ['voorraad_op', 'artikel_dicht'];
@@ -137,6 +137,59 @@ export function tekortVooruitMeldingen(producten: WinkelProduct[], vraag: Vraag[
                 break;
             }
         }
+    }
+    return uit;
+}
+
+/** Een regel uit het winkellogboek, zoals tellenMeldingen hem nodig heeft. */
+export interface TelMutatie { winkel_product_id: string; type: string; hoeveelheid: number; created_at: string }
+
+/**
+ * Per product: hoeveel er met tekort_correctie is rechtgezet sinds de laatste
+ * telling (de Toonbank verkocht meer dan het systeem had). De mutaties in
+ * willekeurige volgorde; op boektijd (created_at). Nul of geen = niets.
+ */
+export function tekortenSindsTelling(mutaties: readonly TelMutatie[]): Map<string, { tekort: number; sinds: string }> {
+    const perProduct = new Map<string, TelMutatie[]>();
+    for (const m of mutaties) {
+        const lijst = perProduct.get(m.winkel_product_id) ?? [];
+        lijst.push(m);
+        perProduct.set(m.winkel_product_id, lijst);
+    }
+    const uit = new Map<string, { tekort: number; sinds: string }>();
+    for (const [id, lijst] of perProduct) {
+        let tekort = 0;
+        let sinds = '';
+        for (const m of [...lijst].sort((a, b) => b.created_at.localeCompare(a.created_at))) {
+            if (m.type === 'telling') break;
+            if (m.type === 'tekort_correctie') {
+                tekort = Math.round((tekort + Number(m.hoeveelheid)) * 1000) / 1000;
+                sinds = m.created_at;
+            }
+        }
+        if (tekort > 0) uit.set(id, { tekort, sinds });
+    }
+    return uit;
+}
+
+/**
+ * "Tel {product}" (contract §4.2 stap 8, review M2 klein 4): aan de Toonbank is
+ * meer verkocht dan het systeem had, en sindsdien is het product niet geteld.
+ * Weg zodra er een telling is.
+ */
+export function tellenMeldingen(producten: WinkelProduct[], mutaties: readonly TelMutatie[]): Melding[] {
+    const tekorten = tekortenSindsTelling(mutaties);
+    const uit: Melding[] = [];
+    for (const p of producten) {
+        const t = tekorten.get(p.id);
+        if (!t || !p.actief || p.voorraad == null) continue;
+        uit.push({
+            bron: 'winkel', item_id: p.id, soort: 'voorraad_tellen',
+            titel: `Tel ${p.naam}`,
+            tekst: `Aan de Toonbank is meer ${p.naam} verkocht dan het systeem had (${hoeveelheidKort(t.tekort, p.eenheid)} rechtgezet). Tel het schap, dan klopt de voorraad weer.`,
+            link: WINKEL_LINK(p.id),
+            metadata: { tekort: t.tekort, sinds: t.sinds, aanwezig: p.voorraad },
+        });
     }
     return uit;
 }

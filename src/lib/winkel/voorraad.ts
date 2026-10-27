@@ -18,7 +18,12 @@ import { tekortTekst } from './wegzetten';
 /** Hoeveel pakketten van het voorstel voor de drempel (antwoord Mathijs, 26 sep). */
 export const DREMPEL_PAKKETTEN = 5;
 
-export type Mutatietype = 'telling' | 'ontvangst' | 'overboeking' | 'verkoop_online' | 'verkoop_kassa' | 'retour' | 'afwijking';
+/**
+ * tekort_correctie (BA-9): een Toonbank-bon verkocht meer dan er volgens het
+ * systeem lag; eerst +tekort, dan de volledige verkoop. Geen afwijkingsreden:
+ * hij staat bewust niet in AFWIJKINGSREDENEN.
+ */
+export type Mutatietype = 'telling' | 'ontvangst' | 'overboeking' | 'verkoop_online' | 'verkoop_kassa' | 'retour' | 'afwijking' | 'tekort_correctie';
 export type Afwijkingsreden = 'eigen_gebruik' | 'proeven' | 'derving_breuk' | 'derving_tht' | 'keuken_verbruik';
 export type Reden = Afwijkingsreden | 'manko' | 'telling_meer';
 
@@ -38,6 +43,7 @@ export const TYPE_LABEL: Record<Mutatietype, string> = {
     verkoop_kassa: 'Verkocht kassa',
     retour: 'Retour',
     afwijking: 'Afwijking',
+    tekort_correctie: 'Tekort gecorrigeerd (Toonbank)',
 };
 
 export const REDEN_LABEL: Record<Reden, string> = {

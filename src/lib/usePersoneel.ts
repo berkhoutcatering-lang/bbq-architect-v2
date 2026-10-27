@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import type { Personeel } from '@/types';
+/* De kolomlijst (zonder Toonbank-kolommen) staat in personeelKolommen.ts: puur, dus te testen. */
+import { PERSONEEL_KOLOMMEN } from '@/lib/personeelKolommen';
+
+export { PERSONEEL_KOLOMMEN };
 
 /**
  * Personeel-hook met UUID id (los van useSupabase die number-id verwacht).
@@ -30,7 +34,7 @@ export function usePersoneel(): {
     setLoading(true);
     supabase
       .from('personeel')
-      .select('*')
+      .select(PERSONEEL_KOLOMMEN)
       .eq('organization_id', orgId)
       .order('actief', { ascending: false })
       .order('naam', { ascending: true })
@@ -78,7 +82,7 @@ export function usePersoneel(): {
       supabase
         .from('personeel')
         .insert({ ...row, organization_id: orgId } as Record<string, unknown>)
-        .select()
+        .select(PERSONEEL_KOLOMMEN)
         .single(),
     ).then(function (res) {
       if (res.error) {
@@ -114,7 +118,7 @@ export function usePersoneel(): {
         .update(row as Record<string, unknown>)
         .eq('id', id)
         .eq('organization_id', orgId)
-        .select()
+        .select(PERSONEEL_KOLOMMEN)
         .single(),
     ).then(function (res) {
       if (res.error) {

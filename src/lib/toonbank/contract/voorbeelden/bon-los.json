@@ -1,0 +1,64 @@
+{
+  "soort": "bon",
+  "gebeurtenis_id": "03ad5707-bf5a-4bcc-a9c4-0638f9bcbdbe",
+  "volgnummer": 1203,
+  "moment": "2027-03-06T11:12:08+01:00",
+  "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+  "bon_id": "03ad5707-bf5a-4bcc-a9c4-0638f9bcbdbe",
+  "bonnummer": "T1-000412",
+  "bon_volgnummer": 412,
+  "status": "afgerond",
+  "kanaal": "winkel",
+  "catalogus_versie": 412,
+  "voorraad_versie": 1181,
+  "leeftijd": { "uitkomst": "vastgesteld", "at": "2027-03-06T11:11:40+01:00" },
+  "regels": [
+    {
+      "regelnr": 1,
+      "soort": "verkoop",
+      "artikel_id": "aa47ca2e-78e2-4e44-abd4-8d2e23e3292e",
+      "naam": "Oproer · Tripel for the Crowd",
+      "aantal": 6,
+      "stuk_cents": 395,
+      "korting_cents": 0,
+      "bedrag_cents": 2370,
+      "btw": [{ "pct": 21, "incl_cents": 2370 }],
+      "alcohol": true,
+      "onderdelen": [{ "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f", "hoeveelheid": 1, "eenheid": "stuk" }],
+      "scan_code": "8101",
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 2,
+      "soort": "statiegeld",
+      "hoort_bij_regelnr": 1,
+      "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f",
+      "aantal": 6,
+      "stuk_cents": 15,
+      "bedrag_cents": 90
+    },
+    {
+      "regelnr": 3,
+      "soort": "verkoop",
+      "artikel_id": "620b126a-12c4-4ffa-8ea8-1d2a0e208280",
+      "naam": "Gerookte amandelen",
+      "aantal": 1,
+      "stuk_cents": 595,
+      "korting_cents": 0,
+      "bedrag_cents": 595,
+      "btw": [{ "pct": 9, "incl_cents": 595 }],
+      "alcohol": false,
+      "onderdelen": [{ "product_id": "b4031e10-fa38-4186-8d58-133ea69360d1", "hoeveelheid": 1, "eenheid": "stuk" }],
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 4,
+      "soort": "betaling",
+      "betaalmethode": "pin",
+      "betaal_bevestiging": "handmatig",
+      "bedrag_cents": 3055
+    }
+  ],
+  "totaal_cents": 3055,
+  "afronding_cents": 0
+}

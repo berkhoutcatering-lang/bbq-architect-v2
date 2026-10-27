@@ -1,0 +1,12 @@
+{
+  "uitkomst": "apart",
+  "voorraad_versie": 1183,
+  "boekingen": [
+    {
+      "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4",
+      "hoeveelheid": -4,
+      "voorraad": 2,
+      "type": "verkoop_online"
+    }
+  ]
+}

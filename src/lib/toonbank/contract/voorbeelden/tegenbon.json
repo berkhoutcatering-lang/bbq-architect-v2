@@ -1,0 +1,42 @@
+{
+  "soort": "tegenbon",
+  "gebeurtenis_id": "47aa8372-666d-4327-9b81-ec217dd9846b",
+  "volgnummer": 1209,
+  "moment": "2027-03-06T14:20:31+01:00",
+  "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+  "bon_id": "47aa8372-666d-4327-9b81-ec217dd9846b",
+  "bonnummer": "T1-000415",
+  "bon_volgnummer": 415,
+  "status": "afgerond",
+  "kanaal": "winkel",
+  "catalogus_versie": 412,
+  "leeftijd": null,
+  "verwijst_naar_bon_id": "03ad5707-bf5a-4bcc-a9c4-0638f9bcbdbe",
+  "reden": "Zak was al open; niet terug in het schap",
+  "regels": [
+    {
+      "regelnr": 1,
+      "soort": "verkoop",
+      "artikel_id": "620b126a-12c4-4ffa-8ea8-1d2a0e208280",
+      "naam": "Gerookte amandelen",
+      "aantal": -1,
+      "stuk_cents": 595,
+      "korting_cents": 0,
+      "bedrag_cents": -595,
+      "btw": [{ "pct": 9, "incl_cents": -595 }],
+      "alcohol": false,
+      "onderdelen": [{ "product_id": "b4031e10-fa38-4186-8d58-133ea69360d1", "hoeveelheid": 1, "eenheid": "stuk" }],
+      "prijs_bron": "catalogus",
+      "verwijst_naar_regelnr": 3,
+      "goederen_terug": false
+    },
+    {
+      "regelnr": 2,
+      "soort": "betaling",
+      "betaalmethode": "contant",
+      "bedrag_cents": -595
+    }
+  ],
+  "totaal_cents": -595,
+  "afronding_cents": 0
+}

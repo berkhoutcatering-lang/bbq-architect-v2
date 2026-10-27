@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantAuth, type TenantAuthCtx } from '@/lib/withTenantAuth';
+import { createServiceSupabase } from '@/lib/supabase-server';
 import { validateDeviceVerify } from '@/lib/prep/validators';
 import {
     verifyPin,
@@ -36,11 +37,16 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     if (!v.ok) return NextResponse.json({ error: (v as { ok: false; error: string }).error }, { status: 400 });
     const { pin, personeelId } = v.data;
 
-    // 1. Load personeel record
-    const { data: person, error: pErr } = await supabase
+    // 1. Load personeel record. Met service_role, alleen binnen de organisatie van
+    //    de ingelogde gebruiker: kds_pin_hash is voor ingelogde gebruikers niet
+    //    leesbaar en de blokkade zet alleen een Admin of service_role (review M2 K4).
+    //    De hash verlaat de server nooit.
+    const dienst = createServiceSupabase();
+    const { data: person, error: pErr } = await dienst
         .from('personeel')
         .select('id, organization_id, naam, actief, kds_pin_hash, kds_pin_lockout_until')
         .eq('id', personeelId)
+        .eq('organization_id', orgId)
         .maybeSingle();
 
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
@@ -102,10 +108,11 @@ export const POST = withTenantAuth(async (req: NextRequest, { supabase, orgId }:
     const failCount = count ?? 0;
     if (failCount >= PIN_MAX_ATTEMPTS) {
         const lockUntil = new Date(Date.now() + PIN_LOCKOUT_MINUTES * 60_000).toISOString();
-        await supabase
+        await dienst
             .from('personeel')
             .update({ kds_pin_lockout_until: lockUntil })
-            .eq('id', person.id);
+            .eq('id', person.id)
+            .eq('organization_id', orgId);
         await appendKdsAudit(supabase, {
             orgId,
             action: 'pin_locked',

@@ -9,6 +9,7 @@ import { useToast } from '@/components/Toast';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { RequireTier } from '@/components/PaywallPrompt';
 import { usePersoneel } from '@/lib/usePersoneel';
+import { personeelWijzigingen } from '@/lib/personeelKolommen';
 import PersoneelDrawer from '@/components/uren/PersoneelDrawer';
 import type { Personeel } from '@/types';
 
@@ -76,8 +77,15 @@ export default function PersoneelPage() {
       });
     }
     if (!editing) return Promise.resolve();
-    const { id: _id, organization_id: _org, created_at: _ca, ...rest } = data as Personeel;
-    return update(editing.id, rest).then(function () {
+    /* Alleen wat in het scherm veranderde; nooit de rest van de rij van toen het
+       scherm openging (blokkade, user_id …). Hercontrole M2, N4a. */
+    const wijzigingen = personeelWijzigingen(editing, data);
+    if (Object.keys(wijzigingen).length === 0) {
+      showToast('Niets gewijzigd', 'info');
+      close();
+      return Promise.resolve();
+    }
+    return update(editing.id, wijzigingen).then(function () {
       showToast('Wijzigingen opgeslagen', 'success');
       close();
     }).catch(function (e: unknown) {

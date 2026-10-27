@@ -1,0 +1,20 @@
+{
+  "taken": [
+    {
+      "order_id": 1042,
+      "nummer": "HB-2027-1042",
+      "naam": "Jansen",
+      "afhaalmoment": "2027-03-06T16:30:00+01:00",
+      "ophalen_binnen_24u": true,
+      "regels": [
+        {
+          "artikel": "Naober",
+          "aantal": 4,
+          "producten": [
+            { "product_id": "8e8f4864-9729-43e2-830e-98bd8eb188b4", "naam": "Naober", "hoeveelheid": 4 }
+          ]
+        }
+      ]
+    }
+  ]
+}

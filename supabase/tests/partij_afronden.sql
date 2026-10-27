@@ -39,7 +39,14 @@ begin
       from public.components
      where organization_id is not null
      order by created_at desc limit 1;
-    if v_org is null then raise exception 'geen component gevonden om mee te testen'; end if;
+    if v_org is null then
+        -- Lege dev-database (zoals tools/testdb na de seed): een eigen
+        -- testcomponent in e2e-hop-en-bites; die wordt mee teruggedraaid.
+        select id into v_org from public.organizations where slug = 'e2e-hop-en-bites';
+        insert into public.components (organization_id, name, type, base_quantity, base_unit, base_cost_cents)
+        values (v_org, 'E2E testcomponent', 'prepared', 1, 'kg', 0)
+        returning id into v_comp;
+    end if;
 
     select jsonb_agg(jsonb_build_object('volgnummer', i, 'inhoud', 1, 'eenheid', 'kg'))
       into v_eenheden from generate_series(1, 12) i;

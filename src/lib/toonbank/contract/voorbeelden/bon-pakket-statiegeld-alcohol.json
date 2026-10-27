@@ -1,0 +1,71 @@
+{
+  "soort": "bon",
+  "gebeurtenis_id": "5d80f3ac-0c94-4101-a2bd-5c73fa312fe7",
+  "volgnummer": 1208,
+  "moment": "2027-03-06T13:05:44+01:00",
+  "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+  "bon_id": "5d80f3ac-0c94-4101-a2bd-5c73fa312fe7",
+  "bonnummer": "T1-000414",
+  "bon_volgnummer": 414,
+  "status": "afgerond",
+  "kanaal": "winkel",
+  "catalogus_versie": 412,
+  "voorraad_versie": 1184,
+  "leeftijd": { "uitkomst": "vastgesteld", "at": "2027-03-06T13:04:20+01:00" },
+  "regels": [
+    {
+      "regelnr": 1,
+      "soort": "verkoop",
+      "artikel_id": "c6652e56-78a0-4681-8720-a7adcc9706b5",
+      "naam": "Proefpakket",
+      "aantal": 1,
+      "stuk_cents": 1495,
+      "korting_cents": 0,
+      "bedrag_cents": 1495,
+      "btw": [
+        { "pct": 21, "incl_cents": 996 },
+        { "pct": 9, "incl_cents": 499 }
+      ],
+      "alcohol": true,
+      "onderdelen": [
+        { "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f", "hoeveelheid": 3, "eenheid": "stuk" },
+        { "product_id": "b4031e10-fa38-4186-8d58-133ea69360d1", "hoeveelheid": 1, "eenheid": "stuk" }
+      ],
+      "scan_code": "9001",
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 2,
+      "soort": "statiegeld",
+      "hoort_bij_regelnr": 1,
+      "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f",
+      "aantal": 3,
+      "stuk_cents": 15,
+      "bedrag_cents": 45
+    },
+    {
+      "regelnr": 3,
+      "soort": "verkoop",
+      "artikel_id": "6e405a4c-d48a-4a86-93af-0bfe63d64575",
+      "naam": "Lupulus · Placebo 0,0%",
+      "aantal": 2,
+      "stuk_cents": 295,
+      "korting_cents": 0,
+      "bedrag_cents": 590,
+      "btw": [{ "pct": 9, "incl_cents": 590 }],
+      "alcohol": false,
+      "onderdelen": [{ "product_id": "3223d8f2-3ac2-4c13-bc13-12c297a2cca2", "hoeveelheid": 1, "eenheid": "stuk" }],
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 4,
+      "soort": "betaling",
+      "betaalmethode": "contant",
+      "bedrag_cents": 2130,
+      "contant_ontvangen_cents": 2500,
+      "wisselgeld_cents": 370
+    }
+  ],
+  "totaal_cents": 2130,
+  "afronding_cents": 0
+}

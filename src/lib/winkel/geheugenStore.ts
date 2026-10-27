@@ -438,8 +438,8 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             const ids = new Set((orders.find((x) => x.id === orderId)?.regels ?? []).map((r) => r.id));
             return componenten.filter((c) => ids.has(c.order_regel_id));
         },
-        async boekRest(orderId, methode) {
-            const o = orders.find((x) => x.id === orderId);
+        async boekRest(orgId, orderId, methode) {
+            const o = orders.find((x) => x.id === orderId && x.organization_id === orgId);
             if (!o) return 'onbekend';
             if (o.status !== 'betaald') return 'niet_betaald';
             if (o.rest_betaald_at) return 'al_geboekt';

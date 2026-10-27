@@ -9,6 +9,11 @@ export default defineConfig({
         environment: 'node',
         include: ['src/**/*.test.ts', 'scripts/*.test.ts'],
         globals: false,
+        /* Ruimer dan de standaard 5 s: tests met scrypt (inlogcodes, koppelcodes) en de
+           winkel-opslag liepen onder belasting (parallelle runs, een E2E-keten ernaast)
+           tegen de time-out aan (review M2, klein 12). Een test die zelf een kortere
+           grens zet, houdt die. */
+        testTimeout: 20_000,
     },
     resolve: {
         alias: {

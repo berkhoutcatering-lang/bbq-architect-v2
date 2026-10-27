@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Calendar, Receipt, CreditCard, Webhook, ExternalLink, CheckCircle2,
-  XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap, Printer,
+  XCircle, ArrowLeft, RefreshCw, Settings, ChevronRight, Shield, Zap, Printer, Tablet,
 } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
 import { Settings as SettingsIcon } from 'lucide-react';
@@ -292,6 +292,26 @@ export default function IntegratiesPage() {
                 <h4 className="text-[14px] font-medium text-[var(--text)] mb-1">Labelprinter (Zebra ZQ630 Plus)</h4>
                 <p className="text-[12px] text-[var(--muted)] line-clamp-1">
                   Koppel de Bluetooth-labelprinter aan de keukentablet, kies de labelmaat en print een testlabel.
+                </p>
+              </div>
+              <ChevronRight size={16} className="text-[var(--muted)] shrink-0" />
+            </div>
+          </MetallicCard>
+        </Link>
+        {/* Toonbank (BA-7a) — de winkelkassa: tablets koppelen en inlogcodes */}
+        <Link href="/instellingen/toonbank" className="block mt-3">
+          <MetallicCard className="overflow-hidden" hover={true} accent="var(--brand)">
+            <div className="flex items-center gap-4 p-4">
+              <div
+                className="p-2.5 rounded-xl shrink-0"
+                style={{ background: 'linear-gradient(135deg, var(--brand)15, var(--brand)08)', border: '1px solid var(--brand)20' }}
+              >
+                <span className="text-[var(--brand)]"><Tablet size={20} /></span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[14px] font-medium text-[var(--text)] mb-1">Toonbank (winkelkassa)</h4>
+                <p className="text-[12px] text-[var(--muted)] line-clamp-1">
+                  Koppel de tablets van de winkel met een code, trek ze in, en kies wie mag inloggen.
                 </p>
               </div>
               <ChevronRight size={16} className="text-[var(--muted)] shrink-0" />
