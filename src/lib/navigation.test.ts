@@ -6,6 +6,8 @@ import {
     isTabZichtbaar,
     uitzetbareSleutels,
     werkruimteStart,
+    toonbankTegel,
+    TOONBANK,
     VASTE_TABS,
 } from './navigation';
 
@@ -122,5 +124,54 @@ describe('uitzetbareSleutels', () => {
     it('elke tab-href is uniek over alle werkruimtes', () => {
         const hrefs = navSections.flatMap((s) => s.children.map((c) => c.href));
         expect(new Set(hrefs).size).toBe(hrefs.length);
+    });
+});
+
+describe('tegel Winkel-kassa (de Toonbank)', () => {
+    it('zonder adres geen tegel, zodat hij nooit naar een lege pagina gaat', () => {
+        expect(toonbankTegel(iedereen, undefined)).toBeNull();
+        expect(toonbankTegel(iedereen, '')).toBeNull();
+        expect(toonbankTegel(iedereen, '   ')).toBeNull();
+    });
+
+    it('met adres een tegel die naar dat adres gaat', () => {
+        const tegel = toonbankTegel(iedereen, 'https://toonbank.hopbites.nl');
+        expect(tegel).not.toBeNull();
+        expect(tegel!.href).toBe('https://toonbank.hopbites.nl/');
+        expect(tegel!.title).toBe('Winkel-kassa');
+        expect(tegel!.slug).toBe('toonbank');
+    });
+
+    it('houdt een pad in het adres heel', () => {
+        expect(toonbankTegel(iedereen, ' https://toonbank.hopbites.nl/start ')!.href).toBe('https://toonbank.hopbites.nl/start');
+    });
+
+    it('lokaal testen mag over http, verder alleen https', () => {
+        expect(toonbankTegel(iedereen, 'http://localhost:5173')!.href).toBe('http://localhost:5173/');
+        expect(toonbankTegel(iedereen, 'http://toonbank.hopbites.nl')).toBeNull();
+        expect(toonbankTegel(iedereen, 'javascript:alert(1)')).toBeNull();
+        expect(toonbankTegel(iedereen, 'toonbank.hopbites.nl')).toBeNull();
+    });
+
+    it('verdwijnt als het bedrijf hem uitzet, ook met adres', () => {
+        expect(toonbankTegel({ ...iedereen, verborgen: ['toonbank'] }, 'https://toonbank.hopbites.nl')).toBeNull();
+    });
+
+    it('leest standaard NEXT_PUBLIC_TOONBANK_URL', () => {
+        const vorige = process.env.NEXT_PUBLIC_TOONBANK_URL;
+        try {
+            delete process.env.NEXT_PUBLIC_TOONBANK_URL;
+            expect(toonbankTegel(iedereen)).toBeNull();
+            process.env.NEXT_PUBLIC_TOONBANK_URL = 'https://toonbank.hopbites.nl';
+            expect(toonbankTegel(iedereen)!.href).toBe('https://toonbank.hopbites.nl/');
+        } finally {
+            if (vorige === undefined) delete process.env.NEXT_PUBLIC_TOONBANK_URL;
+            else process.env.NEXT_PUBLIC_TOONBANK_URL = vorige;
+        }
+    });
+
+    it('is uit te zetten in Onderdelen en botst met geen werkruimte', () => {
+        expect(uitzetbareSleutels().has(TOONBANK.slug)).toBe(true);
+        expect(navSections.some((s) => s.slug === TOONBANK.slug)).toBe(false);
     });
 });

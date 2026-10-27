@@ -21,7 +21,7 @@ export default function Tegelscherm({ onClose }: { onClose: () => void }) {
     const pathname = usePathname();
     const { organization, isAdmin } = useOrg();
     const { badges } = useApp();
-    const { werkruimtes } = useOnderdelen();
+    const { werkruimtes, toonbank } = useOnderdelen();
     const huidige = vindWerkruimte(pathname)?.section.slug ?? (pathname === '/' ? 'vandaag' : null);
     const paneelRef = useRef<HTMLDivElement>(null);
     const startPad = useRef(pathname);
@@ -128,6 +128,23 @@ export default function Tegelscherm({ onClose }: { onClose: () => void }) {
                             </Link>
                         );
                     })}
+                    {toonbank ? (
+                        /* De Toonbank is een aparte app: nieuw tabblad, geen
+                           Link (die blijft binnen BBQ Architect). */
+                        <a
+                            key={toonbank.slug}
+                            href={toonbank.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="wr-tegel"
+                            onClick={onClose}
+                            style={{ ['--wr-kleur' as string]: toonbank.kleur, animationDelay: (tegels.length * 25) + 'ms' }}
+                        >
+                            <span className="wr-tegel-icoon" aria-hidden="true">{toonbank.icon}</span>
+                            <span className="wr-tegel-naam">{toonbank.title}</span>
+                            <span className="wr-tegel-uitleg">{toonbank.description}</span>
+                        </a>
+                    ) : null}
                 </nav>
 
                 <div className="wr-tegels-voet">

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { useSettings } from '@/lib/useSupabase';
-import { zichtbareWerkruimtes, type NavSection, type ZichtbaarheidOpties } from '@/lib/navigation';
+import { toonbankTegel, zichtbareWerkruimtes, type NavSection, type ToonbankTegel, type ZichtbaarheidOpties } from '@/lib/navigation';
 
 /* Platformbeheerders staan in een e-mail-allowlist (zelfde bron als AppShell
    en de /api/admin-routes). Alleen zij zien "Platform Beheer". */
@@ -30,6 +30,8 @@ export function useOnderdelen(): {
     verborgen: string[];
     opties: ZichtbaarheidOpties;
     werkruimtes: NavSection[];
+    /** De tegel "Winkel-kassa", of null (geen adres, of uitgezet). */
+    toonbank: ToonbankTegel | null;
     loading: boolean;
 } {
     /* Gedeelde kopie volstaat; niet bij elke mount opnieuw vragen. */
@@ -41,5 +43,6 @@ export function useOnderdelen(): {
     }, [raw]);
     const opties = useMemo(function () { return { verborgen, isPlatformAdmin }; }, [verborgen, isPlatformAdmin]);
     const werkruimtes = useMemo(function () { return zichtbareWerkruimtes(opties); }, [opties]);
-    return { verborgen, opties, werkruimtes, loading };
+    const toonbank = useMemo(function () { return toonbankTegel(opties); }, [opties]);
+    return { verborgen, opties, werkruimtes, toonbank, loading };
 }
