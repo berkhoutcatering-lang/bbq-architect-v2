@@ -15,7 +15,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { betaalFormulierHtml, getTxnStatus, leesBetaalbericht, purchaseVelden, refund, type MyposConfig } from '@/lib/mypos/ipc';
-import { berekenOfferte, maskeerEmail, momentOpen, naarMoment, vandaagISO, type MomentRij, type OfferteInternUitkomst } from './rekenen';
+import { berekenOfferte, isKiesvak, keuzesVan, maskeerEmail, momentOpen, naarMoment, optiesVan, slotsVan, vandaagISO, verkoopbaar, type MomentRij, type OfferteInternUitkomst } from './rekenen';
+import { beschikbaar } from './voorraad';
 import { plaatsBestelling } from './plaatsing';
 import type { OrderRegelRij, OrderRij, Tenant, WinkelStore } from './store';
 import type { Mand, Moment, Offerte, Offerteregel, OfferteUitkomst, OrderUitkomst, Orderstatus } from './types';
@@ -73,7 +74,7 @@ const MandSchema = z.object({
         slug: z.string().regex(/^[a-z0-9-]{1,80}$/),
         aantal: z.number().int().min(1).max(9999),
         moment: z.string().max(80).nullable().optional().transform((v) => v ?? null),
-        /* De pakketten zijn vast (S1): keuzes horen er nog niet bij. Meesturen = validatie. */
+        /* Keuzes voor kies-vakken; rekenen.ts (valideerKeuzes) controleert de vorm. Bij een vast pakket = validatie. */
         keuzes: z.unknown().optional(),
     })).max(50),
 });
@@ -236,6 +237,87 @@ export async function haalBeschikbaarheid(ctx: KassaContext, slug: string): Prom
         console.error('[winkel] beschikbaarheid faalde:', e instanceof Error ? e.message : e);
         return { status: 503, body: { ok: false, soort: 'niet-beschikbaar', melding: 'De beschikbaarheid is op dit moment niet op te halen.' } };
     }
+}
+
+/* ── 2c. Keuzes van de combideals (plan winkel-aanbod fase 2) ─────────────── */
+
+/** Of een keuze er is: zonder getal, net als de badge. 'onbeperkt' = niet bijgehouden. */
+export type KeuzeStand = 'ja' | 'op' | 'onbeperkt';
+
+export interface KeuzeOptie {
+    /** Het product-id: dit stuurt de website terug in `keuzes[].producten`. */
+    product: string;
+    naam: string;
+    meerprijsCenten: number;
+    stand: KeuzeStand;
+    alcohol: boolean;
+}
+
+export interface KeuzeVak {
+    /** Het vak-id: dit stuurt de website terug in `keuzes[].slot`. */
+    slot: string;
+    naam: string;
+    /** 'vast' = altijd hetzelfde; 'kies' = de klant kiest `keuzes` keer uit `opties`. */
+    keuze: 'vast' | 'kies';
+    keuzes: number;
+    verschillend: boolean;
+    hoeveelheid: number;
+    eenheid: 'stuk' | 'gram';
+    /** Vast vak: wat erin zit. */
+    product: string | null;
+    /** Kies-vak: wat er gekozen wordt als de klant niets opgeeft (null = de klant moet kiezen). */
+    voorkeuze: string | null;
+    opties: KeuzeOptie[];
+}
+
+export interface KeuzeArtikel {
+    slug: string;
+    naam: string;
+    prijsCenten: number | null;
+    verkoopbaar: boolean;
+    vakken: KeuzeVak[];
+}
+
+/**
+ * Voor de website: per actief én publiek artikel met minstens één kies-vak de
+ * vakken en hun keuzes. Bedragen alleen als prijs en meerprijs (die zijn
+ * openbaar); voorraad alleen als ja/op/onbeperkt. Het rekenwerk blijft hier:
+ * de offerte controleert de keuzes opnieuw (valideerKeuzes).
+ */
+export async function haalKeuzes(ctx: KassaContext, slug: string): Promise<Antwoord> {
+    const t = await tenantEnBronnen(ctx, slug);
+    if (!t) return fout(404, { ok: false, soort: 'niet-beschikbaar', melding: 'Onbekende winkel.' });
+    const { artikelen, slots, opties, producten } = t.bronnen;
+    const opId = new Map(producten.map((p) => [p.id, p]));
+    const stand = (id: string): KeuzeStand => {
+        const p = opId.get(id);
+        const b = p ? beschikbaar(p) : null;
+        return b == null ? 'onbeperkt' : b > 0 ? 'ja' : 'op';
+    };
+    const uit: KeuzeArtikel[] = artikelen
+        .filter((a) => a.actief && a.publiek && slotsVan(a.id, slots).some(isKiesvak))
+        .map((a) => ({
+            slug: a.slug,
+            naam: a.naam,
+            prijsCenten: a.prijs_cents,
+            verkoopbaar: a.prijs_cents != null && verkoopbaar(a.id, slots, opties, opId),
+            vakken: slotsVan(a.id, slots).map((s): KeuzeVak => {
+                const kies = isKiesvak(s);
+                return {
+                    slot: s.id, naam: s.naam, keuze: kies ? 'kies' : 'vast', keuzes: kies ? keuzesVan(s) : 1, verschillend: kies && Boolean(s.verschillend),
+                    hoeveelheid: s.hoeveelheid, eenheid: s.eenheid,
+                    product: kies ? null : s.standaard_product_id,
+                    voorkeuze: kies ? s.standaard_product_id : null,
+                    opties: !kies ? [] : optiesVan(s.id, opties)
+                        .filter((o) => opId.get(o.product_id)?.actief)
+                        .map((o) => ({
+                            product: o.product_id, naam: opId.get(o.product_id)!.naam, meerprijsCenten: o.meerprijs_cents,
+                            stand: stand(o.product_id), alcohol: Boolean(opId.get(o.product_id)!.alcohol),
+                        })),
+                };
+            }),
+        }));
+    return { status: 200, body: { ok: true, artikelen: uit } };
 }
 
 /* ── 3. Offerte ────────────────────────────────────────────────────────────── */

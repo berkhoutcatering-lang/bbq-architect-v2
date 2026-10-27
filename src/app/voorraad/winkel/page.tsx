@@ -45,18 +45,19 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         : { data: null };
     const orgId = (lid?.organization_id as string | undefined) ?? null;
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }, { data: leveranciers }, vrij] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: plek }, { data: leveranciers }, vrij, { data: opties, error: optieFout }] = await Promise.all([
         supabase.from('winkel_producten')
             .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, leverancier_id')
             .order('type').order('naam'),
-        supabase.from('winkel_artikel_slots')
-            .select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven')
-            .order('volgorde'),
+        /* `*`: keuze/keuzes/verschillend (migratie 20261026120000) mogen er nog niet zijn. */
+        supabase.from('winkel_artikel_slots').select('*').order('volgorde'),
         supabase.from('winkel_artikelen').select('id, naam, slug, actief, telt').order('naam'),
         supabase.from('inventory').select('id, naam, unit, current_stock').order('naam').limit(2000),
         supabase.from('voorraad_plekken').select('id, naam').eq('soort', 'winkel').maybeSingle(),
         supabase.from('leveranciers').select('id, naam').is('archived_at', null).order('naam'),
         orgId ? laadVrijOfLeeg(supabase, orgId) : Promise.resolve([] as VrijProduct[]),
+        /* Opties van de kies-vakken; zonder de tabel gewoon geen. */
+        supabase.from('winkel_slot_opties').select('id, slot_id, product_id, meerprijs_cents, volgorde'),
     ]);
 
     const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
@@ -89,6 +90,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
             leverancier_id: (p.leverancier_id as number | null) ?? null,
         })),
         slots: (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as WinkelData['slots'],
+        opties: optieFout ? [] : ((opties ?? []) as WinkelData['opties']),
         artikelen: (artikelen ?? []) as WinkelData['artikelen'],
         keuken: (keuken ?? []).map((k) => ({ id: Number(k.id), naam: k.naam as string, unit: (k.unit as string | null) ?? null, current_stock: k.current_stock == null ? null : Number(k.current_stock) })),
         leveranciers: (leveranciers ?? []).map((l) => ({ id: Number(l.id), naam: l.naam as string })),

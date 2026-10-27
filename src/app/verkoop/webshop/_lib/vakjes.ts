@@ -74,6 +74,19 @@ export interface SlotRij {
     standaard_product_id: string | null;
     wisselbaar: boolean;
     alternatieven: string[];
+    /* Keuzevak (migratie 20261026120000); ontbreken = vast. */
+    keuze?: 'vast' | 'kies';
+    keuzes?: number;
+    verschillend?: boolean;
+}
+
+/** Een product waaruit de klant kiest in een kies-vak. */
+export interface OptieRij {
+    id: string;
+    slot_id: string;
+    product_id: string;
+    meerprijs_cents: number;
+    volgorde: number;
 }
 
 export interface Wensen {

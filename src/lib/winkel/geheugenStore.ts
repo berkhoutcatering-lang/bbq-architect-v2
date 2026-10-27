@@ -6,7 +6,7 @@
  * database onder vergrendeling doet staat in de migratie en is apart getest
  * in de end-to-end-doorloop.
  */
-import type { Artikel, Instellingen, MomentRij, Product, Slot } from './rekenen';
+import type { Artikel, Instellingen, MomentRij, Product, Slot, SlotOptie } from './rekenen';
 import { vandaagISO } from './rekenen';
 import { regelBoekingen } from './voorraad';
 import { heeftAlcohol, nogOpen, opDezelfdeDag, ophaalBlokkade, restOpen, type Boeking, type Leeftijd, type OphaalBron, type OphaalUitkomst, type RestMethode, type TerugUitkomst } from './ophalen';
@@ -76,6 +76,8 @@ interface Geheugen {
     /** Producten en slots (templates); ontbreekt = geen templates. */
     producten?: Omit<Product, 'voorraad_bezet'>[];
     slots?: Slot[];
+    /** Opties van de kies-vakken; ontbreekt = geen. */
+    opties?: SlotOptie[];
     instellingen: Instellingen & { site_url: string | null; qr_basis_url?: string | null; beschikbaar_grens?: number };
     nu: () => Date;
 }
@@ -414,6 +416,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
                 momenten: g.momenten.map((m) => ({ ...m, bezet: bezetMoment(m.id, null) })),
                 producten: producten.map((p) => (p.voorraad == null ? p : { ...p, voorraad_bezet: bezetProduct(p.id, null) })),
                 slots: g.slots ?? [],
+                opties: g.opties ?? [],
                 instellingen: g.instellingen,
             };
         },
@@ -634,7 +637,7 @@ export function maakGeheugenStore(g: Omit<Geheugen, 'nu'> & { nu?: Date }): Gehe
             return {
                 stand: { versie, gewijzigd_at: versieAt, vrij_verloopt_at: wachtTot[0] ?? null },
                 grens: g.instellingen.beschikbaar_grens ?? BESCHIKBAAR_GRENS,
-                artikelen: vrijArtikelen(artikelen, g.slots ?? [], vrij),
+                artikelen: vrijArtikelen(artikelen, g.slots ?? [], vrij, g.opties),
             };
         },
     };

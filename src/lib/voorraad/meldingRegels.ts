@@ -5,8 +5,8 @@
  *
  * Plan: docs/voorraad-bouwplan.md §3 W4.
  */
-import type { Product, Slot } from '@/lib/winkel/rekenen';
-import { beperkendProduct, beschikbaar, geldendeDrempel, hoeveelheidKort, pakkettenTeMaken } from '@/lib/winkel/voorraad';
+import { isKiesvak, type Product, type Slot, type SlotOptie } from '@/lib/winkel/rekenen';
+import { beperkendProduct, beschikbaar, geldendeDrempel, hoeveelheidKort, leegVak, pakkettenTeMaken } from '@/lib/winkel/voorraad';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
 export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit';
@@ -82,20 +82,30 @@ export function winkelProductMeldingen(producten: WinkelProduct[], slots: Slot[]
     return uit;
 }
 
-/** "Bierpakket € 35 kan niet meer besteld worden: Mr. Hop is op." */
-export function artikelDichtMeldingen(artikelen: ArtikelKort[], producten: WinkelProduct[], slots: Slot[]): Melding[] {
+/**
+ * "Bierpakket € 35 kan niet meer besteld worden: Mr. Hop is op."
+ * Een kies-vak (combideal) is pas dicht als al zijn keuzes samen op zijn.
+ */
+export function artikelDichtMeldingen(artikelen: ArtikelKort[], producten: WinkelProduct[], slots: Slot[], opties: SlotOptie[] = []): Melding[] {
     const uit: Melding[] = [];
     for (const a of artikelen) {
         if (!a.actief) continue;
-        const n = pakkettenTeMaken(a.id, slots, producten);
+        const n = pakkettenTeMaken(a.id, slots, producten, opties);
         if (n !== 0) continue;
-        const oorzaak = beperkendProduct(a.id, slots, producten);
-        const zonderProduct = slots.some((s) => s.artikel_id === a.id && !s.standaard_product_id);
-        const reden = oorzaak ? `${oorzaak.naam} is op` : zonderProduct ? 'er staat een onderdeel zonder product in' : 'een onderdeel is op';
+        const eigen = slots.filter((s) => s.artikel_id === a.id);
+        /* Een vast product noemen we alleen als het vaste deel echt op is — niet als een kies-vak de grens is. */
+        const vastOp = pakkettenTeMaken(a.id, eigen.filter((s) => !isKiesvak(s)), producten) === 0;
+        const oorzaak = vastOp ? beperkendProduct(a.id, slots, producten) : null;
+        const zonderProduct = eigen.some((s) => leegVak(s, opties));
+        const kiesOp = eigen.find((s) => isKiesvak(s) && !leegVak(s, opties) && pakkettenTeMaken(a.id, [s], producten, opties) === 0);
+        const reden = oorzaak ? `${oorzaak.naam} is op` : zonderProduct ? 'er staat een onderdeel zonder product in'
+            : kiesOp ? `alle keuzes bij ${kiesOp.naam} zijn op` : 'een onderdeel is op';
         uit.push({
             bron: 'artikel', item_id: a.id, soort: 'artikel_dicht',
             titel: `${a.naam} kan niet meer besteld worden: ${reden}`,
-            tekst: oorzaak ? `Vul ${oorzaak.naam} aan (ontvangst of overboeken), of kies een ander product in het pakket.` : 'Kies in het pakket voor elk onderdeel een product.',
+            tekst: oorzaak ? `Vul ${oorzaak.naam} aan (ontvangst of overboeken), of kies een ander product in het pakket.`
+                : kiesOp ? `Vul een van de keuzes bij ${kiesOp.naam} aan, of zet er een product bij dat er wel is.`
+                    : 'Kies in het pakket voor elk onderdeel een product.',
             link: oorzaak ? WINKEL_LINK(oorzaak.id) : '/verkoop/webshop#artikelen',
             metadata: { oorzaak_product_id: oorzaak?.id ?? null },
         });

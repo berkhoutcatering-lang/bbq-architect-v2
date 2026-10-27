@@ -10,7 +10,7 @@
  * Bedragen als kommagetallen optellen levert 0,1 + 0,2 op, en dat is geen
  * € 0,30. Alles hier is een geheel getal.
  */
-import type { Betaalwijze, Leverwijze, Mand, Moment, Offerte, Offerteregel, OfferteUitkomst } from './types';
+import type { Betaalwijze, Keuze, Leverwijze, Mand, Moment, Offerte, Offerteregel, OfferteUitkomst } from './types';
 
 /* ── Wat de kassa uit de database kent ─────────────────────────────────────── */
 
@@ -92,9 +92,32 @@ export interface Slot {
     /** 'stuk' = per besteld pakket, 'persoon' = per persoon (de plank). */
     per: 'stuk' | 'persoon';
     standaard_product_id: string | null;
+    /** Ongebruikt (Sinterklaas fase 2); het keuzevak hieronder vervangt ze. */
     wisselbaar: boolean;
     alternatieven: string[];
+    /**
+     * Keuzevak (plan winkel-aanbod fase 2). 'vast' = altijd standaard_product_id;
+     * 'kies' = de klant kiest `keuzes` keer uit de opties van dit vak, elke keuze
+     * `hoeveelheid` groot. Ontbreekt = vast.
+     */
+    keuze?: 'vast' | 'kies';
+    keuzes?: number;
+    /** Kies-vak: elke keuze een ander product ("twee sóórten worst"). */
+    verschillend?: boolean;
 }
+
+/** Een product waaruit de klant in een kies-vak mag kiezen, met eventuele meerprijs per keuze. */
+export interface SlotOptie {
+    id: string;
+    slot_id: string;
+    product_id: string;
+    /** Bovenop de pakketprijs, per keuze, incl. btw. */
+    meerprijs_cents: number;
+    volgorde: number;
+}
+
+/** Per kies-vak de gekozen producten (één id per keuze, herhaling = twee keer hetzelfde). */
+export type Gekozen = Map<string, string[]>;
 
 /** De inhoud van één regel: slot × aantal, vastgelegd bij het plaatsen. */
 export interface Component {
@@ -103,6 +126,9 @@ export interface Component {
     naam: string;
     hoeveelheid: number;
     eenheid: 'stuk' | 'gram';
+    /** Het vak waar dit uit komt, en of de klant het koos (kies-vak). */
+    slot_id?: string;
+    gekozen?: boolean;
 }
 
 export interface MomentRij {
@@ -250,23 +276,169 @@ export function slotsVan(artikelId: string, slots: Slot[] | undefined): Slot[] {
     return (slots ?? []).filter((s) => s.artikel_id === artikelId).sort((a, b) => a.volgorde - b.volgorde);
 }
 
-/**
- * Een artikel met template is pas verkoopbaar als elk slot een product heeft.
- * Zonder slots is er niets in te vullen: verkoopbaar zoals altijd.
- */
-export function verkoopbaar(artikelId: string, slots: Slot[] | undefined): boolean {
-    return slotsVan(artikelId, slots).every((s) => s.standaard_product_id != null);
+export function isKiesvak(s: Slot): boolean {
+    return s.keuze === 'kies';
 }
 
-/** De inhoud van een regel: elk slot × aantal (per stuk) of × personen (per persoon). */
-export function componentenVan(artikelId: string, slots: Slot[] | undefined, aantal: number): Component[] {
-    return slotsVan(artikelId, slots).map((s) => ({
-        product_id: s.standaard_product_id,
-        slot_type: s.slot_type,
-        naam: s.naam,
-        hoeveelheid: rond(s.hoeveelheid * (s.per === 'persoon' ? aantal : aantal)),
-        eenheid: s.eenheid,
-    }));
+/** Hoe vaak de klant in een kies-vak kiest (minstens 1). */
+export function keuzesVan(s: Slot): number {
+    return Math.max(1, Math.floor(s.keuzes ?? 1));
+}
+
+export function optiesVan(slotId: string, opties: SlotOptie[] | undefined): SlotOptie[] {
+    return (opties ?? []).filter((o) => o.slot_id === slotId).sort((a, b) => a.volgorde - b.volgorde);
+}
+
+/**
+ * Een artikel met template is pas verkoopbaar als elk vak gevuld kan worden:
+ * een vast vak heeft een product, een kies-vak minstens één (actieve) optie —
+ * en genoeg verschillende als elke keuze anders moet zijn.
+ * Zonder slots is er niets in te vullen: verkoopbaar zoals altijd.
+ * Zonder `producten` telt elke optie als actief.
+ */
+export function verkoopbaar(artikelId: string, slots: Slot[] | undefined, opties?: SlotOptie[], producten?: Map<string, Product>): boolean {
+    return slotsVan(artikelId, slots).every((s) => {
+        if (!isKiesvak(s)) return s.standaard_product_id != null;
+        const bruikbaar = optiesVan(s.id, opties).filter((o) => !producten || producten.get(o.product_id)?.actief);
+        return s.verschillend ? bruikbaar.length >= keuzesVan(s) : bruikbaar.length > 0;
+    });
+}
+
+/** Wat de klant per kies-vak opgeeft (de website, of de kassa). */
+export type KeuzeInvoer = Keuze;
+
+export type KeuzeUitkomst = { ok: true; gekozen: Gekozen } | { ok: false; fouten: string[] };
+
+/**
+ * Controleert de keuzes van één regel tegen het template. Code, geen AI: precies
+ * `keuzes` keer per kies-vak, alleen uit de opties, alleen actieve producten.
+ * Een kies-vak zonder opgave valt terug op het standaardproduct als dat kan.
+ * Een artikel zonder kies-vakken accepteert geen keuzes (dezelfde zin als vroeger).
+ */
+export function valideerKeuzes(
+    a: Pick<Artikel, 'id' | 'naam'>,
+    slots: Slot[] | undefined,
+    opties: SlotOptie[] | undefined,
+    producten: Map<string, Product>,
+    invoer: unknown,
+): KeuzeUitkomst {
+    const vakken = slotsVan(a.id, slots);
+    const kies = vakken.filter(isKiesvak);
+    const leeg = invoer == null || (Array.isArray(invoer) && invoer.length === 0);
+    if (!kies.length) {
+        return leeg ? { ok: true, gekozen: new Map() } : { ok: false, fouten: [`${a.naam} is een vast pakket; kiezen kan nog niet.`] };
+    }
+
+    const opgave = new Map<string, string[]>();
+    if (!leeg) {
+        const goedeVorm = Array.isArray(invoer) && invoer.every((k) =>
+            k && typeof k === 'object' && typeof (k as KeuzeInvoer).slot === 'string'
+            && Array.isArray((k as KeuzeInvoer).producten) && (k as KeuzeInvoer).producten.every((p) => typeof p === 'string'));
+        if (!goedeVorm) return { ok: false, fouten: [`De keuzes voor ${a.naam} kloppen niet.`] };
+        for (const k of invoer as KeuzeInvoer[]) {
+            const vak = kies.find((s) => s.id === k.slot);
+            if (!vak || opgave.has(k.slot)) return { ok: false, fouten: [`De keuzes voor ${a.naam} kloppen niet.`] };
+            opgave.set(k.slot, k.producten);
+        }
+    }
+
+    const fouten: string[] = [];
+    const gekozen: Gekozen = new Map();
+    for (const s of kies) {
+        const n = keuzesVan(s);
+        const toegestaan = new Set(optiesVan(s.id, opties).map((o) => o.product_id));
+        let keus = opgave.get(s.id);
+        if (!keus) {
+            const std = s.standaard_product_id;
+            if (std && toegestaan.has(std) && (n === 1 || !s.verschillend)) keus = Array(n).fill(std);
+            else {
+                fouten.push(`${a.naam}: kies ${n} × ${s.naam}.`);
+                continue;
+            }
+        }
+        if (keus.length !== n) {
+            fouten.push(`${a.naam}: kies ${n} × ${s.naam} (nu ${keus.length}).`);
+            continue;
+        }
+        const vreemd = keus.find((id) => !toegestaan.has(id));
+        if (vreemd) {
+            fouten.push(`${a.naam}: ${producten.get(vreemd)?.naam ?? 'deze keuze'} hoort niet bij ${s.naam}.`);
+            continue;
+        }
+        const uit = keus.map((id) => producten.get(id)).find((p) => !p || !p.actief);
+        if (uit !== undefined) {
+            fouten.push(`${a.naam}: ${uit?.naam ?? 'een keuze'} is op dit moment niet beschikbaar.`);
+            continue;
+        }
+        if (s.verschillend && new Set(keus).size !== keus.length) {
+            fouten.push(`${a.naam}: kies bij ${s.naam} ${n} verschillende.`);
+            continue;
+        }
+        gekozen.set(s.id, keus);
+    }
+    return fouten.length ? { ok: false, fouten } : { ok: true, gekozen };
+}
+
+/** De meerprijzen van de keuzes, per gekozen product, per stuk (incl. btw). */
+export function meerprijzenVan(gekozen: Gekozen, opties: SlotOptie[] | undefined): { product_id: string; cents: number }[] {
+    const uit: { product_id: string; cents: number }[] = [];
+    for (const [slotId, keus] of gekozen) {
+        const opSlot = new Map(optiesVan(slotId, opties).map((o) => [o.product_id, o.meerprijs_cents]));
+        for (const id of keus) {
+            const c = opSlot.get(id) ?? 0;
+            if (c > 0) uit.push({ product_id: id, cents: c });
+        }
+    }
+    return uit;
+}
+
+/**
+ * Een vaste btw-overschrijving op het artikel past niet bij een kies-vak
+ * waarvan de opties verschillende tarieven hebben (bier 21 %, alcoholvrij 9 %):
+ * de verhouding hangt dan van de keuze af. Dan rekenen we naar rato.
+ */
+export function overschrijvingPast(artikelId: string, slots: Slot[] | undefined, opties: SlotOptie[] | undefined, producten: Map<string, Product>): boolean {
+    return slotsVan(artikelId, slots).filter(isKiesvak).every((s) => {
+        const tarieven = new Set(optiesVan(s.id, opties).map((o) => producten.get(o.product_id)?.btw_pct).filter((t) => t != null));
+        return tarieven.size <= 1;
+    });
+}
+
+/**
+ * De inhoud van een regel: elk slot × aantal (per stuk) of × personen (per persoon).
+ * Een kies-vak levert de gekozen producten (dezelfde keuze samengenomen); zonder
+ * keuze voor dat vak het standaardproduct, zoals een vast vak.
+ */
+export function componentenVan(
+    artikelId: string,
+    slots: Slot[] | undefined,
+    aantal: number,
+    keuze?: { gekozen: Gekozen; producten?: Map<string, Product> },
+): Component[] {
+    return slotsVan(artikelId, slots).flatMap((s): Component[] => {
+        const keus = isKiesvak(s) ? keuze?.gekozen.get(s.id) : undefined;
+        if (!keus) {
+            return [{
+                product_id: s.standaard_product_id,
+                slot_type: s.slot_type,
+                naam: s.naam,
+                hoeveelheid: rond(s.hoeveelheid * (s.per === 'persoon' ? aantal : aantal)),
+                eenheid: s.eenheid,
+                slot_id: s.id,
+            }];
+        }
+        const telling = new Map<string, number>();
+        for (const id of keus) telling.set(id, (telling.get(id) ?? 0) + 1);
+        return [...telling].map(([id, keer]) => ({
+            product_id: id,
+            slot_type: s.slot_type,
+            naam: keuze?.producten?.get(id)?.naam ?? s.naam,
+            hoeveelheid: rond(s.hoeveelheid * keer * aantal),
+            eenheid: s.eenheid,
+            slot_id: s.id,
+            gekozen: true,
+        }));
+    });
 }
 
 function rond(n: number): number {
@@ -296,13 +468,29 @@ export function inkoopwaardeCenten(p: Pick<Product, 'inkoop_excl_cents' | 'prijs
  * Het bedrag wordt eerst over de tarieven verdeeld (restcent naar het grootste
  * deel), dan per deel het btw-deel genomen. Zo tellen de delen altijd op tot
  * het bedrag en klopt de btw per tarief op de cent.
+ *
+ * Meerprijzen van keuzes (kies-vak) gaan niet mee in de verhouding: elke
+ * meerprijs telt tegen het tarief van zijn eigen product, de rest naar rato.
  */
 export function btwVerdeling(
     a: Pick<Artikel, 'btw_pct' | 'btw_verdeling'>,
     componenten: Component[],
     producten: Map<string, Product>,
     bedragCenten: number,
+    meerprijzen: { product_id: string; cents: number }[] = [],
 ): { delen: Record<string, number>; btw: Record<string, number> } {
+    const meer = meerprijzen.reduce((s, m) => s + m.cents, 0);
+    if (meer > 0) {
+        const basis = btwVerdeling(a, componenten, producten, bedragCenten - meer);
+        const delen = { ...basis.delen };
+        for (const m of meerprijzen) {
+            const pct = String(producten.get(m.product_id)?.btw_pct ?? a.btw_pct);
+            delen[pct] = (delen[pct] ?? 0) + m.cents;
+        }
+        const btw: Record<string, number> = {};
+        for (const [pct, deel] of Object.entries(delen)) btw[pct] = btwDeel(deel, Number(pct));
+        return { delen, btw };
+    }
     let gewicht: Record<string, number> = {};
     if (a.btw_verdeling && Object.keys(a.btw_verdeling).length) {
         for (const [pct, w] of Object.entries(a.btw_verdeling)) if (w > 0) gewicht[pct] = w;
@@ -415,6 +603,8 @@ export interface Rekenbronnen {
     /** Producten en slots (templates). Ontbreekt = geen artikel heeft een template. */
     producten?: Product[];
     slots?: Slot[];
+    /** Opties van de kies-vakken. Ontbreekt = geen enkel vak heeft opties. */
+    opties?: SlotOptie[];
     nu?: Date;
 }
 
@@ -461,11 +651,17 @@ export function berekenOfferte(
         const eenheidWoord = a.telt === 'personen' ? 'personen' : 'stuks';
         /* Prijs volgt, uit, of een template waarvan nog niet elk slot is ingevuld:
            dezelfde zin — de site zegt "prijs volgt" of laat het artikel weg. */
-        if (!a.actief || a.prijs_cents == null || !verkoopbaar(a.id, bron.slots)) fouten.push(`${a.naam} kan op dit moment niet besteld worden.`);
+        const tekoop = a.actief && a.prijs_cents != null && verkoopbaar(a.id, bron.slots, bron.opties, producten);
+        if (!tekoop) fouten.push(`${a.naam} kan op dit moment niet besteld worden.`);
         if (regel.aantal < a.minimum) fouten.push(`${a.naam} gaat vanaf ${a.minimum} ${eenheidWoord}.`);
         if (a.maximum !== null && regel.aantal > a.maximum) fouten.push(`${a.naam} gaat tot ${a.maximum} ${eenheidWoord} per bestelling.`);
-        /* Een vast pakket: keuzes horen er niet bij (fase 2). */
-        if ((regel as { keuzes?: unknown }).keuzes != null) fouten.push(`${a.naam} is een vast pakket; kiezen kan nog niet.`);
+        /* Keuzes: een vast pakket weigert ze, een kies-vak eist ze (of valt terug op zijn standaard). */
+        let gekozen: Gekozen = new Map();
+        if (tekoop) {
+            const k = valideerKeuzes(a, bron.slots, bron.opties, producten, (regel as { keuzes?: unknown }).keuzes);
+            if (k.ok === false) fouten.push(...k.fouten);
+            else gekozen = k.gekozen;
+        }
 
         /* Het moment of de dag van deze regel. */
         let moment_id: string | null = null;
@@ -500,9 +696,15 @@ export function berekenOfferte(
         }
 
         if (a.prijs_cents == null) continue;
-        const bedragCenten = a.prijs_cents * regel.aantal;
-        const componenten = componentenVan(a.id, bron.slots, regel.aantal);
-        const verdeling = btwVerdeling(a, componenten, producten, bedragCenten);
+        const meerprijzen = meerprijzenVan(gekozen, bron.opties);
+        const stukCenten = a.prijs_cents + meerprijzen.reduce((s, m) => s + m.cents, 0);
+        const bedragCenten = stukCenten * regel.aantal;
+        const componenten = componentenVan(a.id, bron.slots, regel.aantal, { gekozen, producten });
+        const btwArtikel = overschrijvingPast(a.id, bron.slots, bron.opties, producten) ? a : { ...a, btw_verdeling: null };
+        const verdeling = btwVerdeling(
+            btwArtikel, componenten, producten, bedragCenten,
+            meerprijzen.map((m) => ({ ...m, cents: m.cents * regel.aantal })),
+        );
         for (const [pct, c] of Object.entries(verdeling.btw)) btwCenten[pct] = (btwCenten[pct] ?? 0) + c;
         const alcohol = Boolean(a.alcohol) || componenten.some((c) => c.product_id && producten.get(c.product_id)?.alcohol);
         regels.push({
@@ -510,9 +712,10 @@ export function berekenOfferte(
             naam: a.naam,
             aantal: regel.aantal,
             eenheid: a.eenheid,
-            stukCenten: a.prijs_cents,
+            stukCenten,
             bedragCenten,
             afhaalmoment,
+            ...(gekozen.size ? { keuzes: [...gekozen].map(([slot, producten]) => ({ slot, producten })) } : {}),
             artikel_id: a.id,
             btw_pct: a.btw_pct,
             btw_cents: verdeling.btw,

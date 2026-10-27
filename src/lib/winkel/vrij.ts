@@ -20,8 +20,8 @@
  *   kassaPil          de voorraadpil van de Toonbank, met vaste woorden uit
  *                     prototype v4 (V4-Verkopen.dc.html, pillTxt)
  */
-import type { Artikel, Product, Slot } from './rekenen';
-import { beperkendProduct, pakkettenTeMaken } from './voorraad';
+import { isKiesvak, type Artikel, type Product, type Slot, type SlotOptie } from './rekenen';
+import { beperkendProduct, leegVak, pakkettenTeMaken } from './voorraad';
 
 /** Tot en met dit aantal zegt de website "Nog n" en de Toonbank "nog n" (winkel_instellingen.beschikbaar_grens). */
 export const BESCHIKBAAR_GRENS = 5;
@@ -98,15 +98,20 @@ export function vrijArtikel(
     artikel: Pick<Artikel, 'id' | 'slug' | 'voorraad' | 'voorraad_bezet'>,
     slots: Slot[],
     producten: VrijProduct[],
+    opties?: SlotOptie[],
 ): VrijArtikel {
     const p = producten.map((x) => ({ id: x.product_id, naam: x.naam, voorraad: x.ligt_er, voorraad_bezet: x.gereserveerd }));
     const eigen = slots.filter((s) => s.artikel_id === artikel.id).sort((a, b) => a.volgorde - b.volgorde);
-    const leegSlot = eigen.some((s) => !s.standaard_product_id);
-    const uitOnderdelen = pakkettenTeMaken(artikel.id, eigen, p);
+    const leegSlot = eigen.some((s) => leegVak(s, opties));
+    const uitOnderdelen = pakkettenTeMaken(artikel.id, eigen, p, opties);
     const uitQuotum = artikel.voorraad == null ? null : Math.max(0, artikel.voorraad - (artikel.voorraad_bezet ?? 0));
     const grenzen = [uitOnderdelen, uitQuotum].filter((n): n is number => n != null);
     const vrij = grenzen.length ? Math.min(...grenzen) : null;
-    const onderdelenBepalen = !leegSlot && uitOnderdelen != null && (uitQuotum == null || uitOnderdelen <= uitQuotum);
+    /* Een kies-vak heeft geen één beperkend product: noemen we alleen als een
+       vast product de grens is (bij gelijkstand wint het vaste product). */
+    const uitVast = pakkettenTeMaken(artikel.id, eigen.filter((s) => !isKiesvak(s)), p);
+    const onderdelenBepalen = !leegSlot && uitOnderdelen != null && uitVast === uitOnderdelen
+        && (uitQuotum == null || uitOnderdelen <= uitQuotum);
     return {
         artikel_id: artikel.id,
         slug: artikel.slug,
@@ -120,9 +125,10 @@ export function vrijArtikelen(
     artikelen: Pick<Artikel, 'id' | 'slug' | 'voorraad' | 'voorraad_bezet'>[],
     slots: Slot[],
     producten: VrijProduct[],
+    opties?: SlotOptie[],
 ): VrijArtikel[] {
     return artikelen
-        .map((a) => vrijArtikel(a, slots, producten))
+        .map((a) => vrijArtikel(a, slots, producten, opties))
         .sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
 }
 

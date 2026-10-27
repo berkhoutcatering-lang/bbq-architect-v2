@@ -740,12 +740,30 @@ const SlotVelden = z.object({
     eenheid: z.enum(['stuk', 'gram']).default('stuk'),
     per: z.enum(['stuk', 'persoon']).default('stuk'),
     standaard_product_id: z.string().uuid().nullable().default(null),
+    /* Keuzevak (migratie 20261026120000). */
+    keuze: z.enum(['vast', 'kies']).default('vast'),
+    keuzes: z.number().int().min(1, 'De klant kiest minstens 1 keer').max(24).default(1),
+    verschillend: z.boolean().default(false),
+    opties: z.array(z.object({
+        product_id: z.string().uuid(),
+        meerprijs_cents: z.number().int().min(0, 'Een meerprijs is 0 of meer').max(100000).default(0),
+    })).max(60).default([]),
 });
+
+/** Een onbekende kolom of tabel: de databasestap voor keuzevakken is nog niet gedraaid. */
+function keuzevakNogNietLive(error: { code?: string; message: string }): boolean {
+    return error.code === '42703' || error.code === '42P01' || error.code === 'PGRST204' || error.code === 'PGRST205';
+}
+const NOG_NIET_LIVE = 'Klant kiest werkt pas na de databasestap voor keuzevakken (migratie 20261026120000). Vaste vakken kun je gewoon opslaan.';
 
 /**
  * Het hele template van een artikel in één keer: bestaande slots bijwerken,
  * nieuwe aanmaken, weggelaten slots verwijderen. Bestaande orders raakt dit
  * niet — hun componenten zijn bij het plaatsen vastgelegd.
+ *
+ * Een kies-vak krijgt daarna zijn opties (alles vervangen). Zolang de migratie
+ * voor keuzevakken niet live is, schrijven we de nieuwe kolommen alleen als er
+ * een kies-vak is — dan blijft het opslaan van vaste pakketten werken.
  */
 export async function zetSlots(input: unknown): Promise<ActionResult<{ aantal: number }>> {
     const parsed = z.object({ artikelId: z.string().uuid(), slots: z.array(SlotVelden).max(40) }).safeParse(input);
@@ -754,27 +772,56 @@ export async function zetSlots(input: unknown): Promise<ActionResult<{ aantal: n
     if (!s) return { error: 'unauthorized' };
     const { artikelId, slots } = parsed.data;
 
+    /* Een kies-vak moet te vullen zijn, en de voorkeuze moet een van de opties zijn. */
+    for (const sl of slots.filter((x) => x.keuze === 'kies')) {
+        const ids = sl.opties.map((o) => o.product_id);
+        if (new Set(ids).size !== ids.length) return { error: `${sl.naam}: een product staat twee keer in de keuzes.` };
+        if (ids.length === 0) return { error: `${sl.naam}: kies minstens één product waaruit de klant mag kiezen.` };
+        if (sl.verschillend && ids.length < sl.keuzes) return { error: `${sl.naam}: elk een andere, maar er zijn maar ${ids.length} keuzes voor ${sl.keuzes} keer kiezen.` };
+        if (sl.standaard_product_id && !ids.includes(sl.standaard_product_id)) return { error: `${sl.naam}: de voorkeuze moet ook in de keuzes staan.` };
+    }
+
     const { data: art } = await s.supabase.from('winkel_artikelen').select('id').eq('id', artikelId).eq('organization_id', s.orgId).maybeSingle();
     if (!art) return { error: 'Artikel niet gevonden' };
-    const productIds = [...new Set(slots.map((x) => x.standaard_product_id).filter((x): x is string => !!x))];
+    const productIds = [...new Set(slots.flatMap((x) => [x.standaard_product_id, ...x.opties.map((o) => o.product_id)]).filter((x): x is string => !!x))];
     if (productIds.length) {
         const { data: prods } = await s.supabase.from('winkel_producten').select('id').eq('organization_id', s.orgId).in('id', productIds);
         if ((prods ?? []).length !== productIds.length) return { error: 'Een gekozen product is niet gevonden.' };
     }
 
-    const { data: bestaand } = await s.supabase.from('winkel_artikel_slots').select('id').eq('artikel_id', artikelId).eq('organization_id', s.orgId);
+    const { data: bestaand } = await s.supabase.from('winkel_artikel_slots').select('*').eq('artikel_id', artikelId).eq('organization_id', s.orgId);
+    /* Kent de tabel de kolom keuze al? Bij een bestaand slot zien we het; anders alleen schrijven als het moet. */
+    const metKeuzekolommen = (bestaand ?? []).some((r) => 'keuze' in r) || slots.some((x) => x.keuze === 'kies');
     const houden = new Set(slots.map((x) => x.id).filter((x): x is string => !!x));
     const weg = (bestaand ?? []).map((r) => r.id as string).filter((id) => !houden.has(id));
     if (weg.length) {
         const { error } = await s.supabase.from('winkel_artikel_slots').delete().in('id', weg).eq('organization_id', s.orgId);
         if (error) return { error: error.message };
     }
+    const slotIds: string[] = [];
     for (const [i, sl] of slots.entries()) {
-        const rij = { organization_id: s.orgId, artikel_id: artikelId, volgorde: i + 1, slot_type: sl.slot_type, naam: sl.naam, hoeveelheid: sl.hoeveelheid, eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id };
-        const { error } = sl.id
-            ? await s.supabase.from('winkel_artikel_slots').update(rij).eq('id', sl.id).eq('organization_id', s.orgId)
-            : await s.supabase.from('winkel_artikel_slots').insert(rij);
-        if (error) return { error: error.message };
+        const rij = {
+            organization_id: s.orgId, artikel_id: artikelId, volgorde: i + 1, slot_type: sl.slot_type, naam: sl.naam, hoeveelheid: sl.hoeveelheid, eenheid: sl.eenheid, per: sl.per, standaard_product_id: sl.standaard_product_id,
+            ...(metKeuzekolommen ? { keuze: sl.keuze, keuzes: sl.keuze === 'kies' ? sl.keuzes : 1, verschillend: sl.keuze === 'kies' && sl.verschillend } : {}),
+        };
+        const { data, error } = sl.id
+            ? await s.supabase.from('winkel_artikel_slots').update(rij).eq('id', sl.id).eq('organization_id', s.orgId).select('id').single()
+            : await s.supabase.from('winkel_artikel_slots').insert(rij).select('id').single();
+        if (error) return { error: keuzevakNogNietLive(error) ? NOG_NIET_LIVE : error.message };
+        slotIds.push(data.id as string);
+    }
+
+    /* De opties: per slot alles vervangen. Een vast vak heeft er geen. */
+    if (metKeuzekolommen) {
+        const { error: wegFout } = await s.supabase.from('winkel_slot_opties').delete().in('slot_id', slotIds).eq('organization_id', s.orgId);
+        if (wegFout) return { error: keuzevakNogNietLive(wegFout) ? NOG_NIET_LIVE : wegFout.message };
+        const rijen = slots.flatMap((sl, i) => (sl.keuze !== 'kies' ? [] : sl.opties.map((o, j) => ({
+            organization_id: s.orgId, slot_id: slotIds[i]!, product_id: o.product_id, meerprijs_cents: o.meerprijs_cents, volgorde: j + 1,
+        }))));
+        if (rijen.length) {
+            const { error } = await s.supabase.from('winkel_slot_opties').insert(rijen);
+            if (error) return { error: keuzevakNogNietLive(error) ? NOG_NIET_LIVE : error.message };
+        }
     }
     /* Een ander product of aantal per pakket verandert wat er nog te maken is. */
     verversNaAfloop();

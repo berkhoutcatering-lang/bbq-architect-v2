@@ -9,7 +9,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
-import type { Artikel, MomentRij, Product, Slot } from './rekenen';
+import type { Artikel, MomentRij, Product, Slot, SlotOptie } from './rekenen';
 import { vandaagISO } from './rekenen';
 import type { Bronnen, ComponentRij, EventVakje, NieuweOrder, OpslagCode, OpslagUitkomst, OrderRegelRij, OrderRij, RegelOpEvent, Tenant, WinkelStore } from './store';
 import { BESCHIKBAAR_GRENS, type VoorraadStand, type VrijArtikel, type VrijProduct } from './vrij';
@@ -18,7 +18,11 @@ const ORDER_KOLOMMEN = 'id, organization_id, nummer, token, sleutel, status, sta
 const ARTIKEL_KOLOMMEN = 'id, slug, naam, eenheid, telt, prijs_cents, btw_pct, minimum, maximum, verzendbaar, gekoeld, moment_soort, moment_groep, afhaalmoment_tekst, capaciteit_soort, doos_klein_max, doos_groot, voorraad, actief, publiek, gerecht_id, inventory_id, inkoop_per_stuk, dieet, segment, vast, alcohol, schaal_verdeling, btw_verdeling, verpakking_klein_cents, verpakking_groot_cents';
 const REGEL_KOLOMMEN = 'id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, btw_pct, moment_id, eenheden, voorraad_eenheden, afhaalmoment_tekst, klaar_op, event_id, klaargezet_at, btw_cents, alcohol';
 const PRODUCT_KOLOMMEN = 'id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief';
-const SLOT_KOLOMMEN = 'id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven';
+/* `*` en niet een vaste lijst: keuze/keuzes/verschillend (migratie 20261026120000)
+   mogen er nog niet zijn — een onbekende kolom laat PostgREST de hele vraag weigeren,
+   en dan bestelt niemand meer. Zonder die kolommen is elk vak 'vast', zoals voorheen. */
+const SLOT_KOLOMMEN = '*';
+const OPTIE_KOLOMMEN = 'id, slot_id, product_id, meerprijs_cents, volgorde';
 const MOMENT_KOLOMMEN = 'id, groep, datum, van, tot, capaciteit, bestellen_tot, sluit_op, actief';
 
 function code(e: { code?: string | null; message?: string } | null): OpslagCode {
@@ -146,10 +150,13 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
             }
 
             /* Templates: producten (met bezetting waar er een voorraadgetal is) en slots. */
-            const [{ data: producten }, { data: slots }] = await Promise.all([
+            const [{ data: producten }, { data: slots }, { data: opties, error: optieFout }] = await Promise.all([
                 sb.from('winkel_producten').select(PRODUCT_KOLOMMEN).eq('organization_id', orgId),
                 sb.from('winkel_artikel_slots').select(SLOT_KOLOMMEN).eq('organization_id', orgId).order('volgorde', { ascending: true }),
+                sb.from('winkel_slot_opties').select(OPTIE_KOLOMMEN).eq('organization_id', orgId).order('volgorde', { ascending: true }),
             ]);
+            /* Tabel nog niet live: geen opties, dus geen kies-vakken te koop. Nooit een harde fout. */
+            if (optieFout) console.warn('[winkel] winkel_slot_opties niet te lezen:', optieFout.code, optieFout.message);
             const productBezet = new Map<string, number>();
             for (const p of producten ?? []) {
                 if (p.voorraad == null) continue;
@@ -162,6 +169,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 momenten: (momenten ?? []).map((m) => ({ ...m, bezet: bezet.get(m.id) ?? 0 })) as MomentRij[],
                 producten: (producten ?? []).map((p) => ({ ...p, prijs_per: Number(p.prijs_per), voorraad: p.voorraad == null ? null : Number(p.voorraad), voorraad_bezet: p.voorraad == null ? undefined : productBezet.get(p.id) ?? 0 })) as Product[],
                 slots: (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[],
+                opties: optieFout ? [] : ((opties ?? []) as SlotOptie[]),
                 instellingen: inst,
             };
         },
@@ -330,7 +338,10 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                     artikel_id: r.artikel_id, slug: r.slug, naam: r.naam, aantal: r.aantal, eenheid: r.eenheid,
                     stuk_cents: r.stukCenten, bedrag_cents: r.bedragCenten, btw_pct: r.btw_pct, btw_cents: r.btw_cents, alcohol: r.alcohol, moment_id: r.moment_id,
                     eenheden: r.eenheden, voorraad_eenheden: r.voorraad_eenheden, afhaalmoment_tekst: r.afhaalmoment,
-                    componenten: r.componenten.map((c) => ({ product_id: c.product_id, slot_type: c.slot_type, naam: c.naam, hoeveelheid: c.hoeveelheid, eenheid: c.eenheid })),
+                    componenten: r.componenten.map((c) => ({
+                        product_id: c.product_id, slot_type: c.slot_type, naam: c.naam, hoeveelheid: c.hoeveelheid, eenheid: c.eenheid,
+                        slot_id: c.slot_id ?? null, gekozen: c.gekozen ?? false,
+                    })),
                 })),
                 p_betaalwijze: o.betaalwijze,
                 p_nu_te_betalen_cents: o.nuTeBetalenCenten,

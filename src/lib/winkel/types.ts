@@ -20,12 +20,24 @@ export type Leverwijze = 'afhalen' | 'verzenden';
  */
 export type Betaalwijze = 'volledig' | 'reservering' | 'bij_afhalen';
 
+/**
+ * De keuze in één kies-vak van een combideal: het vak (slot-id) en per keuze
+ * het product (product-id), herhaling = twee keer hetzelfde. Beide id's komen
+ * uit het aanbod dat BBQ Architect publiceert.
+ */
+export interface Keuze {
+    slot: string;
+    producten: string[];
+}
+
 /** Wat de website stuurt: alleen keuzes, nooit bedragen. */
 export interface MandRegel {
     slug: string;
     aantal: number;
     /** Het moment (plank) of de dag (Kerst-Box) van deze regel. */
     moment: string | null;
+    /** Alleen bij een artikel met kies-vakken. Ontbreekt een vak, dan het standaardproduct (als dat kan). */
+    keuzes?: Keuze[];
 }
 
 export interface Mand {
@@ -51,6 +63,8 @@ export interface Offerteregel {
     bedragCenten: number;
     /** De vaste afhaalafspraak in woorden, los van het gekozen moment. */
     afhaalmoment: string | null;
+    /** De keuzes zoals gerekend (met teruggevallen standaarden). stukCenten bevat de meerprijzen. */
+    keuzes?: Keuze[];
 }
 
 export interface Offerte {

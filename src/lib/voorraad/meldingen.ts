@@ -17,7 +17,7 @@
 import 'server-only';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { sendServerMail } from '@/lib/serverMail';
-import type { Slot } from '@/lib/winkel/rekenen';
+import type { Slot, SlotOptie } from '@/lib/winkel/rekenen';
 import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import {
     DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, verschil, winkelProductMeldingen,
@@ -28,16 +28,19 @@ type Sb = ReturnType<typeof createServiceSupabase>;
 type Staat = Pick<Melding, 'bron' | 'item_id' | 'soort'>;
 
 const PRODUCT_KOLOMMEN = 'id, naam, eenheid, voorraad, drempel, actief, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam';
-const SLOT_KOLOMMEN = 'id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven';
+/* `*`: keuze/keuzes/verschillend (migratie 20261026120000) mogen er nog niet zijn. */
+const SLOT_KOLOMMEN = '*';
 
 async function laadWinkel(sb: Sb, orgId: string) {
     /* Gereserveerd voor alle producten in één aanroep (winkel_vrij_producten),
        in plaats van winkel_bezetting_product per product. Dezelfde regel. */
-    const [{ data: producten }, { data: slots }, { data: artikelen }, vrij] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, vrij, { data: opties, error: optieFout }] = await Promise.all([
         sb.from('winkel_producten').select(PRODUCT_KOLOMMEN).eq('organization_id', orgId),
         sb.from('winkel_artikel_slots').select(SLOT_KOLOMMEN).eq('organization_id', orgId),
         sb.from('winkel_artikelen').select('id, naam, actief').eq('organization_id', orgId),
         maakSupabaseStore(sb).laadVrij(orgId),
+        /* Opties van de kies-vakken; zonder de tabel gewoon geen. */
+        sb.from('winkel_slot_opties').select('id, slot_id, product_id, meerprijs_cents, volgorde').eq('organization_id', orgId),
     ]);
     const bijgehouden = (producten ?? []).filter((p) => p.voorraad != null);
     const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
@@ -66,7 +69,7 @@ async function laadWinkel(sb: Sb, orgId: string) {
         bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
     }));
     const sl = (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[];
-    return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag };
+    return { producten: prods, slots: sl, opties: optieFout ? [] : ((opties ?? []) as SlotOptie[]), artikelen: (artikelen ?? []) as ArtikelKort[], vraag };
 }
 
 async function laadInstellingen(sb: Sb, orgId: string) {
@@ -140,7 +143,7 @@ export async function evalueerWinkelMeldingen(orgId: string, productIds?: string
         const actief = new Set(w.artikelen.filter((a) => a.actief).map((a) => a.id));
         const gewenst = [
             ...winkelProductMeldingen(w.producten, w.slots, actief),
-            ...artikelDichtMeldingen(w.artikelen, w.producten, w.slots),
+            ...artikelDichtMeldingen(w.artikelen, w.producten, w.slots, w.opties),
             ...tekortVooruitMeldingen(w.producten, w.vraag),
         ];
         const scope = productIds ? new Set(productIds) : null;
