@@ -53,7 +53,7 @@ export async function laadWinkelEtiketten(supabase: SupabaseClient, orgId: strin
             regel: { id: Number(r.id), artikel_id: r.artikel_id as string, slug: r.slug as string, naam: r.naam as string, aantal: Number(r.aantal), alcohol: Boolean(r.alcohol) },
             order: {
                 id: Number(order.id), nummer: order.nummer as string, contact_naam: order.contact_naam as string,
-                betaalwijze: order.betaalwijze as 'volledig' | 'reservering', nu_te_betalen_cents: Number(order.nu_te_betalen_cents),
+                betaalwijze: order.betaalwijze as 'volledig' | 'reservering' | 'bij_afhalen', nu_te_betalen_cents: Number(order.nu_te_betalen_cents),
                 rest_cents: Number(order.rest_cents), rest_betaald_at: (order.rest_betaald_at as string | null) ?? null,
             },
             componenten: [],

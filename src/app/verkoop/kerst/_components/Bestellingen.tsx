@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useConfirm } from '@/components/ConfirmDialog';
 import { afhaaldagVan, afhaaldagVoluit, euroKerst, veldenUitOrder } from '@/lib/winkel/kerstTellen';
+import { heeftAlcohol, type Leeftijd } from '@/lib/winkel/ophalen';
 import { boekRestBetaling, zetOpgehaald } from '../../webshop/actions';
 import { stuurKerstMailOpnieuw, wijzigKerstAantal, zetKerstGeannuleerd } from '../actions';
 import type { KerstOrderRij, Melding } from './types';
@@ -25,6 +26,8 @@ function opmerkingKlant(o: KerstOrderRij): string {
 }
 
 const opgehaald = (o: KerstOrderRij) => o.winkel_order_regels.length > 0 && o.winkel_order_regels.every((r) => r.opgehaald_at);
+const ingepakt = (o: KerstOrderRij) => o.winkel_order_regels.some((r) => r.klaargezet_at || r.opgehaald_at);
+const tijdstip = (iso: string) => new Date(iso).toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export default function Bestellingen({ orders, dagen, herlaad, melding }: Props) {
     const [zoek, setZoek] = useState('');
@@ -104,7 +107,7 @@ export default function Bestellingen({ orders, dagen, herlaad, melding }: Props)
                                 </div>
                             </div>
                             {isOpen && (
-                                <Uitklap o={o} v={v} betaald={betaald} bezig={bezig} doe={doe}
+                                <Uitklap o={o} v={v} betaald={betaald} bezig={bezig} doe={doe} herlaad={herlaad} melding={melding} setBezig={setBezig}
                                     annuleer={async () => {
                                         const ok = await confirm({ title: `Bestelling ${o.nummer} annuleren?`, description: `${o.contact_naam} · ${v.personen} personen. Hij telt dan niet meer mee in de productie. De klant krijgt geen mail; laat het hem zelf weten.`, confirmText: 'Annuleren', danger: true });
                                         if (ok) await doe(`ann:${o.id}`, () => zetKerstGeannuleerd({ orderId: o.id, geannuleerd: true }), 'Bestelling geannuleerd');
@@ -118,12 +121,15 @@ export default function Bestellingen({ orders, dagen, herlaad, melding }: Props)
     );
 }
 
-function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
+function Uitklap({ o, v, betaald, bezig, doe, herlaad, melding, setBezig, annuleer }: {
     o: KerstOrderRij;
     v: ReturnType<typeof kerstVelden>;
     betaald: boolean;
     bezig: string | null;
     doe: (sleutel: string, fn: () => Promise<Resultaat>, gelukt: string) => Promise<boolean | undefined>;
+    herlaad: () => Promise<void>;
+    melding: Melding;
+    setBezig: (s: string | null) => void;
     annuleer: () => Promise<void>;
 }) {
     const [personen, setPersonen] = useState(v.personen);
@@ -133,10 +139,39 @@ function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
     const [cremant, setCremant] = useState(v.cremant);
     const [champagne, setChampagne] = useState(v.champagne);
     const [onzeker, setOnzeker] = useState(o.aantal_onzeker);
+    /* 18+ aan de balie: "ID gezien" onthouden tot Opgehaald (zoals de webshop-balie). */
+    const [idGezien, setIdGezien] = useState(false);
     const geannuleerd = o.status === 'geannuleerd';
     const gewijzigd = personen !== v.personen || vega !== v.vegetarisch || bier !== v.bier || wijn !== v.wijn || cremant !== v.cremant || champagne !== v.champagne || onzeker !== o.aantal_onzeker;
     const isOpgehaald = opgehaald(o);
-    const vast = Boolean(o.rest_betaald_at) || o.winkel_order_regels.some((r) => r.klaargezet_at || r.opgehaald_at);
+    const isIngepakt = ingepakt(o);
+    const vast = Boolean(o.rest_betaald_at) || isIngepakt;
+    const alcohol = heeftAlcohol({ regels: o.winkel_order_regels });
+
+    /* Ophalen via winkel_order_ophalen (BA-2): de database controleert betaald,
+       18+ en de rest; een "nee" is een uitkomst met een eigen melding, geen
+       fout. Alleen bij een echte wijziging opnieuw laden. */
+    async function haalOp(leeftijd: Leeftijd | null) {
+        setBezig(`op:${o.id}`);
+        try {
+            const r = await zetOpgehaald({ orderId: o.id, opgehaald: true, leeftijd });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            melding(r.data.melding.tekst, r.data.melding.soort);
+            const u = r.data.uitkomst.uitkomst;
+            if (u === 'leeftijd_nodig' || u === 'geweigerd') setIdGezien(false);
+            if (u === 'opgehaald' || u === 'al_opgehaald' || u === 'geweigerd' || u === 'rest_nodig') await herlaad();
+        } finally { setBezig(null); }
+    }
+
+    async function zetTerug() {
+        setBezig(`op:${o.id}`);
+        try {
+            const r = await zetOpgehaald({ orderId: o.id, opgehaald: false });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            melding(r.data.melding.tekst, r.data.melding.soort);
+            if (r.data.uitkomst.uitkomst === 'teruggezet') await herlaad();
+        } finally { setBezig(null); }
+    }
     const opm = opmerkingKlant(o);
     const getal = (zet: (n: number) => void) => (e: React.ChangeEvent<HTMLInputElement>) => zet(Math.max(0, Math.floor(Number(e.target.value) || 0)));
 
@@ -196,10 +231,38 @@ function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
                             <button type="button" className="btn btn-ghost" disabled={bezig !== null} onClick={() => doe(`contant:${o.id}`, () => boekRestBetaling({ orderId: o.id, methode: 'contant' }), 'Betaald contant')}>Contant</button>
                         </>
                     )}
-                    <button type="button" className="btn btn-ghost" disabled={bezig !== null}
-                        onClick={() => doe(`op:${o.id}`, () => zetOpgehaald({ orderId: o.id, opgehaald: !isOpgehaald }), isOpgehaald ? 'Niet meer opgehaald' : 'Opgehaald')}>
-                        {isOpgehaald ? 'Opgehaald ✓ — terugzetten' : 'Opgehaald'}
-                    </button>
+                </div>
+                <div className="kr-acties" style={{ marginTop: 8 }}>
+                    {isOpgehaald ? (
+                        <button type="button" className="btn btn-ghost" disabled={bezig !== null} onClick={zetTerug}
+                            title="Alleen dezelfde dag; de voorraad en de betaling blijven staan">Opgehaald ✓ — terugzetten</button>
+                    ) : !betaald ? (
+                        <>
+                            <button type="button" className="btn btn-ghost" disabled>Opgehaald</button>
+                            <span className="ws-onderschrift">Eerst betalen (pin of contant), dan meegeven.</span>
+                        </>
+                    ) : alcohol && !idGezien ? (
+                        <>
+                            <span className="ws-onderschrift">
+                                <b>18+</b> · er zit drank in: controleer de leeftijd (ID) vóór je meegeeft
+                                {o.leeftijd_geweigerd_at && <> · <span style={{ color: 'var(--red, #ef4444)' }}>eerder geweigerd {tijdstip(o.leeftijd_geweigerd_at)}</span></>}
+                            </span>
+                            <button type="button" className="btn btn-ghost" disabled={bezig !== null} onClick={() => haalOp('geweigerd')}>Geweigerd</button>
+                            <button type="button" className="btn btn-brand" disabled={bezig !== null} onClick={() => setIdGezien(true)}>ID gezien</button>
+                        </>
+                    ) : (
+                        <>
+                            {alcohol && (
+                                <span className="ws-onderschrift">
+                                    ID gezien · <button type="button" onClick={() => setIdGezien(false)} disabled={bezig !== null}
+                                        style={{ background: 'none', border: 'none', padding: 0, color: 'var(--muted)', textDecoration: 'underline', cursor: 'pointer' }}>wijzig</button>
+                                </span>
+                            )}
+                            <button type="button" className="btn btn-brand" disabled={bezig !== null} onClick={() => haalOp(alcohol ? 'vastgesteld' : null)}>
+                                {bezig === `op:${o.id}` ? 'Bezig…' : 'Opgehaald'}
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -219,7 +282,8 @@ function Uitklap({ o, v, betaald, bezig, doe, annuleer }: {
             </div>
 
             <div className="kr-acties" style={{ justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-ghost" style={{ color: 'var(--red, #ef4444)' }} disabled={bezig !== null || isOpgehaald} onClick={annuleer}>Annuleren</button>
+                {isIngepakt && !isOpgehaald && <span className="ws-onderschrift">Al ingepakt: zet het inpakken eerst terug in de webshop, dan komt de voorraad terug.</span>}
+                <button type="button" className="btn btn-ghost" style={{ color: 'var(--red, #ef4444)' }} disabled={bezig !== null || isIngepakt} onClick={annuleer}>Annuleren</button>
             </div>
         </div>
     );
