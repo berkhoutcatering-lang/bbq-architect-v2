@@ -64,17 +64,18 @@ export const VANDAAG = {
 };
 
 /* ── De Toonbank: de kassa-app voor de winkel ──────────────────────────
-   Een aparte web-app (eigen repo hopbites-toonbank) op een eigen adres, dus
-   geen werkruimte met tabbladen: alleen een tegel die de Toonbank in een
-   nieuw tabblad opent. Het zichtbare label is "Winkel-kassa"; in code heet
-   alles `toonbank`, omdat "kassa" in BBQ Architect de online checkout van
-   de webshop is (src/lib/winkel/kassa.ts).
+   Een aparte web-app (eigen repo hopbites-toonbank), dus geen werkruimte
+   met tabbladen: alleen een tegel die de Toonbank opent. Het zichtbare label
+   is "Winkel-kassa"; in code heet alles `toonbank`, omdat "kassa" in BBQ
+   Architect de online checkout van de webshop is (src/lib/winkel/kassa.ts).
 
-   Het adres komt uit NEXT_PUBLIC_TOONBANK_URL. Is die niet gezet, dan is er
-   geen tegel: hij mag nooit naar een lege pagina leiden. (Komt het
-   Toonbank-beheer /instellingen/toonbank uit M2 op main, dan kan de tegel
-   zonder adres daarheen gaan.) Aan/uit zoals een werkruimte, met de sleutel
-   `toonbank` in Instellingen → Onderdelen. */
+   Het adres komt uit NEXT_PUBLIC_TOONBANK_URL. Normaal is dat /toonbank:
+   BBQ Architect geeft dat pad door aan het Vercel-project van de Toonbank
+   (TOONBANK_UPSTREAM_URL in next.config.mjs, die dan ook deze variabele
+   zet). Dan opent de tegel in hetzelfde scherm. Een volledig https-adres
+   kan ook; dat opent in een nieuw tabblad. Geen adres: geen tegel, zodat
+   hij nooit naar een lege pagina leidt. Aan/uit zoals een werkruimte, met
+   de sleutel `toonbank` in Instellingen → Onderdelen. */
 export const TOONBANK = {
     slug: "toonbank",
     title: "Winkel-kassa",
@@ -90,14 +91,18 @@ export interface ToonbankTegel {
     icon: ReactNode;
     description: string;
     kleur: string;
-    /** Volledig adres van de Toonbank; opent in een nieuw tabblad. */
+    /** /toonbank (onder BBQ Architect) of een volledig adres elders. */
     href: string;
+    /** Alleen een adres buiten BBQ Architect opent in een nieuw tabblad. */
+    nieuwTabblad: boolean;
 }
 
-/** Alleen een echt webadres: https, of http op deze computer (lokaal testen). */
-function toonbankAdres(ruw: string | undefined): string | null {
+/** Een pad onder BBQ Architect (/toonbank), of een echt webadres: https, of
+ *  http op deze computer (lokaal testen). Al het andere telt niet. */
+function toonbankAdres(ruw: string | undefined): { href: string; nieuwTabblad: boolean } | null {
     const tekst = (ruw ?? "").trim();
     if (!tekst) return null;
+    if (/^\/[a-z0-9][a-z0-9\-/]*$/i.test(tekst)) return { href: tekst, nieuwTabblad: false };
     let adres: URL;
     try {
         adres = new URL(tekst);
@@ -105,7 +110,7 @@ function toonbankAdres(ruw: string | undefined): string | null {
         return null;
     }
     const lokaal = adres.hostname === "localhost" || adres.hostname === "127.0.0.1";
-    if (adres.protocol === "https:" || (adres.protocol === "http:" && lokaal)) return adres.href;
+    if (adres.protocol === "https:" || (adres.protocol === "http:" && lokaal)) return { href: adres.href, nieuwTabblad: true };
     return null;
 }
 
@@ -118,9 +123,9 @@ export function toonbankTegel(
     url: string | undefined = process.env.NEXT_PUBLIC_TOONBANK_URL,
 ): ToonbankTegel | null {
     if (opties.verborgen.includes(TOONBANK.slug)) return null;
-    const href = toonbankAdres(url);
-    if (!href) return null;
-    return { ...TOONBANK, href };
+    const adres = toonbankAdres(url);
+    if (!adres) return null;
+    return { ...TOONBANK, ...adres };
 }
 
 export const navSections: NavSection[] = [

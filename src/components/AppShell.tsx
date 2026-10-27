@@ -32,7 +32,7 @@ const ContextualHelp = dynamic(() => import('@/components/ContextualHelp'), { ss
 const FAB = dynamic(() => import('@/components/FAB'), { ssr: false });
 
 const AUTH_PAGES = ['/login', '/signup', '/auth/', '/onboarding'];
-const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/bestellen/', '/welkom', '/pricing', '/legal/', '/share/', '/m/'];
+const PUBLIC_PAGES = ['/q/', '/invite', '/aanvraag/', '/arrangement/', '/bestellen/', '/welkom', '/pricing', '/legal/', '/share/', '/m/', '/toonbank/'];
 
 // KDS-pagina's = fullscreen kookbord. Geen sidebar, geen breadcrumb, geen tabs.
 // Match:
