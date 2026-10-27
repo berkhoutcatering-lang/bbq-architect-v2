@@ -60,6 +60,21 @@ export interface ProductRij {
     hop_and_bites_tip: boolean;
     voorraad: number | null;
     actief: boolean;
+    /* De pagina op de website (catalogus, 3 oktober 2026). Leeg bij een product zonder pagina. */
+    slug?: string | null;
+    kenmerken?: Record<string, unknown>;
+    alcohol_pct?: number | string | null;
+    allergenen?: string[] | null;
+    ingredienten?: string[] | null;
+    bewaren?: string | null;
+    lekker_bij?: string | null;
+    foto?: { basis: string; breedte: number; hoogte: number; maten: { w: number; h: number }[]; formaten: ('avif' | 'webp')[] } | null;
+    pagina_status?: 'geen' | 'concept' | 'live';
+    pagina_volgorde?: number | null;
+    goedgekeurd?: Record<string, { door?: string; op?: string } | undefined>;
+    bronnen?: { veld?: string; url: string; titel: string }[];
+    ean?: string | null;
+    updated_at?: string;
 }
 
 export interface SlotRij {
