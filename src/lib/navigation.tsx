@@ -79,7 +79,7 @@ export const TOONBANK = {
     slug: "toonbank",
     title: "Winkel-kassa",
     icon: <Calculator size={18} />,
-    description: "De kassa voor de winkel en events. Opent in een nieuw tabblad.",
+    description: "De Toonbank voor de winkel: verkopen, afhalen en de dagstaat.",
     /* Olijf uit de huisstijl van de Toonbank zelf. */
     kleur: "#52632C",
 };
