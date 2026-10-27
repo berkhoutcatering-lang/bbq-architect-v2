@@ -34,7 +34,7 @@ const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
 /** De dagen die de site aanbiedt; ook zonder bestellingen een kolom. */
 const KERST_DAGEN = ['2026-12-23', '2026-12-24', '2026-12-25', '2026-12-26'];
 
-const ORDER_SELECT = 'id, nummer, status, contact_naam, contact_email, contact_telefoon, opmerking, totaal_cents, rest_cents, rest_betaald_at, rest_betaalmethode, betaalwijze, mail_status, mail_fout, plaatsing_status, plaatsing_fout, created_at, lead_id, aantal_onzeker, navraag_verstuurd_at, herinnering_verstuurd_at, geannuleerd_at, winkel_order_regels!inner(id, slug, naam, aantal, klaar_op, eenheden, opgehaald_at, klaargezet_at, event_id)';
+const ORDER_SELECT = 'id, nummer, status, contact_naam, contact_email, contact_telefoon, opmerking, totaal_cents, rest_cents, rest_betaald_at, rest_betaalmethode, betaalwijze, mail_status, mail_fout, plaatsing_status, plaatsing_fout, created_at, lead_id, aantal_onzeker, navraag_verstuurd_at, herinnering_verstuurd_at, geannuleerd_at, leeftijd_geweigerd_at, winkel_order_regels!inner(id, slug, naam, aantal, klaar_op, eenheden, opgehaald_at, klaargezet_at, event_id, alcohol)';
 
 function paneelUitHash(): Paneel {
     if (typeof window === 'undefined') return 'overzicht';

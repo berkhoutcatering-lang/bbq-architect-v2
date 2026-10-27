@@ -99,6 +99,9 @@ describe('etiket (S7)', () => {
         expect(restTekst(order(1, 'n', 'x', { betaalwijze: 'reservering', nu_te_betalen_cents: 250, rest_cents: 3250 }))).toBe('reeds betaald € 2,50 · rest € 32,50');
         expect(restTekst(order(1, 'n', 'x', { betaalwijze: 'reservering', nu_te_betalen_cents: 250, rest_cents: 3250, rest_betaald_at: '2026-12-04T16:00:00Z' }))).toBe('rest betaald');
         expect(restTekst(order(1, 'n', 'x'))).toBeNull();
+        /* Kerst-Box: niets online, alles aan de balie. */
+        expect(restTekst(order(1, 'n', 'x', { betaalwijze: 'bij_afhalen', rest_cents: 9000 }))).toBe('betalen bij afhalen € 90,00');
+        expect(restTekst(order(1, 'n', 'x', { betaalwijze: 'bij_afhalen', rest_cents: 9000, rest_betaald_at: '2026-12-24T10:00:00Z' }))).toBe('betaald');
     });
     it('één etiket per pakket, één per schaal, met volgnummer en 18+', () => {
         const o = order(1, 'HB-2026-0042', 'Jan Jansen', { betaalwijze: 'reservering', nu_te_betalen_cents: 250, rest_cents: 3250 });
