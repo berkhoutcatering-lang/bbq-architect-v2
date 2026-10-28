@@ -1,3 +1,4 @@
+import { myposConfig } from '@/lib/toonbank/mypos';
 import { createServerSupabase } from '@/lib/supabase-server';
 import type { TabletRij } from '@/lib/toonbank/beheer';
 import ToonbankBeheer, { type MedewerkerRij } from './_components/ToonbankBeheer';
@@ -50,7 +51,8 @@ export default async function ToonbankInstellingenPage() {
         const { data, error } = await supabase.from('toonbank_apparaten').select('id, mypos_terminal_id').eq('organization_id', orgId);
         if (!error) for (const r of (data ?? []) as { id: string; mypos_terminal_id: string | null }[]) mypos.set(r.id, r.mypos_terminal_id);
     }
-    const koppelingKlaar = !!process.env.MYPOS_EPOS_ORGANISATIE_ID && process.env.MYPOS_EPOS_ORGANISATIE_ID === orgId;
+    // Alle MYPOS_EPOS-sleutels staan in Vercel en horen bij deze organisatie.
+    const koppelingKlaar = myposConfig()?.organisatieId === orgId && orgId !== null;
 
     const metCode = new Set(((codes ?? []) as { personeel_id: string; ingesteld: boolean }[]).filter((c) => c.ingesteld).map((c) => c.personeel_id));
     const medewerkers: MedewerkerRij[] = (personeel ?? []).map((p) => ({

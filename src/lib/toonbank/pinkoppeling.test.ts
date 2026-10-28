@@ -28,6 +28,9 @@ function nepClient(standen: MyposBetaling['status'][]) {
     let i = 0;
     const b = (status: string): MyposBetaling => ({ payment_id: 'pay-1', status, bedrag_cents: 2350, rrn: status === 'Success' ? '629012345678' : null, auth_code: null, status_message: null, response_code: null });
     const client: MyposClient = {
+        async terminals() {
+            return [{ terminal_id: '12345678', serial_number: null, model: 'N96' }];
+        },
         async betaling(v) {
             betalingen.push(v);
             return b('InProgress');
@@ -126,5 +129,17 @@ describe('GET status meldt de koppeling', () => {
         expect((await statusAntwoord(store, CTX, gezien, dep)).instellingen.pin_koppeling).toBe(true);
         expect((await statusAntwoord(store, { orgId: ORG, apparaatId: T2 }, gezien, dep)).instellingen.pin_koppeling).toBeUndefined();
         expect((await statusAntwoord(store, CTX, gezien, { config: null, client: null })).instellingen.pin_koppeling).toBeUndefined();
+    });
+});
+
+describe('sleutels geweigerd of de rem erop', () => {
+    it('dan pin_koppeling_uit (met de hand verder), niet terminal_bezet', async () => {
+        const { MyposFout: Fout } = await import('./mypos');
+        const fout = new Fout(423, 'myPOS weigerde de sleutels net.');
+        fout.sleutels = true;
+        const client: MyposClient = { ...nepClient([]).client, betaling: async () => { throw fout; } };
+        const u = await startPinbetaling(store, CTX, VERZOEK, { config: CFG, client });
+        expect(u).toMatchObject({ ok: false, code: 'pin_koppeling_uit' });
+        expect(store.g.pinbetalingen[0]).toMatchObject({ stand: 'mislukt' });
     });
 });

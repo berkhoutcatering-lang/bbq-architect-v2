@@ -21,7 +21,7 @@ import {
     achterstand, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON, resterendeTijd, STATUS_TEKST, tabletStatus, toonKoppelcode, zwakkeInlogcode,
     type NieuweKoppelcode, type TabletRij,
 } from '@/lib/toonbank/beheer';
-import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetMyposTerminal, zetToonbankInstellingen, zetToonbankRol } from '../actions';
+import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, testMyposKoppeling, zetInlogcode, zetMyposTerminal, zetToonbankInstellingen, zetToonbankRol } from '../actions';
 
 export interface ToonbankInstellingen {
     alcohol_toegestaan: boolean;
@@ -205,6 +205,9 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instelli
                 })}
             </div>
 
+            {/* Contract 1.3: de koppeling met myPOS testen en de terminal-ID's zien. */}
+            {isAdmin && <MyposTest klaar={myposKlaar} />}
+
             {/* Wat de tablet via GET status krijgt. */}
             {instellingen && <InstellingenKaart start={instellingen} isAdmin={isAdmin} na={() => router.refresh()} />}
 
@@ -255,6 +258,50 @@ function MyposVeld({ tablet, isAdmin, klaar, na }: { tablet: TabletRij; isAdmin:
                     : 'Leeg: met de hand pinnen. Het terminal-ID staat in je myPOS-account bij het apparaat.'}
             </p>
         </div>
+    );
+}
+
+/** Eén keer testen of de MYPOS_EPOS-sleutels werken, en welke terminals er in de myPOS-account staan. */
+function MyposTest({ klaar }: { klaar: boolean }) {
+    const showToast = useToast();
+    const [bezig, setBezig] = useState(false);
+    const [uitkomst, setUitkomst] = useState<{ omgeving: 'demo' | 'live'; terminals: { terminal_id: string; serial_number: string | null; model: string | null }[] } | null>(null);
+
+    async function test() {
+        setBezig(true);
+        try {
+            const r = await testMyposKoppeling();
+            if ('error' in r) { setUitkomst(null); showToast(r.error, 'error'); return; }
+            setUitkomst(r.data);
+            showToast(r.data.terminals.length ? 'De koppeling met myPOS werkt' : 'De sleutels werken, maar er staat geen terminal in de account', 'success');
+        } finally { setBezig(false); }
+    }
+
+    return (
+        <>
+            <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)] mb-3">Koppeling met myPOS</h3>
+            <MetallicCard className="p-4 mb-8" hover={false}>
+                <p className="text-[13px] text-[var(--text)] mb-2">
+                    {klaar
+                        ? 'De sleutels staan in Vercel. Test één keer of myPOS ze accepteert; je ziet dan ook je terminals met hun terminal-ID.'
+                        : 'De MYPOS_EPOS-sleutels staan nog niet (allemaal) in Vercel. Tot dan pinnen alle tablets met de hand.'}
+                </p>
+                <Button size="sm" variant="ghost" loading={bezig} disabled={!klaar} onClick={() => void test()}>Koppeling testen</Button>
+                {uitkomst && (
+                    <ul className="mt-3 text-[13px] text-[var(--text)] space-y-1">
+                        <li className="text-[12px] text-[var(--muted)]">Omgeving: {uitkomst.omgeving === 'live' ? 'live (echt geld)' : 'demo'}</li>
+                        {uitkomst.terminals.length === 0 && <li>Geen terminals gevonden in deze myPOS-account.</li>}
+                        {uitkomst.terminals.map((t) => (
+                            <li key={t.terminal_id}>
+                                <b>{t.terminal_id}</b>
+                                <span className="text-[var(--muted)]"> · {t.model === 'N96' ? 'myPOS Ultra' : (t.model ?? 'onbekend model')}{t.serial_number ? ` · serienummer ${t.serial_number}` : ''}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+                <p className="text-[11px] text-[var(--muted)] mt-2">Weigert myPOS de sleutels, dan wacht BBQ Architect een uur voor een nieuwe poging: na 3 foute pogingen zet myPOS het account op slot.</p>
+            </MetallicCard>
+        </>
     );
 }
 
