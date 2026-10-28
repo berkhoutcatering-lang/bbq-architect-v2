@@ -98,6 +98,33 @@ export async function tabletIntrekken(input: unknown): Promise<ActionResult<{ ui
     return { data: { uitkomst: String((data as { uitkomst?: string } | null)?.uitkomst ?? 'ingetrokken') } };
 }
 
+/**
+ * Contract 1.3: de myPOS-terminal van een tablet (8 cijfers, zoals in de myPOS-account). Leeg = geen
+ * koppeling; de Toonbank pint dan met de hand. De koppeling werkt pas als ook de myPOS-sleutels in
+ * Vercel staan (MYPOS_EPOS_* in .env.example).
+ */
+export async function zetMyposTerminal(input: unknown): Promise<ActionResult<{ mypos_terminal_id: string | null }>> {
+    const parsed = z.object({
+        apparaatId: z.string().uuid(),
+        terminalId: z.string().trim().regex(/^(\d{8})?$/, 'Een myPOS-terminal-ID is 8 cijfers (of leeg).'),
+    }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await alsAdmin();
+    if (!s) return { error: 'Alleen een beheerder (Admin) kan de myPOS koppelen.' };
+
+    const { data, error } = await s.supabase.rpc('toonbank_apparaat_mypos', {
+        p_org: s.orgId, p_apparaat_id: parsed.data.apparaatId, p_terminal_id: parsed.data.terminalId || null,
+    });
+    if (error) {
+        if (error.code === '23505') return { error: 'Deze myPOS hoort al bij een andere tablet.' };
+        if (error.code === 'P0002') return { error: 'Deze tablet bestaat niet of is ingetrokken.' };
+        if (error.code === '42883') return { error: 'De database kent de koppeling nog niet (migratie 20261029100000).' };
+        return { error: error.message };
+    }
+    revalidatePath(PAD);
+    return { data: { mypos_terminal_id: (data as { mypos_terminal_id: string | null } | null)?.mypos_terminal_id ?? null } };
+}
+
 export async function zetToonbankRol(input: unknown): Promise<ActionResult<{ ok: true }>> {
     const parsed = z.object({
         personeelId: z.string().uuid(),

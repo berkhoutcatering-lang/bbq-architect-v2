@@ -8,6 +8,7 @@
  *   vastlegt.
  */
 import { CONTRACT_HUIDIG, CONTRACT_MINIMAAL, type MedewerkersAntwoord, type StatusAntwoord } from './contract';
+import { koppelTerminal, standaardMypos, type PinAfhankelijk } from './pinkoppeling';
 import type { ApparaatGezien, ToonbankStore } from './store';
 
 export async function medewerkersAntwoord(store: ToonbankStore, orgId: string): Promise<MedewerkersAntwoord> {
@@ -19,8 +20,10 @@ export async function medewerkersAntwoord(store: ToonbankStore, orgId: string): 
     };
 }
 
-export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string; apparaatId: string }, gezien: ApparaatGezien): Promise<StatusAntwoord> {
+export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string; apparaatId: string }, gezien: ApparaatGezien, mypos: PinAfhankelijk = standaardMypos()): Promise<StatusAntwoord> {
     const s = await store.status(ctx.orgId, ctx.apparaatId, gezien);
+    // Contract 1.3: de koppeling met de myPOS. Een storing daarbij mag GET status nooit laten mislukken.
+    const pinKoppeling = await koppelTerminal(store, ctx, mypos).then((t) => t !== null, () => false);
     return {
         servertijd: s.servertijd,
         contract: { huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL },
@@ -34,7 +37,7 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
         hoogste_volgnummer_gemeld: s.hoogste_volgnummer_gemeld,
         bevestigd_tot_volgnummer: s.bevestigd_tot_volgnummer,
         hoogste_bon_volgnummer: s.hoogste_bon_volgnummer,
-        instellingen: s.instellingen,
+        instellingen: pinKoppeling ? { ...s.instellingen, pin_koppeling: true } : s.instellingen,
         te_controleren: s.te_controleren,
     };
 }

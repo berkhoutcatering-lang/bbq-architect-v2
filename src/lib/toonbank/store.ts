@@ -249,6 +249,28 @@ export class OngeldigeMelding extends Error {
     }
 }
 
+/* ── Contract 1.3: pinnen via de koppeling met de myPOS ─────────────────── */
+
+export type PinStand = 'wacht' | 'gelukt' | 'mislukt' | 'geannuleerd';
+
+/** Een rij van toonbank_pinbetalingen: per pinpoging hooguit één betaling bij myPOS. */
+export interface Pinbetaling {
+    organization_id: string;
+    apparaat_id: string;
+    poging_id: string;
+    bon_id: string;
+    bonnummer: string;
+    bedrag_cents: number;
+    mypos_terminal_id: string;
+    mypos_payment_id: string | null;
+    stand: PinStand;
+    mypos_status: string | null;
+    mypos_referentie: string | null;
+    melding: string | null;
+}
+
+export type PinbetalingWijziging = Partial<Pick<Pinbetaling, 'mypos_payment_id' | 'stand' | 'mypos_status' | 'mypos_referentie' | 'melding'>>;
+
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
@@ -311,4 +333,15 @@ export interface ToonbankStore {
     dagstaatOverzicht(orgId: string, apparaatId: string, datum: string): Promise<Record<string, unknown>>;
     /** Status en verschillen van een dagstaat; null als hij (nog) niet bestaat. */
     dagstaatStand(orgId: string, dagstaatId: string): Promise<DagstaatStand | null>;
+
+    /* ── Contract 1.3: pinnen via de koppeling met de myPOS ── */
+    /**
+     * De myPOS-terminal van deze tablet (toonbank_apparaten.mypos_terminal_id), of null. Ook null
+     * als de kolom nog niet bestaat (de migratie is nog niet gedraaid): dan staat de koppeling uit.
+     */
+    myposTerminal(orgId: string, apparaatId: string): Promise<{ terminal_id: string; naam: string } | null>;
+    pinbetaling(orgId: string, pogingId: string): Promise<Pinbetaling | null>;
+    /** Legt een nieuwe pinbetaling vast; bestond hij al (zelfde organisatie en poging_id), dan die. */
+    maakPinbetaling(p: Pinbetaling): Promise<{ rij: Pinbetaling; nieuw: boolean }>;
+    werkPinbetalingBij(orgId: string, pogingId: string, wijziging: PinbetalingWijziging): Promise<Pinbetaling | null>;
 }

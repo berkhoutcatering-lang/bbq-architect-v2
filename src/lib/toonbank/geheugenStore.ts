@@ -12,7 +12,7 @@ import {
     OngeldigeMelding,
     type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
     type NieuweSessie, type OphaalVraag, type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij,
-    type WegzetVraag, type WegzetVraagRuw,
+    type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
 } from './store';
 
 /** Een melding in het journaal (BA-9), zoals toonbank_journaal hem bewaart. */
@@ -83,6 +83,9 @@ export interface ToonbankGeheugen {
     dagstaatOverzicht: Record<string, Record<string, Record<string, unknown>>>;
     /** Wat toonbank_dagstaten na verwerken zegt, op dagstaat-ID. */
     dagstaten: Record<string, DagstaatStand>;
+    /* Contract 1.3: de myPOS-terminal per apparaat-ID, en de pinbetalingen. */
+    myposTerminals: Record<string, string>;
+    pinbetalingen: Pinbetaling[];
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -130,6 +133,8 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         ophaalUitgevoerd: 0,
         dagstaatOverzicht: start.dagstaatOverzicht ?? {},
         dagstaten: start.dagstaten ?? {},
+        myposTerminals: start.myposTerminals ?? {},
+        pinbetalingen: start.pinbetalingen ?? [],
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -372,6 +377,32 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
 
         async dagstaatStand(_orgId, dagstaatId) {
             return g.dagstaten[dagstaatId] ?? null;
+        },
+
+        /* ── Contract 1.3: pinnen via de koppeling met de myPOS ── */
+        async myposTerminal(orgId, apparaatId) {
+            const a = g.apparaten.find((x) => x.id === apparaatId && x.organization_id === orgId);
+            const t = g.myposTerminals[apparaatId];
+            return a && t ? { terminal_id: t, naam: a.naam } : null;
+        },
+
+        async pinbetaling(orgId, pogingId) {
+            const p = g.pinbetalingen.find((x) => x.organization_id === orgId && x.poging_id === pogingId);
+            return p ? { ...p } : null;
+        },
+
+        async maakPinbetaling(p) {
+            const oud = g.pinbetalingen.find((x) => x.organization_id === p.organization_id && x.poging_id === p.poging_id);
+            if (oud) return { rij: { ...oud }, nieuw: false };
+            g.pinbetalingen.push({ ...p });
+            return { rij: { ...p }, nieuw: true };
+        },
+
+        async werkPinbetalingBij(orgId, pogingId, wijziging) {
+            const p = g.pinbetalingen.find((x) => x.organization_id === orgId && x.poging_id === pogingId);
+            if (!p) return null;
+            Object.assign(p, wijziging);
+            return { ...p };
         },
     };
 }

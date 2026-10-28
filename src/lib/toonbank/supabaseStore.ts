@@ -13,11 +13,31 @@ import { createServiceSupabase } from '@/lib/supabase-server';
 import {
     OngeldigeMelding,
     type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
-    type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
+    type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
 } from './store';
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
+const PINBETALING_KOLOMMEN = 'organization_id, apparaat_id, poging_id, bon_id, bonnummer, bedrag_cents, mypos_terminal_id, mypos_payment_id, stand, mypos_status, mypos_referentie, melding';
 const SESSIE_KOLOMMEN = 'id, organization_id, apparaat_id, medewerker_id, rol, doel, geldig_tot, beeindigd_at';
+
+function naarPinbetaling(r: Record<string, unknown>): Pinbetaling {
+    const s = (v: unknown) => (v == null ? null : String(v));
+    const stand = String(r.stand);
+    return {
+        organization_id: String(r.organization_id),
+        apparaat_id: String(r.apparaat_id),
+        poging_id: String(r.poging_id),
+        bon_id: String(r.bon_id),
+        bonnummer: String(r.bonnummer),
+        bedrag_cents: Number(r.bedrag_cents),
+        mypos_terminal_id: String(r.mypos_terminal_id),
+        mypos_payment_id: s(r.mypos_payment_id),
+        stand: stand === 'gelukt' || stand === 'mislukt' || stand === 'geannuleerd' ? stand : 'wacht',
+        mypos_status: s(r.mypos_status),
+        mypos_referentie: s(r.mypos_referentie),
+        melding: s(r.melding),
+    };
+}
 
 export class OpslagFout extends Error {
     constructor(waar: string, public readonly oorzaak: { code?: string | null; message?: string } | null) {
@@ -275,6 +295,47 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
                 status: String(r.status),
                 verschillen: (r.verschillen ?? []).map((x) => ({ veld: String(x.veld), tablet_cents: Number(x.tablet_cents), ba_cents: Number(x.ba_cents) })),
             } satisfies DagstaatStand;
+        },
+
+        /* ── Contract 1.3: pinnen via de koppeling met de myPOS ── */
+        async myposTerminal(orgId, apparaatId) {
+            const { data, error } = await sb.from('toonbank_apparaten')
+                .select('naam, mypos_terminal_id')
+                .eq('organization_id', orgId).eq('id', apparaatId).maybeSingle();
+            // 42703: de kolom bestaat nog niet (migratie 20261029100000 nog niet gedraaid): koppeling uit.
+            if (error?.code === '42703') return null;
+            if (error) throw new OpslagFout('toonbank_apparaten.mypos_terminal_id', error);
+            const r = data as { naam?: unknown; mypos_terminal_id?: unknown } | null;
+            return r && typeof r.mypos_terminal_id === 'string' && r.mypos_terminal_id ? { terminal_id: r.mypos_terminal_id, naam: String(r.naam ?? '') } : null;
+        },
+
+        async pinbetaling(orgId, pogingId) {
+            const { data, error } = await sb.from('toonbank_pinbetalingen').select(PINBETALING_KOLOMMEN)
+                .eq('organization_id', orgId).eq('poging_id', pogingId).maybeSingle();
+            if (error) throw new OpslagFout('toonbank_pinbetalingen', error);
+            return data ? naarPinbetaling(data as Record<string, unknown>) : null;
+        },
+
+        async maakPinbetaling(p) {
+            const { data, error } = await sb.from('toonbank_pinbetalingen')
+                .upsert(p, { onConflict: 'organization_id,poging_id', ignoreDuplicates: true })
+                .select(PINBETALING_KOLOMMEN);
+            if (error) throw new OpslagFout('toonbank_pinbetalingen', error);
+            const nieuw = Array.isArray(data) && data.length > 0;
+            if (nieuw) return { rij: naarPinbetaling((data as Record<string, unknown>[])[0]!), nieuw };
+            const { data: oud, error: e2 } = await sb.from('toonbank_pinbetalingen').select(PINBETALING_KOLOMMEN)
+                .eq('organization_id', p.organization_id).eq('poging_id', p.poging_id).single();
+            if (e2) throw new OpslagFout('toonbank_pinbetalingen', e2);
+            return { rij: naarPinbetaling(oud as Record<string, unknown>), nieuw: false };
+        },
+
+        async werkPinbetalingBij(orgId, pogingId, wijziging) {
+            const { data, error } = await sb.from('toonbank_pinbetalingen')
+                .update({ ...wijziging, updated_at: new Date().toISOString() })
+                .eq('organization_id', orgId).eq('poging_id', pogingId)
+                .select(PINBETALING_KOLOMMEN).maybeSingle();
+            if (error) throw new OpslagFout('toonbank_pinbetalingen', error);
+            return data ? naarPinbetaling(data as Record<string, unknown>) : null;
         },
     };
 }

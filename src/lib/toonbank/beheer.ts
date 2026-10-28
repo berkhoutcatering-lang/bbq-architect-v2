@@ -30,6 +30,8 @@ export interface TabletRij {
     bevestigd_tot_volgnummer: number;
     ingetrokken_at: string | null;
     ingetrokken_reden: string | null;
+    /** Contract 1.3: de myPOS-terminal van deze tablet (8 cijfers), of leeg. */
+    mypos_terminal_id?: string | null;
 }
 
 export type TabletStatus = 'ingetrokken' | 'wacht_op_koppelen' | 'code_verlopen' | 'gekoppeld' | 'nooit_gekoppeld';

@@ -116,7 +116,7 @@ async function verwachtFout(res: Response, status: number, code: string) {
 describe('guard', () => {
     it('geen of een te oude contractversie: 426 met minimaal en huidig', async () => {
         const f = await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: null }), geen), 426, 'contract_verouderd');
-        expect(f.details).toMatchObject({ minimaal: '1.1.0', huidig: '1.1.0' });
+        expect(f.details).toMatchObject({ minimaal: '1.1.0', huidig: '1.3.0' });
         await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '0.9.3' }), geen), 426, 'contract_verouderd');
         /* Review M2 (klein 12): minimaal 1.1.0, zoals het voorbeeld status.json. */
         await verwachtFout(await medewerkersGET(verzoek('medewerkers', { sleutel: sleutelT1.sleutel, contract: '1.0.0' }), geen), 426, 'contract_verouderd');
@@ -278,11 +278,11 @@ describe('POST inloggen', () => {
 });
 
 describe('GET status', () => {
-    it('volgens het contract, met huidig 1.1.0 en minimaal 1.1.0; het volgnummer gaat nooit omlaag', async () => {
+    it('volgens het contract, met huidig 1.3.0 en minimaal 1.1.0; het volgnummer gaat nooit omlaag', async () => {
         const res = await statusGET(verzoek('status?volgnummer=1202', { sleutel: sleutelT1.sleutel }), geen);
         expect(res.status).toBe(200);
         const s = StatusAntwoord.parse(await res.json());
-        expect(s.contract).toEqual({ huidig: '1.1.0', minimaal: '1.1.0' });
+        expect(s.contract).toEqual({ huidig: '1.3.0', minimaal: '1.1.0' });
         expect(s.apparaat).toEqual({ apparaat_id: T1, code: 'T1', naam: 'Toonbank T1' });
         expect(s).toMatchObject({ catalogus_versie: 412, voorraad_versie: 1181, wegzetten_open: 1, hoogste_volgnummer_gemeld: 1202, hoogste_bon_volgnummer: 411 });
         const s2 = StatusAntwoord.parse(await (await statusGET(verzoek('status?volgnummer=3', { sleutel: sleutelT1.sleutel }), geen)).json());

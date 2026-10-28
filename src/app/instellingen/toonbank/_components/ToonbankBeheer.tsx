@@ -21,7 +21,7 @@ import {
     achterstand, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON, resterendeTijd, STATUS_TEKST, tabletStatus, toonKoppelcode, zwakkeInlogcode,
     type NieuweKoppelcode, type TabletRij,
 } from '@/lib/toonbank/beheer';
-import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetToonbankInstellingen, zetToonbankRol } from '../actions';
+import { nieuweKoppelcode, tabletIntrekken, tabletToevoegen, zetInlogcode, zetMyposTerminal, zetToonbankInstellingen, zetToonbankRol } from '../actions';
 
 export interface ToonbankInstellingen {
     alcohol_toegestaan: boolean;
@@ -44,7 +44,7 @@ function tijd(iso: string | null): string {
     return new Date(iso).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instellingen }: { tablets: TabletRij[]; medewerkers: MedewerkerRij[]; isAdmin: boolean; instellingen: ToonbankInstellingen | null }) {
+export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instellingen, myposKlaar = false }: { tablets: TabletRij[]; medewerkers: MedewerkerRij[]; isAdmin: boolean; instellingen: ToonbankInstellingen | null; myposKlaar?: boolean }) {
     const router = useRouter();
     const showToast = useToast();
     const [naam, setNaam] = useState('');
@@ -184,6 +184,7 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instelli
                                         {status === 'ingetrokken' && t.ingetrokken_reden ? ` (${t.ingetrokken_reden})` : ''}
                                         {t.sleutel_prefix && status !== 'ingetrokken' ? ` · sleutel ${t.sleutel_prefix}` : ''}
                                     </p>
+                                    {status !== 'ingetrokken' && <MyposVeld tablet={t} isAdmin={isAdmin} klaar={myposKlaar} na={() => router.refresh()} />}
                                     <p className="text-[12px] text-[var(--muted)]">
                                         Laatst gezien {tijd(t.laatst_gezien_at)}
                                         {t.app_versie ? ` · app ${t.app_versie}` : ''}{t.contract_versie ? ` · contract ${t.contract_versie}` : ''}
@@ -217,6 +218,43 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instelli
                 </ul>
             </MetallicCard>
         </>
+    );
+}
+
+/**
+ * Contract 1.3: de myPOS van deze tablet. Met een terminal-ID (8 cijfers, zoals in de myPOS-account)
+ * springt het bedrag bij Afrekenen vanzelf op die myPOS; leeg = met de hand pinnen. Werkt pas als
+ * ook de myPOS-sleutels in Vercel staan.
+ */
+function MyposVeld({ tablet, isAdmin, klaar, na }: { tablet: TabletRij; isAdmin: boolean; klaar: boolean; na: () => void }) {
+    const showToast = useToast();
+    const [waarde, setWaarde] = useState(tablet.mypos_terminal_id ?? '');
+    const [bezig, setBezig] = useState(false);
+    const veranderd = waarde.trim() !== (tablet.mypos_terminal_id ?? '');
+
+    async function bewaar() {
+        setBezig(true);
+        try {
+            const r = await zetMyposTerminal({ apparaatId: tablet.id, terminalId: waarde.trim() });
+            if ('error' in r) { showToast(r.error, 'error'); return; }
+            showToast(r.data.mypos_terminal_id ? `${tablet.naam} pint nu via myPOS ${r.data.mypos_terminal_id}` : `${tablet.naam} pint weer met de hand`, 'success');
+            na();
+        } finally { setBezig(false); }
+    }
+
+    return (
+        <div className="flex flex-wrap items-end gap-2 my-1">
+            <div className="field" style={{ width: 170 }}>
+                <label htmlFor={`mypos-${tablet.id}`}>myPOS terminal-ID</label>
+                <input id={`mypos-${tablet.id}`} inputMode="numeric" maxLength={8} placeholder="8 cijfers, of leeg" value={waarde} disabled={!isAdmin} onChange={(e) => setWaarde(e.target.value.replace(/\D/g, ''))} />
+            </div>
+            {isAdmin && veranderd && <Button size="sm" variant="ghost" loading={bezig} onClick={() => void bewaar()}>Bewaren</Button>}
+            <p className="text-[11px] text-[var(--muted)] basis-full">
+                {tablet.mypos_terminal_id
+                    ? klaar ? 'Bij Afrekenen springt het bedrag vanzelf op deze myPOS.' : 'De myPOS-sleutels staan nog niet in Vercel: tot dan pint deze tablet met de hand.'
+                    : 'Leeg: met de hand pinnen. Het terminal-ID staat in je myPOS-account bij het apparaat.'}
+            </p>
+        </div>
     );
 }
 

@@ -21,7 +21,7 @@ import {
 
 const MAP = path.join(__dirname, 'contract', 'voorbeelden');
 /** SHA-256 van MANIFEST.sha256 zelf: vastgepind, zodat een stille wijziging opvalt. */
-const MANIFEST_HASH = '8d10759dd4b9d4b033e108c41d003574b4280adb450bdc57ffeff86490571eaa';
+const MANIFEST_HASH = '6863b8cef2c2b114948e22b64af62a08a597116779343a5f945cdad21d740322';
 
 const sha = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 const lees = (naam: string): unknown => JSON.parse(readFileSync(path.join(MAP, naam), 'utf8'));
@@ -66,8 +66,8 @@ describe('kassaPil zegt precies wat pil-gevallen.json zegt', () => {
 });
 
 describe('versies', () => {
-    it('huidig 1.1.0, minimaal 1.1.0 (zoals het voorbeeld status.json; review M2 klein 12)', () => {
-        expect(CONTRACT_HUIDIG).toBe('1.1.0');
+    it('huidig 1.3.0 (1.2 cadeaubonnen, 1.3 de koppeling met de myPOS), minimaal 1.1.0: 1.2 en 1.3 voegen alleen toe', () => {
+        expect(CONTRACT_HUIDIG).toBe('1.3.0');
         expect(CONTRACT_MINIMAAL).toBe('1.1.0');
         expect(versieMinstens(CONTRACT_HUIDIG, CONTRACT_MINIMAAL)).toBe(true);
         expect(StatusAntwoord.shape.contract.parse({ huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL })).toBeTruthy();
