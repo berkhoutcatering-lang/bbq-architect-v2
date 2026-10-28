@@ -1,5 +1,5 @@
 /**
- * Contract toonbank/v1, versie 1.1.0 — de kant van BBQ Architect (BA-7b).
+ * Contract toonbank/v1, versie 1.3.0 — de kant van BBQ Architect (BA-7b; 1.3: pinnen via de koppeling met de myPOS).
  *
  * Bron: hopbites-toonbank/docs/datacontract-toonbank-v1.md (1.1.0-ontwerp)
  * en de zod-schema's in hopbites-toonbank/packages/kern/src/contract/ (branch
@@ -18,7 +18,7 @@ import { z } from 'zod';
 /* ═══ Versie en headers (contract §3.1, §6) ═══════════════════════════════ */
 
 /** De versie die BBQ Architect spreekt. */
-export const CONTRACT_HUIDIG = '1.1.0';
+export const CONTRACT_HUIDIG = '1.3.0';
 /**
  * Een tablet met een lagere x-toonbank-contract krijgt 426 contract_verouderd. 1.1.0: de
  * Toonbank-app is vanaf het begin op 1.1.0 gebouwd (kern CONTRACT_VERSIE) en het voorbeeld
@@ -101,6 +101,10 @@ export const FOUT_STATUS = {
     contract_verouderd: 426,
     te_snel: 429,
     serverfout: 500,
+    // Contract 1.3: pinnen via de koppeling met de myPOS.
+    pin_koppeling_uit: 409,
+    terminal_bezet: 409,
+    mypos_onbereikbaar: 503,
 } as const;
 export type FoutCode = keyof typeof FOUT_STATUS;
 
@@ -235,6 +239,10 @@ export const StatusAntwoord = z.object({
         contant_aan: z.boolean(),
         contant_limiet_cents: PositieveCents.max(CONTANT_GRENS_CENTS),
         beschikbaar_grens: z.int().positive(),
+        /** Contract 1.2 (cadeaubonnen): BBQ Architect zet het nog niet; de tablet laat de tegel dan weg. */
+        cadeaubon_aan: z.boolean().optional(),
+        /** Contract 1.3: kent BBQ Architect voor dit apparaat een myPOS-terminal en de sleutels? */
+        pin_koppeling: z.boolean().optional(),
     }),
     te_controleren: z.int().nonnegative(),
 });
@@ -500,7 +508,8 @@ const BetaalRegel = z.object({
     regelnr: z.int().positive(),
     soort: z.literal('betaling'),
     betaalmethode: Betaalmethode,
-    betaal_bevestiging: z.literal('handmatig').optional(),
+    /** Pin: met de hand, of (contract 1.3) door de koppeling met de myPOS. */
+    betaal_bevestiging: z.enum(['handmatig', 'koppeling']).optional(),
     bedrag_cents: Cents,
     contant_ontvangen_cents: PositieveCents.optional(),
     wisselgeld_cents: PositieveCents.optional(),
@@ -531,7 +540,13 @@ export const TegenbonMelding = z
     .object({ soort: z.literal('tegenbon'), ...bonVelden, verwijst_naar_bon_id: Uuid, reden: z.string().min(1) })
     .refine(zelfdeId, zelfdeIdFout);
 
-export const PinpogingMelding = z.object({ soort: z.literal('pinpoging'), ...envelop, bon_id: Uuid, bedrag_cents: Cents, uitkomst: z.enum(['gelukt', 'mislukt']) });
+export const PinpogingMelding = z.object({
+    soort: z.literal('pinpoging'), ...envelop, bon_id: Uuid, bedrag_cents: Cents, uitkomst: z.enum(['gelukt', 'mislukt']),
+    /** Contract 1.3: hoe de uitkomst vaststaat; ontbreekt het, dan met de hand. */
+    bevestiging: z.enum(['handmatig', 'koppeling']).optional(),
+    /** Contract 1.3: de referentie van de transactie bij myPOS. */
+    mypos_referentie: z.string().min(1).optional(),
+});
 export const InloggenMelding = z.object({ soort: z.literal('inloggen'), ...envelop });
 export const UitloggenMelding = z.object({ soort: z.literal('uitloggen'), ...envelop, reden: z.enum(['zelf', 'time_out', 'wissel']) });
 
@@ -706,7 +721,32 @@ export type DoosOphalenAntwoord = z.infer<typeof DoosOphalenAntwoord>;
 
 /* ═══ De voorbeeldberichten (contract/v1/voorbeelden) ════════════════════ */
 
+/* ═══ Contract 1.3: pinnen via de koppeling met de myPOS ═══════════════ */
+
+export const PinbetalingStand = z.enum(['wacht', 'gelukt', 'mislukt', 'geannuleerd']);
+
+/** POST pinbetalingen. Het poging_id is het gebeurtenis_id van de melding pinpoging. */
+export const PinbetalingVerzoek = z.object({
+    poging_id: Uuid,
+    bon_id: Uuid,
+    bonnummer: Bonnummer,
+    bedrag_cents: z.int().positive(),
+});
+export type PinbetalingVerzoek = z.infer<typeof PinbetalingVerzoek>;
+
+/** Het antwoord op POST pinbetalingen, GET pinbetalingen/{poging_id} en het annuleren. */
+export const PinbetalingAntwoord = z.object({
+    poging_id: Uuid,
+    stand: PinbetalingStand,
+    bedrag_cents: PositieveCents,
+    melding: z.string().nullable(),
+    mypos_referentie: z.string().min(1).nullable(),
+    terminal: z.string().min(1).nullable(),
+});
+export type PinbetalingAntwoord = z.infer<typeof PinbetalingAntwoord>;
+
 export const SCHEMAS = {
+    PinbetalingVerzoek, PinbetalingAntwoord,
     StatusAntwoord, CatalogusAntwoord, VrijAntwoord, WegzettenAntwoord, WegzetAntwoord, OngedaanAntwoord,
     AfhaallijstAntwoord, ScanAntwoord, KoppelAntwoord, MedewerkersAntwoord, InlogAntwoord, EigenaarcodeAntwoord,
     BonMelding, TegenbonMelding, BonnenVerzoek, OrderOphalenVerzoek, DoosOphalenVerzoek, DagstaatMelding,
@@ -730,6 +770,7 @@ export const VOORBEELDEN = {
     'fout-te-weinig-voorraad.json': 'FoutTeWeinigVoorraad',
     'fout-niet-zelfde-dag.json': 'FoutNietZelfdeDag',
     'pil-gevallen.json': 'PilGevallen',
+    'pinbetaling.json': 'PinbetalingAntwoord',
 } as const satisfies Record<string, keyof typeof SCHEMAS>;
 
 /* ═══ Versies vergelijken ════════════════════════════════════════════════ */

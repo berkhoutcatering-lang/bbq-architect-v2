@@ -43,6 +43,15 @@ export default async function ToonbankInstellingenPage() {
         ])
         : [{ data: [] }, { data: [] }, { data: null }, { data: [] }];
 
+    // Contract 1.3: de myPOS per tablet. Apart opgehaald: bestaat de kolom nog niet (migratie
+    // 20261029100000 nog niet gedraaid), dan blijft de pagina gewoon werken, zonder koppeling.
+    const mypos = new Map<string, string | null>();
+    if (orgId) {
+        const { data, error } = await supabase.from('toonbank_apparaten').select('id, mypos_terminal_id').eq('organization_id', orgId);
+        if (!error) for (const r of (data ?? []) as { id: string; mypos_terminal_id: string | null }[]) mypos.set(r.id, r.mypos_terminal_id);
+    }
+    const koppelingKlaar = !!process.env.MYPOS_EPOS_ORGANISATIE_ID && process.env.MYPOS_EPOS_ORGANISATIE_ID === orgId;
+
     const metCode = new Set(((codes ?? []) as { personeel_id: string; ingesteld: boolean }[]).filter((c) => c.ingesteld).map((c) => c.personeel_id));
     const medewerkers: MedewerkerRij[] = (personeel ?? []).map((p) => ({
         id: p.id as string,
@@ -56,7 +65,8 @@ export default async function ToonbankInstellingenPage() {
 
     return (
         <ToonbankBeheer
-            tablets={((tablets ?? []) as TabletRij[]).map((t) => ({ ...t, hoogste_volgnummer_gemeld: Number(t.hoogste_volgnummer_gemeld), bevestigd_tot_volgnummer: Number(t.bevestigd_tot_volgnummer) }))}
+            tablets={((tablets ?? []) as TabletRij[]).map((t) => ({ ...t, hoogste_volgnummer_gemeld: Number(t.hoogste_volgnummer_gemeld), bevestigd_tot_volgnummer: Number(t.bevestigd_tot_volgnummer), mypos_terminal_id: mypos.get(t.id) ?? null }))}
+            myposKlaar={koppelingKlaar}
             medewerkers={medewerkers}
             isAdmin={isAdmin}
             instellingen={inst ? {
