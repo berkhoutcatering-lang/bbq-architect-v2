@@ -13,7 +13,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Ban, KeyRound, Plus, RefreshCw, ShieldCheck, Tablet } from 'lucide-react';
+import { ArrowLeft, Ban, Gift, KeyRound, Plus, RefreshCw, ShieldCheck, Tablet } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
 import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
@@ -210,6 +210,14 @@ export default function ToonbankBeheer({ tablets, medewerkers, isAdmin, instelli
 
             {/* Wat de tablet via GET status krijgt. */}
             {instellingen && <InstellingenKaart start={instellingen} isAdmin={isAdmin} na={() => router.refresh()} />}
+
+            {/* Contract 1.2: cadeaubonnen (eigen pagina; alleen een Admin). */}
+            <Link href="/instellingen/toonbank/cadeaubonnen" className="block mb-8">
+                <MetallicCard className="p-4" hover>
+                    <p className="text-[14px] font-medium text-[var(--text)] flex items-center gap-2"><Gift size={15} /> Cadeaubonnen</p>
+                    <p className="text-[12px] text-[var(--muted)]">Uitgeven, blokkeren en het saldo bekijken, en betalen met een cadeaubon op de Toonbank aanzetten.</p>
+                </MetallicCard>
+            </Link>
 
             {/* Wie mag inloggen. */}
             <h3 className="text-[13px] font-semibold uppercase tracking-[0.1em] text-[var(--muted)] mb-1">Wie mag op de Toonbank</h3>

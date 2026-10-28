@@ -4,7 +4,8 @@
  *
  * De voorbeelden in ./contract/voorbeelden zijn een kopie van
  * hopbites-toonbank/contract/v1/voorbeelden (branch feat/tb-skelet, commit
- * 9660062 voor contract/v1), met MANIFEST.sha256. Verandert een voorbeeld
+ * 9660062 voor contract/v1; de cadeaubonnen van 1.2 uit feat/tb-pin-koppeling,
+ * commit c99912b), met MANIFEST.sha256. Verandert een voorbeeld
  * daar, dan verandert de manifesthash: kopieer de nieuwe bestanden, pas
  * MANIFEST_HASH hieronder aan en laat deze test (en de schema's in
  * contract.ts) weer slagen. Zo breekt het contract nooit pas aan de toonbank.
@@ -21,7 +22,7 @@ import {
 
 const MAP = path.join(__dirname, 'contract', 'voorbeelden');
 /** SHA-256 van MANIFEST.sha256 zelf: vastgepind, zodat een stille wijziging opvalt. */
-const MANIFEST_HASH = '6863b8cef2c2b114948e22b64af62a08a597116779343a5f945cdad21d740322';
+const MANIFEST_HASH = '4ff09a2349b1896254a9394d3936331aa3ed3027c7209cd8a2dbfb9e40320497';
 
 const sha = (b: Buffer | string) => createHash('sha256').update(b).digest('hex');
 const lees = (naam: string): unknown => JSON.parse(readFileSync(path.join(MAP, naam), 'utf8'));

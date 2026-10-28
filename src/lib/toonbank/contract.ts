@@ -1,5 +1,5 @@
 /**
- * Contract toonbank/v1, versie 1.3.0 — de kant van BBQ Architect (BA-7b; 1.3: pinnen via de koppeling met de myPOS).
+ * Contract toonbank/v1, versie 1.3.0 — de kant van BBQ Architect (BA-7b; 1.2: cadeaubonnen; 1.3: pinnen via de koppeling met de myPOS).
  *
  * Bron: hopbites-toonbank/docs/datacontract-toonbank-v1.md (1.1.0-ontwerp)
  * en de zod-schema's in hopbites-toonbank/packages/kern/src/contract/ (branch
@@ -68,6 +68,27 @@ export const Leeftijd = z.object({
 
 export const Betaalmethode = z.enum(['pin', 'contant']);
 
+/** Hoe een bon betaald is: ook met een cadeaubon (contract 1.2). Ophalen en rest blijven pin of contant. */
+export const BonBetaalmethode = z.enum(['pin', 'contant', 'cadeaubon']);
+
+/** De code op een cadeaubon (contract 1.2): hoofdletters, cijfers en streepjes, zoals Cadeauboncode in kern. */
+export const Cadeauboncode = z
+    .string()
+    .trim()
+    .min(4)
+    .max(40)
+    .regex(/^[A-Z0-9-]+$/, 'hoofdletters, cijfers en streepjes');
+
+/**
+ * Maakt van wat er ingetikt of gescand is een code: spaties weg, hoofdletters, een adres wordt het
+ * laatste stuk. Letterlijk normaliseerCadeauboncode uit kern (packages/kern/src/contract/cadeaubon.ts).
+ */
+export function normaliseerCadeauboncode(invoer: string): string {
+    const t = invoer.trim();
+    const laatste = /\/([^/?#]+)\/?(?:[?#].*)?$/.exec(t)?.[1] ?? t;
+    return laatste.replace(/\s+/g, '').toUpperCase();
+}
+
 /* ═══ Fouten (contract §3.2) ═════════════════════════════════════════════ */
 
 export const FoutAntwoord = z.object({
@@ -105,6 +126,11 @@ export const FOUT_STATUS = {
     pin_koppeling_uit: 409,
     terminal_bezet: 409,
     mypos_onbereikbaar: 503,
+    // Contract 1.2: cadeaubonnen. Er is dan niets afgeschreven.
+    cadeaubon_onbekend: 404,
+    cadeaubon_saldo_te_laag: 422,
+    cadeaubon_verlopen: 422,
+    cadeaubon_geblokkeerd: 422,
 } as const;
 export type FoutCode = keyof typeof FOUT_STATUS;
 
@@ -239,7 +265,10 @@ export const StatusAntwoord = z.object({
         contant_aan: z.boolean(),
         contant_limiet_cents: PositieveCents.max(CONTANT_GRENS_CENTS),
         beschikbaar_grens: z.int().positive(),
-        /** Contract 1.2 (cadeaubonnen): BBQ Architect zet het nog niet; de tablet laat de tegel dan weg. */
+        /**
+         * Contract 1.2: kan er met een cadeaubon betaald worden? BBQ Architect zet het alleen als
+         * Instellingen → Toonbank → Cadeaubonnen het aan heeft staan; ontbreekt het, dan niet.
+         */
         cadeaubon_aan: z.boolean().optional(),
         /** Contract 1.3: kent BBQ Architect voor dit apparaat een myPOS-terminal en de sleutels? */
         pin_koppeling: z.boolean().optional(),
@@ -507,12 +536,20 @@ const OrderRestRegel = z.object({
 const BetaalRegel = z.object({
     regelnr: z.int().positive(),
     soort: z.literal('betaling'),
-    betaalmethode: Betaalmethode,
+    /** Pin, contant, of (contract 1.2) een cadeaubon: alleen als GET status cadeaubon_aan meldde. */
+    betaalmethode: BonBetaalmethode,
     /** Pin: met de hand, of (contract 1.3) door de koppeling met de myPOS. */
     betaal_bevestiging: z.enum(['handmatig', 'koppeling']).optional(),
     bedrag_cents: Cents,
     contant_ontvangen_cents: PositieveCents.optional(),
     wisselgeld_cents: PositieveCents.optional(),
+    /**
+     * Bij een cadeaubon (contract 1.2): de code en de reservering waarmee BBQ Architect afschrijft.
+     * Optioneel, zoals in kern: ontbreekt er een, dan wordt de bon toch geboekt en is het een
+     * controle in Te controleren (toonbank_cadeaubon_boek_bon), nooit een weigering.
+     */
+    cadeaubon_code: Cadeauboncode.optional(),
+    reservering_id: Uuid.optional(),
 });
 
 const BonRegel = z.discriminatedUnion('soort', [VerkoopRegel, StatiegeldRegel, OrderRestRegel, BetaalRegel]);
@@ -668,6 +705,8 @@ export const DagstaatMelding = z
         contant_verschil_cents: Cents,
         contant_verschil_reden: z.string().min(1).nullable(),
         afgeroomd_cents: PositieveCents,
+        /** Contract 1.2: wat er met cadeaubonnen is betaald (geen omzet erbij; de omzet staat op de bonnen). */
+        cadeaubon_cents: Cents.optional(),
         verzendbak_leeg: z.boolean(),
     })
     .refine((d) => d.dagstaat_id === d.gebeurtenis_id, { message: 'dagstaat_id is gelijk aan gebeurtenis_id', path: ['dagstaat_id'] });
@@ -721,6 +760,64 @@ export type DoosOphalenAntwoord = z.infer<typeof DoosOphalenAntwoord>;
 
 /* ═══ De voorbeeldberichten (contract/v1/voorbeelden) ════════════════════ */
 
+/* ═══ Contract 1.2: cadeaubonnen ═════════════════════════════════════════ */
+
+/*
+ * BBQ Architect bezit de cadeaubon en het saldo; de Toonbank vraagt en meldt alleen. Inwisselen is
+ * een betaalwijze (een meervoudige voucher: de btw staat op de verkoopregels) [onzeker, boekhouder].
+ * Reserveren houdt het bedrag 15 minuten vast; pas als de bon binnenkomt (POST bonnen) wordt er
+ * afgeschreven. Zie src/lib/toonbank/cadeaubonnen.ts en migratie 20261029120000.
+ */
+
+export const CadeaubonStatus = z.enum(['actief', 'leeg', 'verlopen', 'geblokkeerd']);
+export type CadeaubonStatus = z.infer<typeof CadeaubonStatus>;
+
+/** GET cadeaubonnen/{code}. Een onbekende code is 404 cadeaubon_onbekend. */
+export const CadeaubonAntwoord = z.object({
+    code: Cadeauboncode,
+    status: CadeaubonStatus,
+    /** Het saldo, zonder de lopende reserveringen eraf (nooit onder 0 in het antwoord). */
+    saldo_cents: PositieveCents,
+    gereserveerd_cents: PositieveCents,
+    /** Saldo min gereserveerd, en 0 als de bon niet actief is. */
+    beschikbaar_cents: PositieveCents,
+    waarde_cents: PositieveCents.optional(),
+    /** Tot en met deze dag; leeg als er geen einddatum is. */
+    geldig_tot: Datum.nullable(),
+});
+export type CadeaubonAntwoord = z.infer<typeof CadeaubonAntwoord>;
+
+/** POST cadeaubonnen/{code}/reserveren. Dezelfde reservering_id opnieuw reserveert niet nog een keer. */
+export const CadeaubonReserveerVerzoek = z.object({
+    reservering_id: Uuid,
+    bon_id: Uuid,
+    bedrag_cents: z.int().positive(),
+});
+export type CadeaubonReserveerVerzoek = z.infer<typeof CadeaubonReserveerVerzoek>;
+
+export const CadeaubonReserveerAntwoord = z.object({
+    reservering_id: Uuid,
+    code: Cadeauboncode,
+    bedrag_cents: z.int().positive(),
+    beschikbaar_na_cents: PositieveCents,
+    verloopt_at: Moment,
+});
+export type CadeaubonReserveerAntwoord = z.infer<typeof CadeaubonReserveerAntwoord>;
+
+/** POST cadeaubonnen/{code}/vrijgeven: de verkoop gaat niet door. Twee keer kan geen kwaad. */
+export const CadeaubonVrijgevenVerzoek = z.object({
+    reservering_id: Uuid,
+});
+export type CadeaubonVrijgevenVerzoek = z.infer<typeof CadeaubonVrijgevenVerzoek>;
+
+export const CadeaubonVrijgevenAntwoord = z.object({
+    reservering_id: Uuid,
+    /** Onwaar als de reservering al verlopen, al gebruikt of al vrijgegeven was. */
+    vrijgegeven: z.boolean(),
+    beschikbaar_cents: PositieveCents,
+});
+export type CadeaubonVrijgevenAntwoord = z.infer<typeof CadeaubonVrijgevenAntwoord>;
+
 /* ═══ Contract 1.3: pinnen via de koppeling met de myPOS ═══════════════ */
 
 export const PinbetalingStand = z.enum(['wacht', 'gelukt', 'mislukt', 'geannuleerd']);
@@ -747,6 +844,7 @@ export type PinbetalingAntwoord = z.infer<typeof PinbetalingAntwoord>;
 
 export const SCHEMAS = {
     PinbetalingVerzoek, PinbetalingAntwoord,
+    CadeaubonAntwoord, CadeaubonReserveerVerzoek, CadeaubonReserveerAntwoord, CadeaubonVrijgevenVerzoek, CadeaubonVrijgevenAntwoord,
     StatusAntwoord, CatalogusAntwoord, VrijAntwoord, WegzettenAntwoord, WegzetAntwoord, OngedaanAntwoord,
     AfhaallijstAntwoord, ScanAntwoord, KoppelAntwoord, MedewerkersAntwoord, InlogAntwoord, EigenaarcodeAntwoord,
     BonMelding, TegenbonMelding, BonnenVerzoek, OrderOphalenVerzoek, DoosOphalenVerzoek, DagstaatMelding,
@@ -771,6 +869,10 @@ export const VOORBEELDEN = {
     'fout-niet-zelfde-dag.json': 'FoutNietZelfdeDag',
     'pil-gevallen.json': 'PilGevallen',
     'pinbetaling.json': 'PinbetalingAntwoord',
+    // Contract 1.2: cadeaubonnen.
+    'cadeaubon.json': 'CadeaubonAntwoord',
+    'cadeaubon-reserveren.json': 'CadeaubonReserveerVerzoek',
+    'bon-cadeaubon.json': 'BonMelding',
 } as const satisfies Record<string, keyof typeof SCHEMAS>;
 
 /* ═══ Versies vergelijken ════════════════════════════════════════════════ */

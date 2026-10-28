@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import MetallicCard from '@/components/MetallicCard';
-import { dagTotalen, euro, geldigeDatum, vandaagAmsterdam, type BonRij } from '@/lib/toonbank/overzicht';
+import { cadeaubonVanRegels, dagTotalen, euro, geldigeDatum, vandaagAmsterdam, type BonRij } from '@/lib/toonbank/overzicht';
 import { toonbankLid } from './_lib/lid';
 
 export const dynamic = 'force-dynamic';
@@ -91,6 +91,8 @@ export default async function ToonbankBonnenPagina({ searchParams }: { searchPar
     const lijst = ((bonnen ?? []) as unknown as BonScherm[]).map((b) => ({
         ...b,
         toonbank_bon_regels: [...(b.toonbank_bon_regels ?? [])].sort((x, y) => x.regelnr - y.regelnr),
+        /* Contract 1.2: uit de regels, zodat deze pagina ook werkt voordat de kolom cadeaubon_cents bestaat. */
+        cadeaubon_cents: cadeaubonVanRegels(b.toonbank_bon_regels ?? []),
     }));
     const code = new Map((apparaten ?? []).map((a) => [a.id as string, a.code as string]));
     const t = dagTotalen(lijst);
@@ -135,6 +137,7 @@ export default async function ToonbankBonnenPagina({ searchParams }: { searchPar
                     <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--muted)]">Betaald</p>
                     <p className="text-[13px] text-[var(--text)] tabular-nums">Pin {euro(t.pin_cents)}</p>
                     <p className="text-[13px] text-[var(--text)] tabular-nums">Contant {euro(t.contant_cents)}</p>
+                    {t.cadeaubon_cents !== 0 && <p className="text-[13px] text-[var(--text)] tabular-nums">Cadeaubon {euro(t.cadeaubon_cents)}</p>}
                 </MetallicCard>
                 <MetallicCard className="p-4" hover={false}>
                     <p className="text-[11px] uppercase tracking-[0.08em] text-[var(--muted)]">Geen omzet</p>
@@ -152,7 +155,7 @@ export default async function ToonbankBonnenPagina({ searchParams }: { searchPar
                     {lijst.map((b) => {
                         const tekort = b.toonbank_bon_regels.some((r) => r.voorraad_status === 'tekort_gecorrigeerd');
                         const nietBij = b.toonbank_bon_regels.some((r) => r.voorraad_status === 'niet_bijgehouden');
-                        const betaling = [b.pin_cents ? 'pin' : null, b.contant_cents ? 'contant' : null].filter(Boolean).join(' + ') || '—';
+                        const betaling = [b.pin_cents ? 'pin' : null, b.contant_cents ? 'contant' : null, b.cadeaubon_cents ? 'cadeaubon' : null].filter(Boolean).join(' + ') || '—';
                         return (
                             <details key={b.id} className="rounded-xl border border-[var(--border)] bg-[var(--card)]">
                                 <summary className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 cursor-pointer text-[13px] text-[var(--text)]">

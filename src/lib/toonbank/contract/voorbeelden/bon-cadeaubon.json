@@ -1,0 +1,96 @@
+{
+  "soort": "bon",
+  "gebeurtenis_id": "8c1e2f47-6a3b-4d59-b0e7-3f9a2c6d1e08",
+  "volgnummer": 1215,
+  "moment": "2027-03-06T13:40:12+01:00",
+  "medewerker_id": "fe71fc3c-aaa1-436a-ae15-684b8b3e4de7",
+  "bon_id": "8c1e2f47-6a3b-4d59-b0e7-3f9a2c6d1e08",
+  "bonnummer": "T1-000418",
+  "bon_volgnummer": 418,
+  "status": "afgerond",
+  "kanaal": "winkel",
+  "catalogus_versie": 412,
+  "voorraad_versie": 1185,
+  "leeftijd": {
+    "uitkomst": "vastgesteld",
+    "at": "2027-03-06T13:39:30+01:00"
+  },
+  "regels": [
+    {
+      "regelnr": 1,
+      "soort": "verkoop",
+      "artikel_id": "aa47ca2e-78e2-4e44-abd4-8d2e23e3292e",
+      "naam": "Oproer · Tripel for the Crowd",
+      "aantal": 2,
+      "stuk_cents": 395,
+      "korting_cents": 0,
+      "bedrag_cents": 790,
+      "btw": [
+        {
+          "pct": 21,
+          "incl_cents": 790
+        }
+      ],
+      "alcohol": true,
+      "onderdelen": [
+        {
+          "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f",
+          "hoeveelheid": 1,
+          "eenheid": "stuk"
+        }
+      ],
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 2,
+      "soort": "statiegeld",
+      "hoort_bij_regelnr": 1,
+      "product_id": "076de4f4-9181-4d83-9162-b264cce2cb9f",
+      "aantal": 2,
+      "stuk_cents": 15,
+      "bedrag_cents": 30
+    },
+    {
+      "regelnr": 3,
+      "soort": "verkoop",
+      "artikel_id": "620b126a-12c4-4ffa-8ea8-1d2a0e208280",
+      "naam": "Gerookte amandelen",
+      "aantal": 1,
+      "stuk_cents": 595,
+      "korting_cents": 0,
+      "bedrag_cents": 595,
+      "btw": [
+        {
+          "pct": 9,
+          "incl_cents": 595
+        }
+      ],
+      "alcohol": false,
+      "onderdelen": [
+        {
+          "product_id": "b4031e10-fa38-4186-8d58-133ea69360d1",
+          "hoeveelheid": 1,
+          "eenheid": "stuk"
+        }
+      ],
+      "prijs_bron": "catalogus"
+    },
+    {
+      "regelnr": 4,
+      "soort": "betaling",
+      "betaalmethode": "cadeaubon",
+      "bedrag_cents": 1000,
+      "cadeaubon_code": "HB-CB-1001",
+      "reservering_id": "5b6d1f0e-2c4a-4f7e-9a31-8e2d7c0b4a15"
+    },
+    {
+      "regelnr": 5,
+      "soort": "betaling",
+      "betaalmethode": "pin",
+      "betaal_bevestiging": "handmatig",
+      "bedrag_cents": 415
+    }
+  ],
+  "totaal_cents": 1415,
+  "afronding_cents": 0
+}

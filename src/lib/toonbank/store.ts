@@ -271,6 +271,52 @@ export interface Pinbetaling {
 
 export type PinbetalingWijziging = Partial<Pick<Pinbetaling, 'mypos_payment_id' | 'stand' | 'mypos_status' | 'mypos_referentie' | 'melding'>>;
 
+/* ── Contract 1.2: cadeaubonnen ─────────────────────────────────────────── */
+
+export type CadeaubonStatusRuw = 'actief' | 'leeg' | 'verlopen' | 'geblokkeerd';
+
+/** Wat toonbank_cadeaubon_opzoeken teruggeeft (al in de vorm van GET cadeaubonnen/{code}). */
+export interface CadeaubonStand {
+    code: string;
+    status: CadeaubonStatusRuw;
+    saldo_cents: number;
+    gereserveerd_cents: number;
+    beschikbaar_cents: number;
+    waarde_cents: number;
+    geldig_tot: string | null;
+}
+
+export interface CadeaubonReserveerVraag {
+    orgId: string;
+    apparaatId: string;
+    /** Al genormaliseerd (hoofdletters, zonder spaties). */
+    code: string;
+    reserveringId: string;
+    bonId: string;
+    bedragCents: number;
+    medewerkerId: string | null;
+}
+
+export type CadeaubonReserveerFout = 'cadeaubon_onbekend' | 'cadeaubon_geblokkeerd' | 'cadeaubon_verlopen' | 'cadeaubon_saldo_te_laag' | 'reservering_anders';
+
+/** Wat toonbank_cadeaubon_reserveren teruggeeft. */
+export type CadeaubonReserveerRuw =
+    | { ok: true; reservering_id: string; code: string; bedrag_cents: number; beschikbaar_na_cents: number; verloopt_at: string }
+    | { ok: false; fout: CadeaubonReserveerFout; beschikbaar_cents: number; geldig_tot?: string | null };
+
+export interface CadeaubonVrijgeefVraag {
+    orgId: string;
+    apparaatId: string;
+    code: string;
+    reserveringId: string;
+    medewerkerId: string | null;
+}
+
+/** Wat toonbank_cadeaubon_vrijgeven teruggeeft. */
+export type CadeaubonVrijgeefRuw =
+    | { ok: true; reservering_id: string; vrijgegeven: boolean; beschikbaar_cents: number }
+    | { ok: false; fout: 'cadeaubon_onbekend' };
+
 export interface ToonbankStore {
     /* ── Koppelen (BA-7a) ── */
     koppelKandidaten(): Promise<KoppelKandidaat[]>;
@@ -344,4 +390,17 @@ export interface ToonbankStore {
     /** Legt een nieuwe pinbetaling vast; bestond hij al (zelfde organisatie en poging_id), dan die. */
     maakPinbetaling(p: Pinbetaling): Promise<{ rij: Pinbetaling; nieuw: boolean }>;
     werkPinbetalingBij(orgId: string, pogingId: string, wijziging: PinbetalingWijziging): Promise<Pinbetaling | null>;
+
+    /* ── Contract 1.2: cadeaubonnen (migratie 20261029120000) ── */
+    /**
+     * Staat betalen met een cadeaubon aan (winkel_instellingen.toonbank_cadeaubon_aan)? Onwaar als de
+     * kolom nog niet bestaat (de migratie is nog niet gedraaid): dan staat het uit.
+     */
+    cadeaubonAan(orgId: string): Promise<boolean>;
+    /** toonbank_cadeaubon_opzoeken; null als de code in deze organisatie niet bestaat. */
+    cadeaubon(orgId: string, code: string): Promise<CadeaubonStand | null>;
+    /** toonbank_cadeaubon_reserveren: idempotent op reservering_id. */
+    cadeaubonReserveren(v: CadeaubonReserveerVraag): Promise<CadeaubonReserveerRuw>;
+    /** toonbank_cadeaubon_vrijgeven: twee keer kan geen kwaad. */
+    cadeaubonVrijgeven(v: CadeaubonVrijgeefVraag): Promise<CadeaubonVrijgeefRuw>;
 }

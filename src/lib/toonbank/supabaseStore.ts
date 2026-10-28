@@ -14,7 +14,45 @@ import {
     OngeldigeMelding,
     type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
     type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
+    type CadeaubonReserveerFout, type CadeaubonReserveerRuw, type CadeaubonStand, type CadeaubonStatusRuw, type CadeaubonVrijgeefRuw,
 } from './store';
+
+/** De functie of kolom bestaat nog niet (de migratie is nog niet gedraaid). */
+const NOG_NIET_GEMIGREERD = new Set(['42703', '42P01', '42883', 'PGRST202', 'PGRST204', 'PGRST205']);
+
+const CADEAUBON_STATUSSEN: readonly CadeaubonStatusRuw[] = ['actief', 'leeg', 'verlopen', 'geblokkeerd'];
+const RESERVEER_FOUTEN: readonly CadeaubonReserveerFout[] = ['cadeaubon_onbekend', 'cadeaubon_geblokkeerd', 'cadeaubon_verlopen', 'cadeaubon_saldo_te_laag', 'reservering_anders'];
+
+/** jsonb van toonbank_cadeaubon_opzoeken → CadeaubonStand; getallen kunnen als tekst komen. */
+export function naarCadeaubonStand(r: Record<string, unknown>): CadeaubonStand {
+    const n = (v: unknown) => Math.max(0, Math.trunc(Number(v ?? 0)) || 0);
+    const status = CADEAUBON_STATUSSEN.includes(r.status as CadeaubonStatusRuw) ? (r.status as CadeaubonStatusRuw) : 'geblokkeerd';
+    return {
+        code: String(r.code),
+        status,
+        saldo_cents: n(r.saldo_cents),
+        gereserveerd_cents: n(r.gereserveerd_cents),
+        beschikbaar_cents: status === 'actief' ? n(r.beschikbaar_cents) : 0,
+        waarde_cents: n(r.waarde_cents),
+        geldig_tot: typeof r.geldig_tot === 'string' && r.geldig_tot ? r.geldig_tot.slice(0, 10) : null,
+    };
+}
+
+/** jsonb van toonbank_cadeaubon_reserveren → CadeaubonReserveerRuw; tijden als ISO. */
+export function naarReserveerRuw(r: Record<string, unknown>): CadeaubonReserveerRuw {
+    if (r.ok === true) {
+        return {
+            ok: true,
+            reservering_id: String(r.reservering_id),
+            code: String(r.code),
+            bedrag_cents: Number(r.bedrag_cents),
+            beschikbaar_na_cents: Math.max(0, Number(r.beschikbaar_na_cents ?? 0)),
+            verloopt_at: new Date(String(r.verloopt_at)).toISOString(),
+        };
+    }
+    const fout = RESERVEER_FOUTEN.includes(r.fout as CadeaubonReserveerFout) ? (r.fout as CadeaubonReserveerFout) : 'cadeaubon_onbekend';
+    return { ok: false, fout, beschikbaar_cents: Math.max(0, Number(r.beschikbaar_cents ?? 0)), geldig_tot: typeof r.geldig_tot === 'string' ? r.geldig_tot : null };
+}
 
 const APPARAAT_KOLOMMEN = 'id, organization_id, naam, code, locatie, ingetrokken_at, hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer';
 const PINBETALING_KOLOMMEN = 'organization_id, apparaat_id, poging_id, bon_id, bonnummer, bedrag_cents, mypos_terminal_id, mypos_payment_id, stand, mypos_status, mypos_referentie, melding';
@@ -336,6 +374,49 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
                 .select(PINBETALING_KOLOMMEN).maybeSingle();
             if (error) throw new OpslagFout('toonbank_pinbetalingen', error);
             return data ? naarPinbetaling(data as Record<string, unknown>) : null;
+        },
+
+        /* ── Contract 1.2: cadeaubonnen ── */
+        async cadeaubonAan(orgId) {
+            const { data, error } = await sb.from('winkel_instellingen')
+                .select('toonbank_cadeaubon_aan')
+                .eq('organization_id', orgId).maybeSingle();
+            // De kolom bestaat nog niet (migratie 20261029120000 nog niet gedraaid): uit.
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
+            if (error) throw new OpslagFout('winkel_instellingen.toonbank_cadeaubon_aan', error);
+            return (data as { toonbank_cadeaubon_aan?: unknown } | null)?.toonbank_cadeaubon_aan === true;
+        },
+
+        async cadeaubon(orgId, code) {
+            const { data, error } = await sb.rpc('toonbank_cadeaubon_opzoeken', { p_org: orgId, p_code: code });
+            // Zonder de migratie kent BBQ Architect geen enkele cadeaubon.
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return null;
+            if (error) throw new OpslagFout('toonbank_cadeaubon_opzoeken', error);
+            return data ? naarCadeaubonStand(data as Record<string, unknown>) : null;
+        },
+
+        async cadeaubonReserveren(v) {
+            const { data, error } = await sb.rpc('toonbank_cadeaubon_reserveren', {
+                p_org: v.orgId, p_apparaat_id: v.apparaatId, p_code: v.code, p_reservering_id: v.reserveringId,
+                p_bon_id: v.bonId, p_bedrag_cents: v.bedragCents, p_medewerker_id: v.medewerkerId,
+            });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return { ok: false, fout: 'cadeaubon_onbekend', beschikbaar_cents: 0 };
+            if (error) throw new OpslagFout('toonbank_cadeaubon_reserveren', error);
+            return naarReserveerRuw((data ?? {}) as Record<string, unknown>);
+        },
+
+        async cadeaubonVrijgeven(v) {
+            const { data, error } = await sb.rpc('toonbank_cadeaubon_vrijgeven', {
+                p_org: v.orgId, p_apparaat_id: v.apparaatId, p_code: v.code, p_reservering_id: v.reserveringId, p_medewerker_id: v.medewerkerId,
+            });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return { ok: false, fout: 'cadeaubon_onbekend' };
+            if (error) throw new OpslagFout('toonbank_cadeaubon_vrijgeven', error);
+            const r = (data ?? {}) as Record<string, unknown>;
+            if (r.ok !== true) return { ok: false, fout: 'cadeaubon_onbekend' } satisfies CadeaubonVrijgeefRuw;
+            return {
+                ok: true, reservering_id: String(r.reservering_id), vrijgegeven: r.vrijgegeven === true,
+                beschikbaar_cents: Math.max(0, Number(r.beschikbaar_cents ?? 0)),
+            } satisfies CadeaubonVrijgeefRuw;
         },
     };
 }
