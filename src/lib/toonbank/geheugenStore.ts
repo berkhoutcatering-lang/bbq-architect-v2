@@ -13,7 +13,54 @@ import {
     type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
     type NieuweSessie, type OphaalVraag, type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij,
     type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
+    type CadeaubonStand, type CadeaubonStatusRuw,
 } from './store';
+
+/* ── Contract 1.2: cadeaubonnen, zoals de tabellen uit 20261029120000 ── */
+
+export interface GeheugenCadeaubon {
+    id: string;
+    organization_id: string;
+    code: string;
+    waarde_cents: number;
+    saldo_cents: number;
+    /** jjjj-mm-dd, tot en met; null = geen einddatum. */
+    geldig_tot: string | null;
+    geblokkeerd: boolean;
+}
+
+export interface GeheugenCadeaubonReservering {
+    organization_id: string;
+    reservering_id: string;
+    cadeaubon_id: string;
+    apparaat_id: string;
+    medewerker_id: string | null;
+    bon_id: string;
+    bedrag_cents: number;
+    status: 'vast' | 'vrij' | 'gebruikt';
+    verloopt_at: string;
+    gebruikt_bon_id: string | null;
+}
+
+export interface GeheugenCadeaubonMutatie {
+    organization_id: string;
+    cadeaubon_id: string;
+    soort: 'uitgifte' | 'reservering' | 'vrijgave' | 'afschrijving' | 'correctie' | 'blokkade' | 'deblokkade';
+    bedrag_cents: number;
+    saldo_wijziging_cents: number;
+    saldo_na_cents: number;
+    reservering_id: string | null;
+    bon_id: string | null;
+    idempotency_key: string | null;
+}
+
+/** Hoe lang een reservering het bedrag vasthoudt (zoals c_duur in toonbank_cadeaubon_reserveren). */
+export const CADEAUBON_RESERVERING_MS = 15 * 60_000;
+
+/** De dag in Europe/Amsterdam (jjjj-mm-dd), zoals (now() AT TIME ZONE 'Europe/Amsterdam')::DATE. */
+export function dagInAmsterdam(d: Date): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
 
 /** Een melding in het journaal (BA-9), zoals toonbank_journaal hem bewaart. */
 export interface GeheugenMelding {
@@ -86,6 +133,11 @@ export interface ToonbankGeheugen {
     /* Contract 1.3: de myPOS-terminal per apparaat-ID, en de pinbetalingen. */
     myposTerminals: Record<string, string>;
     pinbetalingen: Pinbetaling[];
+    /* Contract 1.2: cadeaubonnen (de instelling per organisatie, de bonnen, reserveringen en mutaties). */
+    cadeaubonAan: Record<string, boolean>;
+    cadeaubonnen: GeheugenCadeaubon[];
+    cadeaubonReserveringen: GeheugenCadeaubonReservering[];
+    cadeaubonMutaties: GeheugenCadeaubonMutatie[];
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -135,11 +187,80 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         dagstaten: start.dagstaten ?? {},
         myposTerminals: start.myposTerminals ?? {},
         pinbetalingen: start.pinbetalingen ?? [],
+        cadeaubonAan: start.cadeaubonAan ?? {},
+        cadeaubonnen: start.cadeaubonnen ?? [],
+        cadeaubonReserveringen: start.cadeaubonReserveringen ?? [],
+        cadeaubonMutaties: start.cadeaubonMutaties ?? [],
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
         a.koppelcode_hash != null && a.koppelcode_geldig_tot != null && new Date(a.koppelcode_geldig_tot).getTime() > nu() && a.koppelpogingen < KOPPEL_MAX_POGINGEN && !a.ingetrokken_at;
     const foutenVanBron = (bron: string) => g.koppelFouten.filter((f) => f.bron === bron && f.at > nu() - KOPPEL_BRON_MINUTEN * 60_000).length;
+    /* ── Cadeaubonnen: zoals private.cadeaubon_status, _gereserveerd en _stand ── */
+    const cbStatus = (c: GeheugenCadeaubon): CadeaubonStatusRuw =>
+        c.geblokkeerd ? 'geblokkeerd' : c.geldig_tot && c.geldig_tot < dagInAmsterdam(g.nu) ? 'verlopen' : c.saldo_cents <= 0 ? 'leeg' : 'actief';
+    const cbGereserveerd = (c: GeheugenCadeaubon) => g.cadeaubonReserveringen
+        .filter((r) => r.cadeaubon_id === c.id && r.status === 'vast' && new Date(r.verloopt_at).getTime() > nu())
+        .reduce((som, r) => som + r.bedrag_cents, 0);
+    const cbStand = (c: GeheugenCadeaubon): CadeaubonStand => {
+        const status = cbStatus(c);
+        const gereserveerd = cbGereserveerd(c);
+        return {
+            code: c.code, status, saldo_cents: Math.max(c.saldo_cents, 0), gereserveerd_cents: gereserveerd,
+            beschikbaar_cents: status === 'actief' ? Math.max(c.saldo_cents - gereserveerd, 0) : 0, waarde_cents: c.waarde_cents, geldig_tot: c.geldig_tot,
+        };
+    };
+    const cbZoek = (orgId: string, code: string) => g.cadeaubonnen.find((c) => c.organization_id === orgId && c.code === code.replace(/\s+/g, '').toUpperCase());
+
+    /**
+     * Zoals private.toonbank_cadeaubon_boek_bon: de betaalregels cadeaubon van een binnengekomen,
+     * afgeronde bon afschrijven. Weigert nooit; geeft de controles.
+     */
+    function cbBoekBon(m: GeheugenMelding): { code: string; melding: string }[] {
+        const p = m.payload;
+        if (p.status !== 'afgerond' || !Array.isArray(p.regels)) return [];
+        const uit: { code: string; melding: string }[] = [];
+        const bonId = String(p.bon_id ?? m.gebeurtenis_id).toLowerCase();
+        const bonnummer = String(p.bonnummer ?? '');
+        const tijd = new Date(String(p.moment ?? g.nu.toISOString()));
+        for (const r of (p.regels as Record<string, unknown>[]).filter((x) => x.soort === 'betaling' && x.betaalmethode === 'cadeaubon')) {
+            const nr = Number(r.regelnr);
+            const bedrag = Number(r.bedrag_cents);
+            const code = typeof r.cadeaubon_code === 'string' && r.cadeaubon_code.trim() ? r.cadeaubon_code.replace(/\s+/g, '').toUpperCase() : null;
+            const resId = typeof r.reservering_id === 'string' && UUID_RE.test(r.reservering_id) ? r.reservering_id.toLowerCase() : null;
+            if (m.soort === 'tegenbon') { uit.push({ code: 'cadeaubon_terug', melding: `Regel ${nr}: retour op cadeaubon ${code ?? '(zonder code)'}; niets teruggezet.` }); continue; }
+            if (!(bedrag > 0)) { uit.push({ code: 'cadeaubon_bedrag', melding: `Regel ${nr}: geen bedrag; niets afgeschreven.` }); continue; }
+            if (!code) { uit.push({ code: 'cadeaubon_zonder_code', melding: `Regel ${nr}: cadeaubon zonder code; niets afgeschreven.` }); continue; }
+            const sleutel = `tb:${bonId}:${resId ?? `regel-${nr}`}`;
+            if (g.cadeaubonMutaties.some((x) => x.organization_id === m.organization_id && x.idempotency_key === sleutel)) continue;
+            const cb = cbZoek(m.organization_id, code);
+            if (!cb) { uit.push({ code: 'cadeaubon_onbekend', melding: `Regel ${nr}: cadeaubon ${code} onbekend; niets afgeschreven.` }); continue; }
+            if (!resId) {
+                uit.push({ code: 'cadeaubon_zonder_reservering', melding: `Regel ${nr}: zonder reservering; toch afgeschreven.` });
+            } else {
+                const res = g.cadeaubonReserveringen.find((x) => x.organization_id === m.organization_id && x.reservering_id === resId);
+                if (!res || res.cadeaubon_id !== cb.id) {
+                    uit.push({ code: 'cadeaubon_reservering_onbekend', melding: `Regel ${nr}: de reservering hoort niet bij ${code}; toch afgeschreven.` });
+                } else if (res.status === 'gebruikt' && res.gebruikt_bon_id !== bonId) {
+                    uit.push({ code: 'cadeaubon_reservering_gebruikt', melding: `Regel ${nr}: reservering al gebruikt; toch afgeschreven.` });
+                } else {
+                    if (res.bedrag_cents !== bedrag) uit.push({ code: 'cadeaubon_bedrag_anders', melding: `Regel ${nr}: ${res.bedrag_cents} gereserveerd, ${bedrag} op de bon.` });
+                    res.status = 'gebruikt';
+                    res.gebruikt_bon_id = bonId;
+                }
+            }
+            if (cb.geblokkeerd) uit.push({ code: 'cadeaubon_geblokkeerd', melding: `Regel ${nr}: ${code} is geblokkeerd; toch afgeschreven.` });
+            if (cb.geldig_tot && cb.geldig_tot < dagInAmsterdam(tijd)) uit.push({ code: 'cadeaubon_verlopen', melding: `Regel ${nr}: ${code} was verlopen; toch afgeschreven.` });
+            cb.saldo_cents -= bedrag;
+            g.cadeaubonMutaties.push({
+                organization_id: m.organization_id, cadeaubon_id: cb.id, soort: 'afschrijving', bedrag_cents: bedrag, saldo_wijziging_cents: -bedrag,
+                saldo_na_cents: cb.saldo_cents, reservering_id: resId, bon_id: bonId, idempotency_key: sleutel,
+            });
+            if (cb.saldo_cents < 0) uit.push({ code: 'cadeaubon_saldo_negatief', melding: `Regel ${nr}: na bon ${bonnummer} staat ${code} op ${cb.saldo_cents} ct (onder nul).` });
+        }
+        return uit;
+    }
+
     const zonderHashes = (a: GeheugenApparaat): Apparaat => ({
         id: a.id, organization_id: a.organization_id, naam: a.naam, code: a.code, locatie: a.locatie,
         ingetrokken_at: a.ingetrokken_at, hoogste_volgnummer_gemeld: a.hoogste_volgnummer_gemeld, bevestigd_tot_volgnummer: a.bevestigd_tot_volgnummer,
@@ -346,7 +467,15 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
                 const r = g.verwerkMelding(m);
                 m.verwerk_status = r.status;
                 m.fout_code = r.fout_code ?? null;
-                uit.push({ journaal_id: m.id, gebeurtenis_id: m.gebeurtenis_id, soort: m.soort, status: r.status, product_ids: r.product_ids ?? [] });
+                /* Contract 1.2: zoals toonbank_boek_bon de cadeaubon afschrijven; een controle maakt hem conflict. */
+                if ((m.soort === 'bon' || m.soort === 'tegenbon') && (r.status === 'verwerkt' || r.status === 'conflict')) {
+                    const controles = cbBoekBon(m);
+                    if (controles.length > 0) {
+                        if (m.verwerk_status === 'verwerkt') { m.verwerk_status = 'conflict'; m.fout_code = controles[0]!.code; }
+                        m.fout_melding = [m.fout_melding, ...controles.map((c) => c.melding)].filter(Boolean).join(' ');
+                    }
+                }
+                uit.push({ journaal_id: m.id, gebeurtenis_id: m.gebeurtenis_id, soort: m.soort, status: m.verwerk_status, product_ids: r.product_ids ?? [] });
             }
             return uit;
         },
@@ -403,6 +532,61 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             if (!p) return null;
             Object.assign(p, wijziging);
             return { ...p };
+        },
+
+        /* ── Contract 1.2: zoals toonbank_cadeaubon_opzoeken, _reserveren en _vrijgeven ── */
+        async cadeaubonAan(orgId) {
+            return g.cadeaubonAan[orgId] === true;
+        },
+
+        async cadeaubon(orgId, code) {
+            const c = cbZoek(orgId, code);
+            return c ? cbStand(c) : null;
+        },
+
+        async cadeaubonReserveren(v) {
+            const a = g.apparaten.find((x) => x.id === v.apparaatId && x.organization_id === v.orgId && !x.ingetrokken_at);
+            if (!a) throw new Error('tablet niet in deze organisatie of ingetrokken (P0002)');
+            const c = cbZoek(v.orgId, v.code);
+            if (!c) return { ok: false, fout: 'cadeaubon_onbekend', beschikbaar_cents: 0 };
+            const oud = g.cadeaubonReserveringen.find((r) => r.organization_id === v.orgId && r.reservering_id === v.reserveringId.toLowerCase());
+            if (oud) {
+                if (oud.cadeaubon_id !== c.id || oud.bon_id !== v.bonId.toLowerCase() || oud.bedrag_cents !== v.bedragCents) {
+                    return { ok: false, fout: 'reservering_anders', beschikbaar_cents: 0 };
+                }
+                return { ok: true, reservering_id: oud.reservering_id, code: c.code, bedrag_cents: oud.bedrag_cents, beschikbaar_na_cents: cbStand(c).beschikbaar_cents, verloopt_at: oud.verloopt_at };
+            }
+            const stand = cbStand(c);
+            if (stand.status === 'geblokkeerd') return { ok: false, fout: 'cadeaubon_geblokkeerd', beschikbaar_cents: 0 };
+            if (stand.status === 'verlopen') return { ok: false, fout: 'cadeaubon_verlopen', beschikbaar_cents: 0, geldig_tot: c.geldig_tot };
+            if (stand.beschikbaar_cents < v.bedragCents) return { ok: false, fout: 'cadeaubon_saldo_te_laag', beschikbaar_cents: stand.beschikbaar_cents };
+            const res: GeheugenCadeaubonReservering = {
+                organization_id: v.orgId, reservering_id: v.reserveringId.toLowerCase(), cadeaubon_id: c.id, apparaat_id: v.apparaatId, medewerker_id: v.medewerkerId,
+                bon_id: v.bonId.toLowerCase(), bedrag_cents: v.bedragCents, status: 'vast', verloopt_at: new Date(nu() + CADEAUBON_RESERVERING_MS).toISOString(), gebruikt_bon_id: null,
+            };
+            g.cadeaubonReserveringen.push(res);
+            g.cadeaubonMutaties.push({
+                organization_id: v.orgId, cadeaubon_id: c.id, soort: 'reservering', bedrag_cents: v.bedragCents, saldo_wijziging_cents: 0,
+                saldo_na_cents: c.saldo_cents, reservering_id: res.reservering_id, bon_id: res.bon_id, idempotency_key: null,
+            });
+            return { ok: true, reservering_id: res.reservering_id, code: c.code, bedrag_cents: res.bedrag_cents, beschikbaar_na_cents: cbStand(c).beschikbaar_cents, verloopt_at: res.verloopt_at };
+        },
+
+        async cadeaubonVrijgeven(v) {
+            const c = cbZoek(v.orgId, v.code);
+            if (!c) return { ok: false, fout: 'cadeaubon_onbekend' };
+            const res = g.cadeaubonReserveringen.find((r) => r.organization_id === v.orgId && r.reservering_id === v.reserveringId.toLowerCase()
+                && r.cadeaubon_id === c.id && r.apparaat_id === v.apparaatId);
+            let vrij = false;
+            if (res && res.status === 'vast' && new Date(res.verloopt_at).getTime() > nu()) {
+                res.status = 'vrij';
+                g.cadeaubonMutaties.push({
+                    organization_id: v.orgId, cadeaubon_id: c.id, soort: 'vrijgave', bedrag_cents: res.bedrag_cents, saldo_wijziging_cents: 0,
+                    saldo_na_cents: c.saldo_cents, reservering_id: res.reservering_id, bon_id: res.bon_id, idempotency_key: null,
+                });
+                vrij = true;
+            }
+            return { ok: true, reservering_id: v.reserveringId.toLowerCase(), vrijgegeven: vrij, beschikbaar_cents: cbStand(c).beschikbaar_cents };
         },
     };
 }

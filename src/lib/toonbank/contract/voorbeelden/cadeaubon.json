@@ -1,0 +1,9 @@
+{
+  "code": "HB-CB-1001",
+  "status": "actief",
+  "saldo_cents": 1850,
+  "gereserveerd_cents": 0,
+  "beschikbaar_cents": 1850,
+  "waarde_cents": 2500,
+  "geldig_tot": "2028-12-31"
+}

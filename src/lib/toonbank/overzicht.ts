@@ -25,6 +25,13 @@ export interface BonRij {
     afronding_cents: number;
     pin_cents: number;
     contant_cents: number;
+    /** Contract 1.2: betaald met een cadeaubon (een betaalwijze, geen omzet). */
+    cadeaubon_cents?: number;
+}
+
+/** De som van de betaalregels met een cadeaubon (uit de regels: werkt ook zonder kolom cadeaubon_cents). */
+export function cadeaubonVanRegels(regels: readonly { soort: string; betaalmethode?: string | null; bedrag_cents: number }[]): number {
+    return regels.filter((r) => r.soort === 'betaling' && r.betaalmethode === 'cadeaubon').reduce((som, r) => som + Number(r.bedrag_cents), 0);
 }
 
 export interface TariefTotaal {
@@ -48,6 +55,7 @@ export interface DagTotalen {
     afronding_cents: number;
     pin_cents: number;
     contant_cents: number;
+    cadeaubon_cents: number;
 }
 
 /** Som van de bon-btw per tarief van de afgeronde bonnen; nooit opnieuw afronden. */
@@ -55,7 +63,7 @@ export function dagTotalen(bonnen: readonly BonRij[]): DagTotalen {
     const perTarief = new Map<number, TariefTotaal>();
     const t: DagTotalen = {
         aantal_bonnen: 0, aantal_tegenbonnen: 0, aantal_geannuleerd: 0, omzet: [], omzet_incl_cents: 0, statiegeld_cents: 0,
-        order_rest_cents: 0, tegenbonnen_cents: 0, korting_cents: 0, afronding_cents: 0, pin_cents: 0, contant_cents: 0,
+        order_rest_cents: 0, tegenbonnen_cents: 0, korting_cents: 0, afronding_cents: 0, pin_cents: 0, contant_cents: 0, cadeaubon_cents: 0,
     };
     for (const b of bonnen) {
         if (b.status === 'geannuleerd') { t.aantal_geannuleerd += 1; continue; }
@@ -76,6 +84,7 @@ export function dagTotalen(bonnen: readonly BonRij[]): DagTotalen {
         t.afronding_cents += Number(b.afronding_cents);
         t.pin_cents += Number(b.pin_cents);
         t.contant_cents += Number(b.contant_cents);
+        t.cadeaubon_cents += Number(b.cadeaubon_cents ?? 0);
     }
     t.omzet = [...perTarief.values()].sort((a, b) => b.pct - a.pct);
     return t;
@@ -123,6 +132,18 @@ export const CONTROLE_LABEL: Record<string, string> = {
     tegenbon_te_veel: 'Meer terug dan verkocht',
     alcohol_niet_toegestaan: 'Alcohol terwijl het uit staat',
     alcohol_prijs: 'Alcohol onder 75% van de prijs',
+    /* Contract 1.2: cadeaubonnen (toonbank_cadeaubon_boek_bon). De bon is altijd geboekt. */
+    cadeaubon_saldo_negatief: 'Cadeaubon onder nul',
+    cadeaubon_onbekend: 'Betaald met een onbekende cadeaubon',
+    cadeaubon_zonder_code: 'Cadeaubon zonder code',
+    cadeaubon_bedrag: 'Cadeaubon zonder bedrag',
+    cadeaubon_zonder_reservering: 'Cadeaubon zonder reservering',
+    cadeaubon_reservering_onbekend: 'Reservering hoort niet bij de cadeaubon',
+    cadeaubon_reservering_gebruikt: 'Cadeaubon-reservering twee keer gebruikt',
+    cadeaubon_bedrag_anders: 'Ander bedrag dan gereserveerd',
+    cadeaubon_geblokkeerd: 'Betaald met een geblokkeerde cadeaubon',
+    cadeaubon_verlopen: 'Betaald met een verlopen cadeaubon',
+    cadeaubon_terug: 'Retour op een cadeaubon',
     /* Tijdelijke databasefouten (review M2 B1): blijven op wacht en worden opnieuw verwerkt. */
     '40P01': 'Tijdelijk: deadlock, wordt opnieuw verwerkt',
     '40001': 'Tijdelijk: gelijktijdige wijziging, wordt opnieuw verwerkt',

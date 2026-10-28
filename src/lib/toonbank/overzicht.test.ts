@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { controleLabel, dagTotalen, euro, geldigeDatum, meldingSamenvatting, vandaagAmsterdam, verschilLabel, type BonRij } from './overzicht';
+import { cadeaubonVanRegels, controleLabel, dagTotalen, euro, geldigeDatum, meldingSamenvatting, vandaagAmsterdam, verschilLabel, type BonRij } from './overzicht';
 
 const bon = (o: Partial<BonRij>): BonRij => ({
     id: crypto.randomUUID(), soort: 'verkoop', status: 'afgerond', totaal_cents: 0, omzet_incl_cents: 0, btw: {}, statiegeld_cents: 0,
@@ -7,6 +7,20 @@ const bon = (o: Partial<BonRij>): BonRij => ({
 });
 
 describe('dagTotalen', () => {
+    it('contract 1.2: de cadeaubon is een betaalwijze naast pin en contant, geen omzet', () => {
+        const regels = [
+            { soort: 'verkoop', betaalmethode: null, bedrag_cents: 1415 },
+            { soort: 'betaling', betaalmethode: 'cadeaubon', bedrag_cents: 1000 },
+            { soort: 'betaling', betaalmethode: 'pin', bedrag_cents: 415 },
+        ];
+        expect(cadeaubonVanRegels(regels)).toBe(1000);
+        const t = dagTotalen([
+            bon({ omzet_incl_cents: 1415, btw: { 21: { incl_cents: 820, btw_cents: 142 }, 9: { incl_cents: 595, btw_cents: 49 } }, pin_cents: 415, cadeaubon_cents: 1000, totaal_cents: 1415 }),
+            bon({ omzet_incl_cents: 395, btw: { 21: { incl_cents: 395, btw_cents: 69 } }, contant_cents: 395, totaal_cents: 395 }),
+        ]);
+        expect([t.pin_cents, t.contant_cents, t.cadeaubon_cents, t.omzet_incl_cents]).toEqual([415, 395, 1000, 1810]);
+    });
+
     it('telt de bon-btw op zonder opnieuw af te ronden: 2 × € 3,95 = 138, niet 137', () => {
         const t = dagTotalen([
             bon({ omzet_incl_cents: 395, btw: { 21: { incl_cents: 395, btw_cents: 69 } }, pin_cents: 395, totaal_cents: 395 }),

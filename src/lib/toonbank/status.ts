@@ -24,6 +24,9 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
     const s = await store.status(ctx.orgId, ctx.apparaatId, gezien);
     // Contract 1.3: de koppeling met de myPOS. Een storing daarbij mag GET status nooit laten mislukken.
     const pinKoppeling = await koppelTerminal(store, ctx, mypos).then((t) => t !== null, () => false);
+    // Contract 1.2: betalen met een cadeaubon, alleen als het aan staat (en de migratie er is). Ook
+    // hier: een storing betekent uit, nooit een mislukte GET status.
+    const cadeaubonAan = await store.cadeaubonAan(ctx.orgId).catch(() => false);
     return {
         servertijd: s.servertijd,
         contract: { huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL },
@@ -37,7 +40,11 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
         hoogste_volgnummer_gemeld: s.hoogste_volgnummer_gemeld,
         bevestigd_tot_volgnummer: s.bevestigd_tot_volgnummer,
         hoogste_bon_volgnummer: s.hoogste_bon_volgnummer,
-        instellingen: pinKoppeling ? { ...s.instellingen, pin_koppeling: true } : s.instellingen,
+        instellingen: {
+            ...s.instellingen,
+            ...(cadeaubonAan ? { cadeaubon_aan: true } : {}),
+            ...(pinKoppeling ? { pin_koppeling: true } : {}),
+        },
         te_controleren: s.te_controleren,
     };
 }
