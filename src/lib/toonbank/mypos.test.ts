@@ -4,8 +4,11 @@
  * nooit automatisch opnieuw geprobeerd wordt (na 3 foute pogingen zet myPOS het account op slot).
  * Geen echte myPOS: een nep-fetch.
  */
-import { describe, expect, it } from 'vitest';
-import { MyposFout, maakMyposClient, myposConfig, type MyposConfig } from './mypos';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { MyposFout, maakMyposClient, myposConfig, remLos, type MyposConfig } from './mypos';
+
+// De rem geldt voor de hele serverinstantie: tussen de tests los.
+beforeEach(() => remLos());
 
 const CFG: MyposConfig = {
     basis: 'https://demo-api-gateway.mypos.com', clientId: 'client_x', clientSecret: 'secret_x', partnerId: 'mps-p-1', applicationId: 'mps-app-1',
@@ -120,5 +123,52 @@ describe('maakMyposClient', () => {
             throw new TypeError('fetch failed');
         });
         await expect(c.stand('pay-1')).rejects.toMatchObject({ name: 'MyposFout', status: 0 });
+    });
+});
+
+describe('de rem: nooit drie foute pogingen (dan zet myPOS het account op slot)', () => {
+    it('na een geweigerde sessie een uur lang geen nieuwe poging, ook niet met een nieuwe client', async () => {
+        const { remLos, remTot } = await import('./mypos');
+        remLos();
+        let t = 1_000_000;
+        const n = nepMypos((v) => (v.url.endsWith('/auth/session') ? { status: 401, body: { title: 'Unauthorized' } } : standaard(v)));
+        const c = maakMyposClient(CFG, n.f, () => t);
+        await expect(c.terminals()).rejects.toMatchObject({ status: 401 });
+        await expect(c.stand('pay-1')).rejects.toMatchObject({ status: 423 });
+        await expect(maakMyposClient(CFG, n.f, () => t).betaling({ terminal_id: '12345678', bedrag_cents: 10, referentie: 'T1-000001', omschrijving: 'x' })).rejects.toMatchObject({ status: 423 });
+        expect(n.verzoeken.filter((v) => v.url.endsWith('/auth/session'))).toHaveLength(1);
+        expect(remTot(CFG, t)).toBe(t + 3_600_000);
+        t += 3_600_001;
+        await expect(c.stand('pay-1')).rejects.toMatchObject({ status: 401 });
+        expect(n.verzoeken.filter((v) => v.url.endsWith('/auth/session'))).toHaveLength(2);
+        remLos();
+    });
+
+    it('geweigerde partnersleutels remmen ook', async () => {
+        const { remLos } = await import('./mypos');
+        remLos();
+        const n = nepMypos((v) => (v.url.endsWith('/oauth/token') ? { status: 400, body: { error: 'invalid_client' } } : standaard(v)));
+        const c = maakMyposClient(CFG, n.f);
+        await expect(c.terminals()).rejects.toMatchObject({ status: 400 });
+        await expect(c.terminals()).rejects.toMatchObject({ status: 423 });
+        expect(n.verzoeken.filter((v) => v.url.endsWith('/oauth/token'))).toHaveLength(1);
+        remLos();
+    });
+});
+
+describe('terminals', () => {
+    it('de lijst uit GET /pos/v1/terminals', async () => {
+        const { remLos } = await import('./mypos');
+        remLos();
+        const n = nepMypos((v) =>
+            v.url.includes('/pos/v1/terminals')
+                ? { status: 200, body: { pagination: { page: 1, page_size: 100, total: 2 }, terminals: [{ terminal_id: '80026232', serial_number: 'N96N960WC15224', model: 'N96' }, { terminal_id: '80026233', serial_number: null, model: 'N96' }] } }
+                : standaard(v),
+        );
+        expect(await maakMyposClient(CFG, n.f).terminals()).toEqual([
+            { terminal_id: '80026232', serial_number: 'N96N960WC15224', model: 'N96' },
+            { terminal_id: '80026233', serial_number: null, model: 'N96' },
+        ]);
+        expect(n.verzoeken.at(-1)!.url).toBe(`${CFG.basis}/pos/v1/terminals?page=1&size=100`);
     });
 });

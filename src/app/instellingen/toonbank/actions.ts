@@ -22,6 +22,8 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { hashPin } from '@/lib/prep/deviceAuth';
 import { hashKoppelcode, maakKoppelcode } from '@/lib/toonbank/koppelcode';
 import { zwakkeInlogcode, type NieuweKoppelcode } from '@/lib/toonbank/beheer';
+import { MyposFout, myposConfig, remTot, type MyposTerminal } from '@/lib/toonbank/mypos';
+import { standaardMypos } from '@/lib/toonbank/pinkoppeling';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -123,6 +125,30 @@ export async function zetMyposTerminal(input: unknown): Promise<ActionResult<{ m
     }
     revalidatePath(PAD);
     return { data: { mypos_terminal_id: (data as { mypos_terminal_id: string | null } | null)?.mypos_terminal_id ?? null } };
+}
+
+/**
+ * De koppeling met myPOS één keer testen: kloppen de MYPOS_EPOS-sleutels, en welke terminals staan
+ * er in de myPOS-account (met hun terminal-ID)? Eén poging: weigert myPOS de sleutels, dan staat de
+ * rem erop (een uur), zodat het account niet op slot gaat na 3 foute pogingen.
+ */
+export async function testMyposKoppeling(): Promise<ActionResult<{ omgeving: 'demo' | 'live'; terminals: MyposTerminal[] }>> {
+    const s = await alsAdmin();
+    if (!s) return { error: 'Alleen een beheerder (Admin) kan de myPOS-koppeling testen.' };
+    const cfg = myposConfig();
+    if (!cfg) return { error: 'De MYPOS_EPOS-sleutels staan nog niet (allemaal) in Vercel. Zet ze erin en deploy opnieuw.' };
+    if (cfg.organisatieId !== s.orgId) return { error: 'MYPOS_EPOS_ORGANISATIE_ID hoort niet bij deze organisatie.' };
+    const rem = remTot(cfg);
+    if (rem) return { error: `myPOS weigerde de sleutels net. Opnieuw proberen kan om ${new Date(rem).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Amsterdam' })}; kijk intussen de sleutels in Vercel na.` };
+    const { client } = standaardMypos();
+    if (!client) return { error: 'De koppeling met myPOS staat uit.' };
+    try {
+        const terminals = await client.terminals();
+        return { data: { omgeving: cfg.basis.includes('demo') ? 'demo' : 'live', terminals } };
+    } catch (e) {
+        if (e instanceof MyposFout && e.status === 0) return { error: 'myPOS was niet bereikbaar. Probeer het zo opnieuw.' };
+        return { error: e instanceof Error ? e.message : 'De test met myPOS lukte niet.' };
+    }
 }
 
 export async function zetToonbankRol(input: unknown): Promise<ActionResult<{ ok: true }>> {

@@ -126,6 +126,11 @@ export async function startPinbetaling(store: ToonbankStore, ctx: PinContext, v:
         const b = await dep.client.betaling({ terminal_id: terminal.terminal_id, bedrag_cents: v.bedrag_cents, referentie: v.bonnummer, omschrijving: `Hop & Bites ${v.bonnummer}` });
         return gelukt(antwoord(await legVast(store, ctx, rij, b)));
     } catch (e) {
+        // De sleutels werkten niet (of de rem staat erop): er is niets naar de terminal gegaan.
+        if (e instanceof MyposFout && e.sleutels) {
+            await store.werkPinbetalingBij(ctx.orgId, v.poging_id, { stand: 'mislukt', melding: 'De koppeling met myPOS werkt nu niet (sleutels).' });
+            return mislukt('pin_koppeling_uit', 'De koppeling met myPOS werkt nu niet. Tik het bedrag met de hand in op de myPOS.', { oorzaak: e.message.slice(0, 300) });
+        }
         // myPOS weigerde de betaling vooraf (4xx): er staat niets op de terminal.
         if (e instanceof MyposFout && e.status >= 400 && e.status < 500) {
             await store.werkPinbetalingBij(ctx.orgId, v.poging_id, { stand: 'mislukt', melding: 'myPOS nam de betaling niet aan.' });

@@ -79,19 +79,57 @@ export interface MyposBetaling {
 
 /** myPOS gaf een fout, of was niet bereikbaar (status 0). */
 export class MyposFout extends Error {
+    /** Gezet als het om de sleutels gaat (token, sessie of de rem), niet om de betaling zelf. */
+    sleutels = false;
     constructor(public readonly status: number, melding: string, public readonly detail: unknown = null) {
         super(melding);
         this.name = 'MyposFout';
     }
 }
 
+/** Een terminal in de myPOS-account (GET /pos/v1/terminals). Model N96 is de myPOS Ultra. */
+export interface MyposTerminal {
+    terminal_id: string;
+    serial_number: string | null;
+    model: string | null;
+}
+
+function sleutelFout(status: number, melding: string, detail: unknown = null): MyposFout {
+    const f = new MyposFout(status, melding, detail);
+    f.sleutels = true;
+    return f;
+}
+
 export interface MyposClient {
+    /** De terminals in de myPOS-account: om de koppeling te testen en het terminal-ID te vinden. */
+    terminals(): Promise<MyposTerminal[]>;
     betaling(v: { terminal_id: string; bedrag_cents: number; referentie: string; omschrijving: string }): Promise<MyposBetaling>;
     stand(paymentId: string): Promise<MyposBetaling>;
     annuleer(paymentId: string): Promise<MyposBetaling>;
 }
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
+
+/**
+ * De rem (besluit 28 oktober 2026, live zonder demo): na 3 foute pogingen met de sleutels zet myPOS
+ * het account op slot. Weigert myPOS de sleutels één keer (400, 401 of 403 bij token of sessie),
+ * dan probeert deze serverinstantie het een uur lang niet meer; de kassa pint dan met de hand.
+ * Per sleutelset bijgehouden, voor de hele instantie (ook over clients heen).
+ */
+const REM_MS = 60 * 60_000;
+const REM = new Map<string, number>();
+const remSleutel = (cfg: MyposConfig) => `${cfg.basis}|${cfg.clientId}|${cfg.merchantClientId}`;
+
+/** Tot wanneer de rem erop staat (ms), of null. */
+export function remTot(cfg: MyposConfig, nu: number = Date.now()): number | null {
+    const t = REM.get(remSleutel(cfg));
+    return t && t > nu ? t : null;
+}
+
+/** Alleen voor tests. */
+export function remLos(): void {
+    REM.clear();
+}
 
 /** Hoe lang op myPOS gewacht wordt; daarna telt het als onbereikbaar. */
 const TIJDSLIMIET_MS = 8000;
@@ -139,21 +177,36 @@ export function maakMyposClient(cfg: MyposConfig, f: Fetch = fetch, nu: () => nu
         }
     };
 
+    const remmen = (status: number) => {
+        if (status === 400 || status === 401 || status === 403) REM.set(remSleutel(cfg), nu() + REM_MS);
+    };
+    const remCheck = () => {
+        const t = REM.get(remSleutel(cfg));
+        if (t && t > nu()) {
+            throw sleutelFout(423, `myPOS weigerde de sleutels net. BBQ Architect probeert het pas om ${new Date(t).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Amsterdam' })} opnieuw, zodat het account niet op slot gaat. Kijk de MYPOS_EPOS-sleutels in Vercel na.`);
+        }
+    };
+
     const haalToken = async (): Promise<string> => {
         if (token && token.tot > nu()) return token.waarde;
+        remCheck();
         const res = await metTijd(`${cfg.basis}/api/v1/oauth/token`, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, grant_type: 'client_credentials' }).toString(),
         });
         const j = await leesJson(res);
-        if (!res.ok || typeof j.access_token !== 'string') throw new MyposFout(res.status, 'myPOS gaf geen token (partnersleutels).', j);
+        if (!res.ok || typeof j.access_token !== 'string') {
+            remmen(res.status);
+            throw sleutelFout(res.status, 'myPOS weigerde de partnersleutels (MYPOS_EPOS_CLIENT_ID en _SECRET).', j);
+        }
         token = { waarde: j.access_token, tot: nu() + Math.max(60, Number(j.expires_in ?? 3600) - 60) * 1000 };
         return token.waarde;
     };
 
     const haalSessie = async (): Promise<string> => {
         if (sessie && sessie.tot > nu()) return sessie.waarde;
+        remCheck();
         const bearer = await haalToken();
         const res = await metTijd(`${cfg.basis}/api/v1/auth/session`, {
             method: 'POST',
@@ -162,7 +215,10 @@ export function maakMyposClient(cfg: MyposConfig, f: Fetch = fetch, nu: () => nu
         });
         const j = await leesJson(res);
         // Nooit automatisch opnieuw: na 3 foute pogingen zet myPOS het account op slot.
-        if (!res.ok || typeof j.session !== 'string') throw new MyposFout(res.status, 'myPOS gaf geen sessie (sleutels van de winkel).', j);
+        if (!res.ok || typeof j.session !== 'string') {
+            remmen(res.status);
+            throw sleutelFout(res.status, 'myPOS weigerde de sleutels van de winkel (MYPOS_EPOS_MERCHANT_CLIENT_ID en _SECRET).', j);
+        }
         // De bronnen spreken elkaar tegen (5 minuten of 3600 s): hooguit 5 minuten aanhouden.
         const geldig = Math.min(300, Number(j.expires_in ?? 300));
         sessie = { waarde: j.session, tot: nu() + Math.max(30, geldig - 30) * 1000 };
@@ -195,6 +251,13 @@ export function maakMyposClient(cfg: MyposConfig, f: Fetch = fetch, nu: () => nu
     };
 
     return {
+        async terminals() {
+            const j = await roep('GET', '/pos/v1/terminals?page=1&size=100');
+            const lijst = Array.isArray(j.terminals) ? (j.terminals as Record<string, unknown>[]) : [];
+            return lijst
+                .filter((t) => t && t.terminal_id != null)
+                .map((t) => ({ terminal_id: String(t.terminal_id), serial_number: t.serial_number == null ? null : String(t.serial_number), model: t.model == null ? null : String(t.model) }));
+        },
         async betaling(v) {
             const j = await roep('POST', '/epos/v1/payments', {
                 reference_number: v.referentie.slice(0, 50),
