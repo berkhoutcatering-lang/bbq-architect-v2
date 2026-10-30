@@ -395,18 +395,76 @@ export function quarterPeriod(year: number, quarter: 1 | 2 | 3 | 4, today: Date 
  * belandde in geen enkele rubriek en verdween daarmee ongemerkt uit de
  * aangifte. Een zichtbare lijst is veiliger dan een stil verkeerd totaal.
  */
+/**
+ * Verlegde BTW op een inkoop: de buitenlandse leverancier rekent geen
+ * Nederlandse BTW, wij geven die zelf aan (4a/4b) en trekken hem weer af (5b).
+ *   'buiten_eu' → rubriek 4a (bv. software-abonnement van een Amerikaans bedrijf)
+ *   'binnen_eu' → rubriek 4b (leveringen/diensten van een ondernemer uit een EU-land)
+ * Zie migratie 20261026140000_bonnen_btw_verlegd.sql.
+ */
+export type BtwVerlegd = 'buiten_eu' | 'binnen_eu';
+
+/** Tarief waartegen verlegde BTW wordt aangegeven. Alleen 21% wordt ondersteund. */
+export const VERLEGD_PCT = 21;
+
 /** Bon met de velden die voor de voorbelasting (5b) nodig zijn. */
 export type BonVoorbelasting = BonMin & {
-    btw_laag_bedrag?: number | string;
-    btw_hoog_bedrag?: number | string;
+    btw_laag_bedrag?: number | string | null;
+    btw_hoog_bedrag?: number | string | null;
+    netto_bedrag?: number | string | null;
     /** Zie migratie voorbelasting_bevestigd — pas true na menselijke controle. */
     voorbelasting_bevestigd?: boolean | null;
     /** Zakelijk gebruik in procenten (0-100). Leeg = 100. */
     zakelijk_pct?: number | string | null;
+    /** Leeg = gewone Nederlandse bon. */
+    btw_verlegd?: BtwVerlegd | string | null;
 };
 
+/**
+ * Eén kassaregel (pos_order_items), al genormaliseerd naar euro's.
+ * De BTW komt uit de kassa zelf (line_btw_cents) en wordt NIET opnieuw
+ * uitgerekend: de kassa rondt per regel af, en dat is wat de klant betaalde.
+ */
+export interface KassaRegel {
+    /** Verkoopdag (YYYY-MM-DD, Nederlandse tijd). */
+    datum: string;
+    /** 9 of 21; null als de kassa geen tarief vastlegde. */
+    btw_pct: number | null;
+    omzet: number;
+    btw: number;
+    /** Voor de gatenlijst. */
+    omschrijving?: string;
+    referentie?: string;
+}
+
+/** Hoeveel BTW een bon oplevert — gewone BTW, of verlegde BTW over het netto bedrag. */
+export function bonBtwBedrag(b: BonVoorbelasting): number {
+    if (b.btw_verlegd === 'buiten_eu' || b.btw_verlegd === 'binnen_eu') {
+        return Math.round(bonVerlegdGrondslag(b) * VERLEGD_PCT) / 100;
+    }
+    return (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0);
+}
+
+/**
+ * Grondslag voor verlegde BTW. Op zo'n factuur staat geen Nederlandse BTW,
+ * dus het netto bedrag is het factuurbedrag. Valt terug op het totaal als het
+ * netto bedrag leeg is.
+ */
+export function bonVerlegdGrondslag(b: BonVoorbelasting): number {
+    const netto = b.netto_bedrag;
+    if (netto !== null && netto !== undefined && netto !== '' && Number.isFinite(Number(netto))) {
+        return Number(netto);
+    }
+    return Number(b.totaal_bedrag) || 0;
+}
+
+/** Wacht deze bon nog op bevestiging van de voorbelasting? */
+export function bonWachtOpVoorbelasting(b: BonVoorbelasting): boolean {
+    return b.voorbelasting_bevestigd !== true && bonBtwBedrag(b) !== 0;
+}
+
 export interface BtwGat {
-    bron: 'factuur';
+    bron: 'factuur' | 'kassa';
     referentie: string;
     datum: string;
     omschrijving: string;
@@ -430,19 +488,35 @@ export interface BtwAangifteRubrieken {
      * intra-EU: die horen in 4b (EU) respectievelijk 4a (buiten de EU), waar de
      * verschuldigde btw óók weer als voorbelasting in 5b terugkomt.
      *
-     * Tot 2026-07-29 stond hier "B2B intra-EU" — verkeerd. 4a/4b bestaan nog
-     * niet in dit systeem, dus wordt hier niets automatisch in geboekt: alles
-     * wat hierop lijkt komt in `gaten` te staan voor handmatige verwerking.
+     * Tot 2026-07-29 stond hier "B2B intra-EU" — verkeerd. Verlegde BTW van
+     * buitenlandse leveranciers staat sinds 2026-10-26 in 4a/4b (via
+     * bonnen.btw_verlegd). Hier wordt niets automatisch in geboekt: alles wat
+     * hierop lijkt komt in `gaten` te staan voor handmatige verwerking.
      */
     rubriek_2a: { omzet: number; btw: number };
     /** 3a — Leveringen naar landen buiten EU — niet automatisch bepaald */
     rubriek_3a: { omzet: number };
     /** 3b — Leveringen naar EU-landen — niet automatisch bepaald */
     rubriek_3b: { omzet: number };
-    /** 5a — Verschuldigde omzetbelasting (som 1a + 1b + 2a) */
+    /** 4a — Leveringen/diensten uit landen buiten de EU (verlegde BTW op bonnen) */
+    rubriek_4a: { omzet: number; btw: number };
+    /** 4b — Leveringen/diensten uit landen binnen de EU (verlegde BTW op bonnen) */
+    rubriek_4b: { omzet: number; btw: number };
+    /** 5a — Verschuldigde omzetbelasting (som 1a + 1b + 2a + 4a + 4b) */
     rubriek_5a: number;
-    /** 5b — Voorbelasting (inkoop-BTW uit bonnen) */
+    /** 5b — Voorbelasting (bevestigde bonnen, inclusief verlegde BTW) */
     rubriek_5b: number;
+    /** Opbouw van 5b: BTW 9%, BTW 21% en verlegde BTW (na zakelijk-%). */
+    rubriek_5b_detail: { laag: number; hoog: number; verlegd: number };
+    /**
+     * Kassaverkoop die in 1a/1b zit — los getoond zodat te zien is hoeveel
+     * van de omzet uit de kassa komt (en of er testbestellingen tussen zitten).
+     */
+    kassa: {
+        omzet_hoog: number; btw_hoog: number;
+        omzet_laag: number; btw_laag: number;
+        regels: number;
+    };
     /** Saldo te betalen (positief) of terug te vragen (negatief) */
     saldo: number;
     /** Regels die handmatig verwerkt moeten worden; zie BtwGat. */
@@ -459,6 +533,7 @@ export function computeBtwAangifte(
     facturen: FactuurMin[],
     bonnen: BonVoorbelasting[],
     period: BtwAangiftePeriod,
+    kassa: KassaRegel[] = [],
 ): BtwAangifteRubrieken {
     const r: BtwAangifteRubrieken = {
         rubriek_1a: { omzet: 0, btw: 0 },
@@ -466,8 +541,12 @@ export function computeBtwAangifte(
         rubriek_2a: { omzet: 0, btw: 0 },
         rubriek_3a: { omzet: 0 },
         rubriek_3b: { omzet: 0 },
+        rubriek_4a: { omzet: 0, btw: 0 },
+        rubriek_4b: { omzet: 0, btw: 0 },
         rubriek_5a: 0,
         rubriek_5b: 0,
+        rubriek_5b_detail: { laag: 0, hoog: 0, verlegd: 0 },
+        kassa: { omzet_hoog: 0, btw_hoog: 0, omzet_laag: 0, btw_laag: 0, regels: 0 },
         saldo: 0,
         gaten: [],
         gaten_bedrag: 0,
@@ -526,6 +605,37 @@ export function computeBtwAangifte(
         }
     }
 
+    /* Kassaverkoop — 1a/1b, op de verkoopdag. De kassa legt per regel
+       zelf omzet en BTW vast; die bedragen worden overgenomen, niet herrekend. */
+    for (const k of kassa) {
+        if (!k.datum || k.datum < period.start_date || k.datum > period.end_date) continue;
+        r.kassa.regels += 1;
+        if (k.btw_pct === 21) {
+            r.rubriek_1a.omzet += k.omzet;
+            r.rubriek_1a.btw += k.btw;
+            r.kassa.omzet_hoog += k.omzet;
+            r.kassa.btw_hoog += k.btw;
+        } else if (k.btw_pct === 9) {
+            r.rubriek_1b.omzet += k.omzet;
+            r.rubriek_1b.btw += k.btw;
+            r.kassa.omzet_laag += k.omzet;
+            r.kassa.btw_laag += k.btw;
+        } else {
+            r.gaten.push({
+                bron: 'kassa',
+                referentie: k.referentie || 'kassa',
+                datum: k.datum,
+                omschrijving: k.omschrijving || 'kassaregel',
+                bedrag: k.omzet,
+                pct: k.btw_pct,
+                reden: k.btw_pct === null
+                    ? 'Kassaregel zonder BTW-tarief.'
+                    : `Kassaregel met ${k.btw_pct}% — past in geen NL-rubriek (verwacht 9 of 21).`,
+            });
+            r.gaten_bedrag += k.omzet;
+        }
+    }
+
     /* Voorbelasting uit bonnen — 5b.
        Aftrek vereist zakelijk gebruik én een factuur die aan de eisen voldoet.
        Alleen bonnen die daar expliciet op zijn nagelopen tellen mee; de rest
@@ -535,7 +645,15 @@ export function computeBtwAangifte(
     for (const b of bonnen) {
         if (!b.datum) continue;
         if (b.datum < period.start_date || b.datum > period.end_date) continue;
-        const btwBedrag = (Number(b.btw_laag_bedrag) || 0) + (Number(b.btw_hoog_bedrag) || 0);
+        const btwBedrag = bonBtwBedrag(b);
+
+        /* Verlegde BTW is verschuldigd zodra de dienst is afgenomen — ook als
+           de aftrek (hieronder) nog niet is bevestigd. */
+        if (b.btw_verlegd === 'buiten_eu' || b.btw_verlegd === 'binnen_eu') {
+            const doel = b.btw_verlegd === 'buiten_eu' ? r.rubriek_4a : r.rubriek_4b;
+            doel.omzet += bonVerlegdGrondslag(b);
+            doel.btw += btwBedrag;
+        }
         if (btwBedrag === 0) continue;
 
         const bevestigd = b.voorbelasting_bevestigd === true;
@@ -545,23 +663,45 @@ export function computeBtwAangifte(
             : 100;
 
         if (bevestigd) {
-            r.rubriek_5b += btwBedrag * (zakelijkPct / 100);
+            const deel = zakelijkPct / 100;
+            r.rubriek_5b += btwBedrag * deel;
+            if (b.btw_verlegd === 'buiten_eu' || b.btw_verlegd === 'binnen_eu') {
+                r.rubriek_5b_detail.verlegd += btwBedrag * deel;
+            } else {
+                r.rubriek_5b_detail.laag += (Number(b.btw_laag_bedrag) || 0) * deel;
+                r.rubriek_5b_detail.hoog += (Number(b.btw_hoog_bedrag) || 0) * deel;
+            }
         } else {
             r.voorbelasting_onbevestigd += btwBedrag;
             r.voorbelasting_onbevestigd_count += 1;
         }
     }
 
-    r.rubriek_5a = r.rubriek_1a.btw + r.rubriek_1b.btw + r.rubriek_2a.btw;
-    r.saldo = r.rubriek_5a - r.rubriek_5b;
-
-    /* Ronding op centen. */
+    /* Ronding op centen per rubriek vóór het optellen, zodat 5a precies de
+       som is van de bedragen die op het scherm staan. */
     const round = (n: number) => Math.round(n * 100) / 100;
     r.rubriek_1a = { omzet: round(r.rubriek_1a.omzet), btw: round(r.rubriek_1a.btw) };
     r.rubriek_1b = { omzet: round(r.rubriek_1b.omzet), btw: round(r.rubriek_1b.btw) };
     r.rubriek_2a = { omzet: round(r.rubriek_2a.omzet), btw: round(r.rubriek_2a.btw) };
+    r.rubriek_4a = { omzet: round(r.rubriek_4a.omzet), btw: round(r.rubriek_4a.btw) };
+    r.rubriek_4b = { omzet: round(r.rubriek_4b.omzet), btw: round(r.rubriek_4b.btw) };
+    r.kassa = {
+        omzet_hoog: round(r.kassa.omzet_hoog), btw_hoog: round(r.kassa.btw_hoog),
+        omzet_laag: round(r.kassa.omzet_laag), btw_laag: round(r.kassa.btw_laag),
+        regels: r.kassa.regels,
+    };
+
+    r.rubriek_5a = r.rubriek_1a.btw + r.rubriek_1b.btw + r.rubriek_2a.btw
+        + r.rubriek_4a.btw + r.rubriek_4b.btw;
+    r.saldo = r.rubriek_5a - round(r.rubriek_5b);
+
     r.rubriek_5a = round(r.rubriek_5a);
     r.rubriek_5b = round(r.rubriek_5b);
+    r.rubriek_5b_detail = {
+        laag: round(r.rubriek_5b_detail.laag),
+        hoog: round(r.rubriek_5b_detail.hoog),
+        verlegd: round(r.rubriek_5b_detail.verlegd),
+    };
     r.saldo = round(r.saldo);
     r.gaten_bedrag = round(r.gaten_bedrag);
     r.voorbelasting_onbevestigd = round(r.voorbelasting_onbevestigd);

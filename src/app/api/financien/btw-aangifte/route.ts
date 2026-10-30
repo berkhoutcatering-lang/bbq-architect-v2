@@ -1,8 +1,11 @@
 /* /api/financien/btw-aangifte — vastzetten + historie van kwartaalaangiftes
  *
  * GET    → lijst vastgezette aangiftes (historie), nieuwste eerst.
- * POST   → { year, quarter } : bereken rubrieken server-side en zet vast
- *          (onveranderlijke snapshot). Weigert als het kwartaal al vaststaat.
+ * POST   → { year, quarter, accepteer_open_punten? } : bereken rubrieken
+ *          server-side en zet vast (onveranderlijke snapshot). Weigert als het
+ *          kwartaal al vaststaat. Weigert óók (409, `open_punten`) zolang er
+ *          bonnen op voorbelasting-bevestiging wachten of de kassa niet te
+ *          lezen was — tenzij de gebruiker dat expliciet accepteert.
  * DELETE → { id } : ontgrendel (verwijder snapshot) zodat opnieuw kan.
  *
  * Geen AI in de loop — bedragen komen uit financeAnalytics.computeBtwAangifte().
@@ -11,6 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { quarterPeriod, computeBtwAangifte, computeBoekhoudChecks } from '@/lib/financeAnalytics';
+import { laadAangifteBronnen } from '@/lib/btwAangifteBronnen';
+import { formatEur } from '@/lib/format';
 
 export const runtime = 'nodejs';
 
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
     const org = await resolveOrg(supabase);
     if ('error' in org) return NextResponse.json({ error: org.error }, { status: org.status });
 
-    const body = await req.json().catch(() => null) as { year?: number; quarter?: number } | null;
+    const body = await req.json().catch(() => null) as { year?: number; quarter?: number; accepteer_open_punten?: boolean } | null;
     const year = body?.year;
     const quarter = body?.quarter;
     if (typeof year !== 'number' || year < 2020 || year > 2099) {
@@ -65,26 +70,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Dit kwartaal is al vastgezet. Ontgrendel eerst om opnieuw vast te zetten.' }, { status: 409 });
     }
 
-    /* Verse berekening uit facturen + bonnen. RLS isoleert op org. */
-    const [factResp, bonnenResp] = await Promise.all([
-        supabase.from('facturen')
-            .select('id,nummer,client_naam,datum,status,items')
-            .eq('organization_id', org.orgId)
-            .gte('datum', period.start_date).lte('datum', period.end_date),
-        supabase.from('bonnen')
-            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,ai_classify_status,voorbelasting_bevestigd,zakelijk_pct')
-            .eq('organization_id', org.orgId)
-            .gte('datum', period.start_date).lte('datum', period.end_date),
-    ]);
-    if (factResp.error || bonnenResp.error) {
-        return NextResponse.json({ error: 'Data-fetch faalde', detail: factResp.error?.message || bonnenResp.error?.message }, { status: 500 });
+    /* Verse berekening uit facturen + bonnen + kassa. Zelfde bron als het scherm. */
+    const bronnen = await laadAangifteBronnen(supabase, org.orgId, period.start_date, period.end_date);
+    if (bronnen.fout) {
+        return NextResponse.json({ error: 'Data-fetch faalde', detail: bronnen.fout }, { status: 500 });
     }
 
-    const facturen = factResp.data || [];
-    const bonnen = bonnenResp.data || [];
-    const rubrieken = computeBtwAangifte(facturen, bonnen, period);
+    const { facturen, bonnen, kassa } = bronnen;
+    const rubrieken = computeBtwAangifte(facturen, bonnen, period, kassa);
     const checks = computeBoekhoudChecks(facturen, bonnen, period);
     const openIssues = checks.filter(c => c.severity === 'error').length;
+
+    /* Een vastgezette aangifte met BTW die nog wacht, mist die aftrek voorgoed.
+       Eerst zeggen hoeveel het is; alleen doorgaan als de gebruiker dat weet. */
+    const openPunten: string[] = [];
+    if (rubrieken.voorbelasting_onbevestigd > 0) {
+        const n = rubrieken.voorbelasting_onbevestigd_count;
+        openPunten.push(`${formatEur(rubrieken.voorbelasting_onbevestigd)} BTW op ${n} ${n === 1 ? 'bon' : 'bonnen'} wacht nog op bevestiging en telt niet mee in 5b.`);
+    }
+    if (bronnen.kassa_fout) {
+        openPunten.push(`${bronnen.kassa_fout} Kassaomzet ontbreekt in 1a/1b.`);
+    }
+    if (openPunten.length > 0 && body?.accepteer_open_punten !== true) {
+        return NextResponse.json({
+            error: 'Nog niet alles is verwerkt.',
+            open_punten: openPunten,
+            voorbelasting_onbevestigd: rubrieken.voorbelasting_onbevestigd,
+            voorbelasting_onbevestigd_count: rubrieken.voorbelasting_onbevestigd_count,
+        }, { status: 409 });
+    }
 
     /* organization_id ALTIJD expliciet meesturen (RLS insert-klasse). */
     const { data: inserted, error: insertErr } = await supabase
@@ -100,7 +114,10 @@ export async function POST(req: NextRequest) {
             meta: {
                 facturen_count: facturen.length,
                 bonnen_count: bonnen.length,
+                kassa_regels: rubrieken.kassa.regels,
                 open_issues: openIssues,
+                /* Wat de gebruiker bewust accepteerde bij het vastzetten. */
+                open_punten_geaccepteerd: openPunten,
                 vastgezet_at: new Date().toISOString(),
             },
             vastgezet_by: org.user.id,

@@ -6,12 +6,14 @@
  *        sluit   → registreer afsluiting + vergrendel bonnen/facturen van de maand
  *        heropen → alleen als het kwartaal nog niet is vastgezet
  *
- * Geen AI in de loop — cijfers uit financeAnalytics.computeBtwAangifte().
+ * Geen AI in de loop — cijfers uit financeAnalytics.computeBtwAangifte(),
+ * bronnen (facturen + bonnen + kassa) uit lib/btwAangifteBronnen.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
-import { quarterPeriod, computeBtwAangifte } from '@/lib/financeAnalytics';
+import { quarterPeriod, computeBtwAangifte, bonWachtOpVoorbelasting } from '@/lib/financeAnalytics';
+import { laadAangifteBronnen } from '@/lib/btwAangifteBronnen';
 
 export const runtime = 'nodejs';
 
@@ -40,24 +42,22 @@ export async function GET(req: NextRequest) {
 
     const year = Number(req.nextUrl.searchParams.get('year')) || new Date().getFullYear();
 
-    const [factResp, bonnenResp, afsluitResp, vastResp] = await Promise.all([
-        supabase.from('facturen').select('id,nummer,client_naam,datum,status,items')
-            .eq('organization_id', org.orgId).gte('datum', `${year}-01-01`).lte('datum', `${year}-12-31`),
-        supabase.from('bonnen').select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,ai_classify_status,voorbelasting_bevestigd,zakelijk_pct')
-            .eq('organization_id', org.orgId).gte('datum', `${year}-01-01`).lte('datum', `${year}-12-31`),
+    const [bronnen, afsluitResp, vastResp] = await Promise.all([
+        laadAangifteBronnen(supabase, org.orgId, `${year}-01-01`, `${year}-12-31`),
         supabase.from('maand_afsluitingen').select('maand').eq('organization_id', org.orgId).eq('jaar', year),
         supabase.from('btw_aangiftes').select('kwartaal, saldo').eq('organization_id', org.orgId).eq('jaar', year),
     ]);
+    if (bronnen.fout) return NextResponse.json({ error: bronnen.fout }, { status: 500 });
 
-    const facturen = factResp.data || [];
-    const bonnen = bonnenResp.data || [];
+    const { facturen, bonnen, kassa } = bronnen;
     const afgesloten = new Set((afsluitResp.data || []).map(r => r.maand));
     const vastgezet = new Map((vastResp.data || []).map(r => [r.kwartaal, Number(r.saldo)]));
 
     const heeftData = (mnd: number) => {
         const mm = String(mnd).padStart(2, '0');
         return facturen.some(f => (f.datum || '').slice(5, 7) === mm)
-            || bonnen.some(b => String(b.datum || '').slice(5, 7) === mm);
+            || bonnen.some(b => String(b.datum || '').slice(5, 7) === mm)
+            || kassa.some(k => k.datum.slice(5, 7) === mm);
     };
     const maanden = Array.from({ length: 12 }, (_, i) => ({
         maand: i + 1,
@@ -67,17 +67,29 @@ export async function GET(req: NextRequest) {
 
     const kwartalen = [1, 2, 3, 4].map(q => {
         const period = quarterPeriod(year, q as 1 | 2 | 3 | 4);
-        const r = computeBtwAangifte(facturen, bonnen, period);
+        const r = computeBtwAangifte(facturen, bonnen, period, kassa);
+        const wachtend = bonnen.filter(b =>
+            !!b.datum && b.datum >= period.start_date && b.datum <= period.end_date && bonWachtOpVoorbelasting(b));
         const maandenInQ = [(q - 1) * 3 + 1, (q - 1) * 3 + 2, (q - 1) * 3 + 3];
         return {
             kwartaal: q,
             rubrieken: r,
+            /* Elke kassadag van het kwartaal — ook uitgesloten dagen — zodat
+               testbestellingen zichtbaar zijn en Mathijs zelf kiest. */
+            kassa_dagen: bronnen.kassa_dagen.filter(d => d.datum >= period.start_date && d.datum <= period.end_date),
+            /* Wachtende bonnen die op slot zitten kunnen pas na heropenen van de maand bevestigd worden. */
+            wachtend_vergrendeld: wachtend.filter(b => !!b.locked_at).length,
             vastgezet: vastgezet.has(q),
             alle_maanden_afgesloten: maandenInQ.every(m => afgesloten.has(m) || !heeftData(m)),
         };
     });
 
-    return NextResponse.json({ year, maanden, kwartalen });
+    return NextResponse.json({
+        year, maanden, kwartalen,
+        kassa_fout: bronnen.kassa_fout,
+        kassa_uitsluiten_beschikbaar: bronnen.kassa_uitsluiten_beschikbaar,
+        verlegd_beschikbaar: bronnen.verlegd_beschikbaar,
+    });
 }
 
 export async function POST(req: NextRequest) {

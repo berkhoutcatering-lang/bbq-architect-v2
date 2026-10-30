@@ -2,12 +2,13 @@
    POST: Genereer BTW-aangifte concept voor het opgegeven kwartaal.
    Returnt JSON met 6 rubrieken die boekhouder direct in zijn software importeert.
 
-   Geen AI in de loop — pure berekening uit facturen + bonnen via financeAnalytics.ts.
+   Geen AI in de loop — pure berekening uit facturen + bonnen + kassa via financeAnalytics.ts.
 */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { currentQuarterPeriod, computeBtwAangifte } from '@/lib/financeAnalytics';
+import { laadAangifteBronnen } from '@/lib/btwAangifteBronnen';
 
 export const runtime = 'nodejs';
 
@@ -74,33 +75,25 @@ export async function POST(req: NextRequest) {
         period = currentQuarterPeriod();
     }
 
-    /* Fetch facturen + bonnen voor de Q-periode. RLS zorgt voor org-isolation. */
-    const [factResp, bonnenResp] = await Promise.all([
-        supabase.from('facturen')
-            .select('id,nummer,client_naam,datum,status,items')
-            .gte('datum', period.start_date)
-            .lte('datum', period.end_date),
-        supabase.from('bonnen')
-            .select('datum,totaal_bedrag,btw_laag_bedrag,btw_hoog_bedrag,rgs_code,voorbelasting_bevestigd,zakelijk_pct')
-            .gte('datum', period.start_date)
-            .lte('datum', period.end_date),
-    ]);
-
-    if (factResp.error || bonnenResp.error) {
-        return NextResponse.json({
-            error: 'Data-fetch faalde',
-            detail: factResp.error?.message || bonnenResp.error?.message,
-        }, { status: 500 });
+    /* Zelfde bronnen als het Boekhouder-scherm en "vastzetten": facturen,
+       bonnen én kassa. */
+    const bronnen = await laadAangifteBronnen(
+        supabase, membership.organization_id as string, period.start_date, period.end_date,
+    );
+    if (bronnen.fout) {
+        return NextResponse.json({ error: 'Data-fetch faalde', detail: bronnen.fout }, { status: 500 });
     }
 
-    const rubrieken = computeBtwAangifte(factResp.data || [], bonnenResp.data || [], period);
+    const rubrieken = computeBtwAangifte(bronnen.facturen, bronnen.bonnen, period, bronnen.kassa);
 
     return NextResponse.json({
         period,
         rubrieken,
         meta: {
-            facturen_count: (factResp.data || []).length,
-            bonnen_count: (bonnenResp.data || []).length,
+            facturen_count: bronnen.facturen.length,
+            bonnen_count: bronnen.bonnen.length,
+            kassa_fout: bronnen.kassa_fout,
+            kassa_statussen: bronnen.kassa_statussen,
             generated_at: new Date().toISOString(),
             disclaimer: 'Dit is een concept-aangifte. Boekhouder valideert en dient in.',
         },
