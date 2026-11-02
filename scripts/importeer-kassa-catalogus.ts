@@ -12,6 +12,8 @@
  *   --behoud=a,b          deze slugs blijven actief, ook al staan ze niet in de lijst
  *                         (standaard kerst-cremant,kerst-champagne; --behoud= voor geen)
  *   --geen-statiegeld     geen € 0,15 op blik zetten
+ *   --alleen=Bier         alleen deze kassagroep; wat live buiten die groep staat blijft onaangeraakt
+ *   --foto-versie=20261102  foto's ook vervangen als er al een staat (nieuwe bestandsnaam -v<versie>)
  *
  * Upsert op slug; niets wordt verwijderd. Foto's alleen voor een product dat
  * er nog geen heeft: 640, 960 en 1024 breed, avif en webp (zelfde maten als C4)
@@ -35,7 +37,7 @@ const waarde = (naam: string) => {
     if (i < 0) return undefined;
     return args[i].includes('=') ? args[i].split('=').slice(1).join('=') : args[i + 1];
 };
-const map = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--rapport');
+const map = args.find((a, i) => !a.startsWith('--') && !['--rapport', '--alleen', '--foto-versie', '--behoud'].includes(args[i - 1]));
 const ECHT = args.includes('--echt');
 const rapportPad = waarde('--rapport');
 const behoud = waarde('--behoud');
@@ -43,7 +45,13 @@ const keuzes: Keuzes = {
     alcohol: args.includes('--alcohol'),
     behoud: behoud === undefined ? STANDAARD_KEUZES.behoud : behoud.split(',').map((s) => s.trim()).filter(Boolean),
     statiegeldBlikCents: args.includes('--geen-statiegeld') ? null : STANDAARD_KEUZES.statiegeldBlikCents,
+    alleenGroep: waarde('--alleen') ?? null,
+    fotoVersie: waarde('--foto-versie') ?? null,
 };
+if (keuzes.fotoVersie && !/^[a-z0-9]+$/.test(keuzes.fotoVersie)) {
+    console.error('--foto-versie: alleen kleine letters en cijfers, bv. 20261102');
+    process.exit(1);
+}
 if (!map) {
     console.error('Gebruik: npx tsx scripts/importeer-kassa-catalogus.ts <KASSA-CATALOGUS-map> [--rapport pad.md] [--echt] [--alcohol] [--behoud=a,b] [--geen-statiegeld]');
     process.exit(1);
@@ -100,7 +108,7 @@ function rapport(plan: Plan, k: Keuzes, org: string): string {
     const tel = (w: string) => plan.regels.filter((x) => x.wat === w).length;
     const uit = plan.acties.filter((a): a is Extract<Actie, { soort: 'niet-actief' }> => a.soort === 'niet-actief');
     r.push(`# Kassacatalogus: ${ECHT ? 'import' : 'droge run'} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`, '');
-    r.push(`Organisatie ${org}. Keuzes: alcohol ${k.alcohol ? 'aan' : 'uit'}, behoud ${k.behoud.join(', ') || 'niets'}, statiegeld blik ${k.statiegeldBlikCents == null ? 'niet zetten' : euro(k.statiegeldBlikCents)}.`, '');
+    r.push(`Organisatie ${org}. Keuzes: alcohol ${k.alcohol ? 'aan' : 'uit'}, behoud ${k.behoud.join(', ') || 'niets'}, statiegeld blik ${k.statiegeldBlikCents == null ? 'niet zetten' : euro(k.statiegeldBlikCents)}, groep ${k.alleenGroep ?? 'alle'}, foto's ${k.fotoVersie ? `vervangen (v${k.fotoVersie})` : 'alleen waar er geen is'}.`, '');
     r.push(`- **${tel('nieuw')} nieuw**, **${tel('bijwerken')} bijgewerkt**, ${tel('gelijk')} al gelijk`);
     r.push(`- **${uit.length} gaan op niet actief** (staan er wel, niet in de lijst; niets wordt verwijderd)`);
     r.push(`- ${plan.alUit.length} staan er, niet in de lijst, en zijn al niet actief`);
@@ -138,7 +146,7 @@ async function main() {
     const o = org.id as string;
 
     const live: LiveStand = {
-        producten: await alles('winkel_producten', 'id, slug, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, btw_pct, alcohol_pct, allergenen, ingredienten, bewaren, foto, statiegeld_cents', o),
+        producten: await alles('winkel_producten', 'id, slug, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, btw_pct, alcohol_pct, allergenen, ingredienten, bewaren, foto, statiegeld_cents, kenmerken', o),
         artikelen: await alles('winkel_artikelen', 'id, slug, naam, eenheid, prijs_cents, btw_pct, btw_verdeling, actief, kanalen, toonbank_groep, toonbank_volgorde', o),
         slots: await alles('winkel_artikel_slots', 'id, artikel_id, standaard_product_id', o),
     };

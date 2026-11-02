@@ -90,6 +90,7 @@ export interface LiveProduct {
     bewaren: string | null;
     foto: unknown;
     statiegeld_cents: number;
+    kenmerken?: unknown;
 }
 export interface LiveArtikel {
     id: string;
@@ -125,6 +126,16 @@ export interface Keuzes {
     behoud: readonly string[];
     /** Statiegeld per blik in centen (LEESMIJ: € 0,15 sinds 2023), of null om het niet te zetten. */
     statiegeldBlikCents: number | null;
+    /**
+     * Alleen deze kassagroep (bv. 'Bier', update van 2 november 2026). De rest
+     * van de catalogus en wat er live buiten die groep staat, blijft onaangeraakt.
+     */
+    alleenGroep?: string | null;
+    /**
+     * Foto's ook vervangen als er al een staat, onder een nieuwe naam
+     * (`-v{fotoVersie}`) zodat een oude foto niet uit een cache blijft komen.
+     */
+    fotoVersie?: string | null;
 }
 
 export const STANDAARD_KEUZES: Keuzes = {
@@ -295,13 +306,22 @@ function euro(c: number | null): string {
 }
 
 /** Waar de foto van een product in de bucket komt (zelfde vorm als C4). */
-export function kassaFotoBasis(orgId: string, s: string): string {
-    return `${orgId}/${s}-v1`;
+export function kassaFotoBasis(orgId: string, s: string, versie = '1'): string {
+    return `${orgId}/${s}-v${versie}`;
+}
+
+/** Hoort een live artikel bij de kassagroep? Op toonbank_groep, anders op het type van het product achter het slot. */
+function inGroep(art: LiveArtikel, groep: string, slots: LiveSlot[], typeVan: Map<string, string>): boolean {
+    if (art.toonbank_groep) return art.toonbank_groep === groep;
+    const type = GROEPEN[groep]?.type;
+    // Alleen een los artikel (één slot): een pakket met een bier erin is geen bier.
+    return !!type && slots.length === 1 && !!slots[0].standaard_product_id && typeVan.get(slots[0].standaard_product_id) === type;
 }
 
 /* ── Het plan maken ────────────────────────────────────────────────────────── */
 
-export function maakPlan(catalogus: readonly KassaArtikel[], live: LiveStand, orgId: string, k: Keuzes = STANDAARD_KEUZES): Plan {
+export function maakPlan(volledig: readonly KassaArtikel[], live: LiveStand, orgId: string, k: Keuzes = STANDAARD_KEUZES): Plan {
+    const catalogus = k.alleenGroep ? volledig.filter((a) => a.kassagroep === k.alleenGroep) : volledig;
     const artikelOp = new Map(live.artikelen.map((a) => [a.slug, a]));
     const productOp = new Map(live.producten.filter((p) => p.slug).map((p) => [p.slug as string, p]));
     const slotsVan = new Map<string, LiveSlot[]>();
@@ -331,7 +351,7 @@ export function maakPlan(catalogus: readonly KassaArtikel[], live: LiveStand, or
         const productPatch: Rij = {};
         const btwGetal = a.btw === 'gemengd' ? null : a.btw;
         const fotoTaak = (heeftFoto: boolean): FotoTaak | null =>
-            a.foto && !heeftFoto ? { bron: a.foto, basis: kassaFotoBasis(orgId, a.slug) } : null;
+            a.foto && (!heeftFoto || k.fotoVersie) ? { bron: a.foto, basis: kassaFotoBasis(orgId, a.slug, k.fotoVersie ?? '1') } : null;
 
         if (prod && los) {
             if (a.allergenen && !zelfde(prod.allergenen, a.allergenen)) {
@@ -348,6 +368,16 @@ export function maakPlan(catalogus: readonly KassaArtikel[], live: LiveStand, or
             if (k.statiegeldBlikCents != null && blik(a) && prod.statiegeld_cents === 0) {
                 productPatch.statiegeld_cents = k.statiegeldBlikCents;
                 wijzigingen.push(`statiegeld blik ${euro(k.statiegeldBlikCents)}`);
+            }
+            if (a.kassagroep === 'Bier') {
+                /* De verpakking kan veranderen (moersleutel-quad: blik 44 → 33 cl). Alleen dat veld, de rest van de kenmerken blijft. */
+                const nieuw = (a.details as { verpakking?: unknown }).verpakking;
+                const oud = (prod.kenmerken as { verpakking?: unknown } | null)?.verpakking;
+                const v = bierKenmerkenSchema.shape.verpakking.safeParse(nieuw);
+                if (nieuw && v.success && v.data && verpakkingTekst(oud) !== verpakkingTekst(v.data)) {
+                    productPatch.kenmerken = { ...((prod.kenmerken as Record<string, unknown> | null) ?? {}), verpakking: v.data };
+                    wijzigingen.push(`verpakking ${verpakkingTekst(oud)} → ${verpakkingTekst(v.data)}`);
+                }
             }
             const verwacht = gram ? { eenheid: 'gram', prijs_per: gram } : { eenheid: 'stuk', prijs_per: 1 };
             if (prod.eenheid !== verwacht.eenheid || Number(prod.prijs_per) !== verwacht.prijs_per) {
@@ -481,6 +511,11 @@ export function maakPlan(catalogus: readonly KassaArtikel[], live: LiveStand, or
             artikelPatch.actief = true;
             actief = true;
             wijzigingen.push('actief');
+        } else if (!art.actief && k.alcohol && heeftAlcohol(a) && nieuwePrijs != null && verkoopbaar(a, k)) {
+            // Stond uit omdat alcohol nog niet verkocht mocht (import van 27 oktober); nu wel.
+            artikelPatch.actief = true;
+            actief = true;
+            wijzigingen.push('actief (alcohol aan)');
         } else if (art.actief && a.prijs_status === 'voorstel') {
             meld(a.slug, `staat al actief met ${euro(art.prijs_cents)}, maar de catalogus noemt de prijs een voorstel: actief gelaten`);
         }
@@ -529,16 +564,23 @@ export function maakPlan(catalogus: readonly KassaArtikel[], live: LiveStand, or
 
     /* ── Wat er staat en niet in de lijst zit: niet actief, nooit weg ── */
     const inLijst = new Set(catalogus.map((a) => a.slug));
+    const typeVan = new Map(live.producten.map((p) => [p.id, p.type]));
     const alUit: string[] = [];
     const behouden: string[] = [];
     for (const art of live.artikelen) {
         if (inLijst.has(art.slug)) continue;
+        if (k.alleenGroep && !inGroep(art, k.alleenGroep, slotsVan.get(art.id) ?? [], typeVan)) continue;
         if (!art.actief) alUit.push(art.slug);
         else if (k.behoud.includes(art.slug)) behouden.push(art.slug);
         else acties.push({ soort: 'niet-actief', slug: art.slug, artikelId: art.id, naam: art.naam });
     }
 
     return { acties, regels, meldingen, alUit, behouden };
+}
+
+function verpakkingTekst(v: unknown): string {
+    const x = v as { soort?: string; cl?: number } | null | undefined;
+    return x?.soort ? `${x.soort}${x.cl ? ` ${String(x.cl).replace('.', ',')} cl` : ''}` : 'onbekend';
 }
 
 /** Kenmerken voor een nieuw product: bij bier wat de catalogus heeft en past, verder leeg (niets verzonnen). */

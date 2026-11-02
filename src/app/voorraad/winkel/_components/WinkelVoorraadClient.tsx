@@ -16,7 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, Gift, Ham, Minus, Nut, Package, PackageCheck, PackagePlus, Salad, Settings2, Soup, Store, TriangleAlert, Wine } from 'lucide-react';
+import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, Gift, Ham, LayoutGrid, Minus, Nut, Package, PackageCheck, PackagePlus, Salad, Settings2, Soup, Store, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
@@ -146,6 +146,7 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <VoorraadBel />
+                    <Link href="/voorraad/winkel/vloer" className="btn btn-ghost"><LayoutGrid size={14} /> Vloer</Link>
                     <Link href="/voorraad/ontvangst" className="btn btn-ghost"><PackagePlus size={14} /> Ontvangst</Link>
                     <Link href="/voorraad/afwijking" className="btn btn-ghost"><Minus size={14} /> Afwijking</Link>
                     {!nietsGeteld && <Link href="/voorraad/winkel/tellen" className="btn btn-brand"><ClipboardList size={14} /> Tellen</Link>}

@@ -257,6 +257,69 @@ describe('alcohol pas als Mathijs het aanzet', () => {
     });
 });
 
+describe('alleen het bier (update 2 november 2026)', () => {
+    const live: LiveStand = {
+        producten: [
+            liveProduct({ slug: 'achel-tripel', type: 'bier', btw_pct: 21, foto: { basis: 'x/achel-tripel-v1' }, kenmerken: { brouwerij: 'Achel', stijl: 'tripel', verpakking: { cl: 33, soort: 'fles' } } }),
+            liveProduct({ slug: 'moersleutel-quad', type: 'bier', btw_pct: 21, statiegeld_cents: 15, kenmerken: { brouwerij: 'Moersleutel', stijl: 'quad', verpakking: { soort: 'blik', cl: 44 } } }),
+            liveProduct({ slug: 'walhalla-luna', type: 'bier', btw_pct: 21 }),
+            liveProduct({ slug: 'naober-pakket-bier', type: 'bier', btw_pct: 21 }),
+        ],
+        artikelen: [
+            liveArtikel({ slug: 'achel-tripel', prijs_cents: 320, btw_pct: 21, toonbank_groep: 'Bier', toonbank_volgorde: 1 }),
+            liveArtikel({ slug: 'moersleutel-quad', prijs_cents: 495, btw_pct: 21, toonbank_groep: 'Bier', toonbank_volgorde: 2 }),
+            liveArtikel({ slug: 'walhalla-luna', prijs_cents: 400, btw_pct: 21, actief: true }),
+            liveArtikel({ slug: 'riblap', prijs_cents: 250, actief: true, toonbank_groep: 'Vers vlees' }),
+            liveArtikel({ slug: 'borrelpakket', prijs_cents: 2500, actief: true }),
+        ],
+        slots: [
+            { id: 's1', artikel_id: 'a-achel-tripel', standaard_product_id: 'p-achel-tripel' },
+            { id: 's2', artikel_id: 'a-moersleutel-quad', standaard_product_id: 'p-moersleutel-quad' },
+            { id: 's3', artikel_id: 'a-walhalla-luna', standaard_product_id: 'p-walhalla-luna' },
+            { id: 's4', artikel_id: 'a-borrelpakket', standaard_product_id: 'p-naober-pakket-bier' },
+            { id: 's5', artikel_id: 'a-borrelpakket', standaard_product_id: 'p-riblap' },
+        ],
+    };
+    const cat = [
+        bier({ slug: 'achel-tripel', naam: 'achel-tripel', prijs: 3.4 }),
+        bier({ slug: 'moersleutel-quad', naam: 'moersleutel-quad', prijs: 5.15, details: { brouwerij: 'Moersleutel', stijl: 'quad', verpakking: { soort: 'blik', cl: 33 } } }),
+        artikel({ slug: 'riblap', prijs: 9.99 }),
+    ];
+    const k = { ...STANDAARD_KEUZES, alleenGroep: 'Bier' };
+
+    it('raakt niets buiten het bier: geen vlees, geen pakket met bier erin', () => {
+        const plan = maakPlan(cat, live, ORG, k);
+        expect(plan.regels.map((r) => r.slug)).toEqual(['achel-tripel', 'moersleutel-quad']);
+        expect(plan.acties.map((a) => a.slug)).not.toContain('riblap');
+        expect(plan.acties.map((a) => a.slug)).not.toContain('borrelpakket');
+    });
+
+    it('een bier dat niet in de lijst staat gaat op niet actief, ook zonder toonbank_groep', () => {
+        const plan = maakPlan(cat, live, ORG, k);
+        expect(plan.acties.filter((a) => a.soort === 'niet-actief').map((a) => a.slug)).toEqual(['walhalla-luna']);
+    });
+
+    it('de verpakking volgt de catalogus; dezelfde verpakking in andere volgorde is geen wijziging', () => {
+        const plan = maakPlan(cat, live, ORG, k);
+        expect(vind(plan.acties, 'bijwerken', 'achel-tripel')!.productPatch).not.toHaveProperty('kenmerken');
+        const m = vind(plan.acties, 'bijwerken', 'moersleutel-quad')!;
+        expect(m.productPatch.kenmerken).toEqual({ brouwerij: 'Moersleutel', stijl: 'quad', verpakking: { soort: 'blik', cl: 33 } });
+    });
+
+    it('vervangt een bestaande foto alleen met een foto-versie, onder een nieuwe naam', () => {
+        expect(vind(maakPlan([bier({ slug: 'achel-tripel', naam: 'achel-tripel', prijs: 3.4, foto: 'fotos/achel-tripel.png' })], live, ORG, k).acties, 'bijwerken', 'achel-tripel')!.foto).toBeNull();
+        const v = vind(maakPlan([bier({ slug: 'achel-tripel', naam: 'achel-tripel', prijs: 3.4, foto: 'fotos/achel-tripel.png' })], live, ORG, { ...k, fotoVersie: '20261102' }).acties, 'bijwerken', 'achel-tripel')!;
+        expect(v.foto).toEqual({ bron: 'fotos/achel-tripel.png', basis: `${ORG}/achel-tripel-v20261102` });
+    });
+
+    it('met alcohol aan gaat een geprijsd bier dat uit stond weer actief', () => {
+        const uit = vind(maakPlan(cat, live, ORG, k).acties, 'bijwerken', 'achel-tripel')!;
+        expect(uit.artikelPatch).not.toHaveProperty('actief');
+        const aan = vind(maakPlan(cat, live, ORG, { ...k, alcohol: true }).acties, 'bijwerken', 'achel-tripel')!;
+        expect(aan.artikelPatch).toMatchObject({ actief: true, prijs_cents: 340, kanalen: ['webshop', 'toonbank'] });
+    });
+});
+
 describe.skipIf(!fs.existsSync(BRON))('de echte catalogus', () => {
     const cat = leesCatalogus(JSON.parse(fs.readFileSync(BRON, 'utf8')));
 
