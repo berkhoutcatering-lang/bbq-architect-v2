@@ -9,7 +9,7 @@
  */
 import Link from 'next/link';
 import { motion, useReducedMotion } from 'framer-motion';
-import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Beef, Beer, CalendarClock, Cookie, LayoutGrid, Minus, Nut, Package, Salad, Sandwich, Wine } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Beef, Beer, CalendarClock, Cookie, LayoutGrid, Minus, Nut, Package, Salad, Sandwich, Snowflake, Sparkles, Wine } from 'lucide-react';
 import { formatEur } from '@/lib/format';
 import type { AfdelingTegel, Trend } from '@/lib/winkel/afdelingen';
 
@@ -25,6 +25,8 @@ function stijlVan(naam: string): { Icoon: typeof Beer; kleur: string } {
     if (n.includes('vlees') || n.includes('slager')) return { Icoon: Beef, kleur: '#B5483B' };
     if (n.includes('beleg') || n.includes('brood')) return { Icoon: Sandwich, kleur: '#6B7A3F' };
     if (n.includes('koek') || n.includes('cracker') || n.includes('zoet')) return { Icoon: Cookie, kleur: '#A0673A' };
+    if (n.includes('vriez') || n.includes('diepvries')) return { Icoon: Snowflake, kleur: '#4A8FB8' };
+    if (n.includes('rub') || n.includes('zout') || n.includes('kruid')) return { Icoon: Sparkles, kleur: '#C26A3D' };
     return { Icoon: Package, kleur: '#6B7685' };
 }
 
@@ -142,7 +144,7 @@ export default function AfdelingenClient({ tegels, heeftWinkel, plekkenOntbreken
             {(zonderPlek > 0 || pakketOmzet7_cents !== 0) && heeftWinkel && (
                 <div style={{ marginTop: 18, fontSize: 13, color: 'var(--muted)', display: 'grid', gap: 4 }}>
                     {zonderPlek > 0 && (
-                        <span>{zonderPlek} actieve {zonderPlek === 1 ? 'product staat' : 'producten staan'} op geen enkele afdeling. <Link href="/voorraad/winkel/vloer" style={{ color: 'var(--brand-gold, #c4a35a)' }}>Geef ze een plek</Link>.</span>
+                        <span>{zonderPlek} {zonderPlek === 1 ? 'product dat los te koop is, staat' : 'producten die los te koop zijn, staan'} op geen enkele afdeling. <Link href="/voorraad/winkel/vloer" style={{ color: 'var(--brand-gold, #c4a35a)' }}>Geef ze een plek</Link>.</span>
                     )}
                     {pakketOmzet7_cents !== 0 && <span>Pakketten (meerdere producten in één artikel) tellen niet bij een afdeling: {euro(pakketOmzet7_cents)} in de laatste 7 dagen.</span>}
                 </div>

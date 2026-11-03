@@ -23,7 +23,9 @@ export default async function WinkelPage() {
 
     const tegels = afdelingTegels(o.afdelingen, o.plaatsingen, o.producten, o.regels, o.stuks, nu);
     const metPlek = new Set(o.plaatsingen.filter((p) => o.afdelingen.some((a) => a.id === p.locatie_id)).map((p) => p.product_id));
-    const zonderPlek = o.producten.filter((p) => p.actief && !metPlek.has(p.id)).length;
+    /* Alleen wat los te koop is (een actief eigen artikel); onderdelen van pakketten en oude artikelen tellen niet. */
+    const losTeKoop = new Set(o.artikelen.filter((a) => a.actief && a.product_id).map((a) => a.product_id!));
+    const zonderPlek = o.producten.filter((p) => p.actief && losTeKoop.has(p.id) && !metPlek.has(p.id)).length;
     const urgent = datumGroepen(o.stuks, nu, true);
     const { pakketten } = regelsPerProduct(o.regels);
     const pakketOmzet7 = pakketten

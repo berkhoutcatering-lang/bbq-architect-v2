@@ -69,6 +69,8 @@ const GROEPEN: Record<string, { type: string; moment: string | null; segment: 'b
     'Vleeswaren en kaas': { type: 'vleeswaar', moment: 'vlees', segment: null },
     'Uit de vriezer': { type: 'overig', moment: 'vlees', segment: null },
     'Borrel': { type: 'overig', moment: null, segment: null },
+    /* 3 november 2026: de rubs, zoutvlokken en cadeausets van Down Under (website lib/content/winkelwaar.ts). Afhalen zoals het vlees. */
+    'Rubs & zouten': { type: 'overig', moment: 'vlees', segment: null },
 };
 /** "hotelblok-kaas staat bij Vleeswaren en kaas. Het is kaas, geen vlees." */
 const KAAS = new Set(['hotelblok-kaas']);
