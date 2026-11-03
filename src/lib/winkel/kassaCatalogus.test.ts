@@ -5,7 +5,7 @@
  * (KASSA_CATALOGUS of het vaste pad).
  */
 import fs from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
     CatalogusFout, STANDAARD_KEUZES, controleer, leesCatalogus, maakPlan,
     type Actie, type KassaArtikel, type LiveArtikel, type LiveProduct, type LiveStand,
@@ -320,8 +320,11 @@ describe('alleen het bier (update 2 november 2026)', () => {
     });
 });
 
+/* Het bestand staat alleen op de Mac van Mathijs. Vitest draait de body van een
+   overgeslagen describe tóch (bij het verzamelen); daarom pas lezen in beforeAll. */
 describe.skipIf(!fs.existsSync(BRON))('de echte catalogus', () => {
-    const cat = leesCatalogus(JSON.parse(fs.readFileSync(BRON, 'utf8')));
+    let cat: ReturnType<typeof leesCatalogus> = [];
+    beforeAll(() => { cat = leesCatalogus(JSON.parse(fs.readFileSync(BRON, 'utf8'))); });
 
     it('139 artikelen, zonder fouten', () => {
         expect(cat).toHaveLength(139);
