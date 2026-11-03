@@ -288,6 +288,22 @@ describe('GET status: instellingen.cadeaubon_aan', () => {
     });
 });
 
+describe('GET status: bon_kop', () => {
+    const gezien = { volgnummer: null, app_versie: null, contract_versie: '1.4.0' };
+
+    it('ontbreekt zonder bedrijfsgegevens; staat erin als ze er zijn; een storing laat hem weg', async () => {
+        const zonder = StatusAntwoord.parse(await statusAntwoord(store, { orgId: ORG, apparaatId: T1 }, gezien, GEEN_PIN));
+        expect(zonder.bon_kop).toBeUndefined();
+        const kop = { naam: 'Hop & Bites', adresregels: ['Tramstraat 13', '7848 BG Schoonoord'], btw_nummer: 'NL1', kvk_nummer: '80189458', voettekst: null };
+        store.g.bonKop[ORG] = kop;
+        const met = StatusAntwoord.parse(await statusAntwoord(store, { orgId: ORG, apparaatId: T1 }, gezien, GEEN_PIN));
+        expect(met.bon_kop).toEqual(kop);
+        const kapot: ToonbankStore = { ...store, bonKop: async () => { throw new Error('42P01'); } };
+        const s = StatusAntwoord.parse(await statusAntwoord(kapot, { orgId: ORG, apparaatId: T1 }, gezien, GEEN_PIN));
+        expect(s.bon_kop).toBeUndefined();
+    });
+});
+
 describe('de opslag van Supabase vertaalt de databasefuncties', () => {
     it('opzoeken: getallen als tekst, nooit onder nul, niet actief = niets beschikbaar', () => {
         expect(naarCadeaubonStand({ code: 'HB-CB-1001', status: 'leeg', saldo_cents: '-565', gereserveerd_cents: '0', beschikbaar_cents: '5', waarde_cents: 2500, geldig_tot: '2028-12-31' }))

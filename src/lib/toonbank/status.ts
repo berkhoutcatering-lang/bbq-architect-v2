@@ -29,6 +29,8 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
     const cadeaubonAan = await store.cadeaubonAan(ctx.orgId).catch(() => false);
     // Contract 1.4: echte stickers alleen als de eigenaar het aanzet. Een storing = uit.
     const gewichtToegestaan = await store.gewichtToegestaan(ctx.orgId).catch(() => false);
+    // De kop van de kassabon: zonder (of bij een storing) print de Toonbank hem zonder bedrijfsgegevens.
+    const bonKop = await store.bonKop(ctx.orgId).catch(() => null);
     return {
         servertijd: s.servertijd,
         contract: { huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL },
@@ -49,5 +51,6 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
             ...(gewichtToegestaan ? { gewicht_toegestaan: true } : {}),
         },
         te_controleren: s.te_controleren,
+        ...(bonKop ? { bon_kop: bonKop } : {}),
     };
 }
