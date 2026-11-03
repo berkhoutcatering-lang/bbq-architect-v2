@@ -11,9 +11,9 @@ const plek = (over: Partial<LivePlek> & { code: string }): LivePlek => ({
 });
 
 describe('planWinkelPlekken', () => {
-    it('maakt de Winkel en de vijf afdelingen als er niets staat', () => {
+    it('maakt de Winkel en de zes afdelingen als er niets staat', () => {
         const plan = planWinkelPlekken([]);
-        expect(plan.nieuw.map((p) => p.naam)).toEqual(['Winkel', 'Bier', 'Wijn', 'Nootjes', 'Kazen', 'Vlees (slager)']);
+        expect(plan.nieuw.map((p) => p.naam)).toEqual(['Winkel', 'Bier', 'Wijn', 'Nootjes', 'Kazen', 'Vlees (slager)', 'Broodbeleg']);
         expect(plan.nieuw[0]).toMatchObject({ soort: 'ruimte', ouderCode: null });
         expect(plan.nieuw.slice(1).every((p) => p.soort === 'afdeling' && p.ouderCode === 'WINKEL')).toBe(true);
     });

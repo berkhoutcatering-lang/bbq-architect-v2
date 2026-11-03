@@ -91,7 +91,7 @@ export default function VloerClient({ data }: { data: VloerData | null }) {
                 </div>
                 <div style={{ flex: '1 1 280px', minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 24, fontWeight: 300 }}>De winkel heeft nog geen afdelingen</div>
-                    <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 6 }}>Maak Bier, Wijn, Nootjes, Kazen en Vlees (slager) aan. Daarna zet je per afdeling de producten erin.</div>
+                    <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 6 }}>Maak Bier, Wijn, Nootjes, Kazen, Vlees (slager) en Broodbeleg aan. Daarna zet je per afdeling de producten erin.</div>
                 </div>
                 <button type="button" className="btn btn-brand btn-touch" disabled={bezig} onClick={() => doe(richtWinkelIn, 'De afdelingen staan er.', false)}>
                     <Plus size={16} /> Afdelingen aanmaken

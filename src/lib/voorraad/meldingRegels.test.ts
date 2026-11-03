@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Slot } from '@/lib/winkel/rekenen';
 import {
-    artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tekortenSindsTelling, tellenMeldingen, verschil, winkelProductMeldingen,
+    artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tekortenSindsTelling, tellenMeldingen, thtMeldingen, verschil, winkelProductMeldingen,
     type Melding, type TelMutatie, type WinkelProduct,
 } from './meldingRegels';
 
@@ -144,5 +144,21 @@ describe('Tel {product} na een tekort aan de Toonbank (contract §4.2 stap 8, re
         const tekort = [mut('p-x', 'tekort_correctie', 1, '2027-03-06T11:00:00Z')];
         expect(tellenMeldingen([prod('p-x', 'X', null)], tekort)).toHaveLength(0);
         expect(tellenMeldingen([{ ...prod('p-x', 'X', 0), actief: false }], tekort)).toHaveLength(0);
+    });
+});
+
+describe('thtMeldingen', () => {
+    const producten = [{ id: 'a', naam: 'Riblappen' }, { id: 'b', naam: 'Oude kaas' }];
+    it('per product: over de datum en bijna apart, later niets', () => {
+        const m = thtMeldingen(producten, [
+            { product_id: 'a', tht: '2026-11-24' }, { product_id: 'a', tht: '2026-11-26' }, { product_id: 'a', tht: '2026-11-26' },
+            { product_id: 'b', tht: '2026-11-28' },
+        ], '2026-11-25');
+        expect(m.map((x) => [x.item_id, x.soort, x.metadata.stuks])).toEqual([['a', 'tht_verlopen', 1], ['a', 'tht_bijna', 2]]);
+        expect(m[1]!.titel).toContain('2 × Riblappen');
+        expect(m[1]!.link).toBe('/winkel/datums');
+    });
+    it('vandaag de laatste dag', () => {
+        expect(thtMeldingen(producten, [{ product_id: 'b', tht: '2026-11-25' }], '2026-11-25')[0]!.tekst).toBe('Vandaag de laatste dag.');
     });
 });

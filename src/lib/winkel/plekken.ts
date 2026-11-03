@@ -37,6 +37,8 @@ export const WINKEL_AFDELINGEN = [
     { code: 'WINKEL-NOOTJES', naam: 'Nootjes' },
     { code: 'WINKEL-KAZEN', naam: 'Kazen' },
     { code: 'WINKEL-VLEES', naam: 'Vlees (slager)' },
+    /* 3 november 2026: broodbeleg erbij (de vleeswaren van Veerbeek, patés). */
+    { code: 'WINKEL-BROODBELEG', naam: 'Broodbeleg' },
 ] as const;
 
 export interface LivePlek {

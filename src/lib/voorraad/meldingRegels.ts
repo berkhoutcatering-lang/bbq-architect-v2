@@ -9,10 +9,10 @@ import type { Product, Slot } from '@/lib/winkel/rekenen';
 import { beperkendProduct, beschikbaar, geldendeDrempel, hoeveelheidKort, pakkettenTeMaken } from '@/lib/winkel/voorraad';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
-export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit' | 'voorraad_tellen';
+export type Meldingsoort = 'voorraad_laag' | 'voorraad_op' | 'artikel_dicht' | 'voorraad_tekort_vooruit' | 'voorraad_tellen' | 'tht_bijna' | 'tht_verlopen';
 export type Meldingbron = 'winkel' | 'keuken' | 'artikel';
 
-export const MELDINGSOORTEN: Meldingsoort[] = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen'];
+export const MELDINGSOORTEN: Meldingsoort[] = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen', 'tht_bijna', 'tht_verlopen'];
 
 /** Direct mailen; de rest gaat mee in het overzicht van 8:00 (besluit Mathijs, 26 sep). */
 export const DIRECT_MAILEN: Meldingsoort[] = ['voorraad_op', 'artikel_dicht'];
@@ -190,6 +190,50 @@ export function tellenMeldingen(producten: WinkelProduct[], mutaties: readonly T
             link: WINKEL_LINK(p.id),
             metadata: { tekort: t.tekort, sinds: t.sinds, aanwezig: p.voorraad },
         });
+    }
+    return uit;
+}
+
+/** Een gestickerd stuk dat nog in de winkel ligt (winkel_stuks, status op_voorraad). */
+export interface ThtStuk { product_id: string; tht: string }
+
+/**
+ * THT per product (migratie 20261103120000): "over de datum" (THT vóór
+ * vandaag) en "bijna" (vandaag t/m over twee dagen). Eén melding per product
+ * en soort; weg zodra die stuks verkocht of afgeboekt zijn.
+ */
+export function thtMeldingen(producten: Pick<WinkelProduct, 'id' | 'naam'>[], stuks: readonly ThtStuk[], vandaag: string): Melding[] {
+    const naam = new Map(producten.map((p) => [p.id, p.naam]));
+    const per = new Map<string, { over: string[]; bijna: string[] }>();
+    const dagen = (tht: string) => Math.round((Date.parse(`${tht}T12:00:00Z`) - Date.parse(`${vandaag}T12:00:00Z`)) / 86_400_000);
+    for (const s of stuks) {
+        const d = dagen(s.tht);
+        if (d > 2) continue;
+        const r = per.get(s.product_id) ?? { over: [], bijna: [] };
+        (d < 0 ? r.over : r.bijna).push(s.tht);
+        per.set(s.product_id, r);
+    }
+    const kort = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Amsterdam' });
+    const uit: Melding[] = [];
+    for (const [pid, r] of per) {
+        const n = naam.get(pid) ?? 'Product';
+        if (r.over.length) {
+            uit.push({
+                bron: 'winkel', item_id: pid, soort: 'tht_verlopen',
+                titel: `${r.over.length} × ${n} over de datum`,
+                tekst: `De THT is voorbij (${kort(r.over.sort()[0]!)}). Haal ${r.over.length === 1 ? 'het' : 'ze'} uit de winkel: naar de keuken of weg.`,
+                link: '/winkel/datums', metadata: { stuks: r.over.length, tht: r.over[0] },
+            });
+        }
+        if (r.bijna.length) {
+            const eerste = r.bijna.sort()[0]!;
+            uit.push({
+                bron: 'winkel', item_id: pid, soort: 'tht_bijna',
+                titel: `${r.bijna.length} × ${n}: THT ${kort(eerste)}`,
+                tekst: dagen(eerste) === 0 ? 'Vandaag de laatste dag.' : `Nog ${dagen(eerste)} ${dagen(eerste) === 1 ? 'dag' : 'dagen'}. Zet ${r.bijna.length === 1 ? 'het' : 'ze'} vooraan of gebruik ${r.bijna.length === 1 ? 'het' : 'ze'} in de keuken.`,
+                link: '/winkel/datums', metadata: { stuks: r.bijna.length, tht: eerste },
+            });
+        }
     }
     return uit;
 }
