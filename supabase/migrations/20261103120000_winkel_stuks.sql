@@ -86,6 +86,13 @@ COMMENT ON COLUMN public.winkel_artikelen.sticker_plu IS
 COMMENT ON COLUMN public.winkel_artikelen.etiket IS
     '{houdbaar_dagen, bewaren, rauwe_melk, beschermende_atmosfeer}: wat er naast naam, ingrediënten en allergenen (van het product) op de sticker komt.';
 
+-- Echte stickers (met prijs uit gewicht) pas als de eigenaar dit aanzet, na het
+-- antwoord van NMi over weegschaal + kassa + app + printer (WELMEC 2.2). Uit:
+-- de Toonbank print alleen een PROEF-sticker. GET status meldt het als
+-- instellingen.gewicht_toegestaan.
+ALTER TABLE public.winkel_instellingen
+    ADD COLUMN toonbank_gewicht_toegestaan BOOLEAN NOT NULL DEFAULT false;
+
 ALTER TABLE public.winkel_producten
     ADD COLUMN binnen_per_sticker BOOLEAN NOT NULL DEFAULT false;
 COMMENT ON COLUMN public.winkel_producten.binnen_per_sticker IS

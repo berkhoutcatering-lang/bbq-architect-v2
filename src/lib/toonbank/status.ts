@@ -27,6 +27,8 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
     // Contract 1.2: betalen met een cadeaubon, alleen als het aan staat (en de migratie er is). Ook
     // hier: een storing betekent uit, nooit een mislukte GET status.
     const cadeaubonAan = await store.cadeaubonAan(ctx.orgId).catch(() => false);
+    // Contract 1.4: echte stickers alleen als de eigenaar het aanzet. Een storing = uit.
+    const gewichtToegestaan = await store.gewichtToegestaan(ctx.orgId).catch(() => false);
     return {
         servertijd: s.servertijd,
         contract: { huidig: CONTRACT_HUIDIG, minimaal: CONTRACT_MINIMAAL },
@@ -44,6 +46,7 @@ export async function statusAntwoord(store: ToonbankStore, ctx: { orgId: string;
             ...s.instellingen,
             ...(cadeaubonAan ? { cadeaubon_aan: true } : {}),
             ...(pinKoppeling ? { pin_koppeling: true } : {}),
+            ...(gewichtToegestaan ? { gewicht_toegestaan: true } : {}),
         },
         te_controleren: s.te_controleren,
     };
