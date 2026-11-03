@@ -12,7 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import {
     OngeldigeMelding,
-    type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
     type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
     type CadeaubonReserveerFout, type CadeaubonReserveerRuw, type CadeaubonStand, type CadeaubonStatusRuw, type CadeaubonVrijgeefRuw,
 } from './store';
@@ -385,6 +385,24 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
             if (error) throw new OpslagFout('winkel_instellingen.toonbank_cadeaubon_aan', error);
             return (data as { toonbank_cadeaubon_aan?: unknown } | null)?.toonbank_cadeaubon_aan === true;
+        },
+
+        /* ── Contract 1.4: stickers ── */
+        async gewichtToegestaan(orgId) {
+            const { data, error } = await sb.from('winkel_instellingen')
+                .select('toonbank_gewicht_toegestaan')
+                .eq('organization_id', orgId).maybeSingle();
+            // Zonder migratie 20261103120000: uit.
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
+            if (error) throw new OpslagFout('winkel_instellingen.toonbank_gewicht_toegestaan', error);
+            return (data as { toonbank_gewicht_toegestaan?: unknown } | null)?.toonbank_gewicht_toegestaan === true;
+        },
+
+        async partijen(orgId) {
+            const { data, error } = await sb.rpc('toonbank_partijen', { p_org: orgId });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return [];
+            if (error) throw new OpslagFout('toonbank_partijen', error);
+            return ((data as { partijen?: PartijRuw[] } | null)?.partijen ?? []);
         },
 
         async cadeaubon(orgId, code) {

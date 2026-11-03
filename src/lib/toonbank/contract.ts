@@ -18,7 +18,7 @@ import { z } from 'zod';
 /* ═══ Versie en headers (contract §3.1, §6) ═══════════════════════════════ */
 
 /** De versie die BBQ Architect spreekt. */
-export const CONTRACT_HUIDIG = '1.3.0';
+export const CONTRACT_HUIDIG = '1.4.0';
 /**
  * Een tablet met een lagere x-toonbank-contract krijgt 426 contract_verouderd. 1.1.0: de
  * Toonbank-app is vanaf het begin op 1.1.0 gebouwd (kern CONTRACT_VERSIE) en het voorbeeld
@@ -272,6 +272,12 @@ export const StatusAntwoord = z.object({
         cadeaubon_aan: z.boolean().optional(),
         /** Contract 1.3: kent BBQ Architect voor dit apparaat een myPOS-terminal en de sleutels? */
         pin_koppeling: z.boolean().optional(),
+        /**
+         * Contract 1.4: echte stickers met een prijs uit het gewicht. Alleen waar als de eigenaar het
+         * aanzet (winkel_instellingen.toonbank_gewicht_toegestaan, na NMi); anders print de Toonbank
+         * alleen een PROEF-sticker. Ontbreekt het, dan niet.
+         */
+        gewicht_toegestaan: z.boolean().optional(),
     }),
     te_controleren: z.int().nonnegative(),
 });
@@ -282,6 +288,22 @@ export type StatusAntwoord = z.infer<typeof StatusAntwoord>;
 export const Kanaal = z.enum(['toonbank', 'webshop', 'event']);
 
 export const BtwVerdeling = z.array(z.object({ pct: BtwPct, gewicht: z.number().positive() })).min(1);
+
+/**
+ * Contract 1.4: het etiket van een artikel op gewicht. Ingrediënten en allergenen komen van het
+ * product. tht_uit_partij: de THT komt uit de gekozen partij (voorverpakt vlees van het A4), niet
+ * uit snijdag + houdbaar_dagen.
+ */
+export const Etiket = z.object({
+    plu: z.int().min(1).max(99_999),
+    ingredienten: z.string().min(1).nullable(),
+    allergenen: z.array(z.string().min(1)),
+    houdbaar_dagen: z.int().min(0).max(365),
+    bewaren: z.string().min(1).nullable(),
+    rauwe_melk: z.boolean(),
+    beschermende_atmosfeer: z.boolean().optional(),
+    tht_uit_partij: z.boolean().optional(),
+});
 
 export const Artikel = z.object({
     artikel_id: Uuid,
@@ -297,6 +319,12 @@ export const Artikel = z.object({
     onderdelen: z.array(Onderdeel),
     actief: z.boolean(),
     kanalen: z.array(Kanaal),
+    /** Contract 1.4: per stuk (standaard) of op gewicht, vooraf gestickerd. */
+    verkoop_per: z.enum(['stuk', 'kg']).optional(),
+    /** Contract 1.4: de prijs per kilo, inclusief btw. Alleen bij verkoop_per "kg". */
+    kiloprijs_cents: PositieveCents.nullable().optional(),
+    /** Contract 1.4: wat er op de sticker komt. Alleen bij verkoop_per "kg"; zonder etiket geen sticker. */
+    etiket: Etiket.nullable().optional(),
 });
 
 export const Product = z.object({
@@ -503,7 +531,8 @@ const VerkoopRegel = z.object({
     alcohol: z.boolean(),
     onderdelen: z.array(Onderdeel),
     scan_code: z.string().min(1).optional(),
-    prijs_bron: z.enum(['catalogus', 'open_prijs']),
+    /** Contract 1.4: "sticker" = een gescande sticker; de prijs is gewicht × kiloprijs van de sticker. */
+    prijs_bron: z.enum(['catalogus', 'open_prijs', 'sticker']),
     verwijst_naar_regelnr: z.int().positive().optional(),
     /**
      * Op een tegenbon: kwam de waar terug (true: retour op de voorraad) of niet (false). De
@@ -513,6 +542,9 @@ const VerkoopRegel = z.object({
      * Op een gewone verkoopregel heeft het geen betekenis.
      */
     goederen_terug: z.boolean().optional(),
+    /** Contract 1.4: op gewicht verkocht; het nettogewicht in gram, altijd samen met kiloprijs_cents. */
+    gewicht_g: z.int().positive().optional(),
+    kiloprijs_cents: PositieveCents.optional(),
 });
 
 const StatiegeldRegel = z.object({
@@ -616,15 +648,36 @@ export const VrijOverschredenMelding = z
 
 export const DagOpenenMelding = z.object({ soort: z.literal('dag_openen'), ...envelop, bedrijfsdag: Datum, contant_begin_cents: PositieveCents });
 
+/**
+ * Contract 1.4: een geprinte sticker (kaas uit een hele kaas, of een bakje voorverpakt vlees).
+ * BBQ Architect maakt er een stuk van (winkel_stuks); bij binnen_per_sticker is het ook de
+ * ontvangst. partij_id: de gekozen levering (GET partijen), alleen bij vlees.
+ */
+export const StickerMelding = z.object({
+    soort: z.literal('sticker'),
+    ...envelop,
+    artikel_id: Uuid,
+    plu: z.int().min(1).max(99_999),
+    code: z.string().regex(/^29\d{26}$/),
+    gewicht_g: z.int().positive(),
+    kiloprijs_cents: PositieveCents,
+    prijs_cents: PositieveCents,
+    tht: Datum,
+    tht_hele_kaas: Datum,
+    kopie: z.boolean(),
+    partij_id: Uuid.optional(),
+});
+
 export const Melding = z.discriminatedUnion('soort', [
     BonMelding, TegenbonMelding, PinpogingMelding, InloggenMelding, UitloggenMelding, VrijOverschredenMelding, DagOpenenMelding,
+    StickerMelding,
 ]);
 
 export const MAX_MELDINGEN_PER_VERZOEK = 50;
 export const BonnenVerzoek = z.object({ meldingen: z.array(Melding).min(1).max(MAX_MELDINGEN_PER_VERZOEK) });
 
 /** De soorten die via POST bonnen reizen (contract §1.2, plan v5 contractgat 5). */
-export const BONNEN_SOORTEN = ['bon', 'tegenbon', 'pinpoging', 'inloggen', 'uitloggen', 'vrij_overschreden', 'dag_openen'] as const;
+export const BONNEN_SOORTEN = ['bon', 'tegenbon', 'pinpoging', 'inloggen', 'uitloggen', 'vrij_overschreden', 'dag_openen', 'sticker'] as const;
 
 /**
  * De soepele envelop waarmee BBQ Architect eerst opslaat (review M5, BA-9):
@@ -842,7 +895,25 @@ export const PinbetalingAntwoord = z.object({
 });
 export type PinbetalingAntwoord = z.infer<typeof PinbetalingAntwoord>;
 
+/* ═══ Partijen (contract 1.4) ═════════════════════════════════════════════ */
+
+/** GET partijen: de open leveringen om bij het stickeren te kiezen (THT vandaag of later). */
+export const PartijenAntwoord = z.object({
+    partijen: z.array(z.object({
+        partij_id: Uuid,
+        product_id: Uuid,
+        artikel_ids: z.array(Uuid),
+        leverancier: z.string().min(1).nullable(),
+        geleverd_op: Datum,
+        productiedatum: Datum.nullable(),
+        tht: Datum,
+        gestickerd: z.int().nonnegative(),
+    })),
+});
+export type PartijenAntwoord = z.infer<typeof PartijenAntwoord>;
+
 export const SCHEMAS = {
+    StickerMelding, PartijenAntwoord,
     PinbetalingVerzoek, PinbetalingAntwoord,
     CadeaubonAntwoord, CadeaubonReserveerVerzoek, CadeaubonReserveerAntwoord, CadeaubonVrijgevenVerzoek, CadeaubonVrijgevenAntwoord,
     StatusAntwoord, CatalogusAntwoord, VrijAntwoord, WegzettenAntwoord, WegzetAntwoord, OngedaanAntwoord,

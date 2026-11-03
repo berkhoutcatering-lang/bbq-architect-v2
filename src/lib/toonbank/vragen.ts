@@ -16,8 +16,8 @@
  *                                 P0002 → 404, WV011 → 422 al_opgehaald
  */
 import { codeUitScan } from '@/lib/winkel/productie';
-import type { AfhaallijstAntwoord, CatalogusAntwoord, OngedaanAntwoord, ScanAntwoord, VrijAntwoord, WegzetAntwoord, WegzettenAntwoord } from './contract';
-import type { CatalogusArtikelRuw, CatalogusRuw, ToonbankStore, WegzetTaakRij } from './store';
+import type { AfhaallijstAntwoord, CatalogusAntwoord, OngedaanAntwoord, PartijenAntwoord, ScanAntwoord, VrijAntwoord, WegzetAntwoord, WegzettenAntwoord } from './contract';
+import type { CatalogusArtikelRuw, CatalogusRuw, PartijRuw, ToonbankStore, WegzetTaakRij } from './store';
 import { gelukt, mislukt, type Uitkomst } from './uitkomst';
 
 /** Een tijd uit de database (jsonb of timestamptz) als ISO met Z; null blijft null. */
@@ -62,6 +62,48 @@ function naarArtikel(a: CatalogusArtikelRuw, supabaseUrl: string | null | undefi
         onderdelen: (a.onderdelen ?? []).map((o) => ({ product_id: o.product_id, hoeveelheid: getal(o.hoeveelheid), eenheid: o.eenheid })),
         actief: !!a.actief,
         kanalen: (a.kanalen ?? []).filter((k): k is 'toonbank' | 'webshop' | 'event' => k === 'toonbank' || k === 'webshop' || k === 'event'),
+        ...opGewicht(a),
+    };
+}
+
+/**
+ * Contract 1.4: alleen een artikel op gewicht krijgt verkoop_per, kiloprijs en etiket mee; een
+ * gewoon artikel blijft precies zoals in 1.3 (een oudere Toonbank merkt niets).
+ */
+function opGewicht(a: CatalogusArtikelRuw): Pick<CatalogusAntwoord['artikelen'][number], 'verkoop_per' | 'kiloprijs_cents' | 'etiket'> {
+    if (a.verkoop_per !== 'kg' || a.kiloprijs_cents == null) return {};
+    const e = a.etiket as Record<string, unknown> | null | undefined;
+    return {
+        verkoop_per: 'kg',
+        kiloprijs_cents: Number(a.kiloprijs_cents),
+        etiket: e ? {
+            plu: Number(e.plu),
+            ingredienten: typeof e.ingredienten === 'string' && e.ingredienten ? e.ingredienten : null,
+            allergenen: Array.isArray(e.allergenen) ? e.allergenen.map(String).filter(Boolean) : [],
+            houdbaar_dagen: Math.min(365, Math.max(0, Math.round(Number(e.houdbaar_dagen ?? 0)))),
+            bewaren: typeof e.bewaren === 'string' && e.bewaren ? e.bewaren : null,
+            rauwe_melk: e.rauwe_melk === true,
+            beschermende_atmosfeer: e.beschermende_atmosfeer === true,
+            tht_uit_partij: e.tht_uit_partij === true,
+        } : null,
+    };
+}
+
+/* ── Partijen (contract 1.4) ───────────────────────────────────────────────── */
+
+export function partijenAntwoord(ruw: PartijRuw[]): PartijenAntwoord {
+    const datum = (v: unknown): string | null => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : null);
+    return {
+        partijen: ruw.map((p) => ({
+            partij_id: p.partij_id,
+            product_id: p.product_id,
+            artikel_ids: (p.artikel_ids ?? []).map(String),
+            leverancier: p.leverancier || null,
+            geleverd_op: datum(p.geleverd_op)!,
+            productiedatum: datum(p.productiedatum),
+            tht: datum(p.tht)!,
+            gestickerd: Number(p.gestickerd ?? 0),
+        })),
     };
 }
 

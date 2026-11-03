@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { KOPPEL_BRON_MINUTEN, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON } from './koppelcode';
 import {
     OngeldigeMelding,
-    type Apparaat, type CatalogusRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
+    type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
     type NieuweSessie, type OphaalVraag, type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij,
     type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
     type CadeaubonStand, type CadeaubonStatusRuw,
@@ -138,6 +138,9 @@ export interface ToonbankGeheugen {
     cadeaubonnen: GeheugenCadeaubon[];
     cadeaubonReserveringen: GeheugenCadeaubonReservering[];
     cadeaubonMutaties: GeheugenCadeaubonMutatie[];
+    /* Contract 1.4: stickers (de instelling per organisatie en de open partijen). */
+    gewichtToegestaan: Record<string, boolean>;
+    partijen: Record<string, PartijRuw[]>;
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -191,6 +194,8 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         cadeaubonnen: start.cadeaubonnen ?? [],
         cadeaubonReserveringen: start.cadeaubonReserveringen ?? [],
         cadeaubonMutaties: start.cadeaubonMutaties ?? [],
+        gewichtToegestaan: start.gewichtToegestaan ?? {},
+        partijen: start.partijen ?? {},
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -537,6 +542,15 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         /* ── Contract 1.2: zoals toonbank_cadeaubon_opzoeken, _reserveren en _vrijgeven ── */
         async cadeaubonAan(orgId) {
             return g.cadeaubonAan[orgId] === true;
+        },
+
+        /* ── Contract 1.4 ── */
+        async gewichtToegestaan(orgId) {
+            return g.gewichtToegestaan[orgId] === true;
+        },
+
+        async partijen(orgId) {
+            return g.partijen[orgId] ?? [];
         },
 
         async cadeaubon(orgId, code) {

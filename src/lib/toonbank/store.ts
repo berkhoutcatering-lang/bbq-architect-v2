@@ -123,6 +123,22 @@ export interface CatalogusArtikelRuw {
     onderdelen: { product_id: string; hoeveelheid: number; eenheid: string }[];
     actief: boolean;
     kanalen: string[];
+    /** Contract 1.4 (migratie 20261103120000); ontbreekt zonder die migratie. */
+    verkoop_per?: string | null;
+    kiloprijs_cents?: number | null;
+    etiket?: Record<string, unknown> | null;
+}
+
+/** Een open partij uit toonbank_partijen (contract 1.4). */
+export interface PartijRuw {
+    partij_id: string;
+    product_id: string;
+    artikel_ids: string[];
+    leverancier: string | null;
+    geleverd_op: string;
+    productiedatum: string | null;
+    tht: string;
+    gestickerd: number;
 }
 
 export interface CatalogusRuw {
@@ -403,4 +419,10 @@ export interface ToonbankStore {
     cadeaubonReserveren(v: CadeaubonReserveerVraag): Promise<CadeaubonReserveerRuw>;
     /** toonbank_cadeaubon_vrijgeven: twee keer kan geen kwaad. */
     cadeaubonVrijgeven(v: CadeaubonVrijgeefVraag): Promise<CadeaubonVrijgeefRuw>;
+
+    /* ── Contract 1.4: stickers (migratie 20261103120000) ── */
+    /** winkel_instellingen.toonbank_gewicht_toegestaan; onwaar zonder de migratie. */
+    gewichtToegestaan(orgId: string): Promise<boolean>;
+    /** toonbank_partijen: de open leveringen; leeg zonder de migratie. */
+    partijen(orgId: string): Promise<PartijRuw[]>;
 }

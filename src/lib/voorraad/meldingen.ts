@@ -20,11 +20,14 @@ import { sendServerMail } from '@/lib/serverMail';
 import type { Slot } from '@/lib/winkel/rekenen';
 import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import {
-    DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tellenMeldingen, verschil, winkelProductMeldingen,
-    type ArtikelKort, type KeukenItem, type Melding, type TelMutatie, type Vraag, type WinkelProduct,
+    DIRECT_MAILEN, artikelDichtMeldingen, keukenMeldingen, tekortVooruitMeldingen, tellenMeldingen, thtMeldingen, verschil, winkelProductMeldingen,
+    type ArtikelKort, type KeukenItem, type Melding, type TelMutatie, type ThtStuk, type Vraag, type WinkelProduct,
 } from './meldingRegels';
 
 type Sb = ReturnType<typeof createServiceSupabase>;
+
+/** Vandaag als JJJJ-MM-DD in Nederlandse tijd. */
+const vandaagNL = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 type Staat = Pick<Melding, 'bron' | 'item_id' | 'soort'>;
 
 const PRODUCT_KOLOMMEN = 'id, naam, eenheid, voorraad, drempel, actief, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam';
@@ -81,7 +84,12 @@ async function laadWinkel(sb: Sb, orgId: string) {
         bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
     }));
     const sl = (slots ?? []).map((s) => ({ ...s, hoeveelheid: Number(s.hoeveelheid), alternatieven: s.alternatieven ?? [] })) as Slot[];
-    return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag, telMutaties };
+    /* THT per stuk (migratie 20261103120000); zonder die tabel geen THT-meldingen. */
+    const { data: stuks, error: stukFout } = await sb.from('winkel_stuks')
+        .select('winkel_product_id, tht').eq('organization_id', orgId).eq('status', 'op_voorraad').limit(5000);
+    const thtStuks: ThtStuk[] = stukFout ? [] : (stuks ?? []).map((s) => ({ product_id: s.winkel_product_id as string, tht: String(s.tht) }));
+
+    return { producten: prods, slots: sl, artikelen: (artikelen ?? []) as ArtikelKort[], vraag, telMutaties, thtStuks, thtBekend: !stukFout };
 }
 
 async function laadInstellingen(sb: Sb, orgId: string) {
@@ -158,10 +166,14 @@ export async function evalueerWinkelMeldingen(orgId: string, productIds?: string
             ...artikelDichtMeldingen(w.artikelen, w.producten, w.slots),
             ...tekortVooruitMeldingen(w.producten, w.vraag),
             ...tellenMeldingen(w.producten, w.telMutaties),
+            ...thtMeldingen(w.producten, w.thtStuks, vandaagNL()),
         ];
         const scope = productIds ? new Set(productIds) : null;
+        /* THT hangt aan de klok, niet aan een mutatie: altijd helemaal bekijken (als de tabel er is). */
         return await verwerk(sb, orgId, gewenst, (m) =>
-            m.bron === 'artikel' || m.soort === 'voorraad_tekort_vooruit' || (m.bron === 'winkel' && (!scope || scope.has(m.item_id))));
+            m.bron === 'artikel' || m.soort === 'voorraad_tekort_vooruit'
+            || ((m.soort === 'tht_bijna' || m.soort === 'tht_verlopen') && w.thtBekend)
+            || (m.bron === 'winkel' && m.soort !== 'tht_bijna' && m.soort !== 'tht_verlopen' && (!scope || scope.has(m.item_id))));
     } catch (e) {
         console.error('[voorraad-meldingen] winkel', e instanceof Error ? e.message : e);
         return [];
@@ -202,7 +214,7 @@ export async function stuurDagoverzicht(orgId: string): Promise<{ verstuurd: boo
     const ids = (staat ?? []).map((s) => s.notification_id).filter((x): x is string => !!x);
     if (!ids.length) return { verstuurd: false, aantal: 0 };
     const { data: notes } = await sb.from('notifications').select('id, type, title, body, link').in('id', ids);
-    const volgorde: Record<string, number> = { voorraad_tekort_vooruit: 0, voorraad_op: 1, artikel_dicht: 2, voorraad_tellen: 3, voorraad_laag: 4 };
+    const volgorde: Record<string, number> = { tht_verlopen: 0, voorraad_tekort_vooruit: 1, voorraad_op: 2, tht_bijna: 3, artikel_dicht: 4, voorraad_tellen: 5, voorraad_laag: 6 };
     const lijst = ((notes ?? []) as { type: string; title: string; body: string | null; link: string | null }[])
         .sort((a, b) => (volgorde[a.type] ?? 9) - (volgorde[b.type] ?? 9))
         .map((n) => ({ titel: n.title, tekst: n.body ?? '', link: n.link ?? '' }));

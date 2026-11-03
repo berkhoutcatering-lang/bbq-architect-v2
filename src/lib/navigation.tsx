@@ -6,7 +6,7 @@ import {
     HelpCircle, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive, MonitorPlay, LayoutDashboard,
-    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator,
+    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator, LayoutGrid, CalendarClock, MapPinned,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -165,6 +165,25 @@ export const navSections: NavSection[] = [
         ],
     },
     {
+        /* De winkel aan de Tramstraat (open 21 november 2026). De voorraad en
+           de vloer houden hun route onder /voorraad/winkel; het langste
+           voorvoegsel wint, dus ze horen hier en niet bij Inkoop & Voorraad. */
+        title: "Winkel",
+        icon: <Store size={18} />,
+        type: "folder",
+        slug: "winkel",
+        description: "Afdelingen, leveringen, datums en de winkelvoorraad.",
+        hubHref: "/winkel",
+        kleur: "#B5483B",
+        children: [
+            { label: "Afdelingen", icon: <LayoutGrid size={16} />, href: "/winkel", description: "Per afdeling verkoop, omzet en wat bijna over de datum gaat" },
+            { label: "Binnen", icon: <PackagePlus size={16} />, href: "/winkel/binnen", description: "Een levering binnenmelden met de datums van het A4" },
+            { label: "Datums", icon: <CalendarClock size={16} />, href: "/winkel/datums", description: "Wat er ligt, vroegste THT eerst: naar de keuken of weg" },
+            { label: "Voorraad", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Winkelvoorraad tellen en bijbestellen" },
+            { label: "Vloer", icon: <MapPinned size={16} />, href: "/voorraad/winkel/vloer", description: "Afdelingen in de winkel en wat waar staat" },
+        ],
+    },
+    {
         title: "Keuken",
         icon: <ChefHat size={18} />,
         type: "folder",
@@ -187,14 +206,13 @@ export const navSections: NavSection[] = [
         icon: <Package size={18} />,
         type: "folder",
         slug: "voorraad",
-        description: "Voorraad, partijen, winkel, inkoop, leveranciers en bonnen.",
+        description: "Voorraad, partijen, inkoop, leveranciers en bonnen.",
         hubHref: "/voorraad",
         kleur: "#B8862B",
         ook: ["/scan", "/labels", "/factuur-lezer"],
         children: [
             { label: "Voorraad", icon: <Package size={16} />, href: "/voorraad", description: "Voorraadstand en par-levels" },
             { label: "Partijen", icon: <Tag size={16} />, href: "/voorraad/partijen", description: "Wat je zelf maakt en invriest, met sticker en houdbaarheid" },
-            { label: "Winkel", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Winkelvoorraad tellen en bijbestellen" },
             { label: "Ontvangst", icon: <PackagePlus size={16} />, href: "/voorraad/ontvangst", description: "Leveringen binnenboeken" },
             { label: "Inkoop", icon: <ShoppingCart size={16} />, href: "/inkoop", description: "Bestellijsten en bestelvoorstellen" },
             { label: "Leveranciers", icon: <Store size={16} />, href: "/leveranciers", description: "Beheer waar je producten vandaan komen" },
