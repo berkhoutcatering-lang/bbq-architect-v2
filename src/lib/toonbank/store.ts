@@ -11,6 +11,8 @@
  * krijgt die van de guard, nooit van de tablet.
  */
 
+import type { BonKop } from './contract';
+
 export type ToonbankRol = 'medewerker' | 'eigenaar';
 export type SessieDoel = 'dienst' | 'vrij_overschrijden';
 
@@ -425,4 +427,7 @@ export interface ToonbankStore {
     gewichtToegestaan(orgId: string): Promise<boolean>;
     /** toonbank_partijen: de open leveringen; leeg zonder de migratie. */
     partijen(orgId: string): Promise<PartijRuw[]>;
+
+    /** De bedrijfsgegevens voor de kassabon (settings); null zonder bedrijfsnaam. */
+    bonKop(orgId: string): Promise<BonKop | null>;
 }

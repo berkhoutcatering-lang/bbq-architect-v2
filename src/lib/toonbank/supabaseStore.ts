@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabase } from '@/lib/supabase-server';
+import { bonKopUitInstellingen, type InstellingenRuw } from './bonKop';
 import {
     OngeldigeMelding,
     type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
@@ -396,6 +397,14 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
             if (error) throw new OpslagFout('winkel_instellingen.toonbank_gewicht_toegestaan', error);
             return (data as { toonbank_gewicht_toegestaan?: unknown } | null)?.toonbank_gewicht_toegestaan === true;
+        },
+
+        async bonKop(orgId) {
+            const { data, error } = await sb.from('settings')
+                .select('bedrijfsnaam,adres,kvk,btw,btw_nummer')
+                .eq('organization_id', orgId).maybeSingle();
+            if (error) throw new OpslagFout('settings (bon_kop)', error);
+            return bonKopUitInstellingen(data as InstellingenRuw | null);
         },
 
         async partijen(orgId) {

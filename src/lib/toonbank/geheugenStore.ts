@@ -7,6 +7,7 @@
  * hetzelfde zeggen.
  */
 import { randomUUID } from 'node:crypto';
+import type { BonKop } from './contract';
 import { KOPPEL_BRON_MINUTEN, KOPPEL_MAX_POGINGEN, KOPPEL_POGINGEN_PER_BRON } from './koppelcode';
 import {
     OngeldigeMelding,
@@ -141,6 +142,7 @@ export interface ToonbankGeheugen {
     /* Contract 1.4: stickers (de instelling per organisatie en de open partijen). */
     gewichtToegestaan: Record<string, boolean>;
     partijen: Record<string, PartijRuw[]>;
+    bonKop: Record<string, BonKop>;
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -196,6 +198,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         cadeaubonMutaties: start.cadeaubonMutaties ?? [],
         gewichtToegestaan: start.gewichtToegestaan ?? {},
         partijen: start.partijen ?? {},
+        bonKop: start.bonKop ?? {},
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -547,6 +550,10 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         /* ── Contract 1.4 ── */
         async gewichtToegestaan(orgId) {
             return g.gewichtToegestaan[orgId] === true;
+        },
+
+        async bonKop(orgId) {
+            return g.bonKop[orgId] ?? null;
         },
 
         async partijen(orgId) {

@@ -247,6 +247,17 @@ export const EigenaarcodeAntwoord = z.object({
 
 /* ═══ Status (contract §3.3) ═════════════════════════════════════════════ */
 
+/** De kop en voet van de kassabon: bedrijfsgegevens uit Instellingen (settings). */
+export const BonKop = z.object({
+    naam: z.string().min(1),
+    /** Adres en andere regels onder de naam, van boven naar beneden. */
+    adresregels: z.array(z.string().min(1)),
+    btw_nummer: z.string().min(1).nullable(),
+    kvk_nummer: z.string().min(1).nullable(),
+    voettekst: z.string().min(1).nullable(),
+});
+export type BonKop = z.infer<typeof BonKop>;
+
 export const StatusAntwoord = z.object({
     servertijd: Moment,
     contract: z.object({ huidig: z.string().min(1), minimaal: z.string().min(1) }),
@@ -280,6 +291,8 @@ export const StatusAntwoord = z.object({
         gewicht_toegestaan: z.boolean().optional(),
     }),
     te_controleren: z.int().nonnegative(),
+    /** De kop en voet van de kassabon (contract 1.2, optioneel). Ontbreekt zonder bedrijfsnaam. */
+    bon_kop: BonKop.nullable().optional(),
 });
 export type StatusAntwoord = z.infer<typeof StatusAntwoord>;
 
