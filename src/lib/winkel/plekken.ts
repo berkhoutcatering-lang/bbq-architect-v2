@@ -39,7 +39,33 @@ export const WINKEL_AFDELINGEN = [
     { code: 'WINKEL-VLEES', naam: 'Vlees (slager)' },
     /* 3 november 2026: broodbeleg erbij (de vleeswaren van Veerbeek, patés). */
     { code: 'WINKEL-BROODBELEG', naam: 'Broodbeleg' },
+    /* 3 november 2026: zoals op de site (opening 21 november). */
+    { code: 'WINKEL-VRIEZER', naam: 'Uit de vriezer' },
+    { code: 'WINKEL-RUBS', naam: 'Rubs & zouten' },
 ] as const;
+
+/**
+ * Op welke afdeling een artikel uit de kassacatalogus staat, op kassagroep
+ * (Mathijs, 3 november 2026: "alle onderdelen en producten erin, zoals op de
+ * site"). Pakketten, borrel, kerst en proeverijen hebben geen eigen plek: dat
+ * zijn samengestelde artikelen, geen product op de plank.
+ */
+const AFDELING_VAN_GROEP: Record<string, string> = {
+    'Bier': 'WINKEL-BIER',
+    'Wijn': 'WINKEL-WIJN',
+    'Vers vlees': 'WINKEL-VLEES',
+    'Droge worst': 'WINKEL-VLEES',
+    'Vleeswaren en kaas': 'WINKEL-BROODBELEG',
+    'Uit de vriezer': 'WINKEL-VRIEZER',
+    'Rubs & zouten': 'WINKEL-RUBS',
+};
+/** Kaas die in de groep Vleeswaren en kaas staat, hoort bij Kazen. */
+const KAAS_SLUGS = new Set(['hotelblok-kaas']);
+
+export function afdelingVoorArtikel(a: { kassagroep: string; slug: string }): string | null {
+    if (KAAS_SLUGS.has(a.slug)) return 'WINKEL-KAZEN';
+    return AFDELING_VAN_GROEP[a.kassagroep] ?? null;
+}
 
 export interface LivePlek {
     id: string;

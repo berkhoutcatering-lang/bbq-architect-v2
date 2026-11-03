@@ -4,16 +4,26 @@
  * wordt niet stil verplaatst.
  */
 import { describe, expect, it } from 'vitest';
-import { WINKEL_AFDELINGEN, codeVoor, planPlaatsingen, planWinkelPlekken, type LivePlek } from './plekken';
+import { WINKEL_AFDELINGEN, afdelingVoorArtikel, codeVoor, planPlaatsingen, planWinkelPlekken, type LivePlek } from './plekken';
 
 const plek = (over: Partial<LivePlek> & { code: string }): LivePlek => ({
     id: `id-${over.code}`, naam: over.code, soort: 'afdeling', parent_id: null, volgorde: 0, ...over,
 });
 
+describe('afdelingVoorArtikel', () => {
+    it('op kassagroep; kaas bij Kazen; pakketten nergens', () => {
+        expect(afdelingVoorArtikel({ kassagroep: 'Droge worst', slug: 'droge-worst' })).toBe('WINKEL-VLEES');
+        expect(afdelingVoorArtikel({ kassagroep: 'Vleeswaren en kaas', slug: 'boterhamworst' })).toBe('WINKEL-BROODBELEG');
+        expect(afdelingVoorArtikel({ kassagroep: 'Vleeswaren en kaas', slug: 'hotelblok-kaas' })).toBe('WINKEL-KAZEN');
+        expect(afdelingVoorArtikel({ kassagroep: 'Rubs & zouten', slug: 'lemon-myrtle' })).toBe('WINKEL-RUBS');
+        expect(afdelingVoorArtikel({ kassagroep: 'Geschenkpakketten', slug: 'bierpakket-20' })).toBeNull();
+    });
+});
+
 describe('planWinkelPlekken', () => {
     it('maakt de Winkel en de zes afdelingen als er niets staat', () => {
         const plan = planWinkelPlekken([]);
-        expect(plan.nieuw.map((p) => p.naam)).toEqual(['Winkel', 'Bier', 'Wijn', 'Nootjes', 'Kazen', 'Vlees (slager)', 'Broodbeleg']);
+        expect(plan.nieuw.map((p) => p.naam)).toEqual(['Winkel', 'Bier', 'Wijn', 'Nootjes', 'Kazen', 'Vlees (slager)', 'Broodbeleg', 'Uit de vriezer', 'Rubs & zouten']);
         expect(plan.nieuw[0]).toMatchObject({ soort: 'ruimte', ouderCode: null });
         expect(plan.nieuw.slice(1).every((p) => p.soort === 'afdeling' && p.ouderCode === 'WINKEL')).toBe(true);
     });
