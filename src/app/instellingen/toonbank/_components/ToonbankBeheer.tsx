@@ -27,6 +27,8 @@ export interface ToonbankInstellingen {
     alcohol_toegestaan: boolean;
     contant_aan: boolean;
     contant_limiet_cents: number;
+    /** Null: de database kent het nog niet (migratie 20261103120000). */
+    gewicht_toegestaan: boolean | null;
 }
 
 export interface MedewerkerRij {
@@ -318,6 +320,7 @@ function InstellingenKaart({ start, isAdmin, na }: { start: ToonbankInstellingen
     const [alcohol, setAlcohol] = useState(start.alcohol_toegestaan);
     const [contant, setContant] = useState(start.contant_aan);
     const [limiet, setLimiet] = useState(String(Math.round(start.contant_limiet_cents / 100)));
+    const [gewicht, setGewicht] = useState(start.gewicht_toegestaan === true);
     const [bezig, setBezig] = useState(false);
 
     async function bewaar() {
@@ -325,7 +328,10 @@ function InstellingenKaart({ start, isAdmin, na }: { start: ToonbankInstellingen
         if (!(euro > 0) || euro > 3000) { showToast('De contantgrens ligt tussen € 0 en € 3.000.', 'error'); return; }
         setBezig(true);
         try {
-            const r = await zetToonbankInstellingen({ alcohol_toegestaan: alcohol, contant_aan: contant, contant_limiet_cents: Math.round(euro * 100) });
+            const r = await zetToonbankInstellingen({
+                alcohol_toegestaan: alcohol, contant_aan: contant, contant_limiet_cents: Math.round(euro * 100),
+                ...(start.gewicht_toegestaan === null ? {} : { gewicht_toegestaan: gewicht }),
+            });
             if ('error' in r) { showToast(r.error, 'error'); return; }
             showToast('Toonbank-instellingen bewaard; de tablets krijgen ze binnen 30 seconden', 'success');
             na();
@@ -345,6 +351,12 @@ function InstellingenKaart({ start, isAdmin, na }: { start: ToonbankInstellingen
                         <input type="checkbox" checked={contant} disabled={!isAdmin} onChange={(e) => setContant(e.target.checked)} />
                         Contant aannemen
                     </label>
+                    {start.gewicht_toegestaan !== null && (
+                        <label className="flex items-center gap-2 text-[13px] text-[var(--text)]">
+                            <input type="checkbox" checked={gewicht} disabled={!isAdmin} onChange={(e) => setGewicht(e.target.checked)} />
+                            Verkopen op gewicht (echte stickers met prijs; uit = alleen een proefsticker)
+                        </label>
+                    )}
                     <div className="field" style={{ width: 160 }}>
                         <label htmlFor="tb-limiet">Contant tot (€)</label>
                         <input id="tb-limiet" inputMode="decimal" value={limiet} disabled={!isAdmin || !contant} onChange={(e) => setLimiet(e.target.value)} />
@@ -352,6 +364,9 @@ function InstellingenKaart({ start, isAdmin, na }: { start: ToonbankInstellingen
                     {isAdmin && <Button size="sm" loading={bezig} onClick={() => void bewaar()}>Bewaren</Button>}
                 </div>
                 <p className="text-[11px] text-[var(--muted)] mt-2">Contant kan nooit vanaf € 3.000 per bon (wet sinds 1 januari 2026); lager mag.</p>
+                {start.gewicht_toegestaan !== null && (
+                    <p className="text-[11px] text-[var(--muted)] mt-1">Verkopen op gewicht: de kassa rekent de prijs uit het gewicht van de geijkte weegschaal. Weegschaal, kassa en printer samen vallen dan onder de weegregels (NMi); dat risico is voor jou.</p>
+                )}
             </MetallicCard>
         </>
     );

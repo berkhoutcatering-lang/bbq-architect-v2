@@ -180,6 +180,8 @@ export async function zetToonbankInstellingen(input: unknown): Promise<ActionRes
         alcohol_toegestaan: z.boolean(),
         contant_aan: z.boolean(),
         contant_limiet_cents: z.number().int().min(1, 'De contantgrens is meer dan € 0').max(300_000, 'Contant kan nooit vanaf € 3.000 (wet sinds 1 januari 2026)'),
+        /* Contract 1.4: echte stickers met een prijs uit het gewicht (migratie 20261103120000). */
+        gewicht_toegestaan: z.boolean().optional(),
     }).safeParse(input);
     if (!parsed.success) return { error: eersteFout(parsed.error) };
     const s = await alsAdmin();
@@ -190,6 +192,7 @@ export async function zetToonbankInstellingen(input: unknown): Promise<ActionRes
             toonbank_alcohol_toegestaan: parsed.data.alcohol_toegestaan,
             toonbank_contant_aan: parsed.data.contant_aan,
             toonbank_contant_limiet_cents: parsed.data.contant_limiet_cents,
+            ...(parsed.data.gewicht_toegestaan === undefined ? {} : { toonbank_gewicht_toegestaan: parsed.data.gewicht_toegestaan }),
         })
         .eq('organization_id', s.orgId)
         .select('organization_id');

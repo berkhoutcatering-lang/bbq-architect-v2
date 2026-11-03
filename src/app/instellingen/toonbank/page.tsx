@@ -51,6 +51,12 @@ export default async function ToonbankInstellingenPage() {
         const { data, error } = await supabase.from('toonbank_apparaten').select('id, mypos_terminal_id').eq('organization_id', orgId);
         if (!error) for (const r of (data ?? []) as { id: string; mypos_terminal_id: string | null }[]) mypos.set(r.id, r.mypos_terminal_id);
     }
+    // Contract 1.4: verkopen op gewicht. Apart, zodat de pagina werkt als de kolom er nog niet is.
+    let gewichtToegestaan: boolean | null = null;
+    if (orgId) {
+        const { data, error } = await supabase.from('winkel_instellingen').select('toonbank_gewicht_toegestaan').eq('organization_id', orgId).maybeSingle();
+        if (!error && data) gewichtToegestaan = (data as { toonbank_gewicht_toegestaan?: boolean }).toonbank_gewicht_toegestaan === true;
+    }
     // Alle MYPOS_EPOS-sleutels staan in Vercel en horen bij deze organisatie.
     const koppelingKlaar = myposConfig()?.organisatieId === orgId && orgId !== null;
 
@@ -75,6 +81,7 @@ export default async function ToonbankInstellingenPage() {
                 alcohol_toegestaan: !!inst.toonbank_alcohol_toegestaan,
                 contant_aan: inst.toonbank_contant_aan !== false,
                 contant_limiet_cents: Number(inst.toonbank_contant_limiet_cents ?? 300000),
+                gewicht_toegestaan: gewichtToegestaan,
             } : null}
         />
     );
