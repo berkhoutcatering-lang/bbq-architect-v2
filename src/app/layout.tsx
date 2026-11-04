@@ -1,5 +1,5 @@
 import './globals.css';
-import { DM_Sans, Outfit, IBM_Plex_Mono, Playfair_Display, Oswald } from 'next/font/google';
+import localFont from 'next/font/local';
 import React from 'react';
 import { cookies } from 'next/headers';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
@@ -23,46 +23,113 @@ import type { Viewport } from 'next';
  * daarna fonts.gstatic.com bevragen vóórdat er íets op het scherm kwam — een
  * geserialiseerde DNS + TLS + fetch vóór het eerste beeld.
  *
- * next/font haalt de bestanden bij de build op en serveert ze vanaf ons eigen
- * domein, met `display: swap` zodat tekst meteen leesbaar is. Elke familie
- * levert een CSS-variabele die globals.css gebruikt.
+ * De bestanden staan in public/fonts/web/, niet via next/font/google: dat
+ * haalde ze bij elke build bij Google op, en een los antwoord zonder
+ * bestandsextensie liet de build willekeurig stuklopen (next.js #99114). Zo
+ * hangt de build niet meer van Google af. Elke familie levert een CSS-variabele
+ * die globals.css gebruikt, met `display: swap` zodat tekst meteen leesbaar is.
+ *
+ * De familienaam moet gelijk blijven aan de echte naam: tientallen schermen en
+ * de menukaart-previews schrijven letterlijk `fontFamily: 'Outfit, sans-serif'`
+ * en vallen anders stil terug op een systeemletter. De build neemt die naam van
+ * de constante, dus `Outfit` en `Oswald` heten bewust met een hoofdletter — niet
+ * hernoemen. Namen met een spatie kunnen dat niet; daarvoor staat er een tweede
+ * `...Naam`-regel op hetzelfde bestand. Die alleen, zonder de eerste, kan niet:
+ * dan wijst de CSS-variabele naar een familie die niet bestaat.
+ *
+ * Per gewicht een eigen regel, ook als het hetzelfde variabele bestand is: zo
+ * blijven tussengewichten op het dichtstbijzijnde gewicht vallen, net als eerst.
  *
  * Inter stond er ook bij maar werd nergens gebruikt — die is vervallen.
  * De .ttf's in public/fonts/menukaart/ staan hier los van: die zijn voor de
  * menukaart-PDF's aan de serverkant (zie lib/menukaart/pdf-shared.ts).
  */
-const dmSans = DM_Sans({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+const dmSans = localFont({
+  src: [
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-dm-sans',
   display: 'swap',
 });
-const outfit = Outfit({
-  subsets: ['latin'],
-  weight: ['200', '300', '400', '500', '600', '700'],
+const dmSansNaam = localFont({
+  src: [
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/web/dm-sans.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-dm-sans-naam',
+  display: 'swap',
+  declarations: [{ prop: 'font-family', value: "'DM Sans'" }],
+});
+const Outfit = localFont({
+  src: [
+    { path: '../../public/fonts/web/outfit.woff2', weight: '200', style: 'normal' },
+    { path: '../../public/fonts/web/outfit.woff2', weight: '300', style: 'normal' },
+    { path: '../../public/fonts/web/outfit.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/outfit.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/outfit.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/web/outfit.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-outfit',
   display: 'swap',
 });
-const ibmPlexMono = IBM_Plex_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const ibmPlexMono = localFont({
+  src: [
+    { path: '../../public/fonts/web/ibm-plex-mono-400.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/ibm-plex-mono-500.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/ibm-plex-mono-600.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-ibm-plex-mono',
   display: 'swap',
 });
-const playfair = Playfair_Display({
-  subsets: ['latin'],
-  weight: ['400', '600', '700', '800'],
+const ibmPlexMonoNaam = localFont({
+  src: [
+    { path: '../../public/fonts/web/ibm-plex-mono-400.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/ibm-plex-mono-500.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/ibm-plex-mono-600.woff2', weight: '600', style: 'normal' },
+  ],
+  variable: '--font-ibm-plex-mono-naam',
+  display: 'swap',
+  declarations: [{ prop: 'font-family', value: "'IBM Plex Mono'" }],
+});
+const playfair = localFont({
+  src: [
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '700', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '800', style: 'normal' },
+  ],
   variable: '--font-playfair',
   display: 'swap',
+  adjustFontFallback: 'Times New Roman',
 });
-const oswald = Oswald({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600'],
+const playfairNaam = localFont({
+  src: [
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '600', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '700', style: 'normal' },
+    { path: '../../public/fonts/web/playfair-display.woff2', weight: '800', style: 'normal' },
+  ],
+  variable: '--font-playfair-naam',
+  display: 'swap',
+  declarations: [{ prop: 'font-family', value: "'Playfair Display'" }],
+});
+const Oswald = localFont({
+  src: [
+    { path: '../../public/fonts/web/oswald.woff2', weight: '300', style: 'normal' },
+    { path: '../../public/fonts/web/oswald.woff2', weight: '400', style: 'normal' },
+    { path: '../../public/fonts/web/oswald.woff2', weight: '500', style: 'normal' },
+    { path: '../../public/fonts/web/oswald.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-oswald',
   display: 'swap',
 });
 
-const fontVariables = [dmSans, outfit, ibmPlexMono, playfair, oswald]
+const fontVariables = [dmSans, dmSansNaam, Outfit, ibmPlexMono, ibmPlexMonoNaam, playfair, playfairNaam, Oswald]
   .map(f => f.variable)
   .join(' ');
 

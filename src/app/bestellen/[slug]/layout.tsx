@@ -6,23 +6,32 @@
  * pagina ze zou meesjouwen. IBM Plex Mono komt wél uit de root-layout — die
  * staat daar al als --font-ibm-plex-mono.
  *
- * next/font haalt de bestanden bij de build op en serveert ze vanaf ons eigen
- * domein, dus geen bezoek aan fonts.googleapis.com voordat er iets op het
- * scherm staat.
+ * De bestanden staan in public/fonts/web/ en komen van ons eigen domein, dus
+ * geen bezoek aan fonts.googleapis.com voordat er iets op het scherm staat. Zie
+ * app/layout.tsx voor waarom de hoofdletters en een regel per gewicht.
  */
 
-import { Cinzel, Archivo } from 'next/font/google';
+import localFont from 'next/font/local';
 
-const cinzel = Cinzel({
-    subsets: ['latin'],
-    weight: ['400', '500', '600', '700'],
+const Cinzel = localFont({
+    src: [
+        { path: '../../../../public/fonts/web/cinzel.woff2', weight: '400', style: 'normal' },
+        { path: '../../../../public/fonts/web/cinzel.woff2', weight: '500', style: 'normal' },
+        { path: '../../../../public/fonts/web/cinzel.woff2', weight: '600', style: 'normal' },
+        { path: '../../../../public/fonts/web/cinzel.woff2', weight: '700', style: 'normal' },
+    ],
     variable: '--font-cinzel',
     display: 'swap',
+    adjustFontFallback: 'Times New Roman',
 });
 
-const archivo = Archivo({
-    subsets: ['latin'],
-    weight: ['400', '500', '600', '700'],
+const Archivo = localFont({
+    src: [
+        { path: '../../../../public/fonts/web/archivo.woff2', weight: '400', style: 'normal' },
+        { path: '../../../../public/fonts/web/archivo.woff2', weight: '500', style: 'normal' },
+        { path: '../../../../public/fonts/web/archivo.woff2', weight: '600', style: 'normal' },
+        { path: '../../../../public/fonts/web/archivo.woff2', weight: '700', style: 'normal' },
+    ],
     variable: '--font-archivo',
     display: 'swap',
 });
@@ -32,5 +41,5 @@ export const metadata = {
 };
 
 export default function BestellenLayout({ children }: { children: React.ReactNode }) {
-    return <div className={`${cinzel.variable} ${archivo.variable}`}>{children}</div>;
+    return <div className={`${Cinzel.variable} ${Archivo.variable}`}>{children}</div>;
 }
