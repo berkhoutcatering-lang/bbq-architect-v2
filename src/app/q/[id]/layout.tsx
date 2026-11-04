@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 
 /**
@@ -10,22 +10,31 @@ import type { ReactNode } from 'react';
  * vóórdat de klant iets van de offerte ziet. Juist op deze pagina — de enige
  * die je klanten te zien krijgen — telt dat eerste beeld het zwaarst.
  *
- * next/font haalt de bestanden bij de build op en serveert ze van ons eigen
- * domein. portal.css gebruikt nu de variabelen die hieronder gezet worden.
+ * De bestanden staan in public/fonts/web/ en komen van ons eigen domein.
+ * portal.css gebruikt de variabelen die hieronder gezet worden. Zie
+ * app/layout.tsx voor waarom de hoofdletter en een regel per gewicht.
  */
-const geist = Geist({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+const Geist = localFont({
+  src: [
+    { path: '../../../../public/fonts/web/geist.woff2', weight: '300', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist.woff2', weight: '400', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist.woff2', weight: '500', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist.woff2', weight: '600', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist.woff2', weight: '700', style: 'normal' },
+  ],
   variable: '--font-geist',
   display: 'swap',
 });
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
+const geistMono = localFont({
+  src: [
+    { path: '../../../../public/fonts/web/geist-mono.woff2', weight: '400', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist-mono.woff2', weight: '500', style: 'normal' },
+    { path: '../../../../public/fonts/web/geist-mono.woff2', weight: '600', style: 'normal' },
+  ],
   variable: '--font-geist-mono',
   display: 'swap',
 });
 
 export default function QuotePortalLayout({ children }: { children: ReactNode }) {
-  return <div className={geist.variable + ' ' + geistMono.variable}>{children}</div>;
+  return <div className={Geist.variable + ' ' + geistMono.variable}>{children}</div>;
 }
