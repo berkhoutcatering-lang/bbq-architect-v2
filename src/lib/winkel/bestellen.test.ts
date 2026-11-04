@@ -5,7 +5,7 @@
  * je kunt geen 8 blikjes bestellen.
  */
 import { describe, expect, it } from 'vitest';
-import { bestelVoorstel, besteleenheidLabel, type BestelProduct } from './bestellen';
+import { handmatigeRegel, bestelVoorstel, besteleenheidLabel, type BestelProduct } from './bestellen';
 
 const bier = (over: Partial<BestelProduct> = {}): BestelProduct => ({
     id: 'p-bier', naam: 'Hertog Jan blik', eenheid: 'stuk', voorraad: 9, voorraad_bezet: 0,
@@ -68,5 +68,24 @@ describe('label', () => {
         [2, 12, null, '2× 12'],
     ] as const)('%s × %s %s → %s', (n, g, naam, uit) => {
         expect(besteleenheidLabel(n, g, naam, g === 4000 ? 'gram' : 'stuk')).toBe(uit);
+    });
+});
+
+describe('handmatigeRegel', () => {
+    const p = { id: 'x', naam: 'Achel Tripel', eenheid: 'stuk' as const, voorraad: null, minimum: null, par_niveau: null, bestel_hoeveelheid: 24, bestel_eenheid_naam: 'krat', bestel_prijs_cents: 2400 };
+
+    it('werkt ook als er nog niet geteld is, afgerond op hele besteleenheden', () => {
+        const r = handmatigeRegel(p, 30);
+        expect(r.besteld).toBe(48);
+        expect(r.eenheden).toBe(2);
+        expect(r.eenheid_label).toBe('2 kratten (24)');
+        expect(r.prijs_per_eenheid_eur).toBe(1);
+    });
+
+    it('zonder besteleenheid is het aantal het aantal', () => {
+        const r = handmatigeRegel({ ...p, bestel_hoeveelheid: null, bestel_prijs_cents: null }, 7);
+        expect(r.besteld).toBe(7);
+        expect(r.zonder_besteleenheid).toBe(true);
+        expect(r.prijs_per_eenheid_eur).toBeNull();
     });
 });

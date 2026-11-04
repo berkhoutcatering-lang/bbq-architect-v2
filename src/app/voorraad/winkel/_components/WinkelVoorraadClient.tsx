@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, Soup, TriangleAlert, Wine } from 'lucide-react';
+import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, ShoppingCart, Soup, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import Button from '@/components/Button';
@@ -31,9 +31,9 @@ import {
     hoeveelheidKort, pakkettenTeMaken, voorraadstatus, waardeCenten, type Afwijkingsreden, type Mutatietype, type Reden, type Voorraadstatus,
 } from '@/lib/winkel/voorraad';
 import { ALLES, assortimentKeuzes, assortimentLijst } from '@/lib/winkel/assortiment';
-import type { Afdeling, ProductCijfers, StukRij, Urgentie } from '@/lib/winkel/afdelingen';
+import { urgentie, type Afdeling, type ProductCijfers, type StukRij, type Urgentie } from '@/lib/winkel/afdelingen';
 import type { PartijRij } from '@/lib/winkel/winkelOverzicht';
-import { zetInAssortiment, zetProductOpAfdeling } from '@/app/winkel/actions';
+import { zetHandmatigeBestelling, zetInAssortiment, zetProductOpAfdeling, zetTht } from '@/app/winkel/actions';
 import ToevoegenLade from './ToevoegenLade';
 import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetBestelgegevens, type LogboekRegel } from '../actions';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
@@ -52,6 +52,7 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     bestel_prijs_cents: number | null;
     leverancier_id: number | null;
     winkelprijs_incl_cents: number | null;
+    bestel_handmatig: number | null;
     foto: string | null;
     afdeling_id: string | null;
     cijfers: ProductCijfers;
@@ -62,6 +63,10 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
 
 export interface WinkelData {
     afdelingen: Afdeling[];
+    /** JJJJ-MM-DD in Nederlandse tijd. */
+    vandaag: string;
+    /** Regels op de winkelbestellijst. */
+    opLijst: number;
     producten: WinkelProductRij[];
     slots: Slot[];
     artikelen: { id: string; naam: string; slug: string; actief: boolean; telt: string }[];
@@ -96,15 +101,18 @@ const TYPE_ICOON: Record<string, typeof Beer> = {
     marmelade: Soup, doos: Gift, verpakking: Package, kaas: Salad, zuur: Carrot, overig: Package,
 };
 
-type Filter = 'alles' | 'aandacht' | 'niet_geteld' | 'pakketten';
+type Filter = 'alles' | 'aandacht' | 'niet_geteld' | 'datum' | 'pakketten';
 
-export default function WinkelVoorraadClient({ data, openProductId, openAfdelingId }: { data: WinkelData; openProductId: string | null; openAfdelingId: string | null }) {
+/** Bijna of al over de datum: de THT van het product, of een bakje. */
+const opDatum = (p: WinkelProductRij, vandaag: string) => (p.tht != null && urgentie(p.tht, vandaag) !== 'later') || p.stuks.some((s) => s.urgentie !== 'later');
+
+export default function WinkelVoorraadClient({ data, openProductId, openAfdelingId, beginFilter }: { data: WinkelData; openProductId: string | null; openAfdelingId: string | null; beginFilter: Filter }) {
     const router = useRouter();
     const stil = useReducedMotion();
     const [openId, setOpenId] = useState<string | null>(openProductId);
     const [keuze, setKeuze] = useState<string>(openAfdelingId ?? ALLES);
     const [zoek, setZoek] = useState('');
-    const [filter, setFilter] = useState<Filter>('alles');
+    const [filter, setFilter] = useState<Filter>(beginFilter);
     const [toevoegen, setToevoegen] = useState(false);
     useEffect(() => { setOpenId(openProductId); }, [openProductId]);
     useEffect(() => { if (openAfdelingId) setKeuze(openAfdelingId); }, [openAfdelingId]);
@@ -129,14 +137,16 @@ export default function WinkelVoorraadClient({ data, openProductId, openAfdeling
             zonderPrijs: bij.filter((r) => r.waarde == null).length,
             geteld: bij.length,
             aandacht: inAssortiment.filter((r) => r.status === 'laag' || r.status === 'op' || r.status === 'tekort').length,
+            datum: inAssortiment.filter((r) => opDatum(r.p, data.vandaag)).length,
         };
-    }, [rijen]);
+    }, [rijen, data.vandaag]);
     const nietsGeteld = totaal.geteld === 0;
 
     const keuzes = useMemo(() => assortimentKeuzes(data.afdelingen, rijen), [data.afdelingen, rijen]);
     const zichtbaar = useMemo(() => assortimentLijst(rijen, keuze, zoek, afdelingIds).filter((r) => filter === 'alles' || filter === 'pakketten'
         || (filter === 'aandacht' && (r.status === 'laag' || r.status === 'op' || r.status === 'tekort'))
-        || (filter === 'niet_geteld' && r.status === 'niet_bijgehouden')), [rijen, keuze, zoek, afdelingIds, filter]);
+        || (filter === 'niet_geteld' && r.status === 'niet_bijgehouden')
+        || (filter === 'datum' && opDatum(r.p, data.vandaag))), [rijen, keuze, zoek, afdelingIds, filter, data.vandaag]);
 
     const pakketten = useMemo(() => data.artikelen
         .filter((a) => a.actief && data.slots.some((s) => s.artikel_id === a.id))
@@ -165,6 +175,7 @@ export default function WinkelVoorraadClient({ data, openProductId, openAfdeling
                 </div>
                 <div className="wk-knoppen">
                     <MeerMenu />
+                    {data.opLijst > 0 && <Link href="/winkel/bestellijst" className="btn btn-ghost" style={{ textDecoration: 'none' }}><ShoppingCart size={14} /> Bestellijst ({data.opLijst})</Link>}
                     <Link href="/voorraad/winkel/tellen" className={nietsGeteld ? 'btn btn-brand' : 'btn btn-ghost'} style={{ textDecoration: 'none' }}><ClipboardList size={14} /> Tellen</Link>
                     <button type="button" className={nietsGeteld ? 'btn btn-ghost' : 'btn btn-brand'} onClick={() => setToevoegen(true)}><Plus size={14} /> Product toevoegen</button>
                 </div>
@@ -179,12 +190,13 @@ export default function WinkelVoorraadClient({ data, openProductId, openAfdeling
                             <Search size={15} />
                             <input className="kf-input" type="search" aria-label="Zoek een product" value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek een product" />
                         </label>
-                        {!nietsGeteld && (
+                        {(!nietsGeteld || totaal.datum > 0) && (
                             <select className="kf-input" aria-label="Toon" style={{ width: 'auto', flex: '0 0 auto' }} value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
                                 <option value="alles">Alle producten</option>
-                                <option value="aandacht">Bijna op ({totaal.aandacht})</option>
-                                <option value="niet_geteld">Niet geteld ({totaal.aantal - totaal.geteld})</option>
-                                {pakketten.length > 0 && <option value="pakketten">Pakketten nog te maken</option>}
+                                {totaal.datum > 0 && <option value="datum">Bijna over de datum ({totaal.datum})</option>}
+                                {!nietsGeteld && <option value="aandacht">Bijna op ({totaal.aandacht})</option>}
+                                {!nietsGeteld && <option value="niet_geteld">Niet geteld ({totaal.aantal - totaal.geteld})</option>}
+                                {pakketten.length > 0 && !nietsGeteld && <option value="pakketten">Pakketten nog te maken</option>}
                             </select>
                         )}
                     </div>
@@ -226,7 +238,7 @@ export default function WinkelVoorraadClient({ data, openProductId, openAfdeling
                                         <span className="wk-getal" style={{ fontSize: 12 }}>Ligt er</span>
                                         <span className="wk-getal wk-alleen-breed" style={{ fontSize: 12 }} title="Verkocht in de laatste 4 weken">Verkocht</span>
                                     </div>
-                                    {zichtbaar.map((r) => <ProductRegel key={r.p.id} p={r.p} b={r.b} status={r.status} afdeling={keuze === ALLES ? afdelingNaam(r.p.afdeling_id) : null} onClick={() => setOpenId(r.p.id)} />)}
+                                    {zichtbaar.map((r) => <ProductRegel key={r.p.id} p={r.p} b={r.b} status={r.status} afdeling={keuze === ALLES ? afdelingNaam(r.p.afdeling_id) : null} vandaag={data.vandaag} onClick={() => setOpenId(r.p.id)} />)}
                                 </div>
                             )}
                         </>
@@ -257,6 +269,7 @@ function MeerMenu() {
             <button type="button" className="btn btn-ghost" aria-haspopup="menu" aria-expanded={open} aria-label="Meer" onClick={() => setOpen((x) => !x)}><MoreHorizontal size={16} /></button>
             {open && (
                 <div className="wk-menu-paneel" role="menu">
+                    <Link href="/voorraad/winkel/bestellen" role="menuitem"><Settings2 size={14} /> Bestelinstellingen</Link>
                     <Link href="/voorraad/winkel/vloer" role="menuitem"><LayoutGrid size={14} /> Afdelingen indelen</Link>
                     <Link href="/voorraad/ontvangst" role="menuitem"><PackagePlus size={14} /> Ontvangst</Link>
                     <Link href="/voorraad/afwijking" role="menuitem"><Minus size={14} /> Afwijking</Link>
@@ -287,11 +300,14 @@ function prijsTekst(p: WinkelProductRij): string {
 }
 
 /** De ene regel onder de naam: alleen wat er nu toe doet. */
-function ProductRegel({ p, b, status, afdeling, onClick }: { p: WinkelProductRij; b: number | null; status: Voorraadstatus; afdeling: string | null; onClick: () => void }) {
+function ProductRegel({ p, b, status, afdeling, vandaag, onClick }: { p: WinkelProductRij; b: number | null; status: Voorraadstatus; afdeling: string | null; vandaag: string; onClick: () => void }) {
     const Icoon = TYPE_ICOON[p.type] ?? Package;
     const urgent = p.stuks.filter((s) => s.urgentie !== 'later');
-    const over = urgent.some((s) => s.urgentie === 'over');
-    const melding = urgent.length ? `${urgent.length} ${urgent.length === 1 ? 'stuk' : 'stuks'} ${over ? 'over de datum' : `THT ${thtTekst(urgent[0]!.tht.slice(0, 10))}`}` : null;
+    const thtUrgentie = p.tht ? urgentie(p.tht, vandaag) : 'later';
+    const over = urgent.some((s) => s.urgentie === 'over') || thtUrgentie === 'over';
+    const melding = urgent.length ? `${urgent.length} ${urgent.length === 1 ? 'stuk' : 'stuks'} ${over ? 'over de datum' : `THT ${thtTekst(urgent[0]!.tht.slice(0, 10))}`}`
+        : thtUrgentie === 'over' ? `Over de datum (THT ${thtTekst(p.tht)})`
+        : thtUrgentie !== 'later' ? `THT ${thtTekst(p.tht)}` : null;
     const kleur = p.voorraad != null && status !== 'ok' ? STATUS_KLEUR[status] : undefined;
     return (
         <button type="button" className="wk-rij wk-product" onClick={onClick}>
@@ -365,6 +381,17 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     const keukenItem = data.keuken.find((k) => k.id === keukenId) ?? null;
     const afdeling = data.afdelingen.find((a) => a.id === p.afdeling_id) ?? null;
     const kg = p.artikel?.verkoop_per === 'kg';
+    const [thtDatum, setThtDatum] = useState(p.tht ?? '');
+    const [bestelAantal, setBestelAantal] = useState(() => {
+        if (p.bestel_handmatig != null) return String(p.bestel_handmatig).replace('.', ',');
+        const tekort = p.par_niveau != null ? p.par_niveau - (p.voorraad ?? 0) : null;
+        return tekort != null && tekort > 0 ? String(tekort).replace('.', ',') : '';
+    });
+    async function zetOpLijst() {
+        const n = leesGetal(bestelAantal);
+        if (n == null || Number.isNaN(n) || n <= 0) { toast(`Vul in hoeveel (${eenheid}).`, 'error'); return; }
+        await doe(() => zetHandmatigeBestelling({ productId: p.id, aantal: n }), `${p.naam} staat op de bestellijst.`);
+    }
 
     function geldigAantal(): number | null {
         const n = leesGetal(aantal);
@@ -411,7 +438,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
         { k: 'overboeken', label: 'Makerij', icon: ArrowLeftRight, kan: p.voorraad != null },
         { k: 'tellen', label: 'Tellen', icon: ClipboardList, kan: true },
         { k: 'afwijking', label: 'Afwijking', icon: TriangleAlert, kan: p.voorraad != null },
-        { k: 'instellen', label: 'Bestellen', icon: Settings2, kan: true },
+        { k: 'instellen', label: 'Bestelgegevens', icon: Settings2, kan: true },
     ];
 
     return (
@@ -432,8 +459,25 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                         : 'nog niet verkocht in de laatste 4 weken'}
                     {p.cijfers.laatsteVerkoop && ` · laatst ${thtTekst(p.cijfers.laatsteVerkoop.slice(0, 10))}`}
                     {kg && p.artikel?.sticker_plu != null && ` · stickernummer ${p.artikel.sticker_plu}`}
-                    {p.tht && ` · THT ${thtTekst(p.tht)}`}
                     {p.artikel && !p.artikel.opToonbank && ' · niet op de toonbank'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: 12 }}>
+                    <div className="kf-field">
+                        <label className="kf-label" htmlFor="winkel-tht">THT</label>
+                        <input id="winkel-tht" className="kf-input" type="date" value={thtDatum} disabled={bezig} onChange={(e) => setThtDatum(e.target.value)}
+                            onBlur={() => { if (thtDatum !== (p.tht ?? '')) void doe(() => zetTht({ productId: p.id, tht: thtDatum || null }), thtDatum ? 'THT bewaard' : 'THT gewist'); }} />
+                    </div>
+                    <div className="kf-field">
+                        <label className="kf-label" htmlFor="winkel-bestel">Bestellen ({eenheid})</label>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                            <input id="winkel-bestel" className="kf-input" inputMode="decimal" value={bestelAantal} onChange={(e) => setBestelAantal(e.target.value)} placeholder="Hoeveel" />
+                            <button type="button" className="btn btn-brand" disabled={bezig} onClick={() => void zetOpLijst()}><ShoppingCart size={14} /> {p.bestel_handmatig != null ? 'Wijzig' : 'Bestellen'}</button>
+                        </div>
+                        {p.bestel_handmatig != null ? (
+                            <div className="kf-help">Op de bestellijst: {hoeveelheidKort(p.bestel_handmatig, p.eenheid)}. <button type="button" disabled={bezig} onClick={() => { setBestelAantal(''); void doe(() => zetHandmatigeBestelling({ productId: p.id, aantal: null }), 'Van de bestellijst gehaald'); }} style={{ background: 'none', border: 0, padding: 0, color: 'inherit', font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>Van de lijst halen</button></div>
+                        ) : p.leverancier_id == null && <div className="kf-help">Nog geen leverancier: kies die onder Bestelgegevens.</div>}
+                    </div>
                 </div>
 
                 {p.stuks.length > 0 && (

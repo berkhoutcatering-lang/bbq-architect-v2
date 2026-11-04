@@ -2,6 +2,7 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { afdelingVan, datumNL, productCijfers, regelsPerProduct, urgentie } from '@/lib/winkel/afdelingen';
 import { maakSupabaseStore } from '@/lib/winkel/supabaseStore';
 import { laadWinkelOverzicht } from '@/lib/winkel/winkelOverzicht';
+import { laadWinkelBestelRegels } from '@/lib/dal/winkelBestelling';
 import type { VrijProduct } from '@/lib/winkel/vrij';
 import WinkelVoorraadClient, { type WinkelData } from './_components/WinkelVoorraadClient';
 
@@ -36,8 +37,8 @@ async function laadVrijOfLeeg(supabase: Awaited<ReturnType<typeof createServerSu
     }
 }
 
-export default async function WinkelVoorraadPage({ searchParams }: { searchParams: Promise<{ product?: string; afdeling?: string }> }) {
-    const { product, afdeling } = await searchParams;
+export default async function WinkelVoorraadPage({ searchParams }: { searchParams: Promise<{ product?: string; afdeling?: string; toon?: string }> }) {
+    const { product, afdeling, toon } = await searchParams;
     const supabase = await createServerSupabase();
     const nu = new Date();
 
@@ -49,9 +50,9 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         : { data: null };
     const orgId = (lid?.organization_id as string | undefined) ?? null;
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o, bestelRegels] = await Promise.all([
         supabase.from('winkel_producten')
-            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, leverancier_id')
+            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id')
             .order('type').order('naam'),
         supabase.from('winkel_artikel_slots')
             .select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven')
@@ -61,6 +62,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         supabase.from('leveranciers').select('id, naam').is('archived_at', null).order('naam'),
         orgId ? laadVrijOfLeeg(supabase, orgId) : Promise.resolve([] as VrijProduct[]),
         laadWinkelOverzicht(supabase, nu),
+        orgId ? laadWinkelBestelRegels(supabase, orgId).catch(() => []) : Promise.resolve([]),
     ]);
 
     const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
@@ -72,6 +74,8 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
 
     const data: WinkelData = {
         afdelingen: o.afdelingen,
+        vandaag,
+        opLijst: bestelRegels.length,
         producten: (producten ?? []).map((p) => {
             const id = p.id as string;
             const art = artikelVan.get(id) ?? null;
@@ -99,6 +103,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
                 bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
                 bestel_prijs_cents: (p.bestel_prijs_cents as number | null) ?? null,
                 leverancier_id: (p.leverancier_id as number | null) ?? null,
+                bestel_handmatig: p.bestel_handmatig == null ? null : Number(p.bestel_handmatig),
                 foto: fotoVan.get(id) ?? (p.foto_url as string | null) ?? null,
                 afdeling_id: plekVan.get(id) ?? null,
                 cijfers: productCijfers(perProduct.get(id) ?? [], nu),
@@ -113,5 +118,5 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         leveranciers: (leveranciers ?? []).map((l) => ({ id: Number(l.id), naam: l.naam as string })),
     };
 
-    return <WinkelVoorraadClient data={data} openProductId={product ?? null} openAfdelingId={afdeling ?? null} />;
+    return <WinkelVoorraadClient data={data} openProductId={product ?? null} openAfdelingId={afdeling ?? null} beginFilter={toon === 'datum' ? 'datum' : 'alles'} />;
 }

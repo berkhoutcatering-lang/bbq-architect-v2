@@ -15,6 +15,7 @@ import { useState, useTransition } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { assignSupplierAction } from '../actions';
+import { koppelAanLeverancier } from '@/app/winkel/actions';
 import type { BestelvoorstelItem } from '@/lib/dal/bestelvoorstel';
 import type { UnmatchedIngredient } from '@/lib/dal/inventoryDemand';
 
@@ -64,8 +65,9 @@ export default function MissingSupplierBanner({
                 {unboundItems.map(function (it) {
                     return (
                         <UnboundRow
-                            key={'inv-' + it.inventory_id}
+                            key={it.winkel_product_id ? 'w-' + it.winkel_product_id : 'inv-' + it.inventory_id}
                             inventoryId={it.inventory_id}
+                            winkelProductId={it.winkel_product_id}
                             naam={it.naam}
                             qty={it.qty}
                             unit={it.unit}
@@ -91,7 +93,8 @@ export default function MissingSupplierBanner({
 }
 
 interface UnboundRowProps {
-    inventoryId: number;
+    inventoryId: number | null;
+    winkelProductId: string | null;
     naam: string;
     qty: number;
     unit: string;
@@ -100,7 +103,7 @@ interface UnboundRowProps {
     onAssigned?: () => void;
 }
 
-function UnboundRow({ inventoryId, naam, qty, unit, estTotal, leveranciers, onAssigned }: UnboundRowProps) {
+function UnboundRow({ inventoryId, winkelProductId, naam, qty, unit, estTotal, leveranciers, onAssigned }: UnboundRowProps) {
     const [picked, setPicked] = useState<number | null>(null);
     const [done, setDone] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -113,7 +116,9 @@ function UnboundRow({ inventoryId, naam, qty, unit, estTotal, leveranciers, onAs
         setPicked(id);
         setError(null);
         startTransition(async function () {
-            const res = await assignSupplierAction({ inventory_id: inventoryId, leverancier_id: id });
+            const res = winkelProductId
+                ? await koppelAanLeverancier({ productIds: [winkelProductId], leverancierId: id }).then((r) => ('error' in r ? { ok: false as const, error: r.error } : { ok: true as const }))
+                : await assignSupplierAction({ inventory_id: inventoryId, leverancier_id: id });
             if (res.ok) {
                 setDone(true);
                 onAssigned?.();
@@ -202,7 +207,7 @@ function UnmatchedRow({ naam, qty, unit }: { naam: string; qty: number; unit: st
 
 function fmtQty(n: number, unit: string): string {
     const v = Number(n) || 0;
-    if (v >= 100) return Math.round(v) + ' ' + unit;
+    if (Number.isInteger(v) || v >= 100) return Math.round(v) + ' ' + unit;
     if (v >= 10) return v.toFixed(1) + ' ' + unit;
     return v.toFixed(2) + ' ' + unit;
 }

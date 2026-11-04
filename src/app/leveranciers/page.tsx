@@ -442,6 +442,19 @@ function LeverancierCard({ lev, onArchive, onRefresh, onReview }: { lev: Leveran
                     <FileText size={13} /> PDF
                 </Link>
                 <Link
+                    href={`/leveranciers/${lev.id}/winkel`}
+                    title="Welke winkelproducten deze leverancier levert"
+                    style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '8px 12px', borderRadius: 8,
+                        background: 'transparent', color: 'var(--text)',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                        textDecoration: 'none', fontSize: 12, fontWeight: 600,
+                    }}
+                >
+                    <Store size={13} /> Winkelproducten
+                </Link>
+                <Link
                     href={`/leveranciers/${lev.id}/producten`}
                     title="Gesynchroniseerde producten + prijzen per eenheid"
                     style={{

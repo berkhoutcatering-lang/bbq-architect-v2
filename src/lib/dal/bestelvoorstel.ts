@@ -62,6 +62,10 @@ function netPak(size: number | null, unit: string | null): string {
   return `${String(Math.round(q * 1000) / 1000).replace('.', ',')} ${u}`;
 }
 
+export type BestelPlek = 'keuken' | 'winkel';
+/** De sleutel (concept_inkoop_orders.vakje) van een winkelbestelling: los van de keuken, zelfde leverancier. */
+export const WINKEL_BESTELLING = 'winkel-bestelling';
+
 export interface BestelvoorstelItem {
   /** Keukenregel: het voorraad-item. Winkelregel: null (zie winkel_product_id). */
   inventory_id: number | null;
@@ -191,9 +195,12 @@ export async function buildBestelvoorstel(
   supabase: SupabaseClient,
   orgId: string,
   windowDays: number = 14,
-  opts: { persistConcepts?: boolean; winkel?: number | null; vakje?: VakjeFilter | null } = {},
+  opts: { persistConcepts?: boolean; winkel?: number | null; vakje?: VakjeFilter | null; plek?: BestelPlek } = {},
 ): Promise<BestelvoorstelSummary> {
   const persistConcepts = opts.persistConcepts !== false;
+  /* Keuken en winkel zijn twee lijsten met elk een eigen concept-bestelling:
+     een winkelbestelling mag nooit keukenregels meesturen. Zonder plek: alles. */
+  const plek = opts.plek ?? null;
   /* Vakje (plan §4.5): alleen de vraag van dit vakje, eigen concept-bestellingen
      per leverancier, en zonder de handmatige overrides van de gewone lijst —
      "bestel alleen dit" is precies wat het vakje nodig heeft. */
@@ -206,7 +213,7 @@ export async function buildBestelvoorstel(
     .from('leveranciers').select('id, naam, voorkeur_rang')
     .eq('organization_id', orgId).not('voorkeur_rang', 'is', null).is('archived_at', null)
     .order('voorkeur_rang', { ascending: true });
-  const winkelKeuzes: WinkelKeuze[] = (rangRows || []).map(function (l: any) {
+  const winkelKeuzes: WinkelKeuze[] = plek === 'winkel' ? [] : (rangRows || []).map(function (l: any) {
     return { id: l.id as number, naam: l.naam as string, rang: Number(l.voorkeur_rang) };
   });
   const winkel: WinkelKeuze | null = opts.winkel != null
@@ -215,9 +222,10 @@ export async function buildBestelvoorstel(
 
   // 1. Demand-snapshot (bevat al derving + par + in-flight in de shortfall).
   const demand = await getInventoryWithDemand(supabase, orgId, windowDays, { vakje });
-  const shortItems = demand.rows.filter(function (r) { return r.shortfall > 0; });
+  const shortItems = plek === 'winkel' ? [] : demand.rows.filter(function (r) { return r.shortfall > 0; });
+  const unmatched = plek === 'winkel' ? [] : demand.unmatched;
   /* Winkelproducten onder hun minimum — niet in een webshop-vakje ("bestel alleen dit"). */
-  const winkelRegels: WinkelBestelRegel[] = vakje ? [] : await laadWinkelBestelRegels(supabase, orgId).catch(function () { return []; });
+  const winkelRegels: WinkelBestelRegel[] = vakje || plek === 'keuken' ? [] : await laadWinkelBestelRegels(supabase, orgId).catch(function () { return []; });
   const demandMeta = {
     events_in_window_count: demand.events_in_window?.length ?? 0,
     has_menu_items: demand.rows.some(function (r) { return r.reserved_qty > 0; }),
@@ -231,7 +239,7 @@ export async function buildBestelvoorstel(
     ? { sleutel: vakje.sleutel, label: vakje.label, datum: vakje.datum, buiten_venster: vakje.datum > windowEndIso }
     : null;
 
-  const blocking = buildBlocking(demand.unmatched);
+  const blocking = buildBlocking(unmatched);
 
   if (shortItems.length === 0 && winkelRegels.length === 0) {
     return {
@@ -240,8 +248,8 @@ export async function buildBestelvoorstel(
       winkel_keuzes: winkelKeuzes,
       niet_bij_winkel: [],
       totals: { items_total: 0, leveranciers_count: 0, estimated_total_eur: 0, window_days: windowDays },
-      has_unknown_supplier: demand.unmatched.length > 0,
-      unmatched_ingredients: demand.unmatched,
+      has_unknown_supplier: unmatched.length > 0,
+      unmatched_ingredients: unmatched,
       blocking,
       window: { start: windowStartIso, end: windowEndIso },
       demand_meta: demandMeta,
@@ -588,7 +596,7 @@ export async function buildBestelvoorstel(
       try {
         bucket.concept_order_id = await ensureConceptOrder(
           supabase, orgId, bucket.leverancier_id, windowStartIso, windowEndIso,
-          vakje ? { sleutel: vakje.sleutel, label: vakje.label } : null,
+          vakje ? { sleutel: vakje.sleutel, label: vakje.label } : plek === 'winkel' ? { sleutel: WINKEL_BESTELLING, label: 'Winkel' } : null,
         );
       } catch (e) {
         console.warn('[bestelvoorstel] ensureConceptOrder failed for', bucket.leverancier_naam, e);
@@ -610,8 +618,8 @@ export async function buildBestelvoorstel(
       estimated_total_eur: Math.round(totalEur * 100) / 100,
       window_days: windowDays,
     },
-    has_unknown_supplier: list.some(function (l) { return l.leverancier_id == null; }) || demand.unmatched.length > 0,
-    unmatched_ingredients: demand.unmatched,
+    has_unknown_supplier: list.some(function (l) { return l.leverancier_id == null; }) || unmatched.length > 0,
+    unmatched_ingredients: unmatched,
     blocking,
     window: { start: windowStartIso, end: windowEndIso },
     demand_meta: demandMeta,

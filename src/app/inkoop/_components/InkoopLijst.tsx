@@ -45,6 +45,7 @@ import {
     Link2,
     Filter,
     CalendarDays,
+    Check,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -57,6 +58,7 @@ import { formatEur } from '@/lib/format';
 import {
     updateOverrideAction,
     sendOrderToSupplierAction,
+    markeerBesteldAction,
     linkSupplierProductAction,
 } from '../actions';
 import type {
@@ -72,6 +74,7 @@ interface InkoopLijstProps {
     has_menu_items: boolean;
     /** "Mee met de volgende bestelling" vanuit een webshop-vakje: markeer de regels van dat vakje. */
     letOp?: { label: string; datum: string; eventIds: number[] } | null;
+    plek: 'keuken' | 'winkel';
 }
 
 export default function InkoopLijst(props: InkoopLijstProps) {
@@ -208,7 +211,14 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                 onAssigned={() => router.refresh()}
             />
 
-            {knownBuckets.length === 0 && unboundItems.length === 0
+            {knownBuckets.length === 0 && unboundItems.length === 0 && props.plek === 'winkel' && (
+                <div className="kf-empty">
+                    <p>Niets te bestellen voor de winkel. Zet een product op de lijst met Bestellen in de lade, of vul bij Bestelinstellingen een minimum in.</p>
+                    <Link href="/voorraad/winkel" className="btn btn-brand" style={{ textDecoration: 'none' }}>Naar Assortiment</Link>
+                </div>
+            )}
+
+            {knownBuckets.length === 0 && unboundItems.length === 0 && props.plek !== 'winkel'
                 ? (
                     <InkoopEmpty
                         eventsInWindow={props.events_count}
@@ -227,6 +237,7 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                         onPDF={() => setPdfPreviewFor(bucket)}
                         onAfterSend={() => router.refresh()}
                         letOpIds={letOpIds}
+                        plek={props.plek}
                     />
                 );
             })}
@@ -513,10 +524,19 @@ interface SupplierCardProps {
     onAfterSend: () => void;
     /** Event-id's (of pseudo-id's van een webshop-dag) waarvan de regels gemarkeerd worden. */
     letOpIds?: Set<number>;
+    plek: 'keuken' | 'winkel';
 }
 
-function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, letOpIds }: SupplierCardProps) {
+function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, letOpIds, plek }: SupplierCardProps) {
     const isManual = !bucket.leverancier_email;
+    const showToast = useToast();
+    const [besteldBezig, startBesteld] = useTransition();
+    const markeerBesteld = () => startBesteld(async function () {
+        const res = await markeerBesteldAction({ concept_order_id: bucket.concept_order_id });
+        if (!res.ok) { showToast(res.error, 'error'); return; }
+        showToast(`Besteld bij ${bucket.leverancier_naam}. Het staat nu onder Onderweg.`, 'success');
+        onAfterSend();
+    });
     const earliestEventDate = useMemo(function () {
         const dates = bucket.items.flatMap(function (it) { return it.events.map(function (e) { return e.event_date; }); });
         if (dates.length === 0) return null;
@@ -684,6 +704,12 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, le
                 >
                     <FileText size={14} /> PDF preview
                 </button>
+                {plek === 'winkel' && (
+                    <button type="button" className={isManual ? 'btn btn-brand btn-sm' : 'btn btn-ghost btn-sm'} style={isManual ? { order: 2 } : undefined}
+                        disabled={besteldBezig || !bucket.concept_order_id} onClick={markeerBesteld}>
+                        <Check size={14} /> Ik heb dit besteld
+                    </button>
+                )}
                 {isManual ? (
                     <>
                         <button type="button" className="btn btn-ghost btn-sm" onClick={onPDF}>
@@ -692,7 +718,7 @@ function SupplierCard({ bucket, leveranciers, applyPatch, onPDF, onAfterSend, le
                         {bucket.leverancier_phone && (
                             <a
                                 href={`tel:${bucket.leverancier_phone.replace(/[^+\d]/g, '')}`}
-                                className="btn btn-brand btn-sm"
+                                className={plek === 'winkel' ? 'btn btn-ghost btn-sm' : 'btn btn-brand btn-sm'}
                                 style={{ marginLeft: 'auto', textDecoration: 'none' }}
                             >
                                 <Phone size={14} /> Bel met lijst
@@ -737,8 +763,7 @@ function WinkelItemRow({ item, isLast }: { item: BestelvoorstelItem; isLast: boo
     return (
         <div style={{ padding: '12px 18px', borderBottom: isLast ? 'none' : '1px solid var(--border)', fontSize: 13 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', padding: '2px 7px', borderRadius: 999, background: 'rgba(196,163,90,.15)', color: 'var(--brand-gold, #c4a35a)' }}>winkel</span>
-                <span style={{ fontWeight: 600, flex: 1, minWidth: 140 }}>{item.naam}</span>
+                                <span style={{ fontWeight: 600, flex: 1, minWidth: 140 }}>{item.naam}</span>
                 <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{item.pack_label ?? fmtQty(item.qty, item.unit)}</span>
                 <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums', minWidth: 70, textAlign: 'right' }}>{item.price_unknown ? 'prijs ?' : formatEur(item.est_total_eur)}</span>
                 <button type="button" onClick={() => setWaarom(!waarom)} style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>waarom?</button>
@@ -1468,7 +1493,7 @@ function sugPerUnit(s: { per_kg: number | null; per_liter: number | null; per_pi
 }
 function fmtQty(n: number, unit: string): string {
     const v = Number(n) || 0;
-    if (v >= 100) return Math.round(v) + ' ' + unit;
+    if (Number.isInteger(v) || v >= 100) return Math.round(v) + ' ' + unit;
     if (v >= 10) return v.toFixed(1) + ' ' + unit;
     return v.toFixed(2) + ' ' + unit;
 }

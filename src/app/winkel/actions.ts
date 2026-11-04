@@ -45,6 +45,8 @@ const datum = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum als JJJJ-MM-DD');
 function ververs() {
     revalidatePath('/winkel');
     revalidatePath('/winkel/leveringen');
+    revalidatePath('/winkel/bestellijst');
+    revalidatePath('/voorraad/winkel/bestellen');
     revalidatePath('/voorraad/winkel');
     revalidatePath('/voorraad/winkel/vloer');
 }
@@ -214,6 +216,54 @@ export async function zetInAssortiment(input: unknown): Promise<ActionResult<{ a
     await evalueerWinkelMeldingen(s.orgId, [productId]);
     ververs();
     return { data: { artikelen: eigen.length } };
+}
+
+/* ── THT, bestellen en leveranciers ──────────────────────────────────────── */
+
+/** Eén datum per product: de eerstvolgende THT. Gewogen bakjes houden hun eigen datum. */
+export async function zetTht(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({ productId: uuid, tht: datum.nullable() }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+    const { error } = await s.supabase.from('winkel_producten').update({ tht: parsed.data.tht })
+        .eq('id', parsed.data.productId).eq('organization_id', s.orgId);
+    if (error) return { error: 'De THT kon niet bewaard worden.' };
+    ververs();
+    return { data: { ok: true } };
+}
+
+/** Zelf op de bestellijst zetten (of eraf, met null). Aantal in de eenheid van de voorraad. */
+export async function zetHandmatigeBestelling(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = z.object({ productId: uuid, aantal: z.number().positive('Vul in hoeveel').nullable() }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+    const { error } = await s.supabase.from('winkel_producten').update({ bestel_handmatig: parsed.data.aantal })
+        .eq('id', parsed.data.productId).eq('organization_id', s.orgId);
+    if (error) return { error: 'De bestelling kon niet bewaard worden.' };
+    ververs();
+    return { data: { ok: true } };
+}
+
+/** Meerdere producten tegelijk aan een leverancier koppelen, of los (leverancierId null). */
+export async function koppelAanLeverancier(input: unknown): Promise<ActionResult<{ aantal: number }>> {
+    const parsed = z.object({ productIds: z.array(uuid).min(1, 'Kies een product').max(500), leverancierId: z.number().int().positive().nullable() }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+    const { leverancierId, productIds } = parsed.data;
+    if (leverancierId != null) {
+        const { data: lev } = await s.supabase.from('leveranciers').select('id').eq('id', leverancierId).eq('organization_id', s.orgId).maybeSingle();
+        if (!lev) return { error: 'Deze leverancier bestaat niet (meer).' };
+    }
+    const { error } = await s.supabase.from('winkel_producten').update({ leverancier_id: leverancierId })
+        .in('id', productIds).eq('organization_id', s.orgId);
+    if (error) return { error: 'De producten konden niet gekoppeld worden.' };
+    ververs();
+    revalidatePath('/inkoop');
+    if (leverancierId != null) revalidatePath(`/leveranciers/${leverancierId}/winkel`);
+    return { data: { aantal: productIds.length } };
 }
 
 /* ── Een levering binnenmelden (het A4 van de slager) ────────────────────── */

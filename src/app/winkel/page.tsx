@@ -1,5 +1,5 @@
 import { createServerSupabase } from '@/lib/supabase-server';
-import { afdelingTegels, datumGroepen, regelsPerProduct } from '@/lib/winkel/afdelingen';
+import { afdelingTegels, datumGroepen, datumNL, regelsPerProduct, urgentie } from '@/lib/winkel/afdelingen';
 import { laadWinkelOverzicht } from '@/lib/winkel/winkelOverzicht';
 import OverzichtClient from './_components/OverzichtClient';
 
@@ -33,6 +33,8 @@ export default async function WinkelPage() {
 
     const inAssortiment = o.producten.filter((p) => p.actief);
     const nietGeteld = inAssortiment.filter((p) => p.voorraad == null).length;
+    const vandaag = datumNL(nu);
+    const metTht = inAssortiment.filter((p) => p.tht != null).map((p) => urgentie(p.tht!, vandaag));
 
     return (
         <OverzichtClient
@@ -43,6 +45,7 @@ export default async function WinkelPage() {
             nietGeteld={nietGeteld}
             nietsGeteld={nietGeteld === inAssortiment.length}
             urgent={{ over: urgent.filter((g) => g.urgentie === 'over').reduce((n, g) => n + g.stuks.length, 0), bijna: urgent.filter((g) => g.urgentie !== 'over').reduce((n, g) => n + g.stuks.length, 0) }}
+            thtProducten={{ over: metTht.filter((u) => u === 'over').length, bijna: metTht.filter((u) => u !== 'over' && u !== 'later').length }}
             pakketOmzet7_cents={pakketOmzet7}
             heeftVerkoop={o.regels.length > 0}
         />

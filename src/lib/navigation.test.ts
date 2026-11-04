@@ -32,6 +32,8 @@ describe('vindWerkruimte', () => {
         expect(vindWerkruimte('/voorraad/winkel/vloer')?.tab?.label).toBe('Assortiment');
         expect(vindWerkruimte('/winkel')?.tab?.label).toBe('Overzicht');
         expect(vindWerkruimte('/winkel/leveringen')?.tab?.label).toBe('Leveringen');
+        expect(vindWerkruimte('/winkel/bestellijst')?.tab?.label).toBe('Bestellijst');
+        expect(vindWerkruimte('/voorraad/winkel/bestellen')?.tab?.label).toBe('Assortiment');
         expect(vindWerkruimte('/voorraad')?.section.slug).toBe('voorraad');
         expect(vindWerkruimte('/voorraad')?.tab?.label).toBe('Voorraad');
         expect(vindWerkruimte('/instellingen/integraties')?.tab?.label).toBe('Koppelingen');
