@@ -70,8 +70,8 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
         const r = await werk();
         if ('error' in r) { toast(r.error, 'error'); return; }
         toast(gelukt, 'success');
-        onClose();
         router.refresh();
+        onClose();
     });
     const onBestaand = (p: { id: string; naam: string }) => doe(() => zetProductOpAfdeling({ productId: p.id, afdelingId: afdeling.id }), `${p.naam} staat nu bij ${afdeling.naam}.`);
     const onNieuw = (v: NieuwInvoer) => doe(() => nieuwProduct({ ...v, afdelingId: afdeling.id }), `${v.naam} staat erbij${v.verkoop_per === 'kg' ? ' en kan gestickerd worden' : ''}.`);

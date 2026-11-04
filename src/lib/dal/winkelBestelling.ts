@@ -6,9 +6,12 @@
  *   minimum   = winkel_producten.drempel, anders het voorstel (5 pakketten)
  *   onderweg  = inkoop_order_lines met winkel_product_id van verstuurde orders
  *   bezet     = besteld in de webshop en nog niet ingepakt
+ *
+ * Zelf op de lijst gezet (bestel_handmatig) telt ook mee als er nog niet
+ * geteld is; de automatische regel alleen bij getelde producten.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { bestelVoorstel, type BestelRegel } from '@/lib/winkel/bestellen';
+import { bestelVoorstel, handmatigeRegel, type BestelRegel } from '@/lib/winkel/bestellen';
 import { geldendeDrempel } from '@/lib/winkel/voorraad';
 import type { Slot } from '@/lib/winkel/rekenen';
 
@@ -21,10 +24,10 @@ export interface WinkelBestelRegel extends BestelRegel {
 export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: string): Promise<WinkelBestelRegel[]> {
     const { data: producten, error } = await supabase
         .from('winkel_producten')
-        .select('id, naam, type, eenheid, voorraad, drempel, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam, bestel_prijs_cents, leverancier_id, btw_pct')
+        .select('id, naam, type, eenheid, voorraad, drempel, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id, btw_pct')
         .eq('organization_id', orgId)
         .eq('actief', true)
-        .not('voorraad', 'is', null);
+        .or('voorraad.not.is.null,bestel_handmatig.not.is.null');
     /* Bestaan de winkeltabellen niet (andere cateraar), dan is er gewoon niets. */
     if (error || !producten?.length) return [];
 
@@ -39,7 +42,7 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
             .eq('concept_inkoop_orders.status', 'sent'),
     ]);
     const bezet = new Map<string, number>();
-    await Promise.all(ids.map(async (id) => {
+    await Promise.all(producten.filter((p) => p.voorraad != null).map((p) => p.id as string).map(async (id) => {
         const { data: n } = await supabase.rpc('winkel_bezetting_product', { p_product_id: id, p_zonder_order: null });
         bezet.set(id, Number(n ?? 0));
     }));
@@ -54,14 +57,16 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
     const uit: WinkelBestelRegel[] = [];
     for (const p of producten) {
         const minimum = geldendeDrempel({ id: p.id as string, drempel: p.drempel == null ? null : Number(p.drempel) }, sl, actief).waarde;
-        const r = bestelVoorstel({
+        const product = {
             id: p.id as string, naam: p.naam as string, eenheid: p.eenheid as 'stuk' | 'gram',
-            voorraad: Number(p.voorraad), voorraad_bezet: bezet.get(p.id as string) ?? 0,
+            voorraad: p.voorraad == null ? null : Number(p.voorraad), voorraad_bezet: bezet.get(p.id as string) ?? 0,
             minimum, par_niveau: p.par_niveau == null ? null : Number(p.par_niveau),
             bestel_hoeveelheid: p.bestel_hoeveelheid == null ? null : Number(p.bestel_hoeveelheid),
             bestel_eenheid_naam: (p.bestel_eenheid_naam as string | null) ?? null,
             bestel_prijs_cents: (p.bestel_prijs_cents as number | null) ?? null,
-        }, onderweg.get(p.id as string) ?? 0);
+        };
+        const stand = onderweg.get(p.id as string) ?? 0;
+        const r = p.bestel_handmatig != null ? handmatigeRegel(product, Number(p.bestel_handmatig), stand) : bestelVoorstel(product, stand);
         if (r) uit.push({ ...r, leverancier_id: (p.leverancier_id as number | null) ?? null, btw_pct: Number(p.btw_pct ?? 9), type: p.type as string });
     }
     return uit;

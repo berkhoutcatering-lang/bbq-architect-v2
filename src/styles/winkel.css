@@ -48,3 +48,9 @@
     .wk-keuzes { flex-wrap: nowrap; overflow-x: auto; margin-inline: calc(-1 * var(--space-mobile-edge, 16px)); padding-inline: var(--space-mobile-edge, 16px); scrollbar-width: none; }
     .wk-keuzes .kf-chip { flex-shrink: 0; }
 }
+
+/* Bestelinstellingen: één regel per product, met Tab door de velden. */
+.wk-instel { grid-template-columns: 20px minmax(170px, 1fr) 170px 80px 92px 92px 92px; min-width: 780px; min-height: 52px; padding: 6px 14px; cursor: default; }
+.wk-instel:hover { background: none; }
+.wk-instel .kf-input { padding: 7px 9px; font-size: 13px; }
+.wk-bulk { position: sticky; top: 8px; z-index: 10; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; background: var(--color-bg-elevated); border: 1px solid var(--brand-gold, #c4a35a); border-radius: 12px; }

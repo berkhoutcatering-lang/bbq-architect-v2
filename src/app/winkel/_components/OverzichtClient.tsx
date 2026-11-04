@@ -48,7 +48,7 @@ function Taak({ href, Icoon, kleur, children }: { href: string; Icoon: typeof Be
     );
 }
 
-export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken, zonderPlek, nietGeteld, nietsGeteld, urgent, pakketOmzet7_cents, heeftVerkoop }: {
+export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken, zonderPlek, nietGeteld, nietsGeteld, urgent, thtProducten, pakketOmzet7_cents, heeftVerkoop }: {
     tegels: AfdelingTegel[];
     heeftWinkel: boolean;
     plekkenOntbreken: boolean;
@@ -56,11 +56,12 @@ export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken,
     nietGeteld: number;
     nietsGeteld: boolean;
     urgent: { over: number; bijna: number };
+    thtProducten: { over: number; bijna: number };
     pakketOmzet7_cents: number;
     heeftVerkoop: boolean;
 }) {
     const totaal7 = tegels.reduce((s, t) => s + t.omzet7_cents, 0) + pakketOmzet7_cents;
-    const heeftTaken = urgent.over > 0 || urgent.bijna > 0 || nietGeteld > 0 || zonderPlek > 0;
+    const heeftTaken = urgent.over > 0 || urgent.bijna > 0 || thtProducten.over > 0 || thtProducten.bijna > 0 || nietGeteld > 0 || zonderPlek > 0;
 
     return (
         <div className="wk-pagina mobile-safe-bottom">
@@ -80,6 +81,8 @@ export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken,
                     <div className="wk-lijst">
                         {urgent.over > 0 && <Taak href="/winkel/leveringen" Icoon={AlertTriangle} kleur="var(--red, #dc2626)">{urgent.over} {urgent.over === 1 ? 'stuk is' : 'stuks zijn'} over de datum</Taak>}
                         {urgent.bijna > 0 && <Taak href="/winkel/leveringen" Icoon={AlertTriangle} kleur="#D9A520">{urgent.bijna} {urgent.bijna === 1 ? 'stuk gaat' : 'stuks gaan'} binnen twee dagen over de datum</Taak>}
+                        {thtProducten.over > 0 && <Taak href="/voorraad/winkel?toon=datum" Icoon={AlertTriangle} kleur="var(--red, #dc2626)">{thtProducten.over} {thtProducten.over === 1 ? 'product is' : 'producten zijn'} over de datum</Taak>}
+                        {thtProducten.bijna > 0 && <Taak href="/voorraad/winkel?toon=datum" Icoon={AlertTriangle} kleur="#D9A520">{thtProducten.bijna} {thtProducten.bijna === 1 ? 'product gaat' : 'producten gaan'} binnen twee dagen over de datum</Taak>}
                         {nietGeteld > 0 && <Taak href="/voorraad/winkel/tellen" Icoon={ClipboardList}>{nietsGeteld ? 'De winkel tellen' : `${nietGeteld} ${nietGeteld === 1 ? 'product' : 'producten'} nog tellen`}</Taak>}
                         {zonderPlek > 0 && <Taak href="/voorraad/winkel/vloer" Icoon={MapPinned}>{zonderPlek} {zonderPlek === 1 ? 'product' : 'producten'} een plek geven</Taak>}
                     </div>

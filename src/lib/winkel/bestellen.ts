@@ -19,6 +19,9 @@
  *             de keuken).
  *
  * Niet bijgehouden (voorraad NULL) of geen minimum: geen voorstel. Geen gok.
+ *
+ * Zelf op de lijst gezet (bestel_handmatig): dat aantal gaat voor, ook als er
+ * nog niet geteld is. Dat is geen gok: Mathijs zegt zelf hoeveel.
  */
 import { roundUpToPack } from '@/lib/dal/packRounding';
 import { beschikbaar, hoeveelheidKort } from './voorraad';
@@ -110,5 +113,20 @@ export function bestelVoorstel(p: BestelProduct, onderweg = 0): BestelRegel | nu
         winkel_product_id: p.id, naam: p.naam, eenheid: p.eenheid,
         nodig, besteld: pak.qty_ordered, eenheden: pak.packs, eenheid_label: label, zonder_besteleenheid: !grootte,
         prijs_per_eenheid_eur: prijs, uitleg, beschikbaar: vrij, onderweg, minimum: p.minimum, aanvullen_tot: doel,
+    };
+}
+
+/** Zelf op de lijst gezet: het aantal gaat voor op de rekenregel, afgerond op hele besteleenheden. */
+export function handmatigeRegel(p: BestelProduct, aantal: number, onderweg = 0): BestelRegel {
+    const grootte = p.bestel_hoeveelheid != null && p.bestel_hoeveelheid > 0 ? p.bestel_hoeveelheid : null;
+    const pak = roundUpToPack(aantal, p.eenheid, { package_size: grootte, package_unit: grootte ? p.eenheid : null, moq_packs: null });
+    const label = pak.packs != null && grootte ? besteleenheidLabel(pak.packs, grootte, p.bestel_eenheid_naam, p.eenheid) : null;
+    const k = (n: number) => hoeveelheidKort(n, p.eenheid);
+    return {
+        winkel_product_id: p.id, naam: p.naam, eenheid: p.eenheid,
+        nodig: aantal, besteld: pak.qty_ordered, eenheden: pak.packs, eenheid_label: label, zonder_besteleenheid: !grootte,
+        prijs_per_eenheid_eur: p.bestel_prijs_cents != null && grootte ? p.bestel_prijs_cents / 100 / grootte : null,
+        uitleg: `Zelf op de lijst gezet: ${k(aantal)}${label ? ` → ${label}` : ''}`,
+        beschikbaar: beschikbaar(p) ?? 0, onderweg, minimum: p.minimum ?? 0, aanvullen_tot: p.par_niveau,
     };
 }

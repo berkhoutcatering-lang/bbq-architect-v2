@@ -25,7 +25,7 @@ import {
     markOrderReceived,
     type OrderItemSnapshot,
 } from '@/lib/dal/inkoopOrders';
-import { buildBestelvoorstel } from '@/lib/dal/bestelvoorstel';
+import { WINKEL_BESTELLING, buildBestelvoorstel, type BestelvoorstelItem } from '@/lib/dal/bestelvoorstel';
 import { resolveVakje } from '@/lib/dal/vakje';
 import { InkoopOrderPdf, determineBtwPct } from '@/lib/pdf/InkoopOrderPdf';
 
@@ -148,6 +148,71 @@ export async function linkSupplierProductAction(input: unknown) {
     }
 }
 
+/* De duurzame orderregels: bron voor onderweg-verrekening en de ontvangst. */
+function orderRegels(items: BestelvoorstelItem[], orgId: string, orderId: string) {
+    return items.map(function (it) {
+        return {
+            organization_id: orgId,
+            concept_order_id: orderId,
+            inventory_id: it.inventory_id,
+            winkel_product_id: it.winkel_product_id ?? null,
+            supplier_product_id: it.supplier_product_id ?? null,
+            naam: it.naam,
+            qty_needed: it.qty_needed,
+            qty_ordered: it.qty_ordered,
+            qty_received: null,
+            unit: it.unit,
+            unit_price_eur: it.unit_price_eur,
+            btw_pct: it.btw_pct_vast === 9 || it.btw_pct_vast === 21 ? it.btw_pct_vast : determineBtwPct(it.categorie),
+            categorie: it.categorie ?? null,
+        };
+    });
+}
+
+/* Wat zelf op de lijst stond, is de deur uit. */
+async function wisHandmatig(sb: Awaited<ReturnType<typeof getAuthContext>>['sb'], orgId: string, items: BestelvoorstelItem[]) {
+    const ids = items.map(function (it) { return it.winkel_product_id; }).filter(function (id): id is string { return !!id; });
+    if (ids.length === 0) return;
+    const { error } = await sb.from('winkel_producten').update({ bestel_handmatig: null }).in('id', ids).eq('organization_id', orgId);
+    if (error) console.warn('[inkoop] bestel_handmatig wissen mislukt:', error.message);
+}
+
+// ── markeerBesteld ────────────────────────────────────────────────────
+// Winkel: gebeld of de PDF gestuurd. Geen mail, wel onderweg: de regels tellen
+// mee in de bestellijst en de ontvangst boekt ze in de winkelvoorraad.
+export async function markeerBesteldAction(input: unknown) {
+    try {
+        const { concept_order_id } = z.object({ concept_order_id: z.string().uuid() }).parse(input);
+        const { sb, orgId } = await getAuthContext();
+        const order = await getConceptOrderById(sb, concept_order_id);
+        if (!order || order.organization_id !== orgId) throw new Error('Geen toegang tot deze order');
+        if (order.status !== 'concept') throw new Error('Deze order is al besteld');
+        if (order.vakje !== WINKEL_BESTELLING) throw new Error('Dit kan alleen bij een winkelbestelling');
+
+        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, plek: 'winkel' });
+        const bucket = summary.per_leverancier.find(function (b) { return b.leverancier_id === order.leverancier_id; });
+        if (!bucket || bucket.items.length === 0) throw new Error('Geen items om te bestellen: herlaad de pagina');
+
+        const regels = orderRegels(bucket.items, orgId, order.id);
+        await sb.from('inkoop_order_lines').delete().eq('concept_order_id', order.id).eq('organization_id', orgId);
+        const { error: lineErr } = await sb.from('inkoop_order_lines').insert(regels);
+        if (lineErr) throw new Error('Orderregels bewaren mislukt: ' + lineErr.message);
+
+        const { error } = await sb.from('concept_inkoop_orders')
+            .update({ status: 'sent', sent_at: new Date().toISOString(), subtotal_eur: bucket.subtotal_eur, total_eur: bucket.subtotal_eur, send_note: 'Zelf besteld (geen mail verstuurd)' })
+            .eq('id', order.id).eq('organization_id', orgId);
+        if (error) throw new Error('Order bijwerken mislukt: ' + error.message);
+
+        await wisHandmatig(sb, orgId, bucket.items);
+        revalidatePath('/winkel/bestellijst');
+        revalidatePath('/voorraad/winkel');
+        return { ok: true as const };
+    } catch (e) {
+        console.error('[inkoop/markeerBesteld]', e);
+        return { ok: false as const, error: e instanceof Error ? e.message : 'Markeren mislukt' };
+    }
+}
+
 // ── sendOrderToSupplier ───────────────────────────────────────────────
 const sendSchema = z.object({
     concept_order_id: z.string().uuid(),
@@ -171,11 +236,12 @@ export async function sendOrderToSupplierAction(input: unknown) {
         //    qty's verzenden (overrides toegepast). We filteren op deze ene
         //    leverancier-bucket. Een vakje-bestelling rekent alleen dat vakje.
         let vakje = null;
-        if (order.vakje) {
+        const opWinkel = order.vakje === WINKEL_BESTELLING;
+        if (order.vakje && !opWinkel) {
             vakje = await resolveVakje(sb, orgId, order.vakje);
             if (!vakje) throw new Error('Het vakje van deze bestelling bestaat niet meer — plaats de orders opnieuw in Webshop');
         }
-        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, winkel: parsed.winkel_id ?? null, vakje });
+        const summary = await buildBestelvoorstel(sb, orgId, 14, { persistConcepts: false, winkel: parsed.winkel_id ?? null, vakje, plek: opWinkel ? 'winkel' : 'keuken' });
         const bucket = summary.per_leverancier.find(function (b) {
             return b.leverancier_id === order.leverancier_id
                 || (b.leverancier_id == null && order.leverancier_id == null);
@@ -346,23 +412,7 @@ export async function sendOrderToSupplierAction(input: unknown) {
             await sb.from('inkoop_order_lines').delete()
                 .eq('concept_order_id', order.id)
                 .eq('organization_id', orgId);
-            const orderLines = bucket.items.map(function (it) {
-                return {
-                    organization_id: orgId,
-                    concept_order_id: order.id,
-                    inventory_id: it.inventory_id,
-                    winkel_product_id: it.winkel_product_id ?? null,
-                    supplier_product_id: it.supplier_product_id ?? null,
-                    naam: it.naam,
-                    qty_needed: it.qty_needed,
-                    qty_ordered: it.qty_ordered,
-                    qty_received: null,
-                    unit: it.unit,
-                    unit_price_eur: it.unit_price_eur,
-                    btw_pct: it.btw_pct_vast === 9 || it.btw_pct_vast === 21 ? it.btw_pct_vast : determineBtwPct(it.categorie),
-                    categorie: it.categorie ?? null,
-                };
-            });
+            const orderLines = orderRegels(bucket.items, orgId, order.id);
             if (orderLines.length > 0) {
                 const { error: lineErr } = await sb.from('inkoop_order_lines').insert(orderLines);
                 if (lineErr) console.warn('[inkoop/send] inkoop_order_lines insert failed (non-fatal):', lineErr.message);
@@ -370,6 +420,8 @@ export async function sendOrderToSupplierAction(input: unknown) {
         } catch (lineErr) {
             console.warn('[inkoop/send] inkoop_order_lines write failed (non-fatal):', lineErr);
         }
+
+        await wisHandmatig(sb, orgId, bucket.items);
 
         // Audit log — best-effort, niet de hele action laten falen als ie stuk gaat.
         try {
@@ -449,6 +501,7 @@ export async function receiveOrderAction(input: unknown) {
         }));
 
         revalidatePath('/inkoop');
+        revalidatePath('/winkel/bestellijst');
         revalidatePath('/voorraad');
         return { ok: true as const };
     } catch (e) {
