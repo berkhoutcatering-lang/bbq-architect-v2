@@ -1,16 +1,15 @@
 'use client';
 
 /**
- * Datums: alle gestickerde stuks die nog in de winkel liggen, vroegste THT
+ * De datums op Leveringen: alle gestickerde stuks die nog in de winkel liggen, vroegste THT
  * eerst, per product en datum gebundeld. Per bundel (of per stuk): naar de
  * keuken (afwijking keuken_verbruik) of weggooien (derving_tht). Wat verder
  * weg ligt, staat onder "Later" ingeklapt.
  */
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, CalendarCheck, ChefHat, ChevronDown, Trash2 } from 'lucide-react';
+import { CalendarCheck, ChefHat, ChevronDown, Trash2 } from 'lucide-react';
 import { useToast } from '@/components/Toast';
 import { formatEur, formatNumber } from '@/lib/format';
 import type { DatumGroep, Urgentie } from '@/lib/winkel/afdelingen';
@@ -22,9 +21,9 @@ const datumKort = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateStri
 const LABEL: Record<Urgentie, string> = { over: 'Over de datum', vandaag: 'Vandaag de laatste dag', morgen: 'Morgen de laatste dag', bijna: 'Over twee dagen', later: 'Later' };
 const KLEUR: Record<Urgentie, string> = { over: 'var(--red, #dc2626)', vandaag: 'var(--red, #dc2626)', morgen: '#D9A520', bijna: '#D9A520', later: 'var(--muted)' };
 
-type Groep = DatumGroep & { naam: string; afdeling: string | null };
+export type Groep = DatumGroep & { naam: string; afdeling: string | null };
 
-export default function DatumsClient({ groepen, ontbreekt }: { groepen: Groep[]; ontbreekt: boolean }) {
+export default function DatumLijst({ groepen }: { groepen: Groep[] }) {
     const router = useRouter();
     const toast = useToast();
     const stil = useReducedMotion();
@@ -78,47 +77,35 @@ export default function DatumsClient({ groepen, ontbreekt }: { groepen: Groep[];
         );
     };
 
-    return (
-        <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge, 16px) 48px', maxWidth: 980, margin: '0 auto' }}>
-            <div style={{ marginBottom: 20 }}>
-                <Link href="/winkel" className="kf-eyebrow" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', color: 'var(--muted)' }}><ArrowLeft size={12} /> Afdelingen</Link>
-                <h1 className="chassis-titel" style={{ margin: '4px 0 0' }}>Datums</h1>
-                <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4 }}>Alles wat gestickerd in de winkel ligt, vroegste THT eerst. Verkochte stuks gaan er vanzelf af.</div>
-            </div>
+    if (groepen.length === 0) return <div className="kf-empty"><p>Er ligt niets gestickerd in de winkel.</p></div>;
 
-            {ontbreekt ? (
-                <div className="kf-empty"><p>Datums per stuk komen er zodra de update voor stickers draait (migratie 20261103120000).</p></div>
-            ) : groepen.length === 0 ? (
-                <div className="kf-empty"><p>Er ligt niets gestickerd in de winkel.</p></div>
+    return (
+        <>
+            {urgent.length === 0 ? (
+                <div style={{ ...kaart, padding: '18px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <CalendarCheck size={20} style={{ color: 'var(--green, #2E9E6B)' }} />
+                    <span style={{ fontSize: 14 }}>Niets gaat de komende twee dagen over de datum.</span>
+                </div>
             ) : (
-                <>
-                    {urgent.length === 0 ? (
-                        <div style={{ ...kaart, padding: '18px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <CalendarCheck size={20} style={{ color: 'var(--green, #2E9E6B)' }} />
-                            <span style={{ fontSize: 14 }}>Niets gaat de komende twee dagen over de datum.</span>
-                        </div>
-                    ) : (
-                        (['over', 'vandaag', 'morgen', 'bijna'] as Urgentie[]).map((u) => {
-                            const hier = urgent.filter((g) => g.urgentie === u);
-                            if (!hier.length) return null;
-                            return (
-                                <section key={u} style={{ marginBottom: 18 }}>
-                                    <div className="kf-eyebrow" style={{ marginBottom: 8, color: KLEUR[u] }}>{LABEL[u]}</div>
-                                    <div style={{ display: 'grid', gap: 8 }}><AnimatePresence>{hier.map(blok)}</AnimatePresence></div>
-                                </section>
-                            );
-                        })
-                    )}
-                    {later.length > 0 && (
-                        <section style={{ marginTop: 12 }}>
-                            <button type="button" className="btn btn-ghost" onClick={() => setToonLater((x) => !x)}>
-                                <ChevronDown size={14} style={{ transform: toonLater ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} /> Later ({later.reduce((n, g) => n + g.stuks.length, 0)} stuks)
-                            </button>
-                            {toonLater && <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>{later.map(blok)}</div>}
+                (['over', 'vandaag', 'morgen', 'bijna'] as Urgentie[]).map((u) => {
+                    const hier = urgent.filter((g) => g.urgentie === u);
+                    if (!hier.length) return null;
+                    return (
+                        <section key={u} style={{ marginBottom: 18 }}>
+                            <div className="kf-eyebrow" style={{ marginBottom: 8, color: KLEUR[u] }}>{LABEL[u]}</div>
+                            <div style={{ display: 'grid', gap: 8 }}><AnimatePresence>{hier.map(blok)}</AnimatePresence></div>
                         </section>
-                    )}
-                </>
+                    );
+                })
             )}
-        </div>
+            {later.length > 0 && (
+                <section style={{ marginTop: 12 }}>
+                    <button type="button" className="btn btn-ghost" onClick={() => setToonLater((x) => !x)}>
+                        <ChevronDown size={14} style={{ transform: toonLater ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} /> Later ({later.reduce((n, g) => n + g.stuks.length, 0)} stuks)
+                    </button>
+                    {toonLater && <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>{later.map(blok)}</div>}
+                </section>
+            )}
+        </>
     );
 }

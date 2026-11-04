@@ -8,17 +8,19 @@
  *  - ScanFab — pillar #3 (10-sec foto-bon), altijd rechtsonder aanwezig
  *
  * Eén plek om aan te passen i.p.v. drie identieke layout.tsx-files.
+ * Onder /voorraad/winkel niet: dat is de winkel, niet de cateringvoorraad.
  */
 import EventSpine from '@/components/voorraad/EventSpine';
+import NietInDeWinkel from '@/components/voorraad/NietInDeWinkel';
 import ScanFab from '@/components/voorraad/ScanFab';
 
 export default function VoorraadHeader() {
   return (
-    <>
+    <NietInDeWinkel>
       <div style={{ padding: '16px 32px 0' }}>
         <EventSpine />
       </div>
       <ScanFab />
-    </>
+    </NietInDeWinkel>
   );
 }

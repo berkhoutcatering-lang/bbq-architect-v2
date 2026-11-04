@@ -27,11 +27,11 @@ describe('vindWerkruimte', () => {
 
     it('langste voorvoegsel wint: /voorraad/winkel hoort bij de werkruimte Winkel, niet bij Voorraad', () => {
         expect(vindWerkruimte('/voorraad/winkel')?.section.slug).toBe('winkel');
-        expect(vindWerkruimte('/voorraad/winkel')?.tab?.label).toBe('Voorraad');
-        expect(vindWerkruimte('/voorraad/winkel/tellen')?.tab?.label).toBe('Voorraad');
-        expect(vindWerkruimte('/voorraad/winkel/vloer')?.tab?.label).toBe('Vloer');
-        expect(vindWerkruimte('/winkel/afdeling/abc')?.tab?.label).toBe('Afdelingen');
-        expect(vindWerkruimte('/winkel/datums')?.tab?.label).toBe('Datums');
+        expect(vindWerkruimte('/voorraad/winkel')?.tab?.label).toBe('Assortiment');
+        expect(vindWerkruimte('/voorraad/winkel/tellen')?.tab?.label).toBe('Assortiment');
+        expect(vindWerkruimte('/voorraad/winkel/vloer')?.tab?.label).toBe('Assortiment');
+        expect(vindWerkruimte('/winkel')?.tab?.label).toBe('Overzicht');
+        expect(vindWerkruimte('/winkel/leveringen')?.tab?.label).toBe('Leveringen');
         expect(vindWerkruimte('/voorraad')?.section.slug).toBe('voorraad');
         expect(vindWerkruimte('/voorraad')?.tab?.label).toBe('Voorraad');
         expect(vindWerkruimte('/instellingen/integraties')?.tab?.label).toBe('Koppelingen');

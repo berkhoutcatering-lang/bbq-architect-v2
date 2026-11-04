@@ -1,20 +1,19 @@
 import { createServerSupabase } from '@/lib/supabase-server';
 import { afdelingTegels, datumGroepen, regelsPerProduct } from '@/lib/winkel/afdelingen';
 import { laadWinkelOverzicht } from '@/lib/winkel/winkelOverzicht';
-import AfdelingenClient from './_components/AfdelingenClient';
+import OverzichtClient from './_components/OverzichtClient';
 
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-    title: 'Winkel · Afdelingen',
-    description: 'Per afdeling wat er ligt, wat het opbrengt en wat bijna over de datum gaat.',
+    title: 'Winkel · Overzicht',
+    description: 'Wat er nu moet gebeuren en wat de afdelingen opbrengen.',
 };
 
 /**
- * De werkruimte Winkel: één tegel per afdeling (Vlees, Kazen, Nootjes,
- * Broodbeleg …). Omzet van de laatste 7 dagen tegen de week ervoor, het
- * aantal producten, en een rood bolletje als er stuks bijna over de datum
- * gaan. Tik op een tegel voor de producten.
+ * De werkruimte Winkel: bovenaan wat er nu moet gebeuren, daaronder één regel
+ * per afdeling (Vlees, Kazen, Nootjes, Broodbeleg …) met de omzet van de
+ * laatste 7 dagen tegen de week ervoor. Tik op een afdeling voor de producten.
  */
 export default async function WinkelPage() {
     const supabase = await createServerSupabase();
@@ -32,12 +31,17 @@ export default async function WinkelPage() {
         .filter((r) => Date.parse(r.op) > nu.getTime() - 7 * 86_400_000)
         .reduce((som, r) => som + r.bedrag_cents, 0);
 
+    const inAssortiment = o.producten.filter((p) => p.actief);
+    const nietGeteld = inAssortiment.filter((p) => p.voorraad == null).length;
+
     return (
-        <AfdelingenClient
+        <OverzichtClient
             tegels={tegels}
             heeftWinkel={!!o.ruimteId}
             plekkenOntbreken={o.ontbreekt.plekken}
             zonderPlek={zonderPlek}
+            nietGeteld={nietGeteld}
+            nietsGeteld={nietGeteld === inAssortiment.length}
             urgent={{ over: urgent.filter((g) => g.urgentie === 'over').reduce((n, g) => n + g.stuks.length, 0), bijna: urgent.filter((g) => g.urgentie !== 'over').reduce((n, g) => n + g.stuks.length, 0) }}
             pakketOmzet7_cents={pakketOmzet7}
             heeftVerkoop={o.regels.length > 0}

@@ -1,16 +1,16 @@
 'use client';
 
 /**
- * Winkelvloer — per afdeling wat er te koop staat. Tik op een product om het
- * te verplaatsen of van de plek te halen; "+ Product" zet er iets bij.
- * Producten die nergens staan, staan onderaan. Geen voorraadgetallen: dat is
- * /voorraad/winkel.
+ * Afdelingen indelen — de afdelingen als ingeklapte lijst. Klap er één open
+ * om te zien wat er staat; tik op een product om het te verplaatsen of van de
+ * plek te halen; "+ Product" zet er iets bij. Producten die nergens staan,
+ * staan onderaan. Geen voorraadgetallen: dat is Assortiment.
  */
 import { useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, Beer, Beef, Cookie, Gift, Ham, LayoutGrid, MapPin, Nut, Package, Pencil, Plus, Salad, Search, Wine } from 'lucide-react';
+import { ArrowLeft, Beer, Beef, ChevronDown, Cookie, Gift, Ham, LayoutGrid, Nut, Package, Pencil, Plus, Salad, Search, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
@@ -63,10 +63,10 @@ export default function VloerClient({ data }: { data: VloerData | null }) {
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 22 }}>
             <div>
                 <Link href="/voorraad/winkel" className="kf-eyebrow" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', color: 'var(--muted)' }}>
-                    <ArrowLeft size={12} /> Winkelvoorraad
+                    <ArrowLeft size={12} /> Assortiment
                 </Link>
-                <h1 className="chassis-titel" style={{ margin: '4px 0 0' }}>Winkelvloer</h1>
-                <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4 }}>Wat waar staat in de winkel. De voorraad tel je bij Winkelvoorraad.</div>
+                <h1 className="chassis-titel" style={{ margin: '4px 0 0' }}>Afdelingen indelen</h1>
+                <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4 }}>Welke afdelingen de winkel heeft en wat waar staat.</div>
             </div>
             {data?.ruimte && (
                 <button type="button" className="btn btn-ghost" onClick={() => setLade({ soort: 'nieuwe-plek' })}><Plus size={14} /> Afdeling of meubel</button>
@@ -74,7 +74,7 @@ export default function VloerClient({ data }: { data: VloerData | null }) {
         </div>
     );
     const omhulsel = (inhoud: React.ReactNode) => (
-        <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge, 16px) 48px', maxWidth: 1180, margin: '0 auto' }}>{kop}{inhoud}</div>
+        <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge, 16px) 48px', maxWidth: 1040, margin: '0 auto' }}>{kop}{inhoud}</div>
     );
 
     if (!data) {
@@ -99,11 +99,11 @@ export default function VloerClient({ data }: { data: VloerData | null }) {
             </motion.div>,
         );
     }
-    return omhulsel(<Vloer data={data} stil={!!stil} bezig={bezig} lade={lade} setLade={setLade} doe={doe} />);
+    return omhulsel(<Vloer data={data} bezig={bezig} lade={lade} setLade={setLade} doe={doe} />);
 }
 
-function Vloer({ data, stil, bezig, lade, setLade, doe }: {
-    data: VloerData; stil: boolean; bezig: boolean; lade: Lade | null; setLade: (l: Lade | null) => void;
+function Vloer({ data, bezig, lade, setLade, doe }: {
+    data: VloerData; bezig: boolean; lade: Lade | null; setLade: (l: Lade | null) => void;
     doe: (werk: () => Promise<{ error: string } | { data: unknown }>, gelukt: string, sluit?: boolean) => void;
 }) {
     const productOp = useMemo(() => new Map(data.producten.map((p) => [p.id, p])), [data.producten]);
@@ -114,50 +114,59 @@ function Vloer({ data, stil, bezig, lade, setLade, doe }: {
     const plekVan = useMemo(() => new Map(verkoop.map((p) => [p.product_id, p])), [verkoop]);
     const nergens = data.producten.filter((p) => p.actief && !plekVan.has(p.id));
 
+    const [uitgeklapt, setUitgeklapt] = useState<string | null>(null);
+    const klap = (id: string) => setUitgeklapt((x) => (x === id ? null : id));
+
     const open = lade?.soort === 'product' ? productOp.get(lade.productId) : null;
     const openPlaatsing = open ? plekVan.get(open.id) : null;
 
     return (
         <>
-            <div style={{ display: 'grid', gap: 18 }}>
-                {plekken.map((plek, i) => {
+            <div style={{ display: 'grid', gap: 8 }}>
+                {plekken.map((plek) => {
                     const hier = verkoop.filter((p) => p.locatie_id === plek.id).sort((a, b) => a.volgorde - b.volgorde);
+                    const isOpen = uitgeklapt === plek.id;
                     return (
-                        <motion.section key={plek.id} initial={stil ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                            style={{ ...kaart, padding: '16px 16px 18px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: hier.length ? 14 : 6, flexWrap: 'wrap' }}>
-                                <MapPin size={16} style={{ color: 'var(--brand-gold, #c4a35a)' }} />
-                                <h2 style={{ margin: 0, fontFamily: 'var(--font-display, Outfit)', fontWeight: 400, fontSize: 20 }}>{plek.naam}</h2>
-                                <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                                    {plek.soort !== 'afdeling' ? `${PLEK_SOORT_LABEL[plek.soort as PlekSoort] ?? plek.soort} · ` : ''}{hier.length} {hier.length === 1 ? 'product' : 'producten'}
-                                </span>
+                        <section key={plek.id} style={{ ...kaart, padding: '6px 10px 6px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button type="button" aria-expanded={isOpen} onClick={() => klap(plek.id)}
+                                    style={{ flex: 1, minWidth: 0, minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 0, padding: 0, color: 'inherit', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+                                    <ChevronDown size={15} style={{ color: 'var(--muted)', flexShrink: 0, transform: isOpen ? undefined : 'rotate(-90deg)', transition: 'transform .15s' }} />
+                                    <span style={{ fontSize: 15, fontWeight: 500 }}>{plek.naam}</span>
+                                    <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+                                        {plek.soort !== 'afdeling' ? `${PLEK_SOORT_LABEL[plek.soort as PlekSoort] ?? plek.soort} · ` : ''}{hier.length} {hier.length === 1 ? 'product' : 'producten'}
+                                    </span>
+                                </button>
                                 <button type="button" className="btn btn-ghost" style={{ padding: '4px 8px' }} aria-label={`${plek.naam} hernoemen`} onClick={() => setLade({ soort: 'hernoem', plekId: plek.id })}><Pencil size={13} /></button>
-                                <div style={{ flex: 1 }} />
-                                <button type="button" className="btn btn-ghost" onClick={() => setLade({ soort: 'erbij', plekId: plek.id })}><Plus size={14} /> Product</button>
+                                <button type="button" className="btn btn-ghost" aria-label={`Product bij ${plek.naam} zetten`} onClick={() => setLade({ soort: 'erbij', plekId: plek.id })}><Plus size={14} /> Product</button>
                             </div>
-                            {hier.length === 0
-                                ? <div style={{ fontSize: 13, color: 'var(--muted)' }}>Nog leeg.</div>
+                            {isOpen && (hier.length === 0
+                                ? <div style={{ fontSize: 13, color: 'var(--muted)', padding: '4px 0 10px 25px' }}>Nog leeg.</div>
                                 : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10, padding: '8px 4px 10px 0' }}>
                                         {hier.map((pl) => {
                                             const p = productOp.get(pl.product_id);
                                             return p ? <Tegel key={pl.id} p={p} onClick={() => setLade({ soort: 'product', productId: p.id })} /> : null;
                                         })}
                                     </div>
-                                )}
-                        </motion.section>
+                                ))}
+                        </section>
                     );
                 })}
 
                 {nergens.length > 0 && (
-                    <section style={{ ...kaart, padding: '16px 16px 18px', borderStyle: 'dashed' }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 14 }}>
-                            <h2 style={{ margin: 0, fontFamily: 'var(--font-display, Outfit)', fontWeight: 400, fontSize: 20 }}>Staat nergens</h2>
-                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{nergens.length} actieve producten zonder plek. Tik om ze een plek te geven.</span>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10 }}>
-                            {nergens.map((p) => <Tegel key={p.id} p={p} onClick={() => setLade({ soort: 'product', productId: p.id })} />)}
-                        </div>
+                    <section style={{ ...kaart, padding: '6px 14px', borderStyle: 'dashed' }}>
+                        <button type="button" aria-expanded={uitgeklapt === 'nergens'} onClick={() => klap('nergens')}
+                            style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 0, padding: 0, color: 'inherit', font: 'inherit', textAlign: 'left', cursor: 'pointer' }}>
+                            <ChevronDown size={15} style={{ color: 'var(--muted)', flexShrink: 0, transform: uitgeklapt === 'nergens' ? undefined : 'rotate(-90deg)', transition: 'transform .15s' }} />
+                            <span style={{ fontSize: 15, fontWeight: 500 }}>Staat nergens</span>
+                            <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{nergens.length} {nergens.length === 1 ? 'product' : 'producten'} zonder plek</span>
+                        </button>
+                        {uitgeklapt === 'nergens' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(132px, 1fr))', gap: 10, padding: '8px 0 10px' }}>
+                                {nergens.map((p) => <Tegel key={p.id} p={p} onClick={() => setLade({ soort: 'product', productId: p.id })} />)}
+                            </div>
+                        )}
                     </section>
                 )}
             </div>
@@ -170,7 +179,7 @@ function Vloer({ data, stil, bezig, lade, setLade, doe }: {
                         {plekken.filter((pl) => pl.id !== openPlaatsing?.locatie_id).map((pl) => (
                             <button key={pl.id} type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} disabled={bezig}
                                 onClick={() => doe(() => plaatsProduct({ productId: open.id, locatieId: pl.id }), `${open.naam} staat nu bij ${pl.naam}.`)}>
-                                <MapPin size={14} /> {pl.naam}
+                                {pl.naam}
                             </button>
                         ))}
                     </div>
