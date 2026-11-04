@@ -1,8 +1,10 @@
 'use client';
 
 /**
- * Winkelvoorraad (W2) — wat er in de winkel staat, wat besteld is, en hoeveel
- * pakketten er nog te maken zijn. Plan: docs/voorraad-bouwplan.md §3.
+ * Assortiment: één lijst met alle winkelproducten, te zoeken en te filteren
+ * op afdeling. Tik op een product voor alles erover in één lade: voorraad,
+ * verkoop, datums, de afdeling en uit het assortiment. Voorraad volgt
+ * docs/voorraad-bouwplan.md §3.
  *
  *   aanwezig      = de som van het logboek
  *   gereserveerd  = besteld en nog niet ingepakt
@@ -12,15 +14,15 @@
  * makerij of een afwijking met een reden. Het getal zelf is nergens in te
  * typen. "Niet bijgehouden" blijft zo tot de eerste telling.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, Gift, Ham, LayoutGrid, Minus, Nut, Package, PackageCheck, PackagePlus, Salad, Settings2, Soup, Store, TriangleAlert, Wine } from 'lucide-react';
+import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, Soup, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
+import '@/styles/winkel.css';
 import Button from '@/components/Button';
 import { useToast } from '@/components/Toast';
-import VoorraadBel from '@/components/voorraad/VoorraadBel';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import { formatEur } from '@/lib/format';
 import type { Product, Slot } from '@/lib/winkel/rekenen';
@@ -28,6 +30,11 @@ import {
     AFWIJKINGSREDENEN, REDEN_LABEL, TYPE_LABEL, beperkendProduct, beschikbaar, geldendeDrempel, gereserveerd,
     hoeveelheidKort, pakkettenTeMaken, voorraadstatus, waardeCenten, type Afwijkingsreden, type Mutatietype, type Reden, type Voorraadstatus,
 } from '@/lib/winkel/voorraad';
+import { ALLES, assortimentKeuzes, assortimentLijst } from '@/lib/winkel/assortiment';
+import type { Afdeling, ProductCijfers, StukRij, Urgentie } from '@/lib/winkel/afdelingen';
+import type { PartijRij } from '@/lib/winkel/winkelOverzicht';
+import { zetInAssortiment, zetProductOpAfdeling } from '@/app/winkel/actions';
+import ToevoegenLade from './ToevoegenLade';
 import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetBestelgegevens, type LogboekRegel } from '../actions';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
 
@@ -44,10 +51,17 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     bestel_eenheid_naam: string | null;
     bestel_prijs_cents: number | null;
     leverancier_id: number | null;
+    winkelprijs_incl_cents: number | null;
+    foto: string | null;
+    afdeling_id: string | null;
+    cijfers: ProductCijfers;
+    artikel: { prijs_cents: number | null; verkoop_per: 'stuk' | 'kg'; sticker_plu: number | null; opToonbank: boolean } | null;
+    stuks: (StukRij & { urgentie: Urgentie })[];
+    partijen: PartijRij[];
 }
 
 export interface WinkelData {
-    plekNaam: string;
+    afdelingen: Afdeling[];
     producten: WinkelProductRij[];
     slots: Slot[];
     artikelen: { id: string; naam: string; slug: string; actief: boolean; telt: string }[];
@@ -61,9 +75,6 @@ const STATUS_KLEUR: Record<Voorraadstatus, string> = {
     op: 'var(--red, #dc2626)',
     laag: 'var(--brand-gold, #c4a35a)',
     ok: 'var(--green, #22c55e)',
-};
-const STATUS_LABEL: Record<Voorraadstatus, string> = {
-    niet_bijgehouden: 'niet bijgehouden', tekort: 'tekort', op: 'op', laag: 'bijna op', ok: 'op voorraad',
 };
 
 const kaart: React.CSSProperties = { background: 'var(--color-bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, color: 'var(--text)' };
@@ -84,46 +95,48 @@ const TYPE_ICOON: Record<string, typeof Beer> = {
     bier: Beer, wijn: Wine, worst: Beef, vleeswaar: Ham, amandelen: Nut, crackers: Cookie, krokant: Cookie,
     marmelade: Soup, doos: Gift, verpakking: Package, kaas: Salad, zuur: Carrot, overig: Package,
 };
-const TYPE_LABEL_MV: Record<string, string> = {
-    bier: 'Bier', wijn: 'Wijn', worst: 'Worst', vleeswaar: 'Vleeswaren', amandelen: 'Amandelen', crackers: 'Crackers', krokant: 'Krokant',
-    marmelade: 'Marmelades', doos: 'Dozen', verpakking: 'Verpakking', kaas: 'Kaas', zuur: 'Zuur', overig: 'Overig',
-};
 
-type Filter = 'alles' | 'aandacht' | 'niet_geteld';
+type Filter = 'alles' | 'aandacht' | 'niet_geteld' | 'pakketten';
 
-export default function WinkelVoorraadClient({ data, openProductId }: { data: WinkelData; openProductId: string | null }) {
+export default function WinkelVoorraadClient({ data, openProductId, openAfdelingId }: { data: WinkelData; openProductId: string | null; openAfdelingId: string | null }) {
     const router = useRouter();
     const stil = useReducedMotion();
     const [openId, setOpenId] = useState<string | null>(openProductId);
+    const [keuze, setKeuze] = useState<string>(openAfdelingId ?? ALLES);
+    const [zoek, setZoek] = useState('');
     const [filter, setFilter] = useState<Filter>('alles');
+    const [toevoegen, setToevoegen] = useState(false);
     useEffect(() => { setOpenId(openProductId); }, [openProductId]);
+    useEffect(() => { if (openAfdelingId) setKeuze(openAfdelingId); }, [openAfdelingId]);
 
     const actief = useMemo(() => new Set(data.artikelen.filter((a) => a.actief).map((a) => a.id)), [data.artikelen]);
-    const rijen = useMemo(() => data.producten.filter((p) => p.actief).map((p) => {
+    const afdelingIds = useMemo(() => new Set(data.afdelingen.map((a) => a.id)), [data.afdelingen]);
+    const rijen = useMemo(() => data.producten.map((p) => {
         const b = beschikbaar(p);
         const d = geldendeDrempel(p, data.slots, actief);
-        return { p, b, drempel: d, status: voorraadstatus(b, d.waarde), waarde: p.voorraad == null ? null : waardeCenten(p, p.voorraad) };
+        return {
+            p, b, status: voorraadstatus(b, d.waarde), waarde: p.voorraad == null ? null : waardeCenten(p, p.voorraad),
+            naam: p.naam, actief: p.actief, afdeling_id: p.afdeling_id, verkocht28: p.cijfers.verkocht28,
+        };
     }), [data.producten, data.slots, actief]);
 
     const totaal = useMemo(() => {
-        const bij = rijen.filter((r) => r.p.voorraad != null);
+        const inAssortiment = rijen.filter((r) => r.actief);
+        const bij = inAssortiment.filter((r) => r.p.voorraad != null);
         return {
+            aantal: inAssortiment.length,
             waarde: bij.reduce((s, r) => s + (r.waarde ?? 0), 0),
             zonderPrijs: bij.filter((r) => r.waarde == null).length,
             geteld: bij.length,
-            aandacht: rijen.filter((r) => r.status === 'laag' || r.status === 'op' || r.status === 'tekort').length,
+            aandacht: inAssortiment.filter((r) => r.status === 'laag' || r.status === 'op' || r.status === 'tekort').length,
         };
     }, [rijen]);
     const nietsGeteld = totaal.geteld === 0;
 
-    const zichtbaar = rijen.filter((r) => filter === 'alles'
+    const keuzes = useMemo(() => assortimentKeuzes(data.afdelingen, rijen), [data.afdelingen, rijen]);
+    const zichtbaar = useMemo(() => assortimentLijst(rijen, keuze, zoek, afdelingIds).filter((r) => filter === 'alles' || filter === 'pakketten'
         || (filter === 'aandacht' && (r.status === 'laag' || r.status === 'op' || r.status === 'tekort'))
-        || (filter === 'niet_geteld' && r.status === 'niet_bijgehouden'));
-    const perType = useMemo(() => {
-        const m = new Map<string, typeof zichtbaar>();
-        for (const r of zichtbaar) m.set(r.p.type, [...(m.get(r.p.type) ?? []), r]);
-        return [...m.entries()];
-    }, [zichtbaar]);
+        || (filter === 'niet_geteld' && r.status === 'niet_bijgehouden')), [rijen, keuze, zoek, afdelingIds, filter]);
 
     const pakketten = useMemo(() => data.artikelen
         .filter((a) => a.actief && data.slots.some((s) => s.artikel_id === a.id))
@@ -133,191 +146,171 @@ export default function WinkelVoorraadClient({ data, openProductId }: { data: Wi
     const maxPakket = Math.max(1, ...pakketten.map((x) => x.n ?? 0));
 
     const open = openId ? data.producten.find((p) => p.id === openId) ?? null : null;
-    const sluit = useCallback(() => { setOpenId(null); router.replace('/voorraad/winkel', { scroll: false }); }, [router]);
+    const sluit = useCallback(() => {
+        setOpenId(null);
+        if (openProductId) router.replace('/voorraad/winkel', { scroll: false });
+    }, [router, openProductId]);
+    const afdelingNaam = (id: string | null) => data.afdelingen.find((a) => a.id === id)?.naam ?? null;
 
     return (
-        <div className="mobile-safe-bottom" style={{ padding: '20px var(--space-mobile-edge, 16px) 48px', maxWidth: 1180, margin: '0 auto' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
-                    <h1 className="chassis-titel" style={{ margin: 0 }}>{data.plekNaam}</h1>
-                    <p style={{ fontSize: 13, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5 }}>
-                        Wat er staat, wat besteld is en wat de webshop nog kan verkopen.
-                    </p>
+        <div className="wk-pagina mobile-safe-bottom">
+            <div className="wk-kop">
+                <div>
+                    <h1 className="chassis-titel" style={{ margin: 0 }}>Assortiment</h1>
+                    <div className="wk-onder">
+                        {nietsGeteld
+                            ? 'Nog niets geteld. Loop langs de schappen en tel wat er staat.'
+                            : `${totaal.geteld} van ${totaal.aantal} geteld · ${eur(totaal.waarde)} aan inkoop in de winkel${totaal.zonderPrijs ? ` (${totaal.zonderPrijs} zonder inkoopprijs telt niet mee)` : ''}`}
+                    </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <VoorraadBel />
-                    <Link href="/voorraad/winkel/vloer" className="btn btn-ghost"><LayoutGrid size={14} /> Vloer</Link>
-                    <Link href="/voorraad/ontvangst" className="btn btn-ghost"><PackagePlus size={14} /> Ontvangst</Link>
-                    <Link href="/voorraad/afwijking" className="btn btn-ghost"><Minus size={14} /> Afwijking</Link>
-                    {!nietsGeteld && <Link href="/voorraad/winkel/tellen" className="btn btn-brand"><ClipboardList size={14} /> Tellen</Link>}
+                <div className="wk-knoppen">
+                    <MeerMenu />
+                    <Link href="/voorraad/winkel/tellen" className={nietsGeteld ? 'btn btn-brand' : 'btn btn-ghost'} style={{ textDecoration: 'none' }}><ClipboardList size={14} /> Tellen</Link>
+                    <button type="button" className={nietsGeteld ? 'btn btn-ghost' : 'btn btn-brand'} onClick={() => setToevoegen(true)}><Plus size={14} /> Product toevoegen</button>
                 </div>
             </div>
 
-            {nietsGeteld ? (
-                <motion.div initial={stil ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    style={{ ...kaart, padding: '28px 26px', marginBottom: 26, display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap',
-                        background: 'radial-gradient(120% 140% at 0% 0%, rgba(196,163,90,.16), transparent 60%), var(--color-bg-elevated)' }}>
-                    <div style={{ width: 64, height: 64, borderRadius: 18, display: 'grid', placeItems: 'center', background: 'rgba(196,163,90,.16)', color: 'var(--brand-gold, #c4a35a)', flexShrink: 0 }}>
-                        <Store size={30} />
-                    </div>
-                    <div style={{ flex: '1 1 280px', minWidth: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 24, fontWeight: 300, lineHeight: 1.2 }}>Je winkel is nog niet geteld</div>
-                        <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.55 }}>
-                            Loop met je telefoon langs de schappen: {data.producten.filter((p) => p.actief).length} producten, ongeveer een kwartier.
-                            Daarna zie je hier per schap wat er staat, wat bijna op is en hoeveel pakketten je nog kunt maken.
-                        </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                        <Link href="/voorraad/winkel/tellen" className="btn btn-brand btn-touch" style={{ justifyContent: 'center', minWidth: 200 }}><ClipboardList size={16} /> Winkel tellen</Link>
-                        <Link href="/voorraad/ontvangst" className="btn btn-ghost" style={{ justifyContent: 'center' }}><PackagePlus size={14} /> Of begin met een levering</Link>
-                    </div>
-                </motion.div>
+            {data.producten.length === 0 ? (
+                <div className="kf-empty"><p>Nog geen winkelproducten. Voeg je eerste product toe; daarna tel je het hier.</p></div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-                    <Stat label="Geteld" waarde={`${totaal.geteld} / ${rijen.length}`} balk={totaal.geteld / Math.max(1, rijen.length)}
-                        onder={totaal.geteld < rijen.length ? 'Tik om de rest te tellen' : 'Alles wordt bijgehouden'} onClick={totaal.geteld < rijen.length ? () => setFilter('niet_geteld') : undefined} />
-                    <Stat label="In de winkel (inkoop)" waarde={eur(totaal.waarde)} onder={totaal.zonderPrijs ? `${totaal.zonderPrijs} zonder inkoopprijs telt niet mee` : undefined} />
-                    <Stat label="Bijna op of op" waarde={String(totaal.aandacht)} kleur={totaal.aandacht ? 'var(--brand-gold, #c4a35a)' : 'var(--green, #22c55e)'}
-                        onder={totaal.aandacht ? 'Tik om ze te zien' : 'Niets om je zorgen over te maken'} onClick={totaal.aandacht ? () => setFilter('aandacht') : undefined} />
-                </div>
-            )}
-
-            {pakketten.length > 0 && !nietsGeteld && (
-                <section style={{ marginBottom: 28 }}>
-                    <div className="kf-eyebrow" style={{ marginBottom: 10 }}>Nog te maken</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10 }}>
-                        {pakketten.map(({ a, n, door }, i) => {
-                            const kleur = n == null ? 'var(--muted)' : n === 0 ? 'var(--red, #dc2626)' : n <= 5 ? 'var(--brand-gold, #c4a35a)' : 'var(--green, #22c55e)';
-                            return (
-                                <motion.div key={a.id} initial={stil ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i * 0.04, 0.3) }}
-                                    style={{ ...kaart, padding: 16, borderColor: n === 0 ? 'rgba(220,38,38,.45)' : 'var(--border)' }}>
-                                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}><Gift size={14} style={{ color: 'var(--brand-gold, #c4a35a)' }} />{a.naam}</div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                                        <span style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 34, fontWeight: 300, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: kleur }}>{n == null ? '—' : n}</span>
-                                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{a.telt === 'personen' ? 'personen' : 'pakketten'}</span>
-                                    </div>
-                                    <Balk deel={n == null ? 0 : n / maxPakket} kleur={kleur} stil={!!stil} />
-                                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
-                                        {n == null ? 'Nog geen onderdeel geteld'
-                                            : door ? <>Grens: <button type="button" onClick={() => setOpenId(door.id)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>{door.naam}</button>{n === 0 ? ' is op' : ''}</> : ''}
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
+                <>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <label className="wk-zoek">
+                            <Search size={15} />
+                            <input className="kf-input" type="search" aria-label="Zoek een product" value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek een product" />
+                        </label>
+                        {!nietsGeteld && (
+                            <select className="kf-input" aria-label="Toon" style={{ width: 'auto', flex: '0 0 auto' }} value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
+                                <option value="alles">Alle producten</option>
+                                <option value="aandacht">Bijna op ({totaal.aandacht})</option>
+                                <option value="niet_geteld">Niet geteld ({totaal.aantal - totaal.geteld})</option>
+                                {pakketten.length > 0 && <option value="pakketten">Pakketten nog te maken</option>}
+                            </select>
+                        )}
                     </div>
-                </section>
-            )}
 
-            {data.producten.length === 0 && (
-                <div className="kf-empty"><p>Nog geen winkelproducten. Je maakt ze aan in <Link href="/verkoop/webshop#producten" style={{ color: 'var(--brand)' }}>Webshop → Producten</Link>; daarna tel je ze hier.</p></div>
+                    {filter === 'pakketten' ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 10, marginTop: 14 }}>
+                            {pakketten.map(({ a, n, door }) => {
+                                const kleur = n == null ? 'var(--muted)' : n === 0 ? 'var(--red, #dc2626)' : n <= 5 ? 'var(--brand-gold, #c4a35a)' : 'var(--green, #22c55e)';
+                                return (
+                                    <div key={a.id} style={{ ...kaart, padding: 16, borderColor: n === 0 ? 'rgba(220,38,38,.45)' : 'var(--border)' }}>
+                                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 7 }}><Gift size={14} style={{ color: 'var(--brand-gold, #c4a35a)' }} />{a.naam}</div>
+                                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                                            <span style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 34, fontWeight: 300, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: kleur }}>{n == null ? '—' : n}</span>
+                                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{a.telt === 'personen' ? 'personen' : 'pakketten'}</span>
+                                        </div>
+                                        <Balk deel={n == null ? 0 : n / maxPakket} kleur={kleur} stil={!!stil} />
+                                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8 }}>
+                                            {n == null ? 'Nog geen onderdeel geteld'
+                                                : door ? <>Grens: <button type="button" onClick={() => setOpenId(door.id)} style={{ background: 'none', border: 'none', padding: 0, color: 'var(--text)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}>{door.naam}</button>{n === 0 ? ' is op' : ''}</> : ''}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <>
+                            <div className="wk-keuzes">
+                                {keuzes.map((k) => (
+                                    <button key={k.id} type="button" className={`kf-chip${keuze === k.id ? ' is-on' : ''}`} aria-pressed={keuze === k.id} onClick={() => setKeuze(k.id)}>{k.label} {k.aantal}</button>
+                                ))}
+                            </div>
+                            {zichtbaar.length === 0 ? (
+                                <div className="kf-empty"><p>{zoek.trim() ? 'Niets gevonden. Probeer een ander woord of kies Alles.' : 'Niets in deze selectie.'}</p></div>
+                            ) : (
+                                <div className="wk-lijst">
+                                    <div className="wk-rij wk-rij-kop wk-product">
+                                        <span>Product</span>
+                                        <span className="wk-getal wk-alleen-breed" style={{ fontSize: 12 }}>Prijs</span>
+                                        <span className="wk-getal" style={{ fontSize: 12 }}>Ligt er</span>
+                                        <span className="wk-getal wk-alleen-breed" style={{ fontSize: 12 }} title="Verkocht in de laatste 4 weken">Verkocht</span>
+                                    </div>
+                                    {zichtbaar.map((r) => <ProductRegel key={r.p.id} p={r.p} b={r.b} status={r.status} afdeling={keuze === ALLES ? afdelingNaam(r.p.afdeling_id) : null} onClick={() => setOpenId(r.p.id)} />)}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </>
             )}
-
-            {!nietsGeteld && (
-                <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-                    {([['alles', `Alles · ${rijen.length}`], ['aandacht', `Bijna op · ${totaal.aandacht}`], ['niet_geteld', `Niet geteld · ${rijen.length - totaal.geteld}`]] as const).map(([f, label]) => (
-                        <button key={f} type="button" className={`kf-chip${filter === f ? ' is-on' : ''}`} onClick={() => setFilter(f)}>{label}</button>
-                    ))}
-                </div>
-            )}
-
-            {/* Eén doorlopend raster, gesorteerd op schap; het schap staat op de tegel. */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 10 }}>
-                {perType.flatMap(([type, lijst]) => lijst.map(({ p, b, drempel, status }, i) => (
-                    <Tegel key={p.id} p={p} b={b} drempel={drempel.waarde} status={status} Icoon={TYPE_ICOON[type] ?? Package} schap={TYPE_LABEL_MV[type] ?? type}
-                        stil={!!stil} vertraging={Math.min(i * 0.02, 0.3)} onClick={() => setOpenId(p.id)} />
-                )))}
-            </div>
-            {!nietsGeteld && zichtbaar.length === 0 && <div className="kf-empty"><p>Niets in deze selectie.</p></div>}
 
             {open && <ProductDrawer key={open.id} p={open} data={data} actief={actief} onClose={sluit} />}
+            {toevoegen && <ToevoegenLade afdelingen={data.afdelingen} begin={afdelingIds.has(keuze) ? keuze : null} producten={data.producten} leveranciers={data.leveranciers} onClose={() => setToevoegen(false)} />}
         </div>
     );
 }
 
-function Balk({ deel, kleur, stil, grens }: { deel: number; kleur: string; stil: boolean; grens?: number | null }) {
+/** Wat je zelden nodig hebt, staat achter één knop. */
+function MeerMenu() {
+    const [open, setOpen] = useState(false);
+    const plek = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const buiten = (e: MouseEvent) => { if (!plek.current?.contains(e.target as Node)) setOpen(false); };
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('mousedown', buiten);
+        document.addEventListener('keydown', esc);
+        return () => { document.removeEventListener('mousedown', buiten); document.removeEventListener('keydown', esc); };
+    }, [open]);
+    return (
+        <div className="wk-menu" ref={plek}>
+            <button type="button" className="btn btn-ghost" aria-haspopup="menu" aria-expanded={open} aria-label="Meer" onClick={() => setOpen((x) => !x)}><MoreHorizontal size={16} /></button>
+            {open && (
+                <div className="wk-menu-paneel" role="menu">
+                    <Link href="/voorraad/winkel/vloer" role="menuitem"><LayoutGrid size={14} /> Afdelingen indelen</Link>
+                    <Link href="/voorraad/ontvangst" role="menuitem"><PackagePlus size={14} /> Ontvangst</Link>
+                    <Link href="/voorraad/afwijking" role="menuitem"><Minus size={14} /> Afwijking</Link>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function Balk({ deel, kleur, stil }: { deel: number; kleur: string; stil: boolean }) {
     const w = `${Math.max(0, Math.min(1, deel)) * 100}%`;
     return (
         <div style={{ position: 'relative', height: 6, borderRadius: 3, background: 'rgba(255,255,255,.07)', marginTop: 10, overflow: 'hidden' }}>
             <motion.div initial={stil ? false : { width: 0 }} animate={{ width: w }} transition={{ duration: 0.7, ease: [0.2, 0.8, 0.2, 1] }}
                 style={{ position: 'absolute', inset: '0 auto 0 0', width: w, background: kleur, borderRadius: 3 }} />
-            {grens != null && grens > 0 && grens < 1 && (
-                <div title="bijna-op-grens" style={{ position: 'absolute', top: -2, bottom: -2, left: `${grens * 100}%`, width: 2, background: 'var(--text)', opacity: 0.35 }} />
-            )}
         </div>
     );
 }
 
-function Tegel({ p, b, drempel, status, Icoon, schap, stil, vertraging, onClick }: {
-    p: WinkelProductRij; b: number | null; drempel: number | null; status: Voorraadstatus; Icoon: typeof Beer; schap: string; stil: boolean; vertraging: number; onClick: () => void;
-}) {
-    const geteld = p.voorraad != null;
-    /* Schaal: twee keer de grens, of wat er ligt als dat meer is. De streep is de grens. */
-    const schaal = Math.max(1, (drempel ?? 0) * 2, p.voorraad ?? 0);
-    const kleur = STATUS_KLEUR[status];
-    return (
-        <motion.button type="button" onClick={onClick}
-            initial={stil ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: vertraging }}
-            whileHover={stil ? undefined : { y: -2 }}
-            style={{
-                ...kaart, padding: 0, overflow: 'hidden', textAlign: 'left', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-                borderStyle: geteld ? 'solid' : 'dashed', borderColor: status === 'op' || status === 'tekort' ? 'rgba(220,38,38,.5)' : status === 'laag' ? 'rgba(196,163,90,.5)' : 'var(--border)',
-            }}>
-            <div style={{ height: 64, position: 'relative', display: 'grid', placeItems: 'center', background: geteld ? 'rgba(255,255,255,.03)' : 'transparent', borderBottom: '1px solid var(--border)' }}>
-                {p.foto_url
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={p.foto_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: geteld ? 1 : 0.45 }} />
-                    : <Icoon size={28} style={{ color: geteld ? kleur : 'var(--muted)', opacity: geteld ? 0.9 : 0.5 }} />}
-                <span style={{ position: 'absolute', top: 8, left: 9, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                    <Icoon size={10} />{schap}
-                </span>
-                {geteld && status !== 'ok' && (
-                    <span style={{ position: 'absolute', top: 8, right: 8, fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', padding: '3px 7px', borderRadius: 999, background: 'rgba(0,0,0,.55)', color: kleur }}>
-                        {STATUS_LABEL[status]}
-                    </span>
-                )}
-            </div>
-            <div style={{ padding: '10px 12px 12px' }}>
-                <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3, minHeight: 34, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.naam}</div>
-                {geteld ? (
-                    <>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 4 }}>
-                            <span style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 22, fontWeight: 300, fontVariantNumeric: 'tabular-nums', color: status === 'ok' ? 'var(--text)' : kleur }}>{hoeveelheidKort(b ?? 0, p.eenheid)}</span>
-                            <span style={{ fontSize: 11, color: 'var(--muted)' }}>vrij</span>
-                        </div>
-                        <Balk deel={Math.max(0, b ?? 0) / schaal} kleur={kleur} stil={stil} grens={drempel != null ? drempel / schaal : null} />
-                        {(() => {
-                            const best = bestelVoorstel({
-                                id: p.id, naam: p.naam, eenheid: p.eenheid, voorraad: p.voorraad, voorraad_bezet: p.voorraad_bezet, minimum: drempel,
-                                par_niveau: p.par_niveau, bestel_hoeveelheid: p.bestel_hoeveelheid, bestel_eenheid_naam: p.bestel_eenheid_naam, bestel_prijs_cents: null,
-                            });
-                            return best ? (
-                                <div style={{ marginTop: 7, fontSize: 11, fontWeight: 600, color: 'var(--brand-gold, #c4a35a)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <PackagePlus size={11} /> op bestellijst: {best.eenheid_label ?? hoeveelheidKort(best.besteld, p.eenheid)}
-                                </div>
-                            ) : null;
-                        })()}
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 7 }}>
-                            {hoeveelheidKort(p.voorraad ?? 0, p.eenheid)} staat{gereserveerd(p) ? ` · ${hoeveelheidKort(gereserveerd(p), p.eenheid)} besteld` : ''}{p.tht ? ` · THT ${thtTekst(p.tht)}` : ''}
-                        </div>
-                    </>
-                ) : (
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>Nog niet geteld</div>
-                )}
-            </div>
-        </motion.button>
-    );
+function ligtErTekst(p: WinkelProductRij, b: number | null): string {
+    if (p.artikel?.verkoop_per === 'kg' && p.stuks.length) return `${p.stuks.length} ${p.stuks.length === 1 ? 'bakje' : 'bakjes'}`;
+    return p.voorraad == null ? 'niet geteld' : hoeveelheidKort(b ?? 0, p.eenheid);
 }
 
-function Stat({ label, waarde, onder, kleur, balk, onClick }: { label: string; waarde: string; onder?: string; kleur?: string; balk?: number; onClick?: () => void }) {
-    const Tag = onClick ? 'button' : 'div';
+function prijsTekst(p: WinkelProductRij): string {
+    const c = p.artikel?.prijs_cents ?? p.winkelprijs_incl_cents;
+    return c == null ? '–' : `${eur(c)}${p.artikel?.verkoop_per === 'kg' ? ' /kg' : ''}`;
+}
+
+/** De ene regel onder de naam: alleen wat er nu toe doet. */
+function ProductRegel({ p, b, status, afdeling, onClick }: { p: WinkelProductRij; b: number | null; status: Voorraadstatus; afdeling: string | null; onClick: () => void }) {
+    const Icoon = TYPE_ICOON[p.type] ?? Package;
+    const urgent = p.stuks.filter((s) => s.urgentie !== 'later');
+    const over = urgent.some((s) => s.urgentie === 'over');
+    const melding = urgent.length ? `${urgent.length} ${urgent.length === 1 ? 'stuk' : 'stuks'} ${over ? 'over de datum' : `THT ${thtTekst(urgent[0]!.tht.slice(0, 10))}`}` : null;
+    const kleur = p.voorraad != null && status !== 'ok' ? STATUS_KLEUR[status] : undefined;
     return (
-        <Tag type={onClick ? 'button' : undefined} onClick={onClick}
-            style={{ ...kaart, padding: '14px 16px', textAlign: 'left', cursor: onClick ? 'pointer' : 'default', font: 'inherit' }}>
-            <div style={{ fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600 }}>{label}</div>
-            <div style={{ fontFamily: 'var(--font-display, Outfit)', fontSize: 26, fontWeight: 300, color: kleur ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.25 }}>{waarde}</div>
-            {balk != null && <Balk deel={balk} kleur="var(--brand-gold, #c4a35a)" stil={false} />}
-            {onder && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{onder}</div>}
-        </Tag>
+        <button type="button" className="wk-rij wk-product" onClick={onClick}>
+            <span className="wk-foto">
+                {p.foto
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={p.foto} alt="" loading="lazy" />
+                    : <Icoon size={18} />}
+            </span>
+            <span style={{ minWidth: 0 }}>
+                <span className="wk-naam" style={{ display: 'block' }}>{p.naam}</span>
+                {(melding || afdeling) && (
+                    <span className="wk-klein" style={{ display: 'block', color: melding ? (over ? 'var(--red, #dc2626)' : '#D9A520') : undefined }}>{melding ?? afdeling}</span>
+                )}
+            </span>
+            <span className="wk-getal wk-alleen-breed">{prijsTekst(p)}</span>
+            <span className={`wk-getal${p.voorraad == null ? ' wk-stil' : ''}`} style={{ color: kleur }}>{ligtErTekst(p, b)}</span>
+            <span className={`wk-getal wk-alleen-breed${p.cijfers.verkocht28 ? '' : ' wk-stil'}`}>{p.cijfers.verkocht28 || '–'}</span>
+        </button>
     );
 }
 
@@ -370,6 +363,8 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     const [leverancier, setLeverancier] = useState<number | null>(p.leverancier_id);
     const [notitie, setNotitie] = useState('');
     const keukenItem = data.keuken.find((k) => k.id === keukenId) ?? null;
+    const afdeling = data.afdelingen.find((a) => a.id === p.afdeling_id) ?? null;
+    const kg = p.artikel?.verkoop_per === 'kg';
 
     function geldigAantal(): number | null {
         const n = leesGetal(aantal);
@@ -420,7 +415,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     ];
 
     return (
-        <Drawer eyebrow={`${p.type}${p.alcohol ? ' · 18+' : ''}`} title={p.naam} subtitle={p.voorraad == null ? 'Nog niet bijgehouden: tel het eerst' : `Laatste verkoop of verbruik: ${p.laatste_beweging_at ? new Date(p.laatste_beweging_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : 'nog niet'}`} onClose={onClose} width={580}
+        <Drawer eyebrow={`${afdeling?.naam ?? p.type}${p.alcohol ? ' · 18+' : ''}`} title={p.naam} subtitle={p.voorraad == null ? 'Nog niet bijgehouden: tel het eerst' : `Laatste verkoop of verbruik: ${p.laatste_beweging_at ? new Date(p.laatste_beweging_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : 'nog niet'}`} onClose={onClose} width={580}
             footer={<><Button icon={<PackageCheck size={14} />} loading={bezig} onClick={verstuur}>{actie === 'instellen' ? 'Opslaan' : 'Vastleggen'}</Button><Button variant="ghost" onClick={onClose}>Sluiten</Button></>}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
@@ -429,6 +424,39 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     <Mini label="Beschikbaar" waarde={b == null ? '—' : hoeveelheidKort(b, p.eenheid)} />
                     <Mini label={d.bron === 'voorstel' ? 'Minimum (voorstel)' : 'Minimum'} waarde={d.waarde == null ? '—' : hoeveelheidKort(d.waarde, p.eenheid)} />
                 </div>
+
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                    {prijsTekst(p) !== '–' && `${prijsTekst(p)} · `}
+                    {p.cijfers.verkocht28 || p.cijfers.verkocht7
+                        ? `${p.cijfers.verkocht7} verkocht deze week · ${p.cijfers.verkocht28} in 4 weken · ${eur(p.cijfers.omzet28_cents)} omzet`
+                        : 'nog niet verkocht in de laatste 4 weken'}
+                    {p.cijfers.laatsteVerkoop && ` · laatst ${thtTekst(p.cijfers.laatsteVerkoop.slice(0, 10))}`}
+                    {kg && p.artikel?.sticker_plu != null && ` · stickernummer ${p.artikel.sticker_plu}`}
+                    {p.tht && ` · THT ${thtTekst(p.tht)}`}
+                    {p.artikel && !p.artikel.opToonbank && ' · niet op de toonbank'}
+                </div>
+
+                {p.stuks.length > 0 && (
+                    <div>
+                        <div className="kf-eyebrow" style={{ marginBottom: 8 }}>Gestickerd in de winkel</div>
+                        {p.stuks.map((s) => (
+                            <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                                <span>{s.gewicht_g.toLocaleString('nl-NL')} g · {eur(s.prijs_cents)}</span>
+                                <span style={{ color: s.urgentie === 'later' ? 'var(--muted)' : s.urgentie === 'over' || s.urgentie === 'vandaag' ? 'var(--red, #dc2626)' : '#D9A520' }}>THT {thtTekst(s.tht.slice(0, 10))}</span>
+                            </div>
+                        ))}
+                        <Link href="/winkel/leveringen" style={{ fontSize: 12.5, color: 'var(--brand-gold, #c4a35a)', display: 'inline-block', marginTop: 8 }}>Naar de keuken of weggooien</Link>
+                    </div>
+                )}
+
+                {p.partijen.length > 0 && (
+                    <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+                        <div className="kf-eyebrow" style={{ marginBottom: 6 }}>Open leveringen</div>
+                        {p.partijen.map((x) => (
+                            <div key={x.id}>{x.leverancier ?? 'Levering'} van {thtTekst(x.geleverd_op.slice(0, 10))} · THT {thtTekst(x.tht.slice(0, 10))}</div>
+                        ))}
+                    </div>
+                )}
 
                 <div className="kf-seg" role="tablist" style={{ flexWrap: 'wrap' }}>
                     {acties.filter((a) => a.kan).map((a) => (
@@ -582,6 +610,25 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             <span style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--muted)', textAlign: 'right', minWidth: 58 }}>= {hoeveelheidKort(r.resultaat, p.eenheid)}</span>
                         </div>
                     ))}
+                </div>
+
+                <div style={{ display: 'grid', gap: 10 }}>
+                    <div className="kf-eyebrow">Plek in de winkel</div>
+                    {data.afdelingen.length > 0 && (
+                        <select className="kf-input" aria-label="Afdeling" value={afdeling?.id ?? ''} disabled={bezig} onChange={(e) => {
+                            const nieuw = data.afdelingen.find((a) => a.id === e.target.value);
+                            if (nieuw) void doe(() => zetProductOpAfdeling({ productId: p.id, afdelingId: nieuw.id }), `${p.naam} staat nu bij ${nieuw.naam}.`);
+                        }}>
+                            {!afdeling && <option value="">Zonder afdeling</option>}
+                            {data.afdelingen.map((a) => <option key={a.id} value={a.id}>{a.naam}</option>)}
+                        </select>
+                    )}
+                    <button type="button" className="btn btn-ghost" style={{ justifyContent: 'flex-start', color: p.actief ? 'var(--red, #dc2626)' : undefined }} disabled={bezig}
+                        onClick={() => void doe(() => zetInAssortiment({ productId: p.id, actief: !p.actief, afdelingId: afdeling?.id }),
+                            p.actief ? `${p.naam} is uit het assortiment. De geschiedenis blijft.` : `${p.naam} is terug in het assortiment.`)}>
+                        {p.actief ? <><EyeOff size={14} /> Uit het assortiment</> : <><RotateCcw size={14} /> Terug in het assortiment</>}
+                    </button>
+                    {p.actief && <div className="kf-help">Niet meer te koop op de toonbank en de webshop. De verkoopgeschiedenis blijft, terugzetten kan altijd.</div>}
                 </div>
             </div>
         </Drawer>

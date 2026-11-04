@@ -6,12 +6,12 @@ import VloerClient, { type VloerData } from './VloerClient';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-    title: 'Winkelvloer · Voorraad',
+    title: 'Winkel · Afdelingen indelen',
     description: 'Welke afdelingen de winkel heeft en wat waar staat.',
 };
 
 /**
- * Winkelvloer (eerste stap van fase 3): de ruimte "Winkel" met haar
+ * Afdelingen indelen (eerste stap van fase 3): de ruimte "Winkel" met haar
  * afdelingen, en per afdeling de producten die er te koop staan. Faalt het
  * laden omdat migratie 20261102120000_winkel_plekken er nog niet staat, dan
  * zegt het scherm dat, in plaats van een 500.

@@ -222,7 +222,7 @@ export function thtMeldingen(producten: Pick<WinkelProduct, 'id' | 'naam'>[], st
                 bron: 'winkel', item_id: pid, soort: 'tht_verlopen',
                 titel: `${r.over.length} × ${n} over de datum`,
                 tekst: `De THT is voorbij (${kort(r.over.sort()[0]!)}). Haal ${r.over.length === 1 ? 'het' : 'ze'} uit de winkel: naar de keuken of weg.`,
-                link: '/winkel/datums', metadata: { stuks: r.over.length, tht: r.over[0] },
+                link: '/winkel/leveringen', metadata: { stuks: r.over.length, tht: r.over[0] },
             });
         }
         if (r.bijna.length) {
@@ -231,7 +231,7 @@ export function thtMeldingen(producten: Pick<WinkelProduct, 'id' | 'naam'>[], st
                 bron: 'winkel', item_id: pid, soort: 'tht_bijna',
                 titel: `${r.bijna.length} × ${n}: THT ${kort(eerste)}`,
                 tekst: dagen(eerste) === 0 ? 'Vandaag de laatste dag.' : `Nog ${dagen(eerste)} ${dagen(eerste) === 1 ? 'dag' : 'dagen'}. Zet ${r.bijna.length === 1 ? 'het' : 'ze'} vooraan of gebruik ${r.bijna.length === 1 ? 'het' : 'ze'} in de keuken.`,
-                link: '/winkel/datums', metadata: { stuks: r.bijna.length, tht: eerste },
+                link: '/winkel/leveringen', metadata: { stuks: r.bijna.length, tht: eerste },
             });
         }
     }

@@ -156,7 +156,7 @@ describe('thtMeldingen', () => {
         ], '2026-11-25');
         expect(m.map((x) => [x.item_id, x.soort, x.metadata.stuks])).toEqual([['a', 'tht_verlopen', 1], ['a', 'tht_bijna', 2]]);
         expect(m[1]!.titel).toContain('2 × Riblappen');
-        expect(m[1]!.link).toBe('/winkel/datums');
+        expect(m[1]!.link).toBe('/winkel/leveringen');
     });
     it('vandaag de laatste dag', () => {
         expect(thtMeldingen(producten, [{ product_id: 'b', tht: '2026-11-25' }], '2026-11-25')[0]!.tekst).toBe('Vandaag de laatste dag.');

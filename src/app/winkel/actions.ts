@@ -42,13 +42,11 @@ const eersteFout = (e: z.ZodError) => e.issues[0]?.message ?? 'Controleer de vel
 const uuid = z.string().uuid('Onbekend product of afdeling');
 const datum = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum als JJJJ-MM-DD');
 
-function ververs(afdelingId?: string) {
+function ververs() {
     revalidatePath('/winkel');
-    revalidatePath('/winkel/datums');
-    revalidatePath('/winkel/binnen');
+    revalidatePath('/winkel/leveringen');
     revalidatePath('/voorraad/winkel');
     revalidatePath('/voorraad/winkel/vloer');
-    if (afdelingId) revalidatePath(`/winkel/afdeling/${afdelingId}`);
 }
 
 function slugVan(naam: string): string {
@@ -78,7 +76,7 @@ export async function zetProductOpAfdeling(input: unknown): Promise<ActionResult
     if (!s) return NIET_INGELOGD;
     const fout = await zetOpAfdeling(s, parsed.data.productId, parsed.data.afdelingId);
     if (fout) return { error: fout };
-    ververs(parsed.data.afdelingId);
+    ververs();
     return { data: { ok: true } };
 }
 
@@ -181,7 +179,7 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
 
     const fout = await zetOpAfdeling(s, productId, v.afdelingId);
     if (fout) return { error: fout };
-    ververs(v.afdelingId);
+    ververs();
     return { data: { productId, artikelId, plu } };
 }
 
@@ -214,7 +212,7 @@ export async function zetInAssortiment(input: unknown): Promise<ActionResult<{ a
         if (e) return { error: 'Het artikel op de Toonbank kon niet bijgewerkt worden.' };
     }
     await evalueerWinkelMeldingen(s.orgId, [productId]);
-    ververs(parsed.data.afdelingId);
+    ververs();
     return { data: { artikelen: eigen.length } };
 }
 

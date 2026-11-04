@@ -165,22 +165,20 @@ export const navSections: NavSection[] = [
         ],
     },
     {
-        /* De winkel aan de Tramstraat (open 21 november 2026). De voorraad en
-           de vloer houden hun route onder /voorraad/winkel; het langste
-           voorvoegsel wint, dus ze horen hier en niet bij Inkoop & Voorraad. */
+        /* De winkel aan de Tramstraat (open 21 november 2026). Assortiment
+           houdt zijn route onder /voorraad/winkel; het langste voorvoegsel
+           wint, dus die hoort hier en niet bij Inkoop & Voorraad. */
         title: "Winkel",
         icon: <Store size={18} />,
         type: "folder",
         slug: "winkel",
-        description: "Afdelingen, leveringen, datums en de winkelvoorraad.",
+        description: "Overzicht, assortiment en leveringen.",
         hubHref: "/winkel",
         kleur: "#B5483B",
         children: [
-            { label: "Afdelingen", icon: <LayoutGrid size={16} />, href: "/winkel", description: "Per afdeling verkoop, omzet en wat bijna over de datum gaat" },
-            { label: "Binnen", icon: <PackagePlus size={16} />, href: "/winkel/binnen", description: "Een levering binnenmelden met de datums van het A4" },
-            { label: "Datums", icon: <CalendarClock size={16} />, href: "/winkel/datums", description: "Wat er ligt, vroegste THT eerst: naar de keuken of weg" },
-            { label: "Voorraad", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Winkelvoorraad tellen en bijbestellen" },
-            { label: "Vloer", icon: <MapPinned size={16} />, href: "/voorraad/winkel/vloer", description: "Afdelingen in de winkel en wat waar staat" },
+            { label: "Overzicht", icon: <LayoutGrid size={16} />, href: "/winkel", description: "Wat er vandaag moet gebeuren en hoe de afdelingen lopen" },
+            { label: "Assortiment", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Alle producten: zoeken, tellen, bijbestellen en indelen" },
+            { label: "Leveringen", icon: <PackagePlus size={16} />, href: "/winkel/leveringen", description: "Levering binnenmelden en wat bijna over de datum gaat" },
         ],
     },
     {
