@@ -8,5 +8,5 @@ export const metadata = {
 };
 
 export default function WinkelBestellijstPage() {
-    return <div className="pagina-rand" style={{ paddingTop: 0 }}><InkoopScherm sp={{}} plek="winkel" /></div>;
+    return <div className="pagina-rand" style={{ paddingTop: 20 }}><InkoopScherm sp={{}} plek="winkel" /></div>;
 }

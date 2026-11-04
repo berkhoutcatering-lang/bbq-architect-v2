@@ -93,8 +93,8 @@ function ToevoegenLade({ leverancier, afdelingen, producten, onClose }: { levera
         const r = await koppelAanLeverancier({ productIds: [...gekozen], leverancierId: leverancier.id });
         if ('error' in r) { toast(r.error, 'error'); return; }
         toast(`${r.data.aantal} ${r.data.aantal === 1 ? 'product' : 'producten'} bij ${leverancier.naam}.`, 'success');
-        onClose();
         router.refresh();
+        onClose();
     });
 
     return (

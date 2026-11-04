@@ -178,6 +178,14 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                 </div>
             );
         }
+        if (props.plek === 'winkel') {
+            return (
+                <div className="kf-empty">
+                    <p>Niets te bestellen voor de winkel. Zet een product op de lijst met Bestellen in de lade, of vul bij Bestelinstellingen een minimum in.</p>
+                    <Link href="/voorraad/winkel" className="btn btn-brand" style={{ textDecoration: 'none' }}>Naar Assortiment</Link>
+                </div>
+            );
+        }
         return (
             <InkoopEmpty
                 eventsInWindow={props.events_count}
@@ -211,14 +219,7 @@ export default function InkoopLijst(props: InkoopLijstProps) {
                 onAssigned={() => router.refresh()}
             />
 
-            {knownBuckets.length === 0 && unboundItems.length === 0 && props.plek === 'winkel' && (
-                <div className="kf-empty">
-                    <p>Niets te bestellen voor de winkel. Zet een product op de lijst met Bestellen in de lade, of vul bij Bestelinstellingen een minimum in.</p>
-                    <Link href="/voorraad/winkel" className="btn btn-brand" style={{ textDecoration: 'none' }}>Naar Assortiment</Link>
-                </div>
-            )}
-
-            {knownBuckets.length === 0 && unboundItems.length === 0 && props.plek !== 'winkel'
+            {knownBuckets.length === 0 && unboundItems.length === 0
                 ? (
                     <InkoopEmpty
                         eventsInWindow={props.events_count}
