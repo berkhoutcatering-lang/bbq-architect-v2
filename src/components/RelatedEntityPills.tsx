@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, CalendarDays, Receipt, User, ArrowUpRight, Inbox } from 'lucide-react';
+import { FileText, CalendarDays, Receipt, User, ArrowUpRight, Inbox, ShoppingBag } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getRelatedEntities, type RelatedEntity, type EntityKind } from '@/lib/related-entities';
 import StatusBadge from './StatusBadge';
@@ -20,6 +20,7 @@ const KIND_ICON: Record<EntityKind, typeof FileText> = {
   factuur: Receipt,
   klant: User,
   lead: Inbox,
+  bestelling: ShoppingBag,
 };
 
 interface Props {

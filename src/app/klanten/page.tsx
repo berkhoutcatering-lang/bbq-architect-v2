@@ -3,6 +3,7 @@
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { entityHref } from '@/lib/related-entities';
+import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { formatEur } from '@/lib/format';
 import { useSupabase } from '@/lib/useSupabase';
 import { useToast } from '@/components/Toast';
@@ -270,6 +271,12 @@ function Klanten() {
                         <div style={{ marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16, display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted)', fontSize: 12 }}>
                             <Flame size={14} className="animate-pulse" style={{ color: 'var(--color-accent-gold)' }} />
                             Klant-historie laden...
+                        </div>
+                    )}
+
+                    {typeof editing === 'number' && (
+                        <div style={{ marginTop: 24 }}>
+                            <RelatedEntityPills kind="klant" id={editing} clientNaam={form.naam} title="Dossier" />
                         </div>
                     )}
 

@@ -332,9 +332,9 @@ export default function LeadsPage() {
           {!isEmpty && (
             <div style={{ display: 'flex', gap: 0, borderRadius: 12, border: '1px solid var(--border)', background: 'var(--card-solid)', overflow: 'hidden' }}>
               {[
-                { label: 'Open leads', value: String(kpi.open), sub: `€ ${(kpi.openValue / 1000).toFixed(1)}k in pijplijn`, tone: 'var(--text)' },
+                { label: 'Open leads', value: String(kpi.open), sub: `${formatEur(kpi.openValue)} in pijplijn`, tone: 'var(--text)' },
                 { label: 'Win-ratio', value: kpi.winRatio == null ? '—' : kpi.winRatio + '%', sub: `${kpi.won} gewonnen · ${kpi.lost} verloren`, tone: 'var(--green)' },
-                { label: 'Gewonnen waarde', value: `€ ${(kpi.wonValue / 1000).toFixed(1)}k`, sub: 'dit seizoen', tone: 'var(--brand-gold, var(--brand))' },
+                { label: 'Gewonnen waarde', value: formatEur(kpi.wonValue), sub: 'dit seizoen', tone: 'var(--brand-gold, var(--brand))' },
                 { label: 'Te lang stil', value: String(kpi.stale), sub: 'nieuw · >24u', tone: kpi.stale > 0 ? 'var(--orange, #f97316)' : 'var(--muted)' },
               ].map((s) => (
                 <div key={s.label} style={{ padding: '10px 16px', borderLeft: '1px solid var(--border)', minWidth: 108 }}>
