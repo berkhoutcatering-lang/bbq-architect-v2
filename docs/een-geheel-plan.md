@@ -147,6 +147,8 @@ claude plugin disable impeccable@impeccable
 | Kerst-Box | Omzet klopt (€ 23,50 p.p.), geen catering-stappenplan op Vandaag |
 | Menukaart | Bedrijfsnaam gezet voor bestaande bedrijven; nieuwe bedrijven krijgen nog de voorbeeldnaam |
 
+**Later op 6 november, live met `[noodfix]` op verzoek van Mathijs:** PR #266. PR #267 voegt PR #250 toe, plus webshop en Toonbank in de btw-aangifte en de maandstaat onder Geld → Boekhouder → Winkelomzet. Winst en verlies en de balans tellen nog alleen facturen.
+
 **Nog te doen:** blok 5 voor gerecht en product, blok 6 (Bonnen, Inkoop, Website samenvoegen), blok 7 (bouwstenen), de eventpagina voor webshoporders opschonen, en één plek voor alle soorten bestellingen.
 
 ## Keuzes voor Mathijs
