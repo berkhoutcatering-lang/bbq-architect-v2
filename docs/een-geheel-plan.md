@@ -1,6 +1,6 @@
 # BBQ Architect als één geheel — plan
 
-**Datum:** 2026-11-06 · **Status:** blok 1 af, wacht op keuzes van Mathijs (onderaan)
+**Datum:** 2026-11-06 · **Status:** blok 0, 1, 3, 4 en de mailstroom gebouwd (PR #266); zie "Stand 6 november"
 **Aanleiding (Mathijs):** "Het is nu niet één geheel, het zijn pagina's met elk hun eigen ding. Ik wil één complete app."
 
 Bouwt voort op [operatie-overzicht.md](operatie-overzicht.md) (indeling), [design-brief-chassis-2026-09-03.md](design-brief-chassis-2026-09-03.md) (paginakoppen) en [werkruimtes-en-snelheid.md](werkruimtes-en-snelheid.md) (navigatie). Die drie gingen over hoe de app eruitziet en hoe je erdoorheen loopt. Dit plan gaat over wat er nog nooit is gebouwd: de verbinding tussen de onderdelen.
@@ -134,10 +134,25 @@ Uitzetten kan altijd, bijvoorbeeld:
 claude plugin disable impeccable@impeccable
 ```
 
+## Stand 6 november
+
+| Onderdeel | Stand |
+|---|---|
+| Dagtaken | `CRON_SECRET` staat in Vercel, drie routes gerepareerd. Eerste bewijs: morgenochtend |
+| Live adres | `NEXT_PUBLIC_APP_URL` gezet |
+| Klant koppelen | Live; 17 van de 33 records gekoppeld, de rest had geen unieke match |
+| Dossier | Koppelstrook op event en klant, met bestellingen |
+| Rem | `remOpLosseOnderdelen.test.ts` |
+| Mail | Gebouwd en met echte AI getest; wacht op instellen bij Resend en de hostingpartij |
+| Kerst-Box | Omzet klopt (€ 23,50 p.p.), geen catering-stappenplan op Vandaag |
+| Menukaart | Bedrijfsnaam gezet voor bestaande bedrijven; nieuwe bedrijven krijgen nog de voorbeeldnaam |
+
+**Nog te doen:** blok 5 voor gerecht en product, blok 6 (Bonnen, Inkoop, Website samenvoegen), blok 7 (bouwstenen), de eventpagina voor webshoporders opschonen, en één plek voor alle soorten bestellingen.
+
 ## Keuzes voor Mathijs
 
-1. **Blok 4:** mag `klant_id` erbij in de live database?
-2. **Kassa, webshop en bestellen:** alleen nog reparaties tot na 21 november, geen verbouwing?
-3. **Blok 0a–0c:** mag Claude de live instellingen aanpassen?
-4. **Mail:** waar staat info@hopbites.nl en kan er een doorstuurregel op? Zijn er ongeveer 20 eigen verzonden mails voor de schrijfstijl?
-5. **Bestelstroom en Mollie (0d, 0e):** nodig voor de opening?
+1. **myPOS:** staat op testmodus terwijl de kassa open staat. Live zetten vraagt een proefbetaling met echt geld door Mathijs.
+2. **Mail aanzetten:** ontvangstadres en webhook in Resend, `RESEND_WEBHOOK_SECRET` in Vercel, doorstuurregel op info@hopbites.nl.
+3. **Schrijfstijl:** ongeveer 20 eigen mails aanleveren, of zelf invullen in Mailbox onder Schrijfstijl.
+4. **Bestelstroom en Mollie:** nodig voor de opening?
+5. **Voorraadmail:** `melding_email` is leeg, dus de dagelijkse voorraadmail gaat nergens heen.
