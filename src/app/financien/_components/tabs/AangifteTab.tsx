@@ -40,7 +40,34 @@ interface VastgezetteAangifte {
 
 export default function AangifteTab({ facturen, bonnen }: Props) {
     const period = useMemo(() => currentQuarterPeriod(), []);
-    const rubrieken = useMemo(() => computeBtwAangifte(facturen, bonnen, period), [facturen, bonnen, period]);
+    /* De bedragen komen van de server: die telt ook de kassa mee en leest
+       dezelfde bronnen als het Boekhouder-scherm en "vastzetten". De lokale
+       berekening (zonder kassa) is alleen een terugval zolang die laadt. */
+    const lokaal = useMemo(() => computeBtwAangifte(facturen, bonnen, period), [facturen, bonnen, period]);
+    const [server, setServer] = useState<BtwAangifteRubrieken | null>(null);
+    const [serverFout, setServerFout] = useState<string | null>(null);
+    const rubrieken = server ?? lokaal;
+    useEffect(() => {
+        let actief = true;
+        (async () => {
+            try {
+                const res = await fetch('/api/financien/btw-aangifte-concept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ year: period.year, quarter: period.quarter }),
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!actief) return;
+                if (!res.ok) { setServerFout(body.error || `HTTP ${res.status}`); return; }
+                setServer(body.rubrieken);
+                setServerFout(body.meta?.kassa_fout ? `Kassaverkoop ontbreekt: ${body.meta.kassa_fout}` : null);
+            } catch (e) {
+                if (actief) setServerFout(e instanceof Error ? e.message : 'Laden mislukt');
+            }
+        })();
+        return () => { actief = false; };
+    }, [period, facturen, bonnen]);
     const [generating, setGenerating] = useState(false);
     const [generated, setGenerated] = useState<BtwAangifteRubrieken | null>(null);
 
@@ -72,12 +99,25 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
         if (errorCount > 0) return; /* niet vastzetten met openstaande fouten */
         setLocking(true);
         try {
-            const res = await fetch('/api/financien/btw-aangifte', {
+            const post = (accepteer: boolean) => fetch('/api/financien/btw-aangifte', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
-                body: JSON.stringify({ year: period.year, quarter: period.quarter }),
+                body: JSON.stringify({ year: period.year, quarter: period.quarter, accepteer_open_punten: accepteer }),
             });
+            let res = await post(false);
+            if (res.status === 409) {
+                /* Nog BTW die wacht op bevestiging, of kassa onleesbaar: eerst zeggen hoeveel. */
+                const body = await res.clone().json().catch(() => ({}));
+                if (Array.isArray(body.open_punten)) {
+                    const ok = window.confirm(
+                        `Nog niet alles is verwerkt:\n\n• ${body.open_punten.join('\n• ')}\n\n`
+                        + 'Vastzetten legt deze cijfers voorgoed vast. Toch vastzetten?',
+                    );
+                    if (!ok) return;
+                    res = await post(true);
+                }
+            }
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}));
                 throw new Error(body.error || `HTTP ${res.status}`);
@@ -252,6 +292,12 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <FileText size={12} style={{ color: 'var(--brand)' }} /> Concept-rubrieken
                         </h3>
+                        {!server && !serverFout && (
+                            <span style={{ fontSize: 10, color: 'var(--muted)' }}>voorlopig, zonder kassa — laden…</span>
+                        )}
+                        {serverFout && (
+                            <span style={{ fontSize: 11, color: 'var(--red)' }} title={serverFout}>{server ? serverFout : `Server-berekening mislukt — dit is zonder kassa: ${serverFout}`}</span>
+                        )}
                         <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', background: 'rgba(130,130,130,.08)', padding: '2px 8px', borderRadius: 999, border: '1px solid var(--border)' }}>
                             <ShieldCheck size={9} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 3 }} /> Boekhouder beslist
                         </span>
@@ -271,9 +317,34 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>{fmt(rubrieken.rubriek_1b.omzet)}</td>
                                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(rubrieken.rubriek_1b.btw)}</td>
                                 </tr>
+                                {rubrieken.kassa.regels > 0 && (
+                                    <tr>
+                                        <td />
+                                        <td colSpan={3} style={{ color: 'var(--muted)', fontSize: 12 }}>
+                                            Waarvan kassa: {fmt(rubrieken.kassa.omzet_laag + rubrieken.kassa.omzet_hoog)} omzet,{' '}
+                                            {fmt(rubrieken.kassa.btw_laag + rubrieken.kassa.btw_hoog)} BTW ({rubrieken.kassa.regels} regels)
+                                        </td>
+                                    </tr>
+                                )}
+                                {(rubrieken.rubriek_4a.omzet !== 0 || rubrieken.rubriek_4a.btw !== 0) && (
+                                    <tr>
+                                        <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono, ui-monospace)' }}>4a</td>
+                                        <td>Verlegd, buiten EU</td>
+                                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>{fmt(rubrieken.rubriek_4a.omzet)}</td>
+                                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(rubrieken.rubriek_4a.btw)}</td>
+                                    </tr>
+                                )}
+                                {(rubrieken.rubriek_4b.omzet !== 0 || rubrieken.rubriek_4b.btw !== 0) && (
+                                    <tr>
+                                        <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono, ui-monospace)' }}>4b</td>
+                                        <td>Verlegd, binnen EU</td>
+                                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: 'var(--muted)' }}>{fmt(rubrieken.rubriek_4b.omzet)}</td>
+                                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmt(rubrieken.rubriek_4b.btw)}</td>
+                                    </tr>
+                                )}
                                 <tr style={{ background: 'rgba(130,130,130,.04)' }}>
                                     <td style={{ fontWeight: 700, fontFamily: 'var(--font-mono, ui-monospace)' }}>5a</td>
-                                    <td colSpan={2} style={{ color: 'var(--muted)' }}>Verschuldigde BTW (1a + 1b)</td>
+                                    <td colSpan={2} style={{ color: 'var(--muted)' }}>Verschuldigde BTW (1a + 1b + 4a + 4b)</td>
                                     <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--brand)' }}>{fmt(rubrieken.rubriek_5a)}</td>
                                 </tr>
                                 <tr>
@@ -321,7 +392,7 @@ export default function AangifteTab({ facturen, bonnen }: Props) {
                             </div>
                             <div style={{ padding: '0 22px 8px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
                                 Deze regels zitten <strong>niet</strong> in de bedragen hierboven. De rubrieken
-                                1c, 1d, 1e, 3c, 4a en 4b bestaan nog niet in dit systeem, en bij 0% ligt de
+                                1c, 1d, 1e en 3c bestaan nog niet in dit systeem, en bij 0% ligt de
                                 reden (verlegd, export, EU-levering, vrijgesteld) niet vast in de data. Fout
                                 raden maakt de aangifte te hoog of te laag — dus wordt er niet geraden.
                             </div>

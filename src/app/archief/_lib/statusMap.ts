@@ -107,19 +107,54 @@ export function expandFilterStatus(filter: DisplayStatus): BonStatus[] {
 }
 
 /**
+ * Categorie bevestigd, maar de BTW van de bon telt nog NIET mee in de
+ * aangifte (5b). Tot 2026-10-26 stond hier gewoon groen "Bevestigd", waardoor
+ * het leek alsof de bon helemaal klaar was terwijl de voorbelasting nog op
+ * bevestiging wachtte.
+ */
+export const BTW_OPEN_VISUAL: StatusVisual = {
+    label: 'BTW nog bevestigen',
+    display: 'bevestigd',
+    icon: 'alert-triangle',
+    color: 'amber',
+    pillClass: 'bg-[rgba(217,119,6,.12)] text-[var(--amber,#d97706)] border-[rgba(217,119,6,.3)]',
+    dotClass: 'bg-[var(--amber,#d97706)]',
+};
+
+/** Categorie bevestigd; of de BTW meetelt is in deze weergave niet bekend (zoekresultaat). */
+export const CATEGORIE_OK_VISUAL: StatusVisual = {
+    ...STATUS_VISUAL.bevestigd,
+    label: 'Categorie ok',
+};
+
+/**
  * Status zoals de cateraar 'm ziet: het oordeel van de boekhouder wint.
  * Vergrendeld > boekhouder (bevestigd/twijfel) > kistje-status. Oude rijen
  * waar de boekhouder al iets zei maar `status` nog 'pending' stond, tonen
  * zo toch het juiste beeld.
+ *
+ * "Bevestigd" (groen) betekent: categorie ok én — als er BTW op de bon staat —
+ * voorbelasting bevestigd. Staat er BTW op die nog niet meetelt, dan
+ * "BTW nog bevestigen" (amber).
  */
 export function getBonStatusVisual(bon: {
     status: string | null | undefined;
     ai_classify_status?: string | null;
     locked_at?: string | null;
+    btw_laag_bedrag?: number | string | null;
+    btw_hoog_bedrag?: number | string | null;
+    voorbelasting_bevestigd?: boolean | null;
 }): StatusVisual {
     if (bon.locked_at) return STATUS_VISUAL.vergrendeld;
     const ai = bon.ai_classify_status;
-    if (ai === 'verified' || ai === 'auto_accepted' || ai === 'manual') return STATUS_VISUAL.bevestigd;
-    if (ai === 'twijfel') return STATUS_VISUAL.twijfel;
-    return getStatusVisual(bon.status);
+    let visual: StatusVisual;
+    if (ai === 'verified' || ai === 'auto_accepted' || ai === 'manual') visual = STATUS_VISUAL.bevestigd;
+    else if (ai === 'twijfel') return STATUS_VISUAL.twijfel;
+    else visual = getStatusVisual(bon.status);
+
+    if (visual.display !== 'bevestigd') return visual;
+    const btw = (Number(bon.btw_laag_bedrag) || 0) + (Number(bon.btw_hoog_bedrag) || 0);
+    if (bon.voorbelasting_bevestigd === undefined) return CATEGORIE_OK_VISUAL;
+    if (btw !== 0 && bon.voorbelasting_bevestigd !== true) return BTW_OPEN_VISUAL;
+    return visual;
 }

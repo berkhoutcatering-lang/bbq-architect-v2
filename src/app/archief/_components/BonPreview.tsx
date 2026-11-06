@@ -19,7 +19,7 @@ import dynamic from 'next/dynamic';
 import { X, Eye, FileText, Package, Clock, Download, ExternalLink, Share2, Lock, Calendar, Search, ArrowDownRight, ArrowRight, Trash2, FileX2, ScanLine } from 'lucide-react';
 import { useQueryState } from 'nuqs';
 import type { BonRow, AuditLogEntry, StockMovementForBon } from '@/lib/dal/bonnen';
-import { getStatusVisual } from '../_lib/statusMap';
+import { getBonStatusVisual } from '../_lib/statusMap';
 import { fmtEur, fmtDate, fmtDateTime, fmtDateShort } from './format';
 import { getSignedUrlAction, removeBonFileAction, deleteBonAction, confirmVoorbelastingAction } from '../actions';
 
@@ -109,7 +109,7 @@ export function BonPreview({ bon, onClose, onAuditLoad, onStockLoad }: Props) {
 
     if (!bon) return null;
 
-    const status = getStatusVisual(bon.status);
+    const status = getBonStatusVisual(bon);
     const hasFile = !!bon.file_path;
 
     return (
