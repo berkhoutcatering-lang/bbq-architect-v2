@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   BookOpen, Sparkles, Check, AlertCircle, FileText, Package2, Calendar,
-  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus, CalendarCheck, Link2, RefreshCw,
+  Loader2, ShieldCheck, Download, Mail, Settings, Receipt, Archive, Plus, CalendarCheck, Link2, RefreshCw, Store,
 } from 'lucide-react';
 import { RGS_CATERING_CATEGORIES, RGS_BY_CODE, SALES_CODES } from '@/lib/rgsCategories';
 import BonAddSheet from './_components/BonAddSheet';
 import AfsluitenTab from './_components/AfsluitenTab';
+import MaandstaatTab from './_components/MaandstaatTab';
 import { useToast } from '@/components/Toast';
 import { getSignedUrlAction } from '@/app/archief/actions';
 
@@ -25,7 +26,7 @@ import { getSignedUrlAction } from '@/app/archief/actions';
  *   4. Twijfel         — filtered queue van flagged items
  */
 
-type Tab = 'stapel' | 'verkoop' | 'pakket' | 'afsluiten' | 'twijfel' | 'archief';
+type Tab = 'stapel' | 'verkoop' | 'omzet' | 'pakket' | 'afsluiten' | 'twijfel' | 'archief';
 type StatusFilter = 'alle' | 'pending' | 'auto' | 'twijfel';
 
 interface Row {
@@ -94,7 +95,7 @@ export default function BoekhouderPage() {
   // ?tab=twijfel (vanuit de werkbank in het Bonnenkistje) opent direct de twijfel-stapel
   useEffect(function () {
     const t = new URLSearchParams(window.location.search).get('tab');
-    if (t === 'twijfel' || t === 'verkoop' || t === 'pakket' || t === 'afsluiten' || t === 'archief') setTab(t as Tab);
+    if (t === 'twijfel' || t === 'verkoop' || t === 'omzet' || t === 'pakket' || t === 'afsluiten' || t === 'archief') setTab(t as Tab);
   }, []);
   const [month, setMonth] = useState<string>(defaultMonth());
   /* rangeMode 'last3' (default) toont 3 maanden zodat een bon van vorige maand
@@ -333,6 +334,9 @@ export default function BoekhouderPage() {
         <button role="tab" aria-selected={tab === 'verkoop'} className={'bh-tab' + (tab === 'verkoop' ? ' bh-tab--active' : '')} onClick={() => setTab('verkoop')}>
           <Receipt size={14} /> Verkoop-facturen
         </button>
+        <button role="tab" aria-selected={tab === 'omzet'} className={'bh-tab' + (tab === 'omzet' ? ' bh-tab--active' : '')} onClick={() => setTab('omzet')}>
+          <Store size={14} /> Winkelomzet
+        </button>
         <button role="tab" aria-selected={tab === 'pakket'} className={'bh-tab' + (tab === 'pakket' ? ' bh-tab--active' : '')} onClick={() => setTab('pakket')}>
           <FileText size={14} /> Boekhouder-pakket
         </button>
@@ -352,6 +356,8 @@ export default function BoekhouderPage() {
         <ArchiefTab />
       ) : tab === 'afsluiten' ? (
         <AfsluitenTab />
+      ) : tab === 'omzet' ? (
+        <MaandstaatTab />
       ) : tab === 'verkoop' ? (
         <VerkoopTab month={month} rangeMode={rangeMode} />
       ) : tab === 'pakket' ? (

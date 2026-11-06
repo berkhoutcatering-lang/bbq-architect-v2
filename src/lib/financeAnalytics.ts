@@ -435,6 +435,8 @@ export interface KassaRegel {
     /** Voor de gatenlijst. */
     omschrijving?: string;
     referentie?: string;
+    /** Waar de omzet vandaan komt; leeg is de oude kassa. */
+    bron?: 'kassa_oud' | 'webshop' | 'toonbank';
 }
 
 /** Hoeveel BTW een bon oplevert — gewone BTW, of verlegde BTW over het netto bedrag. */

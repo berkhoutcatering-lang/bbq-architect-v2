@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { laadKassa, laadBonnen, nlDatum } from './btwAangifteBronnen';
+import { laadKassa, laadBonnen, nlDatum, toonbankRegels, verdeelOverTarieven, webshopRegels, type ToonbankBon, type WebshopOrder, type WebshopRegel } from './btwAangifteBronnen';
 
 /* Minimale nep-Supabase: filtert rijen in het geheugen zoals PostgREST dat
    zou doen. `kolomFout` laat een select met die kolom falen (42703), zoals de
@@ -141,5 +141,67 @@ describe('laadBonnen', () => {
         expect(r.fout).toBeNull();
         expect(r.verlegd_beschikbaar).toBe(false);
         expect(r.bonnen).toHaveLength(1);
+    });
+});
+
+describe('webshop in de aangifte: de omzet volgt het geld', () => {
+    const regels: WebshopRegel[] = [
+        { order_id: 1, bedrag_cents: 10900, btw_cents: { '9': 900 }, btw_pct: 9 },
+        { order_id: 1, bedrag_cents: 12100, btw_cents: { '21': 2100 }, btw_pct: 21 },
+    ];
+    const order = (o: Partial<WebshopOrder>): WebshopOrder => ({
+        id: 1, nummer: 'HB-1', status: 'betaald', totaal_cents: 23000, betaald_cents: 0,
+        betaald_at: null, rest_betaald_at: null, leverkosten_cents: 0, ...o,
+    });
+    const som = (r: { omzet: number; btw: number }[]) => Math.round(r.reduce((s, x) => s + x.omzet + x.btw, 0) * 100);
+
+    it('volledig online betaald telt op de betaaldag', () => {
+        const r = webshopRegels(order({ betaald_cents: 23000, betaald_at: '2026-11-10T10:00:00Z' }), regels, 21, '2026-11-01', '2026-11-30');
+        expect(som(r)).toBe(23000);
+        expect(r.map((x) => x.datum)).toEqual(['2026-11-10', '2026-11-10']);
+    });
+
+    it('betalen bij afhalen telt niet vóór het afrekenen', () => {
+        const r = webshopRegels(order({ betaald_at: '2026-10-30T10:00:00Z' }), regels, 21, '2026-10-01', '2026-12-31');
+        expect(r).toEqual([]);
+    });
+
+    it('betalen bij afhalen telt op de dag aan de balie', () => {
+        const r = webshopRegels(order({ rest_betaald_at: '2026-12-24T12:00:00Z' }), regels, 21, '2026-12-01', '2026-12-31');
+        expect(som(r)).toBe(23000);
+    });
+
+    it('reservering en rest vallen elk in hun eigen maand en tellen samen het totaal', () => {
+        const o = order({ betaald_cents: 250, betaald_at: '2026-11-20T10:00:00Z', rest_betaald_at: '2026-12-24T12:00:00Z' });
+        const nov = webshopRegels(o, regels, 21, '2026-11-01', '2026-11-30');
+        const dec = webshopRegels(o, regels, 21, '2026-12-01', '2026-12-31');
+        expect(som(nov)).toBe(250);
+        expect(som(dec)).toBe(22750);
+    });
+
+    it('geannuleerd telt niet', () => {
+        expect(webshopRegels(order({ status: 'geannuleerd', betaald_cents: 23000, betaald_at: '2026-11-10T10:00:00Z' }), regels, 21, '2026-11-01', '2026-11-30')).toEqual([]);
+    });
+
+    it('deelbetaling verliest geen cent', () => {
+        const t = verdeelOverTarieven([{ pct: 9, incl: 3333, btw: 275 }, { pct: 21, incl: 6667, btw: 1157 }], 1001, 10000);
+        expect(t.reduce((s, x) => s + x.incl, 0)).toBe(1001);
+    });
+});
+
+describe('toonbank in de aangifte', () => {
+    const bon = (b: Partial<ToonbankBon>): ToonbankBon => ({
+        bonnummer: 'T-1', soort: 'verkoop', status: 'afgerond', bedrijfsdag: '2026-11-21',
+        btw: { '9': { incl_cents: 1090, btw_cents: 90 } }, ...b,
+    });
+
+    it('telt de omzet per tarief', () => {
+        expect(toonbankRegels(bon({}))).toMatchObject([{ datum: '2026-11-21', btw_pct: 9, omzet: 10, btw: 0.9, bron: 'toonbank' }]);
+    });
+    it('een tegenbon trekt af', () => {
+        expect(toonbankRegels(bon({ soort: 'tegenbon', btw: { '9': { incl_cents: -1090, btw_cents: -90 } } }))[0].omzet).toBe(-10);
+    });
+    it('een geannuleerde bon telt niet', () => {
+        expect(toonbankRegels(bon({ status: 'geannuleerd' }))).toEqual([]);
     });
 });

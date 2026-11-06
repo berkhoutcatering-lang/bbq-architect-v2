@@ -8,6 +8,8 @@ import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 import { resolveBtwPct } from '@/lib/btw-rules';
 import { computeBtwAangifte, type BtwAangiftePeriod } from '@/lib/financeAnalytics';
 import { laadAangifteBronnen } from '@/lib/btwAangifteBronnen';
+import { maakMaandstaat, type DagstaatMin } from '@/lib/omzetMaandstaat';
+import { maandstaatPdf } from '@/lib/omzetMaandstaatPdf';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -575,6 +577,15 @@ export async function POST(req: NextRequest) {
       const zip = new JSZip();
       zip.file(pdfFilename, pdfBase64, { base64: true });
       zip.file(`boekhouding-${m}.csv`, csv);
+      if (period.type === 'maand' && period.month != null) {
+        const { data: dagstaten } = await supabase.from('toonbank_dagstaten')
+          .select('bedrijfsdag,status,pin_toonbank_cents,contant_geteld_cents,contant_verschil_cents,pin_verschil_cents,goedgekeurd_at')
+          .eq('organization_id', orgId).gte('bedrijfsdag', start).lte('bedrijfsdag', eindIncl);
+        const staat = maakMaandstaat(period.year, period.month, bronnen.kassa, (dagstaten ?? []) as DagstaatMin[]);
+        const { data: instellingen } = await supabase.from('settings').select('bedrijfsnaam').eq('organization_id', orgId).maybeSingle();
+        const maandPdf = maandstaatPdf(staat, (instellingen as { bedrijfsnaam?: string } | null)?.bedrijfsnaam ?? '');
+        zip.file(maandPdf.filename, maandPdf.base64, { base64: true });
+      }
       const readme = [
         `BOEKHOUDER-PAKKET — ${periodLabel}`,
         `Organisatie: ${orgRow?.name || ''}`,
