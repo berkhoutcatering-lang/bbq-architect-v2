@@ -36,6 +36,12 @@ describe('maakMaandstaat', () => {
         expect(klaar.dagen[0].dagstaat).toBe('in_orde');
     });
 
+    it('een proefdag laat geen sporen na', () => {
+        const m = maakMaandstaat(2026, 10, [], [staat({ bedrijfsdag: '2026-10-27', contant_verschil_cents: -20000 })], new Set(['2026-10-27']));
+        expect(m.dagen).toEqual([]);
+        expect(m.open_punten).toEqual([]);
+    });
+
     it('oude kassa zonder bron telt als oude kassa', () => {
         expect(maakMaandstaat(2026, 8, [regel({ bron: undefined, datum: '2026-08-01' })], []).totaal.kassa_oud).toBe(10.9);
     });

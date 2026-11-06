@@ -54,7 +54,14 @@ function korteDatum(datum: string): string {
     return new Date(`${datum}T12:00:00Z`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' });
 }
 
-export function maakMaandstaat(jaar: number, maand: number, regels: KassaRegel[], dagstaten: DagstaatMin[]): Maandstaat {
+export function maakMaandstaat(
+    jaar: number,
+    maand: number,
+    regels: KassaRegel[],
+    dagstaten: DagstaatMin[],
+    /** Dagen die op "telt niet mee" staan, zoals proefdagen. */
+    uitgesloten: ReadonlySet<string> = new Set(),
+): Maandstaat {
     const dagen = new Map<string, MaandDag>();
     const dag = (datum: string) => {
         const d = dagen.get(datum) ?? legeDag(datum);
@@ -73,6 +80,7 @@ export function maakMaandstaat(jaar: number, maand: number, regels: KassaRegel[]
     }
 
     for (const s of dagstaten) {
+        if (uitgesloten.has(s.bedrijfsdag)) continue;
         const d = dag(s.bedrijfsdag);
         d.pin = (d.pin ?? 0) + s.pin_toonbank_cents / 100;
         d.contant = (d.contant ?? 0) + s.contant_geteld_cents / 100;
