@@ -44,9 +44,9 @@ function getAdminClient() {
     return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
 }
 
-/* Cron-auth — Vercel zet X-Vercel-Cron header. Of CRON_SECRET via Authorization. */
+/* Cron-auth — Vercel Cron stuurt CRON_SECRET als Bearer mee. Een eigen header
+   vertrouwen we niet: die kan iedereen meesturen, en dit kost AI-budget. */
 function isCronAuthorized(req: NextRequest): boolean {
-    if (req.headers.get('x-vercel-cron') === '1') return true;
     const secret = process.env.CRON_SECRET;
     if (secret && req.headers.get('authorization') === `Bearer ${secret}`) return true;
     return false;
@@ -205,8 +205,11 @@ export async function POST(req: NextRequest) {
 }
 
 /* GET endpoint voor end-user — fetch laatste row voor zijn org. Cache via
-   Next.js (revalidate 5 min) zodat repeat-views niet steeds DB-hits doen. */
-export async function GET() {
+   Next.js (revalidate 5 min) zodat repeat-views niet steeds DB-hits doen.
+   Vercel Cron roept ook met GET aan: dan genereren we de samenvatting. */
+export async function GET(req: NextRequest) {
+    if (isCronAuthorized(req)) return POST(req);
+
     const { createServerSupabase } = await import('@/lib/supabase-server');
     const supabase = await createServerSupabase();
     const { data: { user } } = await supabase.auth.getUser();

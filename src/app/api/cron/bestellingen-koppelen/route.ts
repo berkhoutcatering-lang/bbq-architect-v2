@@ -152,3 +152,6 @@ export async function POST(req: Request) {
         wachtlijst_opgeruimd: opruim.wachtlijst,
     });
 }
+
+/* Vercel Cron roept met GET aan; POST blijft voor een handmatige run. */
+export const GET = POST;
