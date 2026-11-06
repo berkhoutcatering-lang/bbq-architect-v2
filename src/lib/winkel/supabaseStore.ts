@@ -270,6 +270,18 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
                 menu: t.menu, menu_gasten: t.menu_gasten, notitie: t.notitie,
             }).eq('id', eventId);
             if (error) throw new Error(`Event bijtellen mislukt: ${error.message}`);
+
+            /* Zonder dit blijft de prijs p.p. op de standaardwaarde van de kolom
+               staan en toont het event een omzet die niemand betaalde. */
+            const { data: regels } = await sb.from('winkel_order_regels')
+                .select('order_id, winkel_orders!inner(totaal_cents, status)')
+                .eq('event_id', eventId).eq('winkel_orders.status', 'betaald');
+            const perOrder = new Map<number, number>();
+            for (const r of (regels ?? []) as unknown as { order_id: number; winkel_orders: { totaal_cents: number } }[]) {
+                perOrder.set(r.order_id, r.winkel_orders.totaal_cents);
+            }
+            const omzetCents = [...perOrder.values()].reduce((som, c) => som + c, 0);
+            await sb.from('events').update({ ppp: t.guests > 0 ? Math.round(omzetCents / t.guests) / 100 : 0 }).eq('id', eventId);
         },
         async noteerPlaatsing(orderId, status, fout = null) {
             await sb.from('winkel_orders').update({ plaatsing_status: status, plaatsing_fout: fout, plaatsing_at: new Date().toISOString() }).eq('id', orderId);
