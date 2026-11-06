@@ -6,6 +6,8 @@ import { RGS_BY_CODE } from '@/lib/rgsCategories';
 import { generateBoekhouderPdf, type PdfBon, type PdfFactuur, type PdfRit } from '@/lib/boekhouderPdf';
 import { tariefVoorJaar, bedragAftrekbaar } from '@/lib/ritten-tarieven';
 import { resolveBtwPct } from '@/lib/btw-rules';
+import { computeBtwAangifte, type BtwAangiftePeriod } from '@/lib/financeAnalytics';
+import { laadAangifteBronnen } from '@/lib/btwAangifteBronnen';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -199,6 +201,26 @@ export async function POST(req: NextRequest) {
       .gte('datum', start)
       .lt('datum', nextMonth);
 
+    // BTW-cijfers: precies dezelfde berekening als het aangiftescherm —
+    // kassa telt mee, verlegde BTW in 4a/4b, en alleen BEVESTIGDE voorbelasting
+    // in 5b. Tot 2026-10-26 telde dit pakket alle bon-BTW mee, ook
+    // onbevestigd, en gaf het daardoor een ander getal dan het scherm.
+    const eindIncl = (() => {
+      const d = new Date(`${nextMonth}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() - 1);
+      return d.toISOString().slice(0, 10);
+    })();
+    const bronnen = await laadAangifteBronnen(supabase, orgId, start, eindIncl);
+    if (bronnen.fout) {
+      return NextResponse.json({ error: `BTW-cijfers niet te berekenen: ${bronnen.fout}` }, { status: 500 });
+    }
+    const btwPeriode: BtwAangiftePeriod = {
+      year: periodYear, quarter: (period.quarter ?? 1) as 1 | 2 | 3 | 4,
+      start_date: start, end_date: eindIncl,
+      deadline: eindIncl, days_until_deadline: 0, is_open: false,
+    };
+    const rubr = computeBtwAangifte(bronnen.facturen, bronnen.bonnen, btwPeriode, bronnen.kassa);
+
     // Kilometerregistratie (zakelijke ritten) — vóór de CSV-bouw nodig
     const { data: rittenRaw } = await supabase
       .from('ritten')
@@ -245,8 +267,6 @@ export async function POST(req: NextRequest) {
     const lines: string[] = [headers.join(',')];
 
     let totalPurchase = 0, totalSales = 0;
-    let totalBtw9 = 0, totalBtw21 = 0;
-    let totalSalesBtw9 = 0, totalSalesBtw21 = 0;
 
     for (const b of bonnen as any[]) {
       const cat = b.rgs_code ? RGS_BY_CODE[b.rgs_code] : null;
@@ -255,8 +275,6 @@ export async function POST(req: NextRequest) {
       const btw21 = Number(b.btw_hoog_bedrag) || 0;
       const totaal = Number(b.totaal_bedrag) || 0;
       totalPurchase += totaal;
-      totalBtw9 += btw9;
-      totalBtw21 += btw21;
       lines.push([
         'inkoop',
         csvEscape(b.datum || ''),
@@ -288,8 +306,6 @@ export async function POST(req: NextRequest) {
       });
       const totaal = netto + btw9 + btw21;
       totalSales += totaal;
-      totalSalesBtw9 += btw9;
-      totalSalesBtw21 += btw21;
       lines.push([
         'verkoop',
         csvEscape(f.datum || ''),
@@ -299,6 +315,25 @@ export async function POST(req: NextRequest) {
         csvEscape(cat?.label || 'Omzet catering — food'),
         '',
         fmtEur(netto), fmtEur(btw9), fmtEur(btw21), fmtEur(totaal),
+      ].join(','));
+    }
+
+    // Kassaverkoop — per dag en tarief één regel (zelfde bron als de aangifte).
+    const kassaPerDag = new Map<string, { netto: number; btw9: number; btw21: number }>();
+    for (const k of bronnen.kassa) {
+      if (k.btw_pct !== 9 && k.btw_pct !== 21) continue; /* staat in de gatenlijst */
+      const d = kassaPerDag.get(k.datum) ?? { netto: 0, btw9: 0, btw21: 0 };
+      d.netto += k.omzet;
+      if (k.btw_pct === 9) d.btw9 += k.btw; else d.btw21 += k.btw;
+      kassaPerDag.set(k.datum, d);
+    }
+    for (const [datum, d] of [...kassaPerDag.entries()].sort()) {
+      const totaal = d.netto + d.btw9 + d.btw21;
+      totalSales += totaal;
+      lines.push([
+        'kassa', csvEscape(datum), 'Kassaverkoop', 'Kassa (dagtotaal)',
+        'WOpbCat', 'Omzet catering — food', '',
+        fmtEur(d.netto), fmtEur(d.btw9), fmtEur(d.btw21), fmtEur(totaal),
       ].join(','));
     }
 
@@ -333,17 +368,31 @@ export async function POST(req: NextRequest) {
       lines.push(`TOTAAL KILOMETERAFTREK,,,,,,${totaalKm} km,,,,${fmtEur(totaalKmBedrag)}`);
     }
     lines.push('');
-    lines.push('BTW SAMENVATTING (voor aangifte):');
-    lines.push(`Voorbelasting BTW 9% (inkoop food),,,,,,,,${fmtEur(totalBtw9)},,`);
-    lines.push(`Voorbelasting BTW 21% (inkoop overig),,,,,,,,,${fmtEur(totalBtw21)},`);
-    lines.push(`Verschuldigd BTW 9% (verkoop food),,,,,,,,${fmtEur(totalSalesBtw9)},,`);
-    lines.push(`Verschuldigd BTW 21% (verkoop overig),,,,,,,,,${fmtEur(totalSalesBtw21)},`);
-    const voorbelasting = totalBtw9 + totalBtw21;
-    const verschuldigd = totalSalesBtw9 + totalSalesBtw21;
-    const afTeDragen = verschuldigd - voorbelasting;
+    lines.push('BTW SAMENVATTING (gelijk aan het aangiftescherm):');
+    lines.push(`1a hoog tarief 21% — omzet,,,,,,,${fmtEur(rubr.rubriek_1a.omzet)},,${fmtEur(rubr.rubriek_1a.btw)},`);
+    lines.push(`1b laag tarief 9% — omzet,,,,,,,${fmtEur(rubr.rubriek_1b.omzet)},${fmtEur(rubr.rubriek_1b.btw)},,`);
+    if (rubr.kassa.regels > 0) {
+      lines.push(`  waarvan kassa,,,,,,,${fmtEur(rubr.kassa.omzet_laag + rubr.kassa.omzet_hoog)},${fmtEur(rubr.kassa.btw_laag)},${fmtEur(rubr.kassa.btw_hoog)},`);
+    }
+    if (rubr.rubriek_4a.btw !== 0) lines.push(`4a verlegd buiten EU,,,,,,,${fmtEur(rubr.rubriek_4a.omzet)},,${fmtEur(rubr.rubriek_4a.btw)},`);
+    if (rubr.rubriek_4b.btw !== 0) lines.push(`4b verlegd binnen EU,,,,,,,${fmtEur(rubr.rubriek_4b.omzet)},,${fmtEur(rubr.rubriek_4b.btw)},`);
+    lines.push(`5b voorbelasting 9% (bevestigde bonnen),,,,,,,,${fmtEur(rubr.rubriek_5b_detail.laag)},,`);
+    lines.push(`5b voorbelasting 21% (bevestigde bonnen incl. verlegd),,,,,,,,,${fmtEur(rubr.rubriek_5b_detail.hoog + rubr.rubriek_5b_detail.verlegd)},`);
+    if (rubr.voorbelasting_onbevestigd > 0) {
+      lines.push(`NIET meegeteld: BTW op ${rubr.voorbelasting_onbevestigd_count} bon(nen) die nog op bevestiging wacht(en),,,,,,,,,,${fmtEur(rubr.voorbelasting_onbevestigd)}`);
+    }
+    if (rubr.gaten.length > 0) {
+      lines.push(`NIET ingedeeld: ${rubr.gaten.length} regel(s) zonder bruikbaar BTW-tarief (omzet),,,,,,,${fmtEur(rubr.gaten_bedrag)},,,`);
+    }
+    if (bronnen.kassa_fout) {
+      lines.push(`LET OP: ${csvEscape(bronnen.kassa_fout)} — kassaomzet ontbreekt,,,,,,,,,,`);
+    }
+    const voorbelasting = rubr.rubriek_5b;
+    const verschuldigd = rubr.rubriek_5a;
+    const afTeDragen = rubr.saldo;
     lines.push('');
-    lines.push(`Totaal voorbelasting,,,,,,,,,,${fmtEur(voorbelasting)}`);
-    lines.push(`Totaal verschuldigd,,,,,,,,,,${fmtEur(verschuldigd)}`);
+    lines.push(`Totaal voorbelasting (5b),,,,,,,,,,${fmtEur(voorbelasting)}`);
+    lines.push(`Totaal verschuldigd (5a),,,,,,,,,,${fmtEur(verschuldigd)}`);
     lines.push(`Af te dragen (verschuldigd − voorbelasting),,,,,,,,,,${fmtEur(afTeDragen)}`);
 
     const csv = lines.join('\n');
@@ -440,10 +489,13 @@ export async function POST(req: NextRequest) {
       totals: {
         inkoop_totaal: totalPurchase,
         verkoop_totaal: totalSales,
-        btw_voorbelasting_9: totalBtw9,
-        btw_voorbelasting_21: totalBtw21,
-        btw_verschuldigd_9: totalSalesBtw9,
-        btw_verschuldigd_21: totalSalesBtw21,
+        btw_voorbelasting_9: rubr.rubriek_5b_detail.laag,
+        btw_voorbelasting_21: rubr.rubriek_5b_detail.hoog + rubr.rubriek_5b_detail.verlegd,
+        btw_verschuldigd_9: rubr.rubriek_1b.btw,
+        btw_verschuldigd_21: rubr.rubriek_1a.btw,
+        btw_verlegd_4a: rubr.rubriek_4a.btw,
+        btw_verlegd_4b: rubr.rubriek_4b.btw,
+        voorbelasting_onbevestigd: rubr.voorbelasting_onbevestigd,
         btw_af_te_dragen: afTeDragen,
         voorraadwaarde_eur: voorraadwaarde,
       },
@@ -537,9 +589,10 @@ export async function POST(req: NextRequest) {
         `SAMENVATTING`,
         `  ${bonnen.length} inkoop-bonnen  · totaal € ${totalPurchase.toFixed(2)}`,
         `  ${(facturen || []).length} verkoop-facturen · totaal € ${totalSales.toFixed(2)}`,
-        `  Voorbelasting BTW 9%:  € ${totalBtw9.toFixed(2)}`,
-        `  Voorbelasting BTW 21%: € ${totalBtw21.toFixed(2)}`,
-        `  Af te dragen BTW:      € ${afTeDragen.toFixed(2)}`,
+        `  Verschuldigd BTW (5a):  € ${verschuldigd.toFixed(2)}`,
+        `  Voorbelasting (5b):     € ${voorbelasting.toFixed(2)} — alleen bevestigde bonnen`,
+        rubr.voorbelasting_onbevestigd > 0 ? `  Niet meegeteld:         € ${rubr.voorbelasting_onbevestigd.toFixed(2)} BTW op ${rubr.voorbelasting_onbevestigd_count} bon(nen) die nog op bevestiging wacht(en)` : '',
+        `  Af te dragen BTW:       € ${afTeDragen.toFixed(2)}`,
         pdfRitten.length > 0 ? `  Kilometeraftrek: ${totaalKm} km × €${tarief.toFixed(2)} = € ${totaalKmBedrag.toFixed(2)}` : '',
         ``,
         `BEWAARTERMIJN`,
