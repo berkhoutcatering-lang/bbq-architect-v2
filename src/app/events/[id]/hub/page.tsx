@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
+import RelatedEntityPills from '@/components/RelatedEntityPills';
 import { generatePDF } from '@/lib/pdfGenerator';
 import { buildBrandingConfig } from '@/lib/branding';
 import { calcLineTotals } from '@/lib/utils';
@@ -150,7 +151,7 @@ export default function EventHubPage() {
            niet hoeven te veranderen tot een aparte cleanup-ronde. */
         Promise.resolve({ data: [], error: null }),
         supabase.from('gerechten').select('*'),
-        ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null, error: null }) as any,
+        ev.klant_id ? supabase.from('klanten').select('*').eq('id', ev.klant_id).limit(1) : ev.client_naam ? supabase.from('klanten').select('*').eq('naam', ev.client_naam).limit(1) : Promise.resolve({ data: null, error: null }) as any,
         supabase.from('settings').select('*').limit(1).maybeSingle(),
         supabase.from('haccp_records').select('*').eq('event_id', eventId),
         /* service_logs.offerte_id is UUID, events.offerte_id is BIGINT —
@@ -709,6 +710,10 @@ export default function EventHubPage() {
             <EventTabs eventId={event.id} eventName={event.name} toonKop={false} />
           </div>
           <OfflineEventToggle eventId={event.id} klantId={klant?.id ?? null} variant="wide" />
+        </div>
+
+        <div style={{ margin: '12px 0' }}>
+          <RelatedEntityPills kind="event" id={event.id} orgId={orgId} />
         </div>
         {/* Alleen tonen als er écht geen menu-inhoud is — de kaart verderop
             valt terug op het standaard-sjabloon en zegt dan "LIVE", dus een

@@ -154,7 +154,7 @@ export const navSections: NavSection[] = [
         ook: ["/verkoop"],
         children: [
             { label: "Aanvragen", icon: <Inbox size={16} />, href: "/verkoop/leads", description: "Inkomende aanvragen + pijplijn" },
-            { label: "Bestellingen", icon: <Package size={16} />, href: "/verkoop/bestellingen", description: "Bestellingen die klanten zelf plaatsten" },
+            { label: "Gourmetboxen", icon: <Package size={16} />, href: "/verkoop/bestellingen", description: "Gourmetboxen van het bestelformulier. Webshoporders staan onder Webshop en Kerst." },
             { label: "Webshop", icon: <ShoppingBag size={16} />, href: "/verkoop/webshop", description: "Artikelen, vakjes en ophaalmomenten van je webshop" },
             { label: "Toonbank", icon: <Receipt size={16} />, href: "/verkoop/toonbank", description: "Bonnen, te controleren en dagstaten van de Toonbank" },
             { label: "Kerst", icon: <Gift size={16} />, href: "/verkoop/kerst", description: "Kerstpakketten: inhoud, bestellingen en overzicht" },

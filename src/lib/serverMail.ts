@@ -24,6 +24,10 @@ interface SendArgs {
   replyTo?: string;
   /** Afzender; standaard RESEND_FROM_EMAIL. Het domein moet in Resend geverifieerd zijn. */
   from?: string;
+  /** Kopie, bv. naar de eigen mailbox zodat die compleet blijft. */
+  bcc?: string;
+  /** Extra mailkoppen, bv. In-Reply-To zodat een antwoord in het gesprek blijft. */
+  headers?: Record<string, string>;
 }
 
 export async function sendServerMail(args: SendArgs): Promise<{ success: boolean; error?: string }> {
@@ -36,14 +40,18 @@ export async function sendServerMail(args: SendArgs): Promise<{ success: boolean
   }
   try {
     const resend = new Resend(apiKey);
-    await resend.emails.send({
+    /* De SDK gooit niet bij een weigering maar geeft `error` terug. */
+    const { error } = await resend.emails.send({
       from: args.from || process.env.RESEND_FROM_EMAIL || 'BBQ Architect <noreply@resend.dev>',
       to: [args.to],
       subject: args.subject,
       html: args.html,
       text: args.text,
       replyTo: args.replyTo,
+      bcc: args.bcc,
+      headers: args.headers,
     });
+    if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Onbekende fout' };

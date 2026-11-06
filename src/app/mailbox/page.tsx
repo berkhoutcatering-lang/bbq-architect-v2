@@ -11,9 +11,11 @@ import PageHeader from '@/components/PageHeader';
 import { sendEmail, wrapHtml } from '@/lib/emailHelper';
 import { Flame, Send, ArrowLeft, Plus, Pencil, Trash2, Search, Mail, FileText, X, Inbox } from 'lucide-react';
 import PageGuideNote from '@/components/PageGuideNote';
+import BinnenTab from './_components/BinnenTab';
+import SchrijfstijlTab from './_components/SchrijfstijlTab';
 import type { Email, EmailTemplate, Klant } from '@/types';
 
-type Tab = 'verzonden' | 'nieuw' | 'templates';
+type Tab = 'binnen' | 'verzonden' | 'nieuw' | 'templates' | 'schrijfstijl';
 type FilterType = 'alle' | 'vrij' | 'offerte' | 'factuur' | 'herinnering';
 
 const TYPE_LABELS: Record<string, string> = {
@@ -45,7 +47,8 @@ export default function Mailbox() {
     const settings = settingsArr[0] || {};
     const bedrijfsnaam: string = settings.bedrijfsnaam || 'BBQ Architect';
 
-    const [tab, setTab] = useState<Tab>('verzonden');
+    const [tab, setTab] = useState<Tab>('binnen');
+    const [binnenAantal, setBinnenAantal] = useState(0);
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState<FilterType>('alle');
     const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
@@ -289,6 +292,10 @@ export default function Mailbox() {
             ) : null}
 
             <div className="tab-bar" style={{ marginBottom: 16 }}>
+                <button className={'tab-btn' + (tab === 'binnen' ? ' active' : '')} onClick={function () { setTab('binnen'); }}>
+                    <Inbox size={14} /> Binnen
+                    {binnenAantal > 0 && <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>({binnenAantal})</span>}
+                </button>
                 <button className={'tab-btn' + (tab === 'verzonden' ? ' active' : '')} onClick={function () { setTab('verzonden'); setSelectedEmail(null); }}>
                     <Mail size={14} /> Verzonden
                     {emails.length > 0 && <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>({emails.length})</span>}
@@ -300,7 +307,20 @@ export default function Mailbox() {
                     <FileText size={14} /> Templates
                     {templates.length > 0 && <span style={{ marginLeft: 6, fontSize: 12, opacity: 0.6 }}>({templates.length})</span>}
                 </button>
+                <button className={'tab-btn' + (tab === 'schrijfstijl' ? ' active' : '')} onClick={function () { setTab('schrijfstijl'); }}>
+                    <Pencil size={14} /> Schrijfstijl
+                </button>
             </div>
+
+            {tab === 'binnen' && <BinnenTab onTeller={setBinnenAantal} />}
+
+            {tab === 'schrijfstijl' && (
+                <SchrijfstijlTab
+                    settingsId={settings.id}
+                    schrijfstijl={settings.mail_schrijfstijl ?? ''}
+                    handtekening={settings.mail_handtekening ?? ''}
+                />
+            )}
 
             {/* ═══════════ TAB: VERZONDEN ═══════════ */}
             {tab === 'verzonden' && (

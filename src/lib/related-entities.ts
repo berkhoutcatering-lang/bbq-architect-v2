@@ -10,14 +10,16 @@
    - offertes.event_id  ↔  events.offerte_id   (bidirectioneel)
    - facturen.offerte_id → offerte
    - facturen.event_id   → event
-   - klant: via client_naam (geen FK, naam-match binnen org)
+   - klant: klant_id op offertes, events, facturen, leads en winkel_orders
+     (sinds 2026-11-06). Leeg = geen unieke match; dan is de naam de terugval.
+   - bestelling: winkel_orders.klant_id en winkel_order_regels.event_id
 
    Werkt zowel client- als server-side (neemt SupabaseClient als param,
    net als resolveClientEmail). */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type EntityKind = 'offerte' | 'event' | 'factuur' | 'klant' | 'lead';
+export type EntityKind = 'offerte' | 'event' | 'factuur' | 'klant' | 'lead' | 'bestelling';
 
 export interface RelatedEntity {
   kind: EntityKind;
@@ -35,6 +37,7 @@ export function entityHref(kind: EntityKind, id: number | string, clientNaam?: s
     case 'factuur': return `/facturen?focus=${id}`;
     case 'klant': return `/klanten?focus=${encodeURIComponent(clientNaam || String(id))}`;
     case 'lead': return `/verkoop/leads?focus=${id}`;
+    case 'bestelling': return '/verkoop/webshop';
   }
 }
 
@@ -55,6 +58,7 @@ function asRelated(kind: EntityKind, row: Row): RelatedEntity | null {
   else if (kind === 'factuur') label = 'Factuur ' + (row.nummer || id);
   else if (kind === 'event') label = String(row.name || 'Event ' + id);
   else if (kind === 'lead') label = String(row.naam || 'Aanvraag ' + id);
+  else if (kind === 'bestelling') label = 'Bestelling ' + (row.nummer || id);
   else label = String(row.naam || id);
   return {
     kind,
@@ -101,7 +105,7 @@ export async function getRelatedEntities(
 
     else if (args.kind === 'event' && args.id != null) {
       const { data: ev } = await supabase.from('events')
-        .select('id,offerte_id,client_naam').eq('id', args.id).single();
+        .select('id,offerte_id,client_naam,klant_id').eq('id', args.id).single();
       if (ev) {
         const offId = (ev as Row).offerte_id;
         if (offId) {
@@ -113,6 +117,12 @@ export async function getRelatedEntities(
         }
         const { data: fac } = await supabase.from('facturen').select('id,nummer,status').eq('event_id', args.id).limit(1).maybeSingle();
         const rf = fac && asRelated('factuur', fac as Row); if (rf) out.push(rf);
+        const { data: regels } = await supabase.from('winkel_order_regels').select('order_id').eq('event_id', args.id);
+        const orderIds = Array.from(new Set(((regels || []) as Row[]).map((r) => r.order_id)));
+        if (orderIds.length) {
+          const { data: orders } = await supabase.from('winkel_orders').select('id,nummer,status').in('id', orderIds);
+          (orders || []).forEach((o) => { const x = asRelated('bestelling', o as Row); if (x) out.push(x); });
+        }
         const naam = (ev as Row).client_naam as string | undefined;
         if (naam) out.push({ kind: 'klant', id: naam, label: naam, href: entityHref('klant', naam, naam) });
       }
@@ -152,13 +162,27 @@ export async function getRelatedEntities(
     }
 
     else if (args.kind === 'klant') {
+      const klantId = args.id;
       const naam = args.clientNaam;
-      if (naam && args.orgId) {
+      if (klantId != null) {
+        const [offs, evs, facs, lds, ords] = await Promise.all([
+          supabase.from('offertes').select('id,nummer,status').eq('klant_id', klantId).order('id', { ascending: false }).limit(10),
+          supabase.from('events').select('id,name,status').eq('klant_id', klantId).order('id', { ascending: false }).limit(10),
+          supabase.from('facturen').select('id,nummer,status').eq('klant_id', klantId).order('id', { ascending: false }).limit(10),
+          supabase.from('leads').select('id,naam,status').eq('klant_id', klantId).order('id', { ascending: false }).limit(10),
+          supabase.from('winkel_orders').select('id,nummer,status').eq('klant_id', klantId).order('id', { ascending: false }).limit(10),
+        ]);
+        (lds.data || []).forEach((r) => { const x = asRelated('lead', r as Row); if (x) out.push(x); });
+        (offs.data || []).forEach((r) => { const x = asRelated('offerte', r as Row); if (x) out.push(x); });
+        (evs.data || []).forEach((r) => { const x = asRelated('event', r as Row); if (x) out.push(x); });
+        (ords.data || []).forEach((r) => { const x = asRelated('bestelling', r as Row); if (x) out.push(x); });
+        (facs.data || []).forEach((r) => { const x = asRelated('factuur', r as Row); if (x) out.push(x); });
+      } else if (naam && args.orgId) {
         const [offs, evs, facs, lds] = await Promise.all([
-          supabase.from('offertes').select('id,nummer,status').eq('organization_id', args.orgId).ilike('client_naam', naam).order('datum', { ascending: false }).limit(10),
-          supabase.from('events').select('id,name,status').eq('organization_id', args.orgId).ilike('client_naam', naam).order('date', { ascending: false }).limit(10),
-          supabase.from('facturen').select('id,nummer,status').eq('organization_id', args.orgId).ilike('client_naam', naam).order('datum', { ascending: false }).limit(10),
-          supabase.from('leads').select('id,naam,status').eq('organization_id', args.orgId).ilike('client_naam', naam).order('created_at', { ascending: false }).limit(10),
+          supabase.from('offertes').select('id,nummer,status').eq('organization_id', args.orgId).ilike('client_naam', naam).limit(10),
+          supabase.from('events').select('id,name,status').eq('organization_id', args.orgId).ilike('client_naam', naam).limit(10),
+          supabase.from('facturen').select('id,nummer,status').eq('organization_id', args.orgId).ilike('client_naam', naam).limit(10),
+          supabase.from('leads').select('id,naam,status').eq('organization_id', args.orgId).ilike('client_naam', naam).limit(10),
         ]);
         (offs.data || []).forEach((r) => { const x = asRelated('offerte', r as Row); if (x) out.push(x); });
         (evs.data || []).forEach((r) => { const x = asRelated('event', r as Row); if (x) out.push(x); });

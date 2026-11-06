@@ -289,7 +289,9 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
           ) : null}
         </div>
 
-        {/* — Col 3: Prep checklist — */}
+        {/* — Col 3: Prep checklist — niet bij webshopbestellingen: daar hoort
+            geen pekelen of smoken bij, die voorbereiding staat in Kerst en Webshop. */}
+        {event.type !== 'Webshop' && (
         <div style={{ minWidth: 0 }}>
           <div
             style={{
@@ -427,6 +429,7 @@ export default function EventHero({ event, onOpen, onNewEvent }: Props): React.R
             })}
           </div>
         </div>
+        )}
       </div>
 
       <style>{`

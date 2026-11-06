@@ -161,3 +161,6 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, processed });
 }
+
+/* Vercel Cron roept met GET aan; POST blijft voor een handmatige run. */
+export const GET = POST;
