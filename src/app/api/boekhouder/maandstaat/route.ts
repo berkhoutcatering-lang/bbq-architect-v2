@@ -30,17 +30,19 @@ export async function GET(req: NextRequest) {
     const orgId = lid.organization_id as string;
 
     const { start, eind } = maandGrenzen(jaar, maand);
-    const [bronnen, dagstaten, settings] = await Promise.all([
+    const [bronnen, dagstaten, settings, uitsluitingen] = await Promise.all([
         laadAangifteBronnen(supabase, orgId, start, eind),
         supabase.from('toonbank_dagstaten')
             .select('bedrijfsdag,status,pin_toonbank_cents,contant_geteld_cents,contant_verschil_cents,pin_verschil_cents,goedgekeurd_at')
             .eq('organization_id', orgId).gte('bedrijfsdag', start).lte('bedrijfsdag', eind),
         supabase.from('settings').select('bedrijfsnaam').eq('organization_id', orgId).maybeSingle(),
+        supabase.from('btw_kassa_uitsluitingen').select('datum').eq('organization_id', orgId).gte('datum', start).lte('datum', eind),
     ]);
     if (bronnen.kassa_fout) return NextResponse.json({ error: bronnen.kassa_fout }, { status: 502 });
     if (dagstaten.error) return NextResponse.json({ error: dagstaten.error.message }, { status: 502 });
 
-    const staat = maakMaandstaat(jaar, maand, bronnen.kassa, (dagstaten.data ?? []) as DagstaatMin[]);
+    const staat = maakMaandstaat(jaar, maand, bronnen.kassa, (dagstaten.data ?? []) as DagstaatMin[],
+        new Set((uitsluitingen.data ?? []).map((u) => String(u.datum))));
 
     if (req.nextUrl.searchParams.get('pdf')) {
         const { base64, filename } = maandstaatPdf(staat, (settings.data as { bedrijfsnaam?: string } | null)?.bedrijfsnaam ?? '');

@@ -581,7 +581,10 @@ export async function POST(req: NextRequest) {
         const { data: dagstaten } = await supabase.from('toonbank_dagstaten')
           .select('bedrijfsdag,status,pin_toonbank_cents,contant_geteld_cents,contant_verschil_cents,pin_verschil_cents,goedgekeurd_at')
           .eq('organization_id', orgId).gte('bedrijfsdag', start).lte('bedrijfsdag', eindIncl);
-        const staat = maakMaandstaat(period.year, period.month, bronnen.kassa, (dagstaten ?? []) as DagstaatMin[]);
+        const { data: uitsluitingen } = await supabase.from('btw_kassa_uitsluitingen').select('datum')
+          .eq('organization_id', orgId).gte('datum', start).lte('datum', eindIncl);
+        const staat = maakMaandstaat(period.year, period.month, bronnen.kassa, (dagstaten ?? []) as DagstaatMin[],
+          new Set((uitsluitingen ?? []).map((u) => String(u.datum))));
         const { data: instellingen } = await supabase.from('settings').select('bedrijfsnaam').eq('organization_id', orgId).maybeSingle();
         const maandPdf = maandstaatPdf(staat, (instellingen as { bedrijfsnaam?: string } | null)?.bedrijfsnaam ?? '');
         zip.file(maandPdf.filename, maandPdf.base64, { base64: true });
