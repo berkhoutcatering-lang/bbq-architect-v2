@@ -22,6 +22,7 @@ import { berekenOfferte } from '@/lib/winkel/rekenen';
 import { KERST_SLUGS, PROEVERIJ_ARTIKEL, kerstArtikelen, kerstMand, kerstOpmerking, leesKerstLead, plaatsKerstBestelling, type KerstAanvraag } from '@/lib/winkel/kerst';
 import { stuurKerstMail, veldenUitOrder, type KerstMailSoort } from '@/lib/winkel/kerstMail';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { isZelfIngevoerd } from '@/lib/winkel/handmatig';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -208,9 +209,11 @@ export async function wijzigKerstAantal(input: unknown): Promise<ActionResult<{ 
     if (!t) return { error: 'Organisatie niet gevonden' };
 
     const { data: o } = await t.sb.from('winkel_orders')
-        .select('id, nummer, status, lead_id, opmerking, rest_betaald_at, winkel_order_regels(id, slug, aantal, moment_id, eenheden, klaar_op, klaargezet_at, opgehaald_at, event_id)')
+        .select('id, nummer, status, bron, lead_id, opmerking, rest_betaald_at, winkel_order_regels(id, slug, aantal, moment_id, eenheden, klaar_op, klaargezet_at, opgehaald_at, event_id)')
         .eq('id', d.orderId).eq('organization_id', s.orgId).maybeSingle();
     if (!o || o.lead_id == null) return { error: 'Kerst-bestelling niet gevonden' };
+    /* Een zelf ingevoerde bestelling kan regels op maat hebben; deze herberekening kent alleen de Kerst-Box en zou ze wissen. */
+    if (isZelfIngevoerd(o.bron)) return { error: 'Deze bestelling is zelf ingevoerd. Annuleer hem en voer hem opnieuw in met het nieuwe aantal.' };
     if (o.status !== 'betaald') return { error: 'Deze bestelling staat niet open.' };
     if (o.rest_betaald_at) return { error: 'Al betaald aan de balie. Pas het daar aan.' };
     const oud = (o.winkel_order_regels ?? []) as { id: number; slug: string; aantal: number; moment_id: string | null; eenheden: number; klaar_op: string; klaargezet_at: string | null; opgehaald_at: string | null; event_id: number | null }[];

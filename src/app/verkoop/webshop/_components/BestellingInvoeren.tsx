@@ -93,11 +93,14 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
 
     /* Aanvragen zoeken terwijl je typt; even wachten zodat niet elke letter een vraag is. */
     useEffect(() => {
+        if (!zoek.trim()) return;
+        let geldig = true;
         const t = window.setTimeout(async () => {
             const r = await zoekAanvragen({ zoek });
-            if ('data' in r) setAanvragen(r.data);
+            /* Een trager antwoord op een oudere zoekterm mag het nieuwe niet overschrijven. */
+            if (geldig && 'data' in r) setAanvragen(r.data);
         }, 250);
-        return () => window.clearTimeout(t);
+        return () => { geldig = false; window.clearTimeout(t); };
     }, [zoek]);
 
     const opSlug = useMemo(() => new Map(artikelen.map((a) => [a.slug, a])), [artikelen]);
@@ -211,35 +214,35 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                     {lead ? (
                         <div className="ws-merk" style={{ alignSelf: 'flex-start', height: 'auto', padding: '6px 10px', whiteSpace: 'normal' }}>
                             <Check size={13} /> Gekoppeld aan aanvraag van {new Date(lead.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long' })} ({lead.email ?? lead.naam})
-                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLead(null)} style={{ marginLeft: 6 }}>Los</button>
+                            <Button variant="ghost" size="sm" onClick={() => setLead(null)} style={{ marginLeft: 6 }}>Los</Button>
                         </div>
                     ) : (
                         <div className="field">
                             <label>Staat de klant er al in?</label>
-                            <div style={{ position: 'relative' }}>
-                                <Search size={14} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--muted)' }} />
-                                <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op naam, e-mail of telefoon" style={{ paddingLeft: 30 }} />
+                            <div style={{ position: 'relative', width: '100%' }}>
+                                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+                                <input value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek op naam, e-mail of telefoon" style={{ paddingLeft: 30, width: '100%' }} />
                             </div>
                             {zoek.trim() && (
                                 <div style={{ display: 'flex', flexDirection: 'column', marginTop: 6, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
                                     {aanvragen.length === 0 && <div className="ws-leeg" style={{ padding: 10 }}>Geen aanvraag gevonden. Vul de klant hieronder in.</div>}
                                     {aanvragen.map((a) => (
-                                        <button key={a.id} type="button" onClick={() => kiesAanvraag(a)} style={{ textAlign: 'left', padding: '8px 10px', background: 'transparent', border: 'none', borderTop: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', font: '13px var(--font-sans)' }}>
+                                        <Button key={a.id} variant="ghost" onClick={() => kiesAanvraag(a)} style={{ justifyContent: 'flex-start', textAlign: 'left', borderRadius: 0, border: 'none', borderTop: '1px solid var(--border)', fontWeight: 400 }}>
                                             <b>{a.naam}</b> <span style={{ color: 'var(--muted)' }}>· {a.email ?? a.telefoon ?? 'geen contact'} · {new Date(a.created_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })}</span>
-                                        </button>
+                                        </Button>
                                     ))}
                                 </div>
                             )}
                             <div className="field-hint">Een aanvraag of aanmelding koppelen, zodat de klant er niet dubbel in komt.</div>
                         </div>
                     )}
-                    <div className="field"><label>Naam</label><input value={naam} onChange={(e) => setNaam(e.target.value)} placeholder="Voor- en achternaam" /></div>
+                    <div className="field"><label>Naam</label><input aria-label="Naam" value={naam} onChange={(e) => setNaam(e.target.value)} placeholder="Voor- en achternaam" /></div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div className="field"><label>E-mail</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
-                        <div className="field"><label>Telefoon</label><input type="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)} /></div>
+                        <div className="field"><label>E-mail</label><input aria-label="E-mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                        <div className="field"><label>Telefoon</label><input aria-label="Telefoon" type="tel" value={telefoon} onChange={(e) => setTelefoon(e.target.value)} /></div>
                     </div>
                     <div className="field"><label>Binnengekomen via</label>
-                        <div className="ws-keuze">{BRONNEN.map((b) => <button key={b} type="button" aria-pressed={bron === b} onClick={() => setBron(b)}>{BRON_LABEL[b]}</button>)}</div>
+                        <div className="ws-keuze" role="radiogroup" aria-label="Binnengekomen via">{BRONNEN.map((b) => <label key={b}><input type="radio" name="bron" checked={bron === b} onChange={() => setBron(b)} />{BRON_LABEL[b]}</label>)}</div>
                     </div>
                 </section>
 
@@ -247,8 +250,8 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                 <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div className="ws-eyebrow">Afhalen</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div className="field"><label>Dag</label><input type="date" min={vandaagISO()} value={datum} onChange={(e) => setDatum(e.target.value)} /></div>
-                        <div className="field"><label>Tijd</label><input type="time" value={tijd} onChange={(e) => setTijd(e.target.value)} /><div className="field-hint">Leeg als het nog niet vaststaat</div></div>
+                        <div className="field"><label>Dag</label><input aria-label="Afhaaldag" type="date" min={vandaagISO()} value={datum} onChange={(e) => setDatum(e.target.value)} /></div>
+                        <div className="field"><label>Tijd</label><input aria-label="Afhaaltijd" type="time" value={tijd} onChange={(e) => setTijd(e.target.value)} /><div className="field-hint">Leeg als het nog niet vaststaat</div></div>
                     </div>
                 </section>
 
@@ -261,30 +264,30 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                             <div key={r.sleutel} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 12, border: '1px solid var(--border)', borderRadius: 12 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                                     <span className="ws-merk">{r.soort === 'artikel' ? 'Uit het assortiment' : 'Op maat'}</span>
-                                    {regels.length > 1 && <button type="button" className="btn btn-ghost btn-sm" aria-label="Regel weghalen" onClick={() => setRegels((rs) => rs.filter((_, j) => j !== i))}><Trash2 size={14} /></button>}
+                                    {regels.length > 1 && <Button variant="ghost" size="sm" aria-label="Regel weghalen" icon={<Trash2 size={14} />} onClick={() => setRegels((rs) => rs.filter((_, j) => j !== i))} />}
                                 </div>
                                 {r.soort === 'artikel' ? (
                                     <div className="field"><label>Product</label>
-                                        <select value={r.slug} onChange={(e) => zetRegel(i, { slug: e.target.value })}>
+                                        <select aria-label="Product" value={r.slug} onChange={(e) => zetRegel(i, { slug: e.target.value })}>
                                             <option value="">Kies een product…</option>
                                             {artikelen.map((a) => <option key={a.id} value={a.slug}>{a.naam}{a.prijs_cents != null ? ` · € ${toonEuro(a.prijs_cents)} ${a.eenheid}` : ' · nog geen prijs'}</option>)}
                                         </select>
                                     </div>
                                 ) : (
-                                    <div className="field"><label>Naam</label><input value={r.naam} onChange={(e) => zetRegel(i, { naam: e.target.value })} placeholder="Kerstavonddiner, 3 gangen" /></div>
+                                    <div className="field"><label>Naam</label><input aria-label="Naam van de regel op maat" value={r.naam} onChange={(e) => zetRegel(i, { naam: e.target.value })} placeholder="Kerstavonddiner, 3 gangen" /></div>
                                 )}
                                 <div style={{ display: 'grid', gridTemplateColumns: r.soort === 'op-maat' ? '1fr 1fr 1.3fr' : '1fr 1fr', gap: 12 }}>
-                                    <div className="field"><label>Aantal</label><input inputMode="numeric" value={r.aantal} onChange={(e) => zetRegel(i, { aantal: e.target.value })} placeholder={art?.eenheid === 'per persoon' ? 'personen' : 'stuks'} /></div>
+                                    <div className="field"><label>Aantal</label><input aria-label="Aantal" inputMode="numeric" value={r.aantal} onChange={(e) => zetRegel(i, { aantal: e.target.value })} placeholder={art?.eenheid === 'per persoon' ? 'personen' : 'stuks'} /></div>
                                     <div className="field"><label>Prijs per stuk</label>
-                                        <input inputMode="decimal" value={r.prijs} onChange={(e) => zetRegel(i, { prijs: e.target.value })}
+                                        <input aria-label="Prijs per stuk" inputMode="decimal" value={r.prijs} onChange={(e) => zetRegel(i, { prijs: e.target.value })}
                                             placeholder={r.soort === 'artikel' ? (art?.prijs_cents != null ? toonEuro(art.prijs_cents) : 'verplicht') : 'prijs volgt'} />
                                         <div className="field-hint">{r.soort === 'artikel' ? 'Leeg = catalogusprijs' : 'Leeg = prijs volgt'}</div>
                                     </div>
                                     {r.soort === 'op-maat' && (
-                                        <div className="field"><label>Btw</label><div className="ws-keuze">{([9, 21, 0] as const).map((p) => <button key={p} type="button" aria-pressed={r.btwPct === p} onClick={() => zetRegel(i, { btwPct: p })}>{p}%</button>)}</div></div>
+                                        <div className="field"><label>Btw</label><div className="ws-keuze" role="radiogroup" aria-label="Btw">{([9, 21, 0] as const).map((p) => <label key={p}><input type="radio" name={`btw-${r.sleutel}`} checked={r.btwPct === p} onChange={() => zetRegel(i, { btwPct: p })} />{p}%</label>)}</div></div>
                                     )}
                                 </div>
-                                <div className="field"><label>Toelichting</label><input value={r.toelichting} onChange={(e) => zetRegel(i, { toelichting: e.target.value })} placeholder={r.soort === 'artikel' ? 'vlees in ovenschaaltjes' : 'drie gangen, verrassing'} /></div>
+                                <div className="field"><label>Toelichting</label><input aria-label="Toelichting" value={r.toelichting} onChange={(e) => zetRegel(i, { toelichting: e.target.value })} placeholder={r.soort === 'artikel' ? 'vlees in ovenschaaltjes' : 'drie gangen, verrassing'} /></div>
                             </div>
                         );
                     })}
@@ -301,18 +304,18 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                         <div className="ws-chips">
                             {ALLERGEEN_KEUZES.map((a) => {
                                 const aan = allergenen.includes(a);
-                                return <button key={a} type="button" className="ws-chip" aria-pressed={aan} onClick={() => setAllergenen((x) => (aan ? x.filter((y) => y !== a) : [...x, a]))}>{aan && <AlertTriangle size={13} />}{a}</button>;
+                                return <label key={a} className="ws-chip"><input type="checkbox" checked={aan} onChange={() => setAllergenen((x) => (aan ? x.filter((y) => y !== a) : [...x, a]))} />{aan && <AlertTriangle size={13} />}{a}</label>;
                             })}
                         </div>
-                        <input value={andereAllergenen} onChange={(e) => setAndereAllergenen(e.target.value)} placeholder="Andere allergenen, gescheiden door komma’s" style={{ marginTop: 8 }} />
+                        <input aria-label="Andere allergenen" value={andereAllergenen} onChange={(e) => setAndereAllergenen(e.target.value)} placeholder="Andere allergenen, gescheiden door komma’s" style={{ marginTop: 8 }} />
                     </div>
                     <div className="field"><label>Harde regels</label>
-                        <textarea rows={3} value={harde} onChange={(e) => setHarde(e.target.value)} placeholder={'geen geitenkaas\ngeen olijven\ngeen alcohol'} />
+                        <textarea aria-label="Harde regels" rows={3} value={harde} onChange={(e) => setHarde(e.target.value)} placeholder={'geen geitenkaas\ngeen olijven\ngeen alcohol'} />
                         <div className="field-hint">Eén per regel. Komt met een ! in de agenda, de vakjes en op Vandaag.</div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
-                        <div className="field"><label>Vegetarisch</label><input inputMode="numeric" value={vega} onChange={(e) => setVega(e.target.value)} placeholder="0" /></div>
-                        <div className="field"><label>Opmerking</label><input value={opmerking} onChange={(e) => setOpmerking(e.target.value)} placeholder="belt nog over de tijd" /></div>
+                        <div className="field"><label>Vegetarisch</label><input aria-label="Vegetarisch" inputMode="numeric" value={vega} onChange={(e) => setVega(e.target.value)} placeholder="0" /></div>
+                        <div className="field"><label>Opmerking</label><input aria-label="Opmerking" value={opmerking} onChange={(e) => setOpmerking(e.target.value)} placeholder="belt nog over de tijd" /></div>
                     </div>
                 </section>
 
@@ -320,7 +323,7 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                 <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div className="ws-eyebrow">Afrekenen</div>
                     <div className="ws-chips">
-                        <button type="button" className="ws-chip" aria-pressed={inDeKassa} onClick={() => setInDeKassa((x) => !x)}><Wallet size={14} />Afrekenen in de kassa bij het afhalen</button>
+                        <label className="ws-chip"><input type="checkbox" checked={inDeKassa} onChange={() => setInDeKassa((x) => !x)} /><Wallet size={14} />Afrekenen in de kassa bij het afhalen</label>
                     </div>
                     <div className="field-hint">
                         {inDeKassa

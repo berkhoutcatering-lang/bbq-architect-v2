@@ -15,6 +15,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceSupabase } from '@/lib/supabase-server';
 import { kerstMailsVoorVandaag } from '@/lib/winkel/kerst';
+import { isZelfIngevoerd } from '@/lib/winkel/handmatig';
 import { stuurKerstMail, veldenUitOrder } from '@/lib/winkel/kerstMail';
 
 export const runtime = 'nodejs';
@@ -32,6 +33,7 @@ interface Rij {
     organization_id: string;
     nummer: string;
     status: string;
+    bron: string | null;
     contact_naam: string;
     contact_email: string;
     opmerking: string | null;
@@ -49,7 +51,7 @@ async function draai(req: Request) {
 
     const { data, error } = await sb
         .from('winkel_orders')
-        .select('id, organization_id, nummer, status, contact_naam, contact_email, opmerking, totaal_cents, aantal_onzeker, navraag_verstuurd_at, herinnering_verstuurd_at, winkel_order_regels(slug, aantal, klaar_op, opgehaald_at)')
+        .select('id, organization_id, nummer, status, bron, contact_naam, contact_email, opmerking, totaal_cents, aantal_onzeker, navraag_verstuurd_at, herinnering_verstuurd_at, winkel_order_regels(slug, aantal, klaar_op, opgehaald_at)')
         .not('lead_id', 'is', null)
         .eq('status', 'betaald')
         .or('herinnering_verstuurd_at.is.null,and(aantal_onzeker.eq.true,navraag_verstuurd_at.is.null)');
@@ -71,6 +73,8 @@ async function draai(req: Request) {
     for (const o of (data ?? []) as Rij[]) {
         const regels = o.winkel_order_regels ?? [];
         if (!regels.length) continue;
+        /* Zelf ingevoerd (mail, telefoon): daar gaat nooit vanzelf een mail heen. */
+        if (isZelfIngevoerd(o.bron)) continue;
         const v = veldenUitOrder(o, regels);
         const moet = kerstMailsVoorVandaag({
             status: o.status,

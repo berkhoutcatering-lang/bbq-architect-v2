@@ -124,6 +124,15 @@
 .ws-keuze button { flex: 1; text-align: center; padding: 8px 0; font: 500 13px var(--font-sans); color: var(--muted); background: transparent; border: none; border-radius: 7px; cursor: pointer; }
 .ws-keuze button[aria-pressed="true"] { background: var(--card-solid); color: var(--text); font-weight: 600; }
 .ws-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+/* Dezelfde keuzes met echte invoervelden (Bestelling invoeren): radio in .ws-keuze, vinkje in .ws-chip. */
+.ws-keuze label, .field .ws-keuze label { position: relative; flex: 1; text-align: center; padding: 8px 0; font: 500 13px var(--font-sans); color: var(--muted); border-radius: 7px; cursor: pointer; text-transform: none; letter-spacing: normal; }
+.ws-keuze label:has(input:checked), .field .ws-keuze label:has(input:checked) { background: var(--card-solid); color: var(--text); font-weight: 600; }
+.ws-keuze label:has(input:focus-visible) { outline: 2px solid var(--brand-gold); outline-offset: -2px; }
+.ws-keuze label input { position: absolute; opacity: 0; pointer-events: none; }
+.field label.ws-chip { font: 500 13px var(--font-sans); text-transform: none; letter-spacing: normal; }
+label.ws-chip:has(input:checked) { border-color: var(--border-strong); background: rgba(255,255,255,.04); color: var(--text); }
+label.ws-chip:has(input:focus-visible) { outline: 2px solid var(--brand-gold); outline-offset: 2px; }
+label.ws-chip input { accent-color: var(--brand-gold); margin: 0; }
 .ws-chip { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: 500 13px var(--font-sans); cursor: pointer; }
 .ws-chip[aria-pressed="true"] { border-color: var(--border-strong); background: rgba(255,255,255,.04); color: var(--text); }
 .ws-chip[aria-pressed="true"] svg { color: var(--green); }
