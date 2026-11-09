@@ -14,6 +14,8 @@ import { CalendarDays, Check, ChevronDown, ChevronUp, CircleAlert, ClipboardList
 import Button from '@/components/Button';
 import { formatEur } from '@/lib/format';
 import { wensenSamenvatting } from '@/lib/winkel/plaatsing';
+import { BRON_LABEL, isZelfIngevoerd, letOpPunten } from '@/lib/winkel/handmatig';
+import { vulRegelPrijsIn } from '../invoeren';
 import { betaaltAanBalie, restOpen as heeftOpenRest, welkeStapNodig, type Melding as OphaalMelding, type OphaalKeuze } from '@/lib/winkel/ophalen';
 import Drawer from './Drawer';
 import ProductiePaneel, { EtiketKnop, useEtiketPrinter } from './ProductiePaneel';
@@ -22,6 +24,7 @@ import {
     type ArtikelRij, type ComponentRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
 } from '../_lib/vakjes';
 import { boekRestBetaling, plaatsOpnieuw, scanDoos, zetKlaargezet, zetOpgehaald, zetWensenHandmatig, type ScanUitkomst } from '../actions';
+import { leesEuro } from '../_lib/vakjes';
 
 type Melding = (tekst: string, soort?: 'success' | 'error' | 'info') => void;
 
@@ -198,6 +201,12 @@ function Merktekens({ v }: { v: Vakje }) {
     }
     for (const a of v.allergenen) items.push(<span key={`a${a.naam}`} className="ws-merk ws-merk-warn"><TriangleAlert size={13} />allergie: {a.naam} ({a.aantal})</span>);
     if (v.nietGelezen > 0) items.push(<span key="lees" className="ws-merk ws-merk-warn"><MailWarning size={13} />{v.nietGelezen} {v.nietGelezen === 1 ? 'opmerking' : 'opmerkingen'} niet gelezen</span>);
+    const zelf = v.orders.filter((o) => isZelfIngevoerd(o.bron));
+    const harde = zelf.filter((o) => (o.wensen?.overig.length ?? 0) > 0).length;
+    if (harde > 0) items.push(<span key="harde" className="ws-merk ws-merk-warn"><TriangleAlert size={13} />! harde regels ({harde})</span>);
+    const volgt = zelf.reduce((n, o) => n + o.winkel_order_regels.filter((r) => r.prijs_volgt).length, 0);
+    if (volgt > 0) items.push(<span key="volgt" className="ws-merk ws-merk-warn"><Wallet size={13} />{volgt} prijs volgt</span>);
+    if (zelf.length > 0) items.push(<span key="zelf" className="ws-merk"><Mail size={13} />{zelf.length} zelf ingevoerd</span>);
     for (const naam of v.ongekoppeld) items.push(<span key={`o${naam}`} className="ws-merk ws-merk-warn"><Sparkles size={13} />nog geen gerecht of product: {naam}</span>);
     if (v.nietGeplaatst > 0) {
         const fout = v.orders.find((o) => o.plaatsing_fout)?.plaatsing_fout;
@@ -344,7 +353,7 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
                     {v.orders.map((o) => (
                         <div key={o.id} className="ws-order">
                             <div className="ws-order-kop">
-                                <div className="ws-order-naam">{o.contact_naam}<span className="ws-order-nummer">{o.nummer}</span>{o.winkel_order_regels.some((r) => r.alcohol) && <span className="ws-merk ws-merk-warn" style={{ marginLeft: 8, height: 22 }}>18+</span>}</div>
+                                <div className="ws-order-naam">{o.contact_naam}<span className="ws-order-nummer">{o.nummer}</span>{isZelfIngevoerd(o.bron) && <span className="ws-merk" style={{ marginLeft: 8, height: 22 }}>{BRON_LABEL[o.bron]}</span>}{o.winkel_order_regels.some((r) => r.alcohol) && <span className="ws-merk ws-merk-warn" style={{ marginLeft: 8, height: 22 }}>18+</span>}</div>
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     {o.status === 'betaald' && <EtiketKnop orderId={o.id} printerId={printerId} aantal={o.winkel_order_regels.reduce((s, r) => s + (artikelOpId.get(r.artikel_id)?.schaal_verdeling ? Math.max(1, Math.ceil(r.aantal / 5)) : r.aantal), 0)} melding={melding} />}
                                     <div className="ws-mono" style={{ fontSize: 13 }}>{eur(o.totaal_cents)}</div>
@@ -355,7 +364,7 @@ function VakjeDrawer({ v, artikelen, vandaag, onClose, herlaad, melding, onOpnie
                             <Opgehaald order={o} herlaad={herlaad} melding={melding} />
                             <div className="ws-order-wat"><a href={`mailto:${o.contact_email}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_email}</a>{o.contact_telefoon && <> · <a href={`tel:${o.contact_telefoon}`} style={{ color: 'var(--brand-gold)' }}>{o.contact_telefoon}</a></>}</div>
                             {o.plaatsing_status === 'mislukt' && <span className="ws-merk ws-merk-vuur" style={{ alignSelf: 'flex-start' }}><CircleAlert size={13} />niet geplaatst — {o.plaatsing_fout}</span>}
-                            <WensenBlok order={o} herlaad={herlaad} melding={melding} />
+                            {isZelfIngevoerd(o.bron) ? <ZelfIngevoerd order={o} herlaad={herlaad} melding={melding} /> : <WensenBlok order={o} herlaad={herlaad} melding={melding} />}
                         </div>
                     ))}
                 </div>
@@ -647,6 +656,52 @@ function RestBetaling({ order: o, herlaad, melding }: { order: OrderRij; herlaad
 /* ── Wat de AI las, naast het origineel ────────────────────────────────────── */
 
 const LEGE_WENSEN: Wensen = { vegetarisch: 0, veganistisch: 0, glutenvrij: 0, allergenen: [], overig: [] };
+
+/**
+ * Een zelf ingevoerde bestelling: de let-op-punten met !, de toelichting per
+ * regel, en bij "prijs volgt" een vakje om de prijs alsnog in te vullen.
+ */
+function ZelfIngevoerd({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
+    const punten = letOpPunten(o.wensen);
+    const dieet = [o.wensen?.vegetarisch ? `${o.wensen.vegetarisch} vegetarisch` : null].filter(Boolean);
+    const metUitleg = o.winkel_order_regels.filter((r) => r.toelichting || r.prijs_volgt);
+    const [prijzen, setPrijzen] = useState<Record<number, string>>({});
+    const [bezig, setBezig] = useState<number | null>(null);
+    async function bewaar(regelId: number) {
+        const c = leesEuro(prijzen[regelId] ?? '');
+        if (c == null) { melding('Vul een prijs in, bijvoorbeeld 45,00.', 'error'); return; }
+        setBezig(regelId);
+        try {
+            const r = await vulRegelPrijsIn({ regelId, stukCenten: c });
+            if ('error' in r) { melding(r.error, 'error'); return; }
+            melding('Prijs staat erin; het totaal is bijgewerkt.', 'success');
+            await herlaad();
+        } finally { setBezig(null); }
+    }
+    if (!punten.length && !dieet.length && !metUitleg.length && !o.opmerking) return null;
+    return (
+        <div className={`ws-wensen${punten.length ? ' ws-wensen-warn' : ''}`}>
+            {(punten.length > 0 || dieet.length > 0) && (
+                <div className="ws-wensen-kop" style={{ flexWrap: 'wrap', gap: 6 }}>
+                    {punten.map((p) => <span key={p} className="ws-merk ws-merk-warn"><TriangleAlert size={13} />{p}</span>)}
+                    {dieet.map((d) => <span key={d} className="ws-merk">{d}</span>)}
+                </div>
+            )}
+            {metUitleg.map((r) => (
+                <div key={r.id} className="ws-wensen-origineel" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span><b>{r.aantal}× {r.naam}</b>{r.toelichting ? ` — ${r.toelichting}` : ''}</span>
+                    {r.prijs_volgt && (
+                        <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ color: 'var(--ws-warn)', fontWeight: 600 }}>Prijs volgt</span>
+                            <input inputMode="decimal" aria-label={`Prijs per stuk voor ${r.naam}`} placeholder="prijs per stuk" value={prijzen[r.id] ?? ''} onChange={(e) => setPrijzen((p) => ({ ...p, [r.id]: e.target.value }))} style={{ width: 120 }} />
+                            <Button size="sm" loading={bezig === r.id} onClick={() => void bewaar(r.id)}>Prijs opslaan</Button>
+                        </span>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
 
 function WensenBlok({ order: o, herlaad, melding }: { order: OrderRij; herlaad: () => Promise<void>; melding: Melding }) {
     const [form, setForm] = useState<null | { vegetarisch: string; veganistisch: string; glutenvrij: string; allergenen: string; overig: string }>(null);

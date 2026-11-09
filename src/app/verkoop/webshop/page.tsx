@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useOrg } from '@/lib/OrgContext';
 import { useToast } from '@/components/Toast';
+import { Plus } from 'lucide-react';
+import Button from '@/components/Button';
 import { vandaagISO } from '@/lib/winkel/rekenen';
 import { taakUitRij, type WegzetTaak } from '@/lib/winkel/wegzetten';
 import VakjesPaneel from './_components/VakjesPaneel';
@@ -22,6 +24,7 @@ import ArtikelenPaneel, { type GerechtKeuze, type VoorraadKeuze } from './_compo
 import MomentenPaneel from './_components/MomentenPaneel';
 import ProductenPaneel from './_components/ProductenPaneel';
 import InstellingenPaneel, { type InstellingenRij } from './_components/InstellingenPaneel';
+import BestellingInvoeren from './_components/BestellingInvoeren';
 import type { ArtikelRij, ComponentRij, MomentRij, OrderRij, ProductRij, SlotRij } from './_lib/vakjes';
 import { dagenTerug, inStukken, ontbrekend, samenvoegen } from './_lib/laden';
 import '@/styles/menu-hub.css';
@@ -29,7 +32,7 @@ import './webshop.css';
 
 type Paneel = 'vakjes' | 'apartzetten' | 'artikelen' | 'producten' | 'momenten' | 'instellingen';
 const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
-    { key: 'vakjes', label: 'Vakjes', onderschrift: 'Elke betaalde bestelling van de website, in het vakje van de dag waarop hij klaar moet zijn.' },
+    { key: 'vakjes', label: 'Vakjes', onderschrift: 'Elke bestelling, van de website of zelf ingevoerd, in het vakje van de dag waarop hij klaar moet zijn.' },
     { key: 'apartzetten', label: 'Apart zetten', onderschrift: 'Losse winkelwaar uit de webshop die nog uit het schap moet. Afvinken zet hem apart en boekt de voorraad af.' },
     { key: 'artikelen', label: 'Artikelen', onderschrift: 'Wat de website verkoopt, en wat de keuken daarvoor maakt of jij daarvoor inkoopt.' },
     { key: 'producten', label: 'Producten', onderschrift: 'Wat er in een pakket of op een plank ligt: bier, wijn, worst, amandelen, doos — met prijs en voorraad.' },
@@ -37,7 +40,7 @@ const PANELEN: { key: Paneel; label: string; onderschrift: string }[] = [
     { key: 'instellingen', label: 'Instellingen', onderschrift: 'Hoe de kassa op de website werkt.' },
 ];
 
-const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode, leeftijd_geweigerd_at, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, opgehaald_at, afhaalmoment_tekst, alcohol, btw_cents)';
+const ORDER_SELECT = 'id, nummer, status, status_reden, leverwijze, moment_id, contact_naam, contact_email, contact_telefoon, adres, opmerking, subtotaal_cents, leverkosten_cents, totaal_cents, reservering_tot, betaald_at, betaalmethode, created_at, refund_status, refund_fout, mail_status, mail_fout, wensen, wensen_bron, plaatsing_status, plaatsing_fout, betaalwijze, nu_te_betalen_cents, rest_cents, rest_betaald_at, rest_betaalmethode, leeftijd_geweigerd_at, bron, winkel_order_regels(id, artikel_id, slug, naam, aantal, eenheid, stuk_cents, bedrag_cents, moment_id, eenheden, klaar_op, event_id, klaargezet_at, opgehaald_at, afhaalmoment_tekst, alcohol, btw_cents, prijs_volgt, toelichting)';
 
 const COMPONENT_SELECT = 'id, order_regel_id, product_id, slot_type, naam, hoeveelheid, eenheid';
 
@@ -161,6 +164,7 @@ export default function WebshopPagina() {
         return () => { levend = false; };
     }, [organization, laad]);
 
+    const [invoeren, setInvoeren] = useState(false);
     const actief = PANELEN.find((p) => p.key === paneel)!;
     const kassaOpen = instellingen?.kassa_open ?? false;
 
@@ -172,8 +176,12 @@ export default function WebshopPagina() {
                     <h1 className="ws-kop">Webshop</h1>
                     <div className="ws-onderschrift">{actief.onderschrift}</div>
                 </div>
-                <span className={`pill ${kassaOpen ? 'pill-green' : 'pill-red'}`} style={{ cursor: 'pointer' }} onClick={() => kies('instellingen')} title="Naar instellingen">{kassaOpen ? 'Kassa open' : 'Kassa dicht'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className={`pill ${kassaOpen ? 'pill-green' : 'pill-red'}`} style={{ cursor: 'pointer' }} onClick={() => kies('instellingen')} title="Naar instellingen">{kassaOpen ? 'Kassa open' : 'Kassa dicht'}</span>
+                    <Button icon={<Plus size={14} />} onClick={() => setInvoeren(true)}>Bestelling invoeren</Button>
+                </div>
             </div>
+            {invoeren && <BestellingInvoeren onClose={() => setInvoeren(false)} onKlaar={laad} melding={melding} />}
 
             <div className="ws-segment" role="tablist" aria-label="Webshop-onderdelen">
                 {PANELEN.map((p) => (
