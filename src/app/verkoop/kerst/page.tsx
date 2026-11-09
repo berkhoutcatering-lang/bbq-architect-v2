@@ -19,6 +19,9 @@ import { KERST_SLUG, KERST_SLUG_LIJST, kerstTotalen, type KerstOnderdeel } from 
 import Overzicht from './_components/Overzicht';
 import Bestellingen from './_components/Bestellingen';
 import Inhoud from './_components/Inhoud';
+import BestellingInvoeren from '../webshop/_components/BestellingInvoeren';
+import Button from '@/components/Button';
+import { Plus } from 'lucide-react';
 import type { ArtikelRij, KerstLead, KerstOrderRij, MomentRij } from './_components/types';
 import '@/styles/menu-hub.css';
 import '../webshop/webshop.css';
@@ -99,6 +102,7 @@ export default function KerstPagina() {
     const totalen = useMemo(() => kerstTotalen(orders.map((o) => ({ ...o, regels: o.winkel_order_regels })), dagen), [orders, dagen]);
     const actief = PANELEN.find((p) => p.key === paneel)!;
     const vegaArtikel = artikelen.find((a) => a.slug === KERST_SLUG.vega);
+    const [invoeren, setInvoeren] = useState(false);
 
     return (
         <div className="ws-root kr-root" style={{ padding: '18px 32px 48px', maxWidth: 1180, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -109,11 +113,15 @@ export default function KerstPagina() {
                     <div className="ws-onderschrift">{actief.onderschrift}</div>
                 </div>
                 {!laden && !migratieOntbreekt && (
-                    <span className="ws-merk" title="Geldige bestellingen (niet geannuleerd)">
-                        <b className="ws-mono">{totalen.totaal.orders}</b> bestellingen · <b className="ws-mono">{totalen.totaal.personen}</b> personen
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span className="ws-merk" title="Geldige bestellingen (niet geannuleerd)">
+                            <b className="ws-mono">{totalen.totaal.orders}</b> bestellingen · <b className="ws-mono">{totalen.totaal.personen}</b> personen
+                        </span>
+                        <Button className="kr-niet-printen" icon={<Plus size={14} />} onClick={() => setInvoeren(true)}>Bestelling invoeren</Button>
+                    </div>
                 )}
             </div>
+            {invoeren && <BestellingInvoeren startSlug={KERST_SLUG.box} onClose={() => setInvoeren(false)} onKlaar={laad} melding={melding} />}
 
             <div className="ws-segment kr-niet-printen" role="tablist" aria-label="Kerst-onderdelen">
                 {PANELEN.map((p) => <button key={p.key} type="button" role="tab" aria-selected={paneel === p.key} onClick={() => kies(p.key)}>{p.label}</button>)}

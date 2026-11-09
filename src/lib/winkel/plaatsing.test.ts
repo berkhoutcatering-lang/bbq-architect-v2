@@ -96,6 +96,14 @@ describe('telTotalen', () => {
             'HB-2026-0003 · Bakkerij Smit · 3× Kerst-Box, 2× Kerst-Box vegetarisch · uit opmerking: 2 vegetarisch · allergie: noten',
         ]);
     });
+    it('zelf ingevoerd: let-op-punten voorop met !, en de opmerking altijd letterlijk', () => {
+        const t = telTotalen([{ regel: regel(1, artikelen[0], 2), order: {
+            id: 1, nummer: 'HB-2026-0006', contact_naam: 'Nienke', bron: 'mail',
+            opmerking: '2× Kerst-Box: vlees in ovenschaaltjes\n2× Kerstavonddiner: prijs volgt',
+            wensen: { vegetarisch: 0, veganistisch: 0, glutenvrij: 0, allergenen: [], overig: ['geen geitenkaas', 'geen olijven', 'geen alcohol'] },
+        } }], art);
+        expect(t.notitie).toBe('! geen geitenkaas · ! geen olijven · ! geen alcohol · HB-2026-0006 · Nienke (mail) · 2× Kerst-Box · opmerking: "2× Kerst-Box: vlees in ovenschaaltjes / 2× Kerstavonddiner: prijs volgt"');
+    });
     it('zet een ongelezen opmerking letterlijk in de notitie', () => {
         const t = telTotalen([{ regel: regel(1, artikelen[0], 4), order: { id: 1, nummer: 'HB-2026-0001', contact_naam: 'Jan', opmerking: 'graag bellen', wensen: null } }], art);
         expect(t.notitie).toBe('HB-2026-0001 · Jan · 4× Kerst-Box · opmerking: "graag bellen"');

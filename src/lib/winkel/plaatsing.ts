@@ -21,6 +21,7 @@
  */
 import type { Artikel, MomentRij } from './rekenen';
 import { vandaagISO } from './rekenen';
+import { BRON_LABEL, isZelfIngevoerd, letOpPunten } from './handmatig';
 import type { EventTotalen, EventVakje, OrderRegelRij, OrderRij, PlaatsingStatus, RegelOpEvent, Tenant, Wensen, WinkelStore } from './store';
 
 /* ── Zuiver ────────────────────────────────────────────────────────────────── */
@@ -47,6 +48,27 @@ export function wensenSamenvatting(w: Wensen | null | undefined): string | null 
     if (w.allergenen.length) delen.push(`allergie: ${w.allergenen.join(', ')}`);
     delen.push(...w.overig.map((s) => s.trim()).filter(Boolean));
     return delen.length ? delen.join(' · ') : null;
+}
+
+/**
+ * De regel van een zelf ingevoerde bestelling op het event: de let-op-punten
+ * voorop (met !), dan wie en wat, het dieet, en de opmerking altijd letterlijk
+ * — daar staan de toelichting per regel en "prijs volgt" in.
+ *
+ *   "! allergie: noten · ! geen olijven · HB-2026-0006 · Nienke (mail) · 2× Kerst-Box · opmerking: \"…\""
+ */
+export function handmatigeNotitie(order: Pick<OrderRij, 'nummer' | 'contact_naam' | 'opmerking' | 'wensen' | 'bron'>, wat: string): string {
+    const w = order.wensen;
+    const delen = [...letOpPunten(w)];
+    const bron = isZelfIngevoerd(order.bron) ? ` (${BRON_LABEL[order.bron].toLowerCase()})` : '';
+    delen.push(`${order.nummer} · ${order.contact_naam}${bron} · ${wat}`);
+    if (w) {
+        if (w.vegetarisch > 0) delen.push(`${w.vegetarisch} vegetarisch`);
+        if (w.veganistisch > 0) delen.push(`${w.veganistisch} veganistisch`);
+        if (w.glutenvrij > 0) delen.push(`${w.glutenvrij} glutenvrij`);
+    }
+    if (order.opmerking?.trim()) delen.push(`opmerking: "${order.opmerking.trim().replace(/\s*\n\s*/g, ' / ')}"`);
+    return delen.join(' · ');
 }
 
 /**
@@ -93,6 +115,10 @@ export function telTotalen(rijen: RegelOpEvent[], artikelen: Map<string, Artikel
             gf += w.glutenvrij;
         }
         const wat = regels.map((r) => `${r.aantal}× ${r.naam}`).join(', ');
+        if (isZelfIngevoerd(order.bron)) {
+            notities.push(handmatigeNotitie(order, wat));
+            continue;
+        }
         const uit = wensenSamenvatting(w);
         let regel = `${order.nummer} · ${order.contact_naam} · ${wat}`;
         if (uit) regel += ` · uit opmerking: ${uit}`;

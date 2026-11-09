@@ -32,6 +32,9 @@ export interface RegelRij {
     /** Sinterklaas: 18+ en btw per tarief (leeg bij oude regels). */
     alcohol?: boolean;
     btw_cents?: Record<string, number> | null;
+    /** Bestelling invoeren: een regel op maat zonder prijs, en wat erbij hoort. */
+    prijs_volgt?: boolean;
+    toelichting?: string | null;
 }
 
 /** Eén component van een regel, zoals vastgelegd bij het plaatsen (S2/S7). */
@@ -136,6 +139,8 @@ export interface OrderRij {
     rest_betaalmethode: 'contant' | 'pin' | null;
     /* BA-2: de laatste 18+-weigering aan de balie. */
     leeftijd_geweigerd_at?: string | null;
+    /** Leeg of 'website' = van de site; mail, telefoon, balie, anders = zelf ingevoerd. */
+    bron?: string | null;
     winkel_order_regels: RegelRij[];
 }
 

@@ -257,7 +257,7 @@ export function maakSupabaseStore(client?: SupabaseClient): WinkelStore {
         async laadBetaaldeRegelsOpEvent(eventId) {
             const { data, error } = await sb
                 .from('winkel_order_regels')
-                .select(`${REGEL_KOLOMMEN}, winkel_orders!inner(id, nummer, contact_naam, opmerking, wensen, status)`)
+                .select(`${REGEL_KOLOMMEN}, winkel_orders!inner(id, nummer, contact_naam, opmerking, wensen, bron, status)`)
                 .eq('event_id', eventId)
                 .eq('winkel_orders.status', 'betaald')
                 .order('id', { ascending: true });

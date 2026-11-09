@@ -42,6 +42,8 @@ import QuickActions from '@/components/dashboard/today/QuickActions';
 import TakenLijst from '@/components/dashboard/today/TakenLijst';
 import { voegTakenSamen, type Taak, type TaakUrgentie } from '@/lib/today/taken-samenvoegen';
 import { wegzetTakenNaarTaken } from '@/lib/today/wegzet-taken';
+import { bestellingTaken } from '@/lib/today/bestelling-taken';
+import { useBestellingSeintje } from '@/lib/today/useBestellingSeintje';
 
 // Today-data helpers
 import { computeRevenueMix } from '@/lib/today/revenue-mix';
@@ -117,6 +119,8 @@ export default function DashboardPage() {
   const margeAlerts: MargeAlert[] = (ma.data || []).filter((a) => a.status === 'open');
 
   const [currentTime, setCurrentTime] = useState(new Date());
+  /* Zelf ingevoerde bestellingen (mail, telefoon) een week van tevoren op Vandaag. */
+  const seintjeRijen = useBestellingSeintje(currentTime);
   const [greeting, setGreeting] = useState('Welkom');
   const [isMounted, setIsMounted] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -782,7 +786,7 @@ export default function DashboardPage() {
 
   /* Eigen bron 'winkel' met onderwerp wegzet:{order_id}: valt nooit samen met
      een bestel- of voorraadmelding (zie taken-samenvoegen.ts). */
-  const takenUitWinkel: Taak[] = wegzetTakenNaarTaken(wgz.data || [], currentTime);
+  const takenUitWinkel: Taak[] = [...bestellingTaken(seintjeRijen, currentTime), ...wegzetTakenNaarTaken(wgz.data || [], currentTime)];
 
   const alleTaken = voegTakenSamen({
     dagbriefing: takenUitDagbriefing,

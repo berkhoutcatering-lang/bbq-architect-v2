@@ -80,6 +80,8 @@ export interface OrderRij {
     /* BA-2: de laatste 18+-weigering aan de balie (niets meegegeven). */
     leeftijd_geweigerd_at?: string | null;
     leeftijd_geweigerd_door?: string | null;
+    /** Waar de bestelling vandaan kwam: leeg of 'website', of zelf ingevoerd (mail, telefoon, balie, anders). */
+    bron?: string | null;
 }
 
 /** Wat uit de opmerking van de klant gelezen is. Staat altijd naast het origineel. */
@@ -157,7 +159,7 @@ export interface EventTotalen {
 
 export interface RegelOpEvent {
     regel: OrderRegelRij;
-    order: Pick<OrderRij, 'id' | 'nummer' | 'contact_naam' | 'opmerking' | 'wensen'>;
+    order: Pick<OrderRij, 'id' | 'nummer' | 'contact_naam' | 'opmerking' | 'wensen' | 'bron'>;
 }
 
 export interface NieuweOrder {
