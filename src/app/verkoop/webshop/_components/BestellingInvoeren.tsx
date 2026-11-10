@@ -54,6 +54,11 @@ interface Props {
 let teller = 0;
 const nieuweSleutel = () => ++teller;
 
+/** Klik ergens in een datum- of tijdveld: open meteen de kalender of klok, niet alleen via het kleine icoon. */
+function openKiezer(e: React.MouseEvent<HTMLInputElement>) {
+    try { e.currentTarget.showPicker?.(); } catch { /* niet ondersteund: het veld blijft gewoon typbaar */ }
+}
+
 function vandaagISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -250,8 +255,8 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                 <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div className="ws-eyebrow">Afhalen</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div className="field"><label>Dag</label><input aria-label="Afhaaldag" type="date" min={vandaagISO()} value={datum} onChange={(e) => setDatum(e.target.value)} /></div>
-                        <div className="field"><label>Tijd</label><input aria-label="Afhaaltijd" type="time" value={tijd} onChange={(e) => setTijd(e.target.value)} /><div className="field-hint">Leeg als het nog niet vaststaat</div></div>
+                        <div className="field"><label>Dag</label><input aria-label="Afhaaldag" type="date" min={vandaagISO()} value={datum} onClick={openKiezer} onChange={(e) => setDatum(e.target.value)} style={{ cursor: 'pointer' }} /></div>
+                        <div className="field"><label>Tijd</label><input aria-label="Afhaaltijd" type="time" value={tijd} onClick={openKiezer} onChange={(e) => setTijd(e.target.value)} style={{ cursor: 'pointer' }} /><div className="field-hint">Leeg als het nog niet vaststaat</div></div>
                     </div>
                 </section>
 
