@@ -112,4 +112,19 @@ describe('maakKasboek', () => {
         expect(k.regels.find((r) => r.soort === 'tussen_dagen')).toBeUndefined();
         expect(k.in_de_la_cents).toBe(20000);
     });
+    it('een kasverschil noemt de dag en of er te weinig of te veel in de la zat', () => {
+        const weinig = maakKasboek([staat('2026-11-26', 15050, 24300, 24100, 9000)], []);
+        expect(weinig.punten[0]).toMatch(/^Kasverschil op do 26 nov: /);
+        expect(weinig.punten[0]).toContain('2,00 te weinig in de la');
+        const veel = maakKasboek([staat('2026-11-26', 15050, 24300, 24500, 9000)], []);
+        expect(veel.punten[0]).toContain('2,00 te veel in de la');
+    });
+    it('een verschil tussen de dagen zegt of er geld uit de la ging of bij kwam', () => {
+        const eruit = maakKasboek([staat('2026-11-24', 15000, 23650, 23650, 8500), staat('2026-11-25', 15000, 22400, 22400, 7400)], []);
+        expect(eruit.punten[0]).toContain('ging er');
+        expect(eruit.punten[0]).toContain('1,50 uit de la');
+        const erbij = maakKasboek([staat('2026-11-24', 15000, 23650, 23650, 8500), staat('2026-11-25', 15300, 22400, 22400, 7400)], []);
+        expect(erbij.punten[0]).toContain('kwam er');
+        expect(erbij.punten[0]).toContain('1,50 bij in de la');
+    });
 });

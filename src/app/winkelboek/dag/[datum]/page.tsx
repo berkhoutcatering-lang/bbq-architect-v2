@@ -29,7 +29,7 @@ export default async function DagPagina({ params }: { params: Promise<{ datum: s
     const { supabase, orgId } = await winkelboekLid();
     if (!orgId) return <p style={{ fontSize: 13, color: 'var(--muted)' }}>Je bent geen lid van een organisatie.</p>;
 
-    const [uitgesloten, bonnen, staten, kas] = await Promise.all([
+    const [proef, bonnen, staten, kas] = await Promise.all([
         laadUitsluitingen(supabase, orgId, datum, datum),
         laadDagBonnen(supabase, orgId, datum, datum),
         laadDagstaten(supabase, orgId, datum, datum),
@@ -43,9 +43,9 @@ export default async function DagPagina({ params }: { params: Promise<{ datum: s
             dag={maakDagboeking(datum, bonnen.bonnen, staten.dagstaten, eigenTijdens)}
             dagstaten={staten.dagstaten}
             eigenTijdens={eigenTijdens}
-            proefdag={uitgesloten.has(datum)}
+            proefdag={proef.dagen.has(datum)}
             /* Zonder bonnen of dagstaten is de dag niet nagekeken: dan geen vinkje. */
-            fout={bonnen.fout ?? staten.fout}
+            fout={bonnen.fout ?? staten.fout ?? proef.fout ?? kas.fout}
         />
     );
 }

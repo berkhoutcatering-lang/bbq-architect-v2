@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Dagboeking } from './dagboeking';
 import type { PeriodeMarge } from './verkoop';
-import { dagKop, inkoopOnderschrift, kasVakje, kassaCijfers, lijstStaat, pinVakje } from './weergave';
+import { dagKop, dervingTegel, inkoopOnderschrift, inkoopVerhouding, kasVakje, kassaCijfers, lijstStaat, pinVakje, systeemStappen } from './weergave';
 
 const dag = (x: Partial<Dagboeking>): Dagboeking => ({
     datum: '2026-11-28', binnen: { pin: 0, contant: 0, cadeaubon: 0, totaal: 0 }, hokjes: [], totaal_hokjes: 0,
@@ -74,6 +74,69 @@ describe('pinVakje', () => {
     it('goedgekeurd of niet afgesloten', () => {
         expect(pinVakje({ ...basis, goedgekeurd: true })).toMatchObject({ toon: 'goed', onder: 'Verschil goedgekeurd' });
         expect(pinVakje({ ...basis, afgesloten: false })).toMatchObject({ toon: 'neutraal', waarde: 'Nog niet afgesloten' });
+    });
+});
+
+describe('de richting in de vakjes', () => {
+    it('het kasvakje zegt te weinig of te veel', () => {
+        const basis = { afgesloten: true, in_de_la_cents: 14948, verklaard_open: false, goedgekeurd: false };
+        expect(kasVakje({ ...basis, onverklaard: [-200] }).waarde).toMatch(/2,00 te weinig$/);
+        expect(kasVakje({ ...basis, onverklaard: [200] }).waarde).toMatch(/2,00 te veel$/);
+    });
+    it('het pinvakje zegt of myPOS meer of minder toont', () => {
+        const basis = { afgesloten: true, pin_cents: 140250, goedgekeurd: false };
+        expect(pinVakje({ ...basis, verschillen: [300] }).waarde).toMatch(/3,00 meer dan de kassa$/);
+        expect(pinVakje({ ...basis, verschillen: [-300] }).waarde).toMatch(/3,00 minder dan de kassa$/);
+    });
+});
+
+describe('dervingTegel', () => {
+    it('niets geboekt: leeg', () => {
+        expect(dervingTegel({ cents: 0, aantal: 0, zonder_waarde: 0 })).toEqual({ soort: 'leeg' });
+    });
+    it('alle regels zonder inkoopprijs: onbekend, nooit € 0,00', () => {
+        const uit = dervingTegel({ cents: 0, aantal: 3, zonder_waarde: 3 });
+        expect(uit.soort).toBe('onbekend');
+        expect(uit).toMatchObject({ reden: '3 regels geboekt, maar zonder inkoopprijs: de waarde is onbekend.' });
+    });
+    it('een deel zonder inkoopprijs: het bedrag met de waarschuwing erbij', () => {
+        expect(dervingTegel({ cents: 1250, aantal: 4, zonder_waarde: 1 })).toEqual({ soort: 'waarde', cents: 1250, onder: '1 regel zonder inkoopprijs niet meegeteld' });
+        expect(dervingTegel({ cents: 1250, aantal: 4, zonder_waarde: 0 })).toEqual({ soort: 'waarde', cents: 1250, onder: '4 regels' });
+    });
+    it('een laadfout is onbekend, niet leeg', () => {
+        expect(dervingTegel({ cents: 0, aantal: 0, zonder_waarde: 0, fout: 'Derving niet te lezen: timeout' })).toMatchObject({ soort: 'onbekend' });
+    });
+});
+
+describe('inkoopVerhouding', () => {
+    const basis = { ingekocht_cents: 42000, omzet_cents: 100000, leveringen: 4, zonder_bedrag: 0 };
+    it('inkoop gedeeld door omzet', () => {
+        expect(inkoopVerhouding(basis)).toMatchObject({ soort: 'waarde', pct: 42, minstens: false });
+    });
+    it('leveringen zonder bedrag: het is minstens zoveel, en dat staat erbij', () => {
+        expect(inkoopVerhouding({ ...basis, zonder_bedrag: 1 })).toMatchObject({ soort: 'waarde', pct: 42, minstens: true, onder: '1 levering zonder bedrag telt niet mee' });
+        expect(inkoopVerhouding({ ...basis, zonder_bedrag: 2 })).toMatchObject({ onder: '2 leveringen zonder bedrag tellen niet mee' });
+    });
+    it('geen omzet, geen leveringen of geen enkel bedrag: onbekend', () => {
+        expect(inkoopVerhouding({ ...basis, omzet_cents: null }).soort).toBe('onbekend');
+        expect(inkoopVerhouding({ ...basis, omzet_cents: 0 }).soort).toBe('onbekend');
+        expect(inkoopVerhouding({ ...basis, leveringen: 0 }).soort).toBe('onbekend');
+        expect(inkoopVerhouding({ ...basis, zonder_bedrag: 4 })).toMatchObject({ soort: 'onbekend', reden: 'Geen enkele levering heeft een bedrag.' });
+    });
+});
+
+describe('systeemStappen', () => {
+    const alles = { bonnen: 64, hokjes: 7, sluit: true, kasregels: 3, pin_cents: 140250, met_voorraad: 58 };
+    it('noemt alleen wat er die dag echt gebeurd is', () => {
+        expect(systeemStappen(alles)).toEqual([
+            '64 bonnen nagerekend', 'Omzet en btw in 7 hokjes gezet', 'Kasboek bijgewerkt', 'Pin naast myPOS gelegd', 'Voorraad afgeboekt bij 58 verkoopregels',
+        ]);
+    });
+    it('een dag zonder pin en zonder voorraadboeking belooft die stappen niet', () => {
+        expect(systeemStappen({ ...alles, pin_cents: 0, met_voorraad: 0 })).toEqual(['64 bonnen nagerekend', 'Omzet en btw in 7 hokjes gezet', 'Kasboek bijgewerkt']);
+    });
+    it('hokjes die niet sluiten en een kasboek zonder regels vallen weg', () => {
+        expect(systeemStappen({ ...alles, sluit: false, kasregels: 0 })).toEqual(['64 bonnen nagerekend', 'Pin naast myPOS gelegd', 'Voorraad afgeboekt bij 58 verkoopregels']);
     });
 });
 

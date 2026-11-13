@@ -15,7 +15,7 @@
  * Na stap 6 is het saldo altijd geteld − afgeroomd.
  */
 import { formatEur } from '@/lib/format';
-import type { DagstaatKort } from './dagboeking';
+import { kasVerschilTekst, type DagstaatKort } from './dagboeking';
 
 export type KasReden = 'uitgave' | 'prive' | 'wisselgeld' | 'overig';
 /** 'tijdens' = tussen openen en tellen (verklaart een kasverschil); 'voor_openen' = vóór de eerste telling van die dag (verklaart een verschil tussen de dagen). */
@@ -122,9 +122,11 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
         } else if (s.contant_begin_cents !== saldo) {
             const verschil = s.contant_begin_cents - saldo;
             regel(dag, 'tussen_dagen', 'Tussen de dagen', verschil);
+            /* Onder nul: er lag bij het openen minder in de la dan er bij het sluiten in zat. */
+            const wat = verschil < 0 ? `ging er ${euro(verschil)} uit de la` : `kwam er ${euro(verschil)} bij in de la`;
             punten.push(i === 0
-                ? `Vóór ${korteDag(dag)} veranderde de la ${euro(verschil)} zonder regel.`
-                : `Tussen ${korteDag(staten[i - 1].bedrijfsdag)} en ${korteDag(dag)} veranderde de la ${euro(verschil)} zonder regel.`);
+                ? `Vóór ${korteDag(dag)} ${wat} zonder regel.`
+                : `Tussen ${korteDag(staten[i - 1].bedrijfsdag)} en ${korteDag(dag)} ${wat} zonder regel.`);
         }
 
         regel(dag, 'verkoop', 'Contante verkoop', s.contant_verwacht_cents - s.contant_begin_cents);
@@ -136,7 +138,7 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
             const goedgekeurd = !!s.goedgekeurd_at;
             regel(dag, 'kasverschil', 'Kasverschil', onverklaard, { goedgekeurd });
             kasverschil += onverklaard;
-            if (!goedgekeurd) punten.push(`Kasverschil van ${euro(onverklaard)} op ${korteDag(dag)} is nog niet goedgekeurd.`);
+            if (!goedgekeurd) punten.push(`Kasverschil op ${korteDag(dag)}: ${kasVerschilTekst(onverklaard)} in de la, nog niet goedgekeurd.`);
         }
 
         if (s.afgeroomd_cents > 0) {

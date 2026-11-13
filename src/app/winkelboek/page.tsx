@@ -27,7 +27,8 @@ export default async function WinkelboekPagina({ searchParams }: { searchParams:
     const periode = periodeVan(p, datumNL(new Date()));
     const { start, eind } = periode;
 
-    const uitgesloten = await laadUitsluitingen(supabase, orgId, start, eind);
+    const proef = await laadUitsluitingen(supabase, orgId, start, eind);
+    const uitgesloten = proef.dagen;
     const [bonnen, staten, kas, kasBegin, toonbank, verkoop, afdelingen, derving] = await Promise.all([
         laadDagBonnen(supabase, orgId, start, eind),
         laadDagstaten(supabase, orgId, start, eind),
@@ -35,20 +36,20 @@ export default async function WinkelboekPagina({ searchParams }: { searchParams:
         laadKasBegin(supabase, orgId, start),
         laadToonbank(supabase, orgId, start, eind),
         laadVerkoopRegels(supabase, orgId, start, eind, uitgesloten),
-        laadAfdelingVanProduct(supabase),
+        laadAfdelingVanProduct(supabase, orgId),
         laadDerving(supabase, orgId, start, eind),
     ]);
 
     return (
         <OverzichtScherm
             periode={periode}
-            fout={bonnen.fout ?? staten.fout ?? toonbank.fout ?? verkoop.fout}
+            fout={bonnen.fout ?? staten.fout ?? toonbank.fout ?? verkoop.fout ?? proef.fout ?? kas.fout ?? kasBegin.fout ?? afdelingen.fout}
             bonnen={zonderProefdagen(bonnen.bonnen, uitgesloten)}
             dagstaten={zonderProefdagen(staten.dagstaten, uitgesloten)}
             kasMutaties={kas.mutaties}
-            kasBegin={kasBegin}
+            kasBegin={kasBegin.begin}
             verkoopRegels={verkoop.regels}
-            afdelingen={afdelingen}
+            afdelingen={afdelingen.afdelingen}
             kassaRegels={toonbank.regels}
             kassaDagen={toonbank.dagen}
             derving={derving}

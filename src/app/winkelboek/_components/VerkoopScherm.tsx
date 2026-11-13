@@ -54,7 +54,8 @@ export default function VerkoopScherm({ periode, artikelen, zoek, afdeling, fout
             {fout && <p role="alert" style={{ fontSize: 13, color: 'var(--status-danger-text)', marginTop: 14 }}>{fout}</p>}
 
             {artikelen.length === 0 ? (
-                <div className="kf-empty" style={{ marginTop: 18 }}><p>Nog niets verkocht in deze periode.</p></div>
+                /* Bij een laadfout weten we niet of er niets is: dan staat alleen de fout er. */
+                fout ? null : <div className="kf-empty" style={{ marginTop: 18 }}><p>Nog niets verkocht in deze periode.</p></div>
             ) : (
                 <>
                     <form method="get" action={basis} role="search" style={{ marginTop: 16 }}>

@@ -19,19 +19,20 @@ export default async function VerkoopPagina({ searchParams }: { searchParams: Pr
     const { p, q, afdeling } = await searchParams;
     const periode = periodeVan(p, datumNL(new Date()));
 
-    const uitgesloten = await laadUitsluitingen(supabase, orgId, periode.start, periode.eind);
+    const proef = await laadUitsluitingen(supabase, orgId, periode.start, periode.eind);
+    const uitgesloten = proef.dagen;
     const [verkoop, afdelingen] = await Promise.all([
         laadVerkoopRegels(supabase, orgId, periode.start, periode.eind, uitgesloten),
-        laadAfdelingVanProduct(supabase),
+        laadAfdelingVanProduct(supabase, orgId),
     ]);
 
     return (
         <VerkoopScherm
             periode={periode}
-            artikelen={verkoopPerArtikel(verkoop.regels, afdelingen)}
+            artikelen={verkoopPerArtikel(verkoop.regels, afdelingen.afdelingen)}
             zoek={q}
             afdeling={afdeling}
-            fout={verkoop.fout}
+            fout={verkoop.fout ?? proef.fout ?? afdelingen.fout}
         />
     );
 }

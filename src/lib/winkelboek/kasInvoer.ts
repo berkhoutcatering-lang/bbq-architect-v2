@@ -5,6 +5,13 @@
  */
 import { z } from 'zod';
 
+/**
+ * De bovengrens van één kasregel: € 100.000. Ruim boven wat er ooit in een la
+ * ligt, en ver onder wat de database in één getal kan bewaren. De tabel
+ * winkel_kas_mutaties heeft dezelfde grens.
+ */
+export const KAS_MAX_CENTS = 10_000_000;
+
 /** Hele euro's met optioneel punten per duizendtal, en optioneel een komma met één of twee cijfers. */
 const BEDRAG = /^(?:\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$/;
 
@@ -34,7 +41,9 @@ function bestaandeDatum(tekst: string): boolean {
 export const KasRegelSchema = z.object({
     datum: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Kies een datum.').refine(bestaandeDatum, 'Kies een bestaande datum.'),
     richting: z.enum(['uit', 'in']),
-    bedrag: z.string().refine((t) => centenUitInvoer(t) !== null, 'Vul een bedrag in, met een komma voor centen.'),
+    bedrag: z.string()
+        .refine((t) => centenUitInvoer(t) !== null, 'Vul een bedrag in, met een komma voor centen.')
+        .refine((t) => (centenUitInvoer(t) ?? 0) <= KAS_MAX_CENTS, 'Een kasregel kan hoogstens € 100.000 zijn.'),
     reden: z.enum(['uitgave', 'prive', 'wisselgeld', 'overig']),
     omschrijving: z.string().trim().min(2, 'Schrijf kort op waar het voor was.').max(200, 'Houd de omschrijving korter dan 200 tekens.'),
     moment: z.enum(['voor_openen', 'tijdens']),

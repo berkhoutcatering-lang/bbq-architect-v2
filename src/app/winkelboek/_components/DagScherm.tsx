@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, Clock, Receipt, XCircle } from 'lucide-react';
 import Panel from '@/components/chassis/Panel';
-import type { Dagboeking, DagstaatKort } from '@/lib/winkelboek/dagboeking';
+import { kasVerschilTekst, type Dagboeking, type DagstaatKort } from '@/lib/winkelboek/dagboeking';
 import { dagKop, type DagKopSoort } from '@/lib/winkelboek/weergave';
 import DagHokjes from './DagHokjes';
 import { aantal, euro, hoofdletter, langeDag, tijd } from '../_lib/tekst';
@@ -83,8 +83,8 @@ export default function DagScherm({ dag, dagstaten, eigenTijdens, proefdag, fout
                         <div style={RIJ}>
                             <span style={{ flex: 1 }}>Geteld</span>
                             {ruw === 0 ? <span style={{ color: 'var(--status-success-text)' }}>Gelijk aan verwacht</span>
-                                : onverklaard === 0 ? <span style={{ color: 'var(--muted)' }}>{euro(ruw)} verschil, verklaard door je kasregel</span>
-                                : <span style={{ ...BEDRAG, color: 'var(--status-warning-text)' }}>{euro(onverklaard)} verschil</span>}
+                                : onverklaard === 0 ? <span style={{ color: 'var(--muted)' }}>{kasVerschilTekst(ruw)}, verklaard door je kasregel</span>
+                                : <span style={{ ...BEDRAG, color: 'var(--status-warning-text)' }}>{kasVerschilTekst(onverklaard)}</span>}
                         </div>
                         <div style={RIJ}>
                             <span style={{ flex: 1 }}>Afgeroomd</span>

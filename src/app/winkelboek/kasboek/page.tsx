@@ -21,7 +21,7 @@ export default async function KasboekPagina({ searchParams }: { searchParams: Pr
     const vandaag = datumNL(new Date());
     const periode = periodeVan(p ?? vandaag.slice(0, 7), vandaag);
 
-    const [uitgesloten, staten, kas, begin] = await Promise.all([
+    const [proef, staten, kas, begin] = await Promise.all([
         laadUitsluitingen(supabase, orgId, periode.start, periode.eind),
         laadDagstaten(supabase, orgId, periode.start, periode.eind),
         laadKasMutaties(supabase, orgId, periode.start, periode.eind),
@@ -31,10 +31,11 @@ export default async function KasboekPagina({ searchParams }: { searchParams: Pr
     return (
         <KasboekScherm
             periode={periode}
-            kasboek={maakKasboek(staten.dagstaten, kas.mutaties, uitgesloten, begin)}
+            kasboek={maakKasboek(staten.dagstaten, kas.mutaties, proef.dagen, begin.begin)}
             beschikbaar={kas.beschikbaar}
             vandaag={vandaag}
-            fout={staten.fout}
+            /* Elk van deze vier bepaalt het saldo: mist er één, dan is het boek niet te vertrouwen. */
+            fout={staten.fout ?? proef.fout ?? kas.fout ?? begin.fout}
         />
     );
 }

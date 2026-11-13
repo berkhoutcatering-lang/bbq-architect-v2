@@ -69,7 +69,8 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
             {fout && <p role="alert" style={{ fontSize: 13, color: 'var(--status-danger-text)', marginBottom: 14 }}>{fout}</p>}
 
             {leeg ? (
-                <div className="kf-empty"><p>Nog geen verkoop om in te delen.</p></div>
+                /* Bij een laadfout weten we niet of er niets is: dan staat alleen de fout er. */
+                fout ? null : <div className="kf-empty"><p>Nog geen verkoop om in te delen.</p></div>
             ) : (
                 <>
                     {lopers.voorlopig && (
@@ -129,7 +130,10 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                     </span>
                                                 </span>
                                                 <span style={GETAL}>{l.verkocht > 0 ? `${formatNumber(l.verkocht)} st` : '0'}</span>
-                                                <span style={{ ...GETAL, fontWeight: 600 }}>{l.marge_cents === null ? '–' : euro(l.marge_cents)}</span>
+                                                <span style={{ ...GETAL, fontWeight: 600 }}>
+                                                    {l.marge_cents === null ? '–' : euro(l.marge_cents)}
+                                                    {l.marge_cents !== null && l.marge_geschat && <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 400, color: 'var(--muted)' }}>geschat</span>}
+                                                </span>
                                                 <span style={GETAL}>{l.voorraad === null ? <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--muted)' }}>Niet geteld</span> : hoeveel(l, l.voorraad)}</span>
                                                 <span style={{ fontSize: 13, color: l.krap ? 'var(--status-warning-text)' : l.dagen_voorraad === null ? 'var(--muted)' : undefined }}>
                                                     {l.groep === 'stil' ? 'Nog niets verkocht'

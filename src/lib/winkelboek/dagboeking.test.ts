@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { maakDagboeking, type BonMin, type DagstaatKort } from './dagboeking';
+import { kasVerschilTekst, maakDagboeking, pinVerschilTekst, type BonMin, type DagstaatKort } from './dagboeking';
 
 const bon = (b: Partial<BonMin>): BonMin => ({
     status: 'afgerond', dagstaat_id: 'd1', totaal_cents: 0, afronding_cents: 0, btw: {}, statiegeld_cents: 0,
@@ -83,5 +83,35 @@ describe('maakDagboeking', () => {
         expect(d.binnen.totaal).toBe(358396);
         expect(d.gesloten_at).toBe('2026-11-28T17:30:00Z');
         expect(d.stand).toBe('geboekt');
+    });
+});
+
+/* De kassa rekent kasverschil = geteld − verwacht en pinverschil = myPOS − kassa. */
+describe('de richting van een verschil', () => {
+    it('een kasverschil zegt of er te weinig of te veel in de la zat', () => {
+        const weinig = maakDagboeking('2026-11-28', [dag], [staat({ contant_geteld_cents: 14800, contant_verschil_cents: -200 })]);
+        expect(weinig.punten[0]).toContain('2,00');
+        expect(weinig.punten[0]).toContain('te weinig in de la');
+        const veel = maakDagboeking('2026-11-28', [dag], [staat({ contant_geteld_cents: 15200, contant_verschil_cents: 200 })]);
+        expect(veel.punten[0]).toContain('te veel in de la');
+    });
+    it('ook een verklaard kasverschil houdt zijn richting', () => {
+        const d = maakDagboeking('2026-11-28', [dag], [staat({ contant_geteld_cents: 14100, contant_verschil_cents: -900 })], -900);
+        expect(d.punten[0]).toContain('te weinig in de la');
+        expect(d.punten[0]).toContain('verklaard door je eigen kasregel');
+    });
+    it('een pinverschil zegt of myPOS meer of minder toont dan de kassa', () => {
+        const meer = maakDagboeking('2026-11-28', [dag], [staat({ pin_toonbank_cents: 140250, pin_mypos_app_cents: 140750, pin_verschil_cents: 500 })]);
+        expect(meer.punten[0]).toContain('myPOS toont');
+        expect(meer.punten[0]).toContain('5,00');
+        expect(meer.punten[0]).toContain('meer dan de kassa');
+        const minder = maakDagboeking('2026-11-28', [dag], [staat({ pin_toonbank_cents: 140250, pin_mypos_app_cents: 139750, pin_verschil_cents: -500 })]);
+        expect(minder.punten[0]).toContain('minder dan de kassa');
+    });
+    it('kasVerschilTekst en pinVerschilTekst', () => {
+        expect(kasVerschilTekst(-200)).toMatch(/2,00 te weinig$/);
+        expect(kasVerschilTekst(200)).toMatch(/2,00 te veel$/);
+        expect(pinVerschilTekst(500)).toMatch(/^myPOS toont .*5,00 meer dan de kassa$/);
+        expect(pinVerschilTekst(-500)).toMatch(/5,00 minder dan de kassa$/);
     });
 });

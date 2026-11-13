@@ -77,7 +77,15 @@ describe('cijfersPerProduct', () => {
             regel({ regel_id: 3, artikel_id: 'a-pakket', onderdelen: [{ product_id: 'p-worst', hoeveelheid: 1, eenheid: 'stuk' }, { product_id: 'p-bier', hoeveelheid: 4, eenheid: 'stuk' }] }),
         ]);
         expect([...uit.keys()]).toEqual(['p-worst']);
-        expect(uit.get('p-worst')).toEqual({ verkocht: 3, omzet_cents: 1800, marge_cents: 721 });
+        expect(uit.get('p-worst')).toEqual({ verkocht: 3, omzet_cents: 1800, marge_cents: 721, geschat: false });
+    });
+    it('een marge die met de inkoopprijs van nu is gerekend heet geschat', () => {
+        const uit = cijfersPerProduct([regel({}), regel({ regel_id: 2, inkoop_bron: 'prijs_nu' })]);
+        expect(uit.get('p-worst')).toMatchObject({ geschat: true });
+    });
+    it('een onbekende marge is niet geschat', () => {
+        const uit = cijfersPerProduct([regel({ inkoop_bron: 'prijs_nu' }), regel({ regel_id: 2, inkoop_cents: null, inkoop_bron: null })]);
+        expect(uit.get('p-worst')).toMatchObject({ marge_cents: null, geschat: false });
     });
     it('één regel zonder inkoopwaarde maakt de marge van het product onbekend', () => {
         const uit = cijfersPerProduct([regel({}), regel({ regel_id: 2, inkoop_cents: null, inkoop_bron: null })]);

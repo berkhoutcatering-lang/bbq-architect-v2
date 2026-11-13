@@ -31,11 +31,12 @@ export default async function InkoopPagina({ searchParams }: { searchParams: Pro
     return (
         <InkoopScherm
             periode={periode}
-            leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen)}
+            leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen)}
             voorraadwaarde={voorraadwaarde}
             /* laadToonbank geeft euro's als kommagetal. */
             omzetCents={toonbank.fout ? null : Math.round(toonbank.regels.reduce((s, r) => s + r.omzet, 0) * 100)}
             fout={ontvangsten.fout}
+            bonFout={bonnen.fout}
         />
     );
 }

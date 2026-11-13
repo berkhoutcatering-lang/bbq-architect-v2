@@ -184,13 +184,30 @@ verkocht per product alleen uit regels met precies één product (regel uit `src
 Zodra een dagstaat is verwerkt, komt er hooguit één melding per bedrijfsdag in `notifications` met een link naar
 `/winkelboek/dag/<datum>`. Hij verschijnt in de bel van de app. Tekst volgt de stand uit R1 op dat moment: "Alles
 klopt, je hoeft niets te doen" of het aantal punten. De melding wordt ná het antwoord aan de tablet gemaakt en
-mag nooit een fout geven. Geen mail en geen pushbericht in deze ronde.
+mag nooit een fout geven. Geen mail en geen pushbericht in deze ronde. De melding heeft per organisatie en dag een
+vast id: sluiten twee kassa's precies tegelijk af, dan botst de tweede en komt er toch maar één.
 
 ## Nieuwe opslag
 
 Eén tabel, `winkel_kas_mutaties`: organisatie, datum, bedrag in centen (niet nul; negatief = uit de la), reden
 (`uitgave`, `prive`, `wisselgeld`, `overig`), omschrijving, moment (`tijdens` of `voor_openen`), wie, wanneer. Rechten zoals de Toonbank-tabellen
 (`private.user_org_ids()`). De schermen werken ook als de tabel er nog niet is.
+
+De tabel bewaakt zelf wat de app ook bewaakt, voor wie de app omzeilt: een regel staat op naam van wie hem
+invoert, in een afgesloten maand komt er niets bij en gaat er niets weg, en een bedrag boven € 100.000 wordt
+geweigerd.
+
+## Als iets niet te laden is
+
+Een lader die faalt geeft zijn fout terug; het scherm toont die fout en zegt dan niet "er is niets" of "het
+klopt". Een tabel of kolom die er nog niet is, telt niet als fout. Is niet na te gaan of een maand is afgesloten,
+dan wordt een kasregel niet toegevoegd en niet weggehaald.
+
+## Verschillen in gewone taal
+
+Een kasverschil zegt of er te weinig of te veel in de la zat (de kassa rekent geteld min verwacht). Een
+pinverschil zegt of myPOS meer of minder toont dan de kassa (de kassa rekent myPOS min kassa). Een verschil
+tussen twee dagen zegt of er geld uit de la ging of bij kwam.
 
 ## Randvoorwaarden
 
@@ -213,6 +230,8 @@ Bij het nakijken tegen de code zijn deze keuzes gemaakt. Mathijs kan ze terugdra
 - Geen eigen getal "Voorbelasting" op Inkoop; de btw per levering heet "geschat".
 - Zoeken en filteren op Verkoop lopen via het adres, zonder knoppen: het aantal losse knoppen in de app staat
   precies op het afgesproken plafond.
+- De bovengrens van één kasregel is € 100.000: ruim boven wat er in een la ligt, bedoeld om tikfouten te vangen.
+- De kleur van de tegel staat als kleurcode in `navigation.tsx`, zoals bij alle andere werkruimtes.
 
 ## Aan de bouwer
 

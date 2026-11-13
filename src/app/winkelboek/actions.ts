@@ -13,17 +13,18 @@
 
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { datumNL } from '@/lib/winkel/afdelingen';
 import { centenUitInvoer, KasRegelSchema } from '@/lib/winkelboek/kasInvoer';
 import { isNogNiet } from '@/lib/winkelboek/laden';
+import { maandSlot } from '@/lib/winkelboek/maandslot';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
 const NIET_INGELOGD = { error: 'Je bent niet ingelogd.' };
 const NOG_NIET_AAN = { error: 'Eigen kasregels zijn nog niet ingeschakeld.' };
 const MAAND_DICHT = { error: 'Deze maand is afgesloten. Heropen hem eerst onder Geld → Boekhouder.' };
+const MAAND_ONBEKEND = { error: 'Er kon niet nagegaan worden of deze maand is afgesloten. Probeer het opnieuw.' };
 
 async function ingelogdMetOrg() {
     const supabase = await createServerSupabase();
@@ -40,13 +41,6 @@ async function ingelogdMetOrg() {
     return { supabase, user, orgId: data.organization_id as string };
 }
 
-async function maandAfgesloten(supabase: SupabaseClient, orgId: string, datum: string): Promise<boolean> {
-    const { data } = await supabase.from('maand_afsluitingen').select('id')
-        .eq('organization_id', orgId).eq('jaar', Number(datum.slice(0, 4))).eq('maand', Number(datum.slice(5, 7)))
-        .limit(1).maybeSingle();
-    return !!data;
-}
-
 export async function voegKasRegelToe(invoer: unknown): Promise<ActionResult<{ id: string }>> {
     const s = await ingelogdMetOrg();
     if (!s) return NIET_INGELOGD;
@@ -56,7 +50,8 @@ export async function voegKasRegelToe(invoer: unknown): Promise<ActionResult<{ i
     const regel = v.data;
 
     if (regel.datum > datumNL(new Date())) return { error: 'Een kasregel kan niet in de toekomst liggen.' };
-    if (await maandAfgesloten(s.supabase, s.orgId, regel.datum)) return MAAND_DICHT;
+    const slot = await maandSlot(s.supabase, s.orgId, regel.datum);
+    if (slot !== 'open') return slot === 'dicht' ? MAAND_DICHT : MAAND_ONBEKEND;
 
     const cents = centenUitInvoer(regel.bedrag);
     if (cents === null) return { error: 'Vul een bedrag in, met een komma voor centen.' };
@@ -68,6 +63,7 @@ export async function voegKasRegelToe(invoer: unknown): Promise<ActionResult<{ i
         reden: regel.reden,
         omschrijving: regel.omschrijving,
         moment: regel.moment,
+        created_by: s.user.id,
     }).select('id').single();
     if (error) {
         if (isNogNiet(error)) return NOG_NIET_AAN;
@@ -88,11 +84,13 @@ export async function verwijderKasRegel(id: string): Promise<ActionResult<true>>
         .eq('organization_id', s.orgId).eq('id', id).maybeSingle();
     if (leesFout) return isNogNiet(leesFout) ? NOG_NIET_AAN : { error: 'De regel kon niet gelezen worden. Probeer het opnieuw.' };
     if (!rij) return { error: 'Deze regel bestaat niet meer.' };
-    if (await maandAfgesloten(s.supabase, s.orgId, String(rij.datum))) return MAAND_DICHT;
+    const slot = await maandSlot(s.supabase, s.orgId, String(rij.datum));
+    if (slot !== 'open') return slot === 'dicht' ? MAAND_DICHT : MAAND_ONBEKEND;
 
-    const { error } = await s.supabase.from('winkel_kas_mutaties').delete().eq('organization_id', s.orgId).eq('id', id);
-    if (error) {
-        console.error('[winkelboek] kasregel verwijderen mislukt:', error.message);
+    /* `.select` erbij: de database weigert een regel in een afgesloten maand zonder foutmelding (nul rijen). */
+    const { data: weg, error } = await s.supabase.from('winkel_kas_mutaties').delete().eq('organization_id', s.orgId).eq('id', id).select('id');
+    if (error || !weg || weg.length === 0) {
+        if (error) console.error('[winkelboek] kasregel verwijderen mislukt:', error.message);
         return { error: 'De regel kon niet verwijderd worden. Probeer het opnieuw.' };
     }
 

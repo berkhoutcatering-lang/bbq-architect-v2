@@ -10,7 +10,7 @@ import { maakDagboeking, type BonMin, type DagstaatKort } from '@/lib/winkelboek
 import { maakKasboek, type KasBegin, type KasMutatie } from '@/lib/winkelboek/kasboek';
 import type { Periode } from '@/lib/winkelboek/periode';
 import { periodeMarge, verkoopPerArtikel, type VerkoopRegel } from '@/lib/winkelboek/verkoop';
-import { inkoopOnderschrift, kasVakje, kassaCijfers, pinVakje, type Toon } from '@/lib/winkelboek/weergave';
+import { dervingTegel, inkoopOnderschrift, kasVakje, kassaCijfers, pinVakje, systeemStappen, type Toon } from '@/lib/winkelboek/weergave';
 import DagBalken from './DagBalken';
 import DagHokjes from './DagHokjes';
 import PeriodeKiezer from './PeriodeKiezer';
@@ -33,7 +33,7 @@ export interface OverzichtGegevens {
     kassaRegels: KassaRegel[];
     /** Uit laadToonbank: bevat ook proefdagen (vlag `uitgesloten`). */
     kassaDagen: KassaDag[];
-    derving: { cents: number; aantal: number; zonder_waarde: number };
+    derving: { cents: number; aantal: number; zonder_waarde: number; fout?: string | null };
     /** Waar de periodekiezer naartoe linkt; de testpagina geeft zijn eigen pad. */
     basis?: string;
 }
@@ -58,8 +58,6 @@ function Vakje({ toon, kop, waarde, onder }: { toon: Toon; kop: string; waarde: 
         </div>
     );
 }
-
-const STAPPEN = ['Dag nagerekend uit de bonnen', 'Omzet en btw in de hokjes', 'Kasboek bijgewerkt', 'Pin naast myPOS gelegd', 'Voorraad en marge bijgewerkt'];
 
 /**
  * Het Overzicht van Boekhouding winkel: of kas en pin kloppen, de laatste dag
@@ -117,8 +115,20 @@ export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasM
     const inkoopStaat: KpiStaat = !heeftVerkoop ? leeg
         : !marge.dekking_pct ? { soort: 'onbepaald', reden: 'Nog geen inkoopprijzen bij wat er verkocht is.' }
         : kpi(euro(marge.inkoop_cents), inkoopOnderschrift(marge));
-    const dervingStaat: KpiStaat = derving.aantal === 0 ? { soort: 'leeg', wanneer: 'Geen breuk of over datum geboekt in deze periode.' }
-        : kpi(euro(derving.cents), derving.zonder_waarde > 0 ? `${aantal(derving.zonder_waarde, 'regel', 'regels')} zonder inkoopprijs niet meegeteld` : aantal(derving.aantal, 'regel', 'regels'));
+    const dervingUit = dervingTegel(derving);
+    const dervingStaat: KpiStaat = dervingUit.soort === 'leeg' ? { soort: 'leeg', wanneer: 'Geen breuk of over datum geboekt in deze periode.' }
+        : dervingUit.soort === 'onbekend' ? { soort: 'onbepaald', reden: dervingUit.reden }
+        : kpi(euro(dervingUit.cents), dervingUit.onder);
+
+    /* Wat het systeem bij het sluiten van de laatste dag echt deed. */
+    const stappen = laatste ? systeemStappen({
+        bonnen: laatste.aantal_bonnen,
+        hokjes: laatste.hokjes.length,
+        sluit: laatste.sluit,
+        kasregels: kasboek.regels.filter((r) => r.datum === laatste.datum).length,
+        pin_cents: statenLaatste.reduce((s, x) => s + x.pin_toonbank_cents, 0),
+        met_voorraad: verkoopRegels.filter((r) => r.bedrijfsdag === laatste.datum && r.aantal > 0 && r.inkoop_bron === 'logboek').length,
+    }) : [];
 
     const [jaar, maand] = start.split('-');
 
@@ -159,12 +169,12 @@ export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasM
                     >
                         <DagHokjes dag={laatste} />
                         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px 18px', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                            {laatste.stand === 'geboekt' && laatste.gesloten_at && (
+                            {laatste.stand === 'geboekt' && laatste.gesloten_at && stappen.length > 0 && (
                                 <>
                                     <div style={{ flex: '1 1 100%', fontSize: 10, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>
                                         Dit deed het systeem om {tijd(laatste.gesloten_at)}, toen je de kassa sloot
                                     </div>
-                                    {STAPPEN.map((s) => (
+                                    {stappen.map((s) => (
                                         <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                                             <Check size={14} style={{ color: 'var(--status-success-text)' }} aria-hidden="true" />{s}
                                         </div>

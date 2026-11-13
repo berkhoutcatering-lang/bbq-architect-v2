@@ -71,6 +71,22 @@ export interface Dagboeking {
 const euro = (cents: number) => formatEur(Math.abs(cents) / 100);
 
 /**
+ * '€ 2,00 te weinig' of '€ 2,00 te veel'. De kassa rekent het kasverschil als
+ * geteld − verwacht: onder nul lag er minder in de la dan verwacht.
+ */
+export function kasVerschilTekst(cents: number): string {
+    return `${euro(cents)} ${cents < 0 ? 'te weinig' : 'te veel'}`;
+}
+
+/**
+ * 'myPOS toont € 5,00 meer dan de kassa'. De kassa rekent het pinverschil als
+ * myPOS − kassa: boven nul staat er in de myPOS-app meer dan de kassa telde.
+ */
+export function pinVerschilTekst(cents: number): string {
+    return `myPOS toont ${euro(cents)} ${cents > 0 ? 'meer' : 'minder'} dan de kassa`;
+}
+
+/**
  * @param eigenTijdens_cents Som van wat je die dag zelf uit (−) of in (+) de la
  *   deed terwijl de kassa open was. Verklaart dat het kasverschil precies, dan
  *   zegt het punt dat; goedkeuren moet nog steeds (zelfde regel als de
@@ -126,12 +142,12 @@ export function maakDagboeking(datum: string, bonnen: BonMin[], dagstaten: Dagst
         const heeftKas = dagstaten.some((s) => s.contant_verschil_cents !== 0 && !s.goedgekeurd_at);
         if (heeftKas) {
             punten.push(kas !== 0 && kas === eigenTijdens_cents
-                ? `Kasverschil van ${euro(kas)} is verklaard door je eigen kasregel, maar nog niet goedgekeurd.`
-                : `Kasverschil van ${euro(kas)} is nog niet goedgekeurd.`);
+                ? `Kasverschil: ${kasVerschilTekst(kas)} in de la, verklaard door je eigen kasregel, nog niet goedgekeurd.`
+                : `Kasverschil: ${kasVerschilTekst(kas)} in de la, nog niet goedgekeurd.`);
         }
         const pin = dagstaten.filter((s) => s.pin_verschil_cents !== 0 && !s.goedgekeurd_at).reduce((n, s) => n + s.pin_verschil_cents, 0);
         const heeftPin = dagstaten.some((s) => s.pin_verschil_cents !== 0 && !s.goedgekeurd_at);
-        if (heeftPin) punten.push(`Pinverschil van ${euro(pin)} is nog niet goedgekeurd.`);
+        if (heeftPin) punten.push(`Pinverschil: ${pinVerschilTekst(pin)}, nog niet goedgekeurd.`);
         if (dagstaten.some((s) => (s.verschillen ?? []).length > 0 && s.status !== 'goedgekeurd')) punten.push('Narekenen uit de bonnen gaf een verschil met de tablet.');
         if (afgerond.some((b) => b.dagstaat_id === null)) punten.push('Er zijn bonnen die in geen dagafsluiting vallen.');
         if (!sluit) punten.push(`De hokjes sluiten niet: ${euro(totaal_hokjes - binnen.totaal)} verschil.`);

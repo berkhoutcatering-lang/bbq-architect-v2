@@ -4,6 +4,7 @@ import KpiTegel, { type KpiStaat } from '@/components/chassis/KpiTegel';
 import { formatPercent } from '@/lib/format';
 import type { Levering } from '@/lib/winkelboek/inkoop';
 import type { Periode } from '@/lib/winkelboek/periode';
+import { inkoopVerhouding } from '@/lib/winkelboek/weergave';
 import PeriodeKiezer from './PeriodeKiezer';
 import { aantal, euro, korteDag } from '../_lib/tekst';
 
@@ -16,14 +17,16 @@ const LINK: React.CSSProperties = { color: 'var(--brand-hover)', textDecoration:
  * bon erbij is. De echte voorbelasting komt van de bonnen en staat in de
  * btw-aangifte; die tonen we hier bewust niet als eigen getal.
  */
-export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omzetCents, fout, basis = '/winkelboek/inkoop', extra }: {
+export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omzetCents, fout, bonFout = null, basis = '/winkelboek/inkoop', extra }: {
     periode: Periode;
     /** Nieuwste eerst. */
     leveringen: Levering[];
-    voorraadwaarde: { cents: number; producten: number; zonder: number };
+    voorraadwaarde: { cents: number; producten: number; zonder: number; fout?: string | null };
     /** Omzet excl. btw van de winkelkassa in dezelfde periode; null als die niet te laden was. */
     omzetCents: number | null;
     fout: string | null;
+    /** De inkoopbonnen waren niet te laden: dan is van geen levering te zeggen of de bon er is. */
+    bonFout?: string | null;
     basis?: string;
     extra?: Record<string, string | undefined>;
 }) {
@@ -34,12 +37,15 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
 
     const ingekochtStaat: KpiStaat = leveringen.length === 0 ? { soort: 'leeg', wanneer: 'Verschijnt zodra je een ontvangst boekt.' }
         : { soort: 'waarde', waarde: euro(ingekocht), onder: zonderBedrag > 0 ? `${aantal(zonderBedrag, 'levering', 'leveringen')} zonder bedrag niet meegeteld` : `${aantal(leveringen.length, 'levering', 'leveringen')}, excl. btw` };
-    const bonStaat: KpiStaat = leveringen.length === 0 ? { soort: 'leeg', wanneer: 'Verschijnt zodra je een ontvangst boekt.' }
+    const bonStaat: KpiStaat = bonFout ? { soort: 'onbepaald', reden: 'De bonnen konden niet geladen worden.' }
+        : leveringen.length === 0 ? { soort: 'leeg', wanneer: 'Verschijnt zodra je een ontvangst boekt.' }
         : { soort: 'waarde', waarde: String(zonderBon), onder: zonderBon === 0 ? 'Bij elke levering is een bon gevonden' : 'Scan de bon, dan klopt je voorbelasting', alarm: zonderBon > 0 };
-    const waardeStaat: KpiStaat = voorraadwaarde.producten === 0 ? { soort: 'onbepaald', reden: 'Nog geen product met een telling én een inkoopprijs.' }
+    const waardeStaat: KpiStaat = voorraadwaarde.fout ? { soort: 'onbepaald', reden: 'De voorraad kon niet geladen worden.' }
+        : voorraadwaarde.producten === 0 ? { soort: 'onbepaald', reden: 'Nog geen product met een telling én een inkoopprijs.' }
         : { soort: 'waarde', waarde: euro(voorraadwaarde.cents), onder: voorraadwaarde.zonder > 0 ? `${aantal(voorraadwaarde.zonder, 'product', 'producten')} zonder inkoopprijs of telling niet meegeteld` : 'Inkoopprijs × wat er ligt' };
-    const verhoudingStaat: KpiStaat = omzetCents === null || omzetCents <= 0 || leveringen.length === 0 ? { soort: 'onbepaald', reden: 'Er is omzet én inkoop in de periode nodig.' }
-        : { soort: 'waarde', waarde: formatPercent((ingekocht / omzetCents) * 100), onder: `${euro(ingekocht)} op ${euro(omzetCents)} omzet` };
+    const verhouding = inkoopVerhouding({ ingekocht_cents: ingekocht, omzet_cents: omzetCents, leveringen: leveringen.length, zonder_bedrag: zonderBedrag });
+    const verhoudingStaat: KpiStaat = verhouding.soort === 'onbekend' ? { soort: 'onbepaald', reden: verhouding.reden }
+        : { soort: 'waarde', waarde: `${verhouding.minstens ? 'Minstens ' : ''}${formatPercent(verhouding.pct)}`, onder: verhouding.onder };
 
     return (
         <>
@@ -52,7 +58,9 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
 
             <PeriodeKiezer periode={periode} basis={basis} extra={extra} />
 
-            {fout && <p role="alert" style={{ fontSize: 13, color: 'var(--status-danger-text)', marginTop: 14 }}>{fout}</p>}
+            {[fout, bonFout, voorraadwaarde.fout].filter(Boolean).map((f) => (
+                <p key={f} role="alert" style={{ fontSize: 13, color: 'var(--status-danger-text)', marginTop: 14 }}>{f}</p>
+            ))}
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, margin: '18px 0' }}>
                 <KpiTegel label="Ingekocht deze periode" staat={ingekochtStaat} />
@@ -62,7 +70,8 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
             </div>
 
             {leveringen.length === 0 ? (
-                <div className="kf-empty"><p>Geen ontvangsten in deze periode.</p></div>
+                /* Bij een laadfout weten we niet of er niets is: dan staat alleen de fout er. */
+                fout ? null : <div className="kf-empty"><p>Geen ontvangsten in deze periode.</p></div>
             ) : (
                 <div className="wk-lijst">
                     <div style={{ overflowX: 'auto' }}>
@@ -89,13 +98,15 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
                                     <span style={{ ...GETAL, fontWeight: 600 }}>{l.bedrag_cents === null ? <span style={{ fontFamily: 'var(--font-sans)', fontWeight: 400, fontSize: 12, color: 'var(--status-warning-text)' }}>Nog geen inkoopprijs</span> : euro(l.bedrag_cents)}</span>
                                     <span style={{ ...GETAL, color: 'var(--muted)' }}>{l.btw_geschat_cents === null ? '–' : euro(l.btw_geschat_cents)}</span>
                                     <span style={{ fontSize: 12.5, minWidth: 0 }}>
-                                        {l.bon.soort === 'gevonden' ? (
+                                        {bonFout ? (
+                                            <span style={{ color: 'var(--muted)' }}>Niet te laden</span>
+                                        ) : l.bon.soort === 'gevonden' ? (
                                             <Link href="/archief" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text)', textDecoration: 'none' }}>
                                                 <CheckCircle2 size={14} style={{ color: 'var(--status-success-text)', flexShrink: 0 }} aria-hidden="true" />
                                                 <span>Bon gevonden{l.bon.netto_cents !== null ? ` · ${euro(l.bon.netto_cents)}` : ''}</span>
                                             </Link>
                                         ) : l.bon.soort === 'meerdere' ? (
-                                            <Link href="/archief" style={LINK}>{l.bon.aantal} bonnen, kies de juiste</Link>
+                                            <Link href="/archief" style={LINK}>{l.bon.aantal} bonnen gevonden, bekijk ze</Link>
                                         ) : (
                                             <Link href="/bonnen" style={LINK}>Bon scannen</Link>
                                         )}

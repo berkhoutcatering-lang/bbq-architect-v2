@@ -134,7 +134,7 @@ export const LOPER_INVOER: LoperInvoer[] = [
     loper('p-worst', 'Droge worst naturel', 'Worst', 74, 44400, 17794, 30),
     loper('p-kaas', 'Boerenkaas belegen', 'Kaas', 31, 43175, 14810, 7100, { eenheid: 'gram' }),
     loper('p-blond', 'Naober Blond 33 cl', 'Bier', 132, 39600, 13587, 96),
-    loper('p-amandel', 'Gerookte amandelen 150 g', 'Noten', 58, 28900, 13174, 40),
+    loper('p-amandel', 'Gerookte amandelen 150 g', 'Noten', 58, 28900, 13174, 40, { marge_geschat: true }),
     loper('p-fuet', 'Fuet met truffel', 'Worst', 31, 21680, 8110, 22),
     loper('p-saus', 'Mosterd-dillesaus', 'Broodbeleg', 29, 13050, null, null),
     loper('p-cracker', 'Crackers zeezout', 'Broodbeleg', 44, 11000, 4812, 60),

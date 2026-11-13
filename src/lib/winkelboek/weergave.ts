@@ -7,7 +7,7 @@
 import type { KassaDag } from '@/lib/btwAangifteBronnen';
 import type { KassaRegel } from '@/lib/financeAnalytics';
 import { formatEur } from '@/lib/format';
-import type { Dagboeking } from './dagboeking';
+import { kasVerschilTekst, pinVerschilTekst, type Dagboeking } from './dagboeking';
 import type { PeriodeMarge } from './verkoop';
 
 const euro = (cents: number) => (cents < 0 ? `− ${formatEur(-cents / 100)}` : formatEur(cents / 100));
@@ -65,7 +65,7 @@ export function kasVakje(v: { afgesloten: boolean; in_de_la_cents: number | null
     if (!v.afgesloten) return { toon: 'neutraal', kop: 'Kas', waarde: 'Nog niet afgesloten', onder: 'Tel de la en sluit de dag af op de kassa' };
     const inDeLa = v.in_de_la_cents === null ? 'Onbekend' : `${euro(v.in_de_la_cents)} in de la`;
     if (v.onverklaard.some((c) => c !== 0)) {
-        return { toon: 'let_op', kop: 'Kasverschil', waarde: v.onverklaard.filter((c) => c !== 0).map(euro).join(' en '), onder: 'Nog niet goedgekeurd' };
+        return { toon: 'let_op', kop: 'Kasverschil', waarde: v.onverklaard.filter((c) => c !== 0).map(kasVerschilTekst).join(' en '), onder: 'Nog niet goedgekeurd' };
     }
     if (v.verklaard_open) return { toon: 'neutraal', kop: 'Kas verklaard', waarde: inDeLa, onder: 'Verschil verklaard door je kasregel, nog goedkeuren' };
     return { toon: 'goed', kop: 'Kas klopt', waarde: inDeLa, onder: v.goedgekeurd ? 'Verschil goedgekeurd' : 'Geteld gelijk aan verwacht' };
@@ -75,7 +75,9 @@ export function kasVakje(v: { afgesloten: boolean; in_de_la_cents: number | null
 export function pinVakje(v: { afgesloten: boolean; pin_cents: number; verschillen: readonly number[]; goedgekeurd: boolean }): Vakje {
     if (!v.afgesloten) return { toon: 'neutraal', kop: 'Pin', waarde: 'Nog niet afgesloten', onder: 'Het pinbedrag volgt bij het afsluiten' };
     if (v.verschillen.some((c) => c !== 0)) {
-        return { toon: 'let_op', kop: 'Pinverschil', waarde: v.verschillen.filter((c) => c !== 0).map(euro).join(' en '), onder: 'Kassa en myPOS wijken af' };
+        /* 'myPOS toont € 3,00 meer dan de kassa' → '€ 3,00 meer dan de kassa': de kop zegt al dat het om pin gaat. */
+        const kort = (c: number) => pinVerschilTekst(c).replace(/^myPOS toont /, '');
+        return { toon: 'let_op', kop: 'Pinverschil', waarde: v.verschillen.filter((c) => c !== 0).map(kort).join(' en '), onder: 'In de myPOS-app, tegenover wat de kassa telde' };
     }
     return { toon: 'goed', kop: 'Pin klopt', waarde: `${euro(v.pin_cents)} gepind`, onder: v.goedgekeurd ? 'Verschil goedgekeurd' : 'Kassa en myPOS geven hetzelfde bedrag' };
 }
@@ -84,4 +86,61 @@ export function pinVakje(v: { afgesloten: boolean; pin_cents: number; verschille
 export function lijstStaat(aantalRijen: number, fout: string | null): 'fout' | 'leeg' | 'lijst' {
     if (fout) return 'fout';
     return aantalRijen === 0 ? 'leeg' : 'lijst';
+}
+
+export type DervingTegel = { soort: 'leeg' } | { soort: 'onbekend'; reden: string } | { soort: 'waarde'; cents: number; onder: string };
+
+/**
+ * De tegel Derving. Regels zonder inkoopprijs hebben geen waarde: is dat bij
+ * allemaal zo, dan is de derving onbekend en staat er geen € 0,00.
+ */
+export function dervingTegel(d: { cents: number; aantal: number; zonder_waarde: number; fout?: string | null }): DervingTegel {
+    if (d.fout) return { soort: 'onbekend', reden: 'De derving kon niet geladen worden.' };
+    if (d.aantal === 0) return { soort: 'leeg' };
+    if (d.zonder_waarde >= d.aantal) return { soort: 'onbekend', reden: `${aantal(d.aantal, 'regel', 'regels')} geboekt, maar zonder inkoopprijs: de waarde is onbekend.` };
+    return {
+        soort: 'waarde', cents: d.cents,
+        onder: d.zonder_waarde > 0 ? `${aantal(d.zonder_waarde, 'regel', 'regels')} zonder inkoopprijs niet meegeteld` : aantal(d.aantal, 'regel', 'regels'),
+    };
+}
+
+export type Verhouding = { soort: 'onbekend'; reden: string } | { soort: 'waarde'; pct: number; minstens: boolean; onder: string };
+
+/**
+ * Inkoop tegenover omzet. Een levering zonder bedrag telt niet mee in de
+ * inkoop: het percentage is dan een ondergrens en heet "minstens".
+ */
+export function inkoopVerhouding(v: { ingekocht_cents: number; omzet_cents: number | null; leveringen: number; zonder_bedrag: number }): Verhouding {
+    if (v.omzet_cents === null || v.omzet_cents <= 0 || v.leveringen === 0) return { soort: 'onbekend', reden: 'Er is omzet én inkoop in de periode nodig.' };
+    if (v.zonder_bedrag >= v.leveringen) return { soort: 'onbekend', reden: 'Geen enkele levering heeft een bedrag.' };
+    const pct = Math.round((v.ingekocht_cents / v.omzet_cents) * 1000) / 10;
+    if (v.zonder_bedrag > 0) {
+        return { soort: 'waarde', pct, minstens: true, onder: `${aantal(v.zonder_bedrag, 'levering', 'leveringen')} zonder bedrag ${v.zonder_bedrag === 1 ? 'telt' : 'tellen'} niet mee` };
+    }
+    return { soort: 'waarde', pct, minstens: false, onder: `${euro(v.ingekocht_cents)} op ${euro(v.omzet_cents)} omzet` };
+}
+
+/**
+ * "Dit deed het systeem" onder de laatste kassadag: alleen de stappen die die
+ * dag echt gebeurd zijn, met het aantal erbij. Geen vaste lijst vinkjes.
+ */
+export function systeemStappen(v: {
+    /** Afgeronde bonnen van de dag. */
+    bonnen: number;
+    hokjes: number;
+    sluit: boolean;
+    /** Regels van deze dag in het kasboek. */
+    kasregels: number;
+    /** Wat de kassa die dag aan pin telde. */
+    pin_cents: number;
+    /** Verkoopregels waarvan de voorraad is afgeboekt (inkoopwaarde uit het logboek). */
+    met_voorraad: number;
+}): string[] {
+    const uit: string[] = [];
+    if (v.bonnen > 0) uit.push(`${aantal(v.bonnen, 'bon', 'bonnen')} nagerekend`);
+    if (v.sluit && v.hokjes > 0) uit.push(`Omzet en btw in ${aantal(v.hokjes, 'hokje', 'hokjes')} gezet`);
+    if (v.kasregels > 0) uit.push('Kasboek bijgewerkt');
+    if (v.pin_cents > 0) uit.push('Pin naast myPOS gelegd');
+    if (v.met_voorraad > 0) uit.push(`Voorraad afgeboekt bij ${aantal(v.met_voorraad, 'verkoopregel', 'verkoopregels')}`);
+    return uit;
 }

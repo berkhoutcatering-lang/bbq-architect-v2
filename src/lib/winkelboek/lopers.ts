@@ -34,6 +34,8 @@ export interface LoperInvoer {
     verkocht: number;
     omzet_cents: number;
     marge_cents: number | null;
+    /** De marge is (deels) gerekend met de inkoopprijs van nu, omdat de voorraad niet was afgeboekt. */
+    marge_geschat?: boolean;
 }
 
 export type LoperGroep = 'hard' | 'midden' | 'traag' | 'stil';
@@ -123,23 +125,24 @@ export function middenLooptDoor(lopers: Lopers): number {
 }
 
 /** Telt per product verkocht, omzet (incl. btw) en marge uit regels met precies één product. */
-export function cijfersPerProduct(regels: readonly VerkoopRegel[]): Map<string, { verkocht: number; omzet_cents: number; marge_cents: number | null }> {
-    interface Som { verkocht: number; omzet: number; incl: Map<number, number>; inkoop: number | null }
+export function cijfersPerProduct(regels: readonly VerkoopRegel[]): Map<string, { verkocht: number; omzet_cents: number; marge_cents: number | null; geschat: boolean }> {
+    interface Som { verkocht: number; omzet: number; incl: Map<number, number>; inkoop: number | null; geschat: boolean }
     const per = new Map<string, Som>();
     for (const r of regels) {
         const productId = productVanRegel({ onderdelen: r.onderdelen });
         if (!productId) continue;
         let s = per.get(productId);
-        if (!s) { s = { verkocht: 0, omzet: 0, incl: new Map(), inkoop: 0 }; per.set(productId, s); }
+        if (!s) { s = { verkocht: 0, omzet: 0, incl: new Map(), inkoop: 0, geschat: false }; per.set(productId, s); }
         s.verkocht += r.aantal;
         s.omzet += r.bedrag_cents;
         const delen = r.btw && r.btw.length > 0 ? r.btw : [{ pct: 0, incl_cents: r.bedrag_cents }];
         for (const d of delen) s.incl.set(d.pct, (s.incl.get(d.pct) ?? 0) + d.incl_cents);
         if (r.inkoop_cents === null || s.inkoop === null) s.inkoop = null;
         else s.inkoop += r.inkoop_cents;
+        if (r.inkoop_bron === 'prijs_nu') s.geschat = true;
     }
     return new Map([...per.entries()].map(([id, s]) => {
         const excl = [...s.incl.entries()].reduce((som, [pct, incl]) => som + exclUitIncl(incl, pct), 0);
-        return [id, { verkocht: s.verkocht, omzet_cents: s.omzet, marge_cents: s.inkoop === null ? null : excl - s.inkoop }];
+        return [id, { verkocht: s.verkocht, omzet_cents: s.omzet, marge_cents: s.inkoop === null ? null : excl - s.inkoop, geschat: s.inkoop !== null && s.geschat }];
     }));
 }

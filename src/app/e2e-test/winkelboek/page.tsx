@@ -45,7 +45,7 @@ function dag(datum: string, fout: string | null = null) {
     );
 }
 
-/** Welk scherm: ?scherm=overzicht|leeg|dag|dag-punten|dag-open|kasboek|kasboek-leeg */
+/** Welk scherm: ?scherm=overzicht|overzicht-derving|leeg|dag|dag-punten|dag-verklaard|dag-fout|dag-open|kasboek|kasboek-leeg|kasboek-fout|kasboek-begin|verkoop|inkoop|inkoop-bonfout|lopers|lopers-fout */
 export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string; q?: string; afdeling?: string; groep?: string }> }) {
     if (process.env.NEXT_PUBLIC_E2E !== '1') notFound();
     const { scherm = 'overzicht', p, q, afdeling, groep } = await searchParams;
@@ -68,6 +68,17 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
             break;
         case 'inkoop':
             inhoud = <InkoopScherm periode={periode} leveringen={maakLeveringen(ONTVANGSTEN, INKOOP_BONNEN)} voorraadwaarde={VOORRAADWAARDE} omzetCents={363700} fout={null} basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'inkoop-bonfout':
+            inhoud = <InkoopScherm periode={periode} leveringen={maakLeveringen(ONTVANGSTEN, [])} voorraadwaarde={VOORRAADWAARDE} omzetCents={363700} fout={null}
+                bonFout="Inkoopbonnen niet te lezen: de verbinding viel weg" basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'overzicht-derving':
+            inhoud = <OverzichtScherm periode={periode} fout={null} bonnen={BONNEN} dagstaten={DAGSTATEN} kasMutaties={KAS_MUTATIES} verkoopRegels={VERKOOP_REGELS}
+                afdelingen={AFDELINGEN} kassaRegels={KASSA_REGELS} kassaDagen={KASSA_DAGEN} derving={{ cents: 0, aantal: 3, zonder_waarde: 3 }} basis={BASIS} />;
+            break;
+        case 'lopers-fout':
+            inhoud = <LopersScherm lopers={deelLopersIn([], { verkoopdagen: 0, dagen_open: 0 })} groep={groep} vandaag="2026-11-28" fout="Artikelen niet te lezen: de verbinding viel weg" basis={BASIS} extra={{ scherm }} />;
             break;
         case 'lopers':
             inhoud = <LopersScherm lopers={deelLopersIn(LOPER_INVOER, { verkoopdagen: 5, dagen_open: 8 })} groep={groep} vandaag="2026-11-28" fout={null} basis={BASIS} extra={{ scherm }} />;
