@@ -117,6 +117,16 @@ aandachtspunt. Het saldo na een afsluiting is altijd gelijk aan "in de la erna".
 Aandachtspunten: een onverklaard verschil zonder goedkeuring; een verschil tussen de dagen; dagafsluitingen van
 meer dan één kassa (het kasboek kent maar één la).
 
+Het boek van een periode begint op wat er na de laatste afsluiting vóór die periode in de la lag, plus de eigen
+regels sindsdien. Zo wordt ook een verschil over een week- of maandgrens heen gemeld. Is er nog nooit eerder
+afgesloten, dan is de eerste telling het begin. Elke eigen regel staat in het boek, ook een van vóór de eerste
+afsluiting: anders is hij bewaard maar nergens te zien of weg te halen.
+
+Een kasverschil dat een eigen regel precies verklaart, blijft "te controleren" tot het is goedgekeurd (zelfde
+regel als de maandstaat); het punt zegt er dan bij dat het verklaard is.
+
+Konden de bonnen of dagstaten niet geladen worden, dan toont een scherm dat, en geen stand, vinkje of melding.
+
 ### R3. Verkoop per artikel
 
 Invoer: verkoopregels (`toonbank_bon_regels.soort = 'verkoop'`) van afgeronde bonnen in de periode. Een tegenbon
