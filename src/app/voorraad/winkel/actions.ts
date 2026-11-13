@@ -285,7 +285,8 @@ export interface BelMelding {
     read_at: string | null;
 }
 
-const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen', 'kassa_onbekend', 'tht_bijna', 'tht_verlopen'];
+/* 'winkel_dag_geboekt' komt van Boekhouding winkel (src/lib/winkelboek/dagMelding.ts): één per afgesloten kassadag. */
+const BEL_TYPES = ['voorraad_laag', 'voorraad_op', 'artikel_dicht', 'voorraad_tekort_vooruit', 'voorraad_tellen', 'kassa_onbekend', 'tht_bijna', 'tht_verlopen', 'winkel_dag_geboekt'];
 
 /** De voorraadmeldingen: de ongelezen eerst, dan de laatste gelezen. */
 export async function laadBelMeldingen(): Promise<ActionResult<{ ongelezen: number; meldingen: BelMelding[] }>> {
