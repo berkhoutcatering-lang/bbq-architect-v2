@@ -77,6 +77,35 @@ describe('maakKasboek', () => {
     it('zonder dagstaten: leeg boek', () => {
         expect(maakKasboek([], [])).toEqual({ regels: [], in_de_la_cents: null, kasverschil_cents: 0, afgeroomd_cents: 0, punten: [] });
     });
+    it('met een beginstand uit de vorige periode: begint op dat saldo en meldt een verschil bij de eerste dag', () => {
+        const k = maakKasboek([staat('2026-12-01', 15000, 20000, 20000, 5000)], [], undefined, { datum: '2026-12-01', saldo_cents: 14945 });
+        expect(k.regels.map((r) => r.soort)).toEqual(['beginstand', 'tussen_dagen', 'verkoop', 'afgeroomd']);
+        expect(k.regels.map((r) => r.saldo_cents)).toEqual([14945, 15000, 20000, 15000]);
+        expect(k.punten.join(' ')).toContain('0,55');
+    });
+    it('met een beginstand: een eigen regel vóór de eerste afsluiting van de periode blijft zichtbaar', () => {
+        const k = maakKasboek([staat('2026-12-02', 16945, 20000, 20000, 0)],
+            [{ id: 'm9', datum: '2026-12-01', bedrag_cents: 2000, reden: 'wisselgeld', omschrijving: 'Wisselgeld erbij', moment: 'tijdens' }], undefined, { datum: '2026-12-01', saldo_cents: 14945 });
+        expect(k.regels.find((r) => r.mutatie_id === 'm9')).toMatchObject({ soort: 'eigen', saldo_cents: 16945 });
+        expect(k.punten).toEqual([]);
+    });
+    it('met een beginstand: een periode zonder afsluiting toont de beginstand en de eigen regels', () => {
+        const k = maakKasboek([], [{ id: 'm9', datum: '2026-12-01', bedrag_cents: -500, reden: 'prive', omschrijving: 'Privé', moment: 'tijdens' }], undefined, { datum: '2026-12-01', saldo_cents: 14945 });
+        expect(k.regels.map((r) => r.soort)).toEqual(['beginstand', 'eigen']);
+        expect(k.in_de_la_cents).toBe(14445);
+    });
+    it('zonder eerdere afsluiting: een eigen regel vóór de allereerste afsluiting staat in het boek en is weg te halen', () => {
+        const k = maakKasboek([staat('2026-11-24', 15000, 23650, 23650, 8500)],
+            [{ id: 'm0', datum: '2026-11-23', bedrag_cents: 15000, reden: 'wisselgeld', omschrijving: 'Wisselgeld in de la', moment: 'tijdens' }]);
+        expect(k.regels.map((r) => r.soort)).toEqual(['eigen', 'beginstand', 'verkoop', 'afgeroomd']);
+        expect(k.regels[0]).toMatchObject({ mutatie_id: 'm0', saldo_cents: 15000 });
+        expect(k.in_de_la_cents).toBe(15150);
+    });
+    it('alleen eigen regels en nog geen afsluiting: de regels staan er, het saldo is onbekend', () => {
+        const k = maakKasboek([], [{ id: 'm0', datum: '2026-11-23', bedrag_cents: 15000, reden: 'wisselgeld', omschrijving: 'Wisselgeld in de la', moment: 'tijdens' }]);
+        expect(k.regels.map((r) => r.mutatie_id)).toEqual(['m0']);
+        expect(k.in_de_la_cents).toBeNull();
+    });
     it('een eigen regel op een dag zonder dagstaat schuift het saldo op', () => {
         const k = maakKasboek([staat('2026-11-24', 15000, 23650, 23650, 8500), staat('2026-11-26', 17150, 20000, 20000, 0)],
             [{ id: 'm2', datum: '2026-11-25', bedrag_cents: 2000, reden: 'wisselgeld', omschrijving: 'Wisselgeld erbij', moment: 'tijdens' }]);

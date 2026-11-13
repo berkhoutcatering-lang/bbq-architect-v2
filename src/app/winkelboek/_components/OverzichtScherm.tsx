@@ -7,9 +7,10 @@ import type { KassaRegel } from '@/lib/financeAnalytics';
 import { formatPercent } from '@/lib/format';
 import { verzamelPunten } from '@/lib/winkelboek/aandacht';
 import { maakDagboeking, type BonMin, type DagstaatKort } from '@/lib/winkelboek/dagboeking';
-import { maakKasboek, type KasMutatie } from '@/lib/winkelboek/kasboek';
+import { maakKasboek, type KasBegin, type KasMutatie } from '@/lib/winkelboek/kasboek';
 import type { Periode } from '@/lib/winkelboek/periode';
 import { periodeMarge, verkoopPerArtikel, type VerkoopRegel } from '@/lib/winkelboek/verkoop';
+import { inkoopOnderschrift, kasVakje, kassaCijfers, pinVakje, type Toon } from '@/lib/winkelboek/weergave';
 import DagBalken from './DagBalken';
 import DagHokjes from './DagHokjes';
 import PeriodeKiezer from './PeriodeKiezer';
@@ -24,6 +25,8 @@ export interface OverzichtGegevens {
     /** Zonder proefdagen. */
     dagstaten: DagstaatKort[];
     kasMutaties: KasMutatie[];
+    /** Wat er vóór de periode in de la lag; null als er nog nooit eerder is afgesloten. */
+    kasBegin?: KasBegin | null;
     verkoopRegels: VerkoopRegel[];
     afdelingen: ReadonlyMap<string, string>;
     /** Uit laadToonbank: euro's als kommagetal, proefdagen er al uit. */
@@ -34,8 +37,6 @@ export interface OverzichtGegevens {
     /** Waar de periodekiezer naartoe linkt; de testpagina geeft zijn eigen pad. */
     basis?: string;
 }
-
-type Toon = 'goed' | 'let_op' | 'neutraal';
 
 const VLAK: Record<Toon, { klasse: string; kleur: string }> = {
     goed: { klasse: 'status-surface-success', kleur: 'var(--status-success-text)' },
@@ -66,32 +67,47 @@ const STAPPEN = ['Dag nagerekend uit de bonnen', 'Omzet en btw in de hokjes', 'K
  * wordt bij het openen uit de bonnen en dagstaten van de kassa gerekend; er
  * hoeft niets geboekt te worden.
  */
-export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasMutaties, verkoopRegels, afdelingen, kassaRegels, kassaDagen: alleDagen, derving, basis = '/winkelboek' }: OverzichtGegevens) {
+export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasMutaties, kasBegin, verkoopRegels, afdelingen, kassaRegels, kassaDagen: alleDagen, derving, basis = '/winkelboek' }: OverzichtGegevens) {
     const { start } = periode;
+
+    /* Wat je per dag zelf uit of in de la deed terwijl de kassa open was. */
+    const eigenTijdens = (dag: string) => kasMutaties.filter((m) => m.datum === dag && m.moment === 'tijdens').reduce((s, m) => s + m.bedrag_cents, 0);
 
     /* Elke dag met bonnen of een dagstaat, oplopend. */
     const dagen = [...new Set([...bonnen.filter((b) => b.status === 'afgerond').map((b) => b.bedrijfsdag), ...dagstaten.map((s) => s.bedrijfsdag)])].sort();
-    const boekingen = dagen.map((d) => maakDagboeking(d, bonnen.filter((b) => b.bedrijfsdag === d), dagstaten.filter((s) => s.bedrijfsdag === d)));
+    const boekingen = dagen.map((d) => maakDagboeking(d, bonnen.filter((b) => b.bedrijfsdag === d), dagstaten.filter((s) => s.bedrijfsdag === d), eigenTijdens(d)));
     const laatste = boekingen.at(-1) ?? null;
-    const kasboek = maakKasboek(dagstaten, kasMutaties);
+    const kasboek = maakKasboek(dagstaten, kasMutaties, undefined, kasBegin);
 
     const artikelen = verkoopPerArtikel(verkoopRegels, afdelingen);
     const marge = periodeMarge(artikelen);
     const punten = verzamelPunten(boekingen, kasboek, marge.zonder_inkoopprijs);
 
-    /* laadToonbank geeft euro's als kommagetal, en `dagen` bevat ook proefdagen. */
-    const kassaDagen = alleDagen.filter((d) => !d.uitgesloten);
-    const omzetCents = Math.round(kassaRegels.reduce((s, r) => s + r.omzet, 0) * 100);
-    const btwCents = Math.round(kassaRegels.reduce((s, r) => s + r.btw, 0) * 100);
-    const aantalBonnen = kassaDagen.reduce((s, d) => s + d.orders, 0);
+    const kassa = kassaCijfers(kassaRegels, alleDagen);
+    const kassaDagen = kassa.dagen;
+    const omzetCents = kassa.omzet_cents;
+    const btwCents = kassa.btw_cents;
+    const aantalBonnen = kassa.bonnen;
     const heeftVerkoop = kassaRegels.length > 0;
 
     /* De drie vakjes gaan over de laatste dag. */
     const statenLaatste = laatste ? dagstaten.filter((s) => s.bedrijfsdag === laatste.datum) : [];
-    const kasOpen = laatste ? kasboek.regels.filter((r) => r.datum === laatste.datum && r.soort === 'kasverschil' && !r.goedgekeurd).reduce((s, r) => s + r.bedrag_cents, 0) : 0;
-    const pin = statenLaatste.reduce((s, x) => s + x.pin_toonbank_cents, 0);
-    const pinOpen = statenLaatste.filter((x) => !x.goedgekeurd_at).reduce((s, x) => s + x.pin_verschil_cents, 0);
     const afgesloten = statenLaatste.length > 0;
+    const kasRegels = laatste ? kasboek.regels.filter((r) => r.datum === laatste.datum && r.soort === 'kasverschil') : [];
+    const onverklaard = kasRegels.filter((r) => !r.goedgekeurd).map((r) => r.bedrag_cents);
+    const kas = kasVakje({
+        afgesloten,
+        in_de_la_cents: kasboek.in_de_la_cents,
+        onverklaard,
+        verklaard_open: onverklaard.length === 0 && statenLaatste.some((s) => s.contant_verschil_cents !== 0 && !s.goedgekeurd_at),
+        goedgekeurd: statenLaatste.some((s) => s.contant_verschil_cents !== 0 && !!s.goedgekeurd_at),
+    });
+    const pin = pinVakje({
+        afgesloten,
+        pin_cents: statenLaatste.reduce((s, x) => s + x.pin_toonbank_cents, 0),
+        verschillen: statenLaatste.filter((s) => !s.goedgekeurd_at).map((s) => s.pin_verschil_cents),
+        goedgekeurd: statenLaatste.some((s) => s.pin_verschil_cents !== 0 && !!s.goedgekeurd_at),
+    });
 
     const kpi = (waarde: string, onder?: string, alarm?: boolean): KpiStaat => ({ soort: 'waarde', waarde, onder, alarm });
     const leeg: KpiStaat = { soort: 'leeg', wanneer: 'Verschijnt zodra de kassa verkoopt.' };
@@ -100,7 +116,7 @@ export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasM
         : kpi(euro(marge.marge_cents), `${formatPercent(marge.marge_pct)} · over ${marge.dekking_pct}% van de omzet`);
     const inkoopStaat: KpiStaat = !heeftVerkoop ? leeg
         : !marge.dekking_pct ? { soort: 'onbepaald', reden: 'Nog geen inkoopprijzen bij wat er verkocht is.' }
-        : kpi(euro(marge.inkoop_cents), marge.geschat > 0 ? `${aantal(marge.geschat, 'artikel', 'artikelen')} met de inkoopprijs van nu` : 'Van wat je verkocht');
+        : kpi(euro(marge.inkoop_cents), inkoopOnderschrift(marge));
     const dervingStaat: KpiStaat = derving.aantal === 0 ? { soort: 'leeg', wanneer: 'Geen breuk of over datum geboekt in deze periode.' }
         : kpi(euro(derving.cents), derving.zonder_waarde > 0 ? `${aantal(derving.zonder_waarde, 'regel', 'regels')} zonder inkoopprijs niet meegeteld` : aantal(derving.aantal, 'regel', 'regels'));
 
@@ -129,20 +145,8 @@ export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasM
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 18 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                        {!afgesloten ? (
-                            <Vakje toon="neutraal" kop="Kas" waarde="Nog niet afgesloten" onder="Tel de la en sluit de dag af op de kassa" />
-                        ) : kasOpen === 0 ? (
-                            <Vakje toon="goed" kop="Kas klopt" waarde={`${euro(kasboek.in_de_la_cents ?? 0)} in de la`} onder="Geteld gelijk aan verwacht" />
-                        ) : (
-                            <Vakje toon="let_op" kop="Kasverschil" waarde={euro(kasOpen)} onder="Nog niet goedgekeurd" />
-                        )}
-                        {!afgesloten ? (
-                            <Vakje toon="neutraal" kop="Pin" waarde="Nog niet afgesloten" onder="Het pinbedrag volgt bij het afsluiten" />
-                        ) : pinOpen === 0 ? (
-                            <Vakje toon="goed" kop="Pin klopt" waarde={`${euro(pin)} gepind`} onder="Kassa en myPOS geven hetzelfde bedrag" />
-                        ) : (
-                            <Vakje toon="let_op" kop="Pinverschil" waarde={euro(pinOpen)} onder="Kassa en myPOS wijken af" />
-                        )}
+                        <Vakje {...kas} />
+                        <Vakje {...pin} />
                         <Vakje toon="neutraal" kop="Afgeroomd deze periode" waarde={euro(kasboek.afgeroomd_cents)} onder="Uit de la gehaald voor de bank" />
                     </div>
 
@@ -189,7 +193,7 @@ export default function OverzichtScherm({ periode, fout, bonnen, dagstaten, kasM
                             {kassaDagen.length === 0 ? (
                                 <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>Nog geen omzet in deze periode.</p>
                             ) : (
-                                <DagBalken dagen={kassaDagen.map((d) => ({ datum: d.datum, cents: Math.round(d.omzet * 100) }))} />
+                                <DagBalken dagen={kassaDagen} />
                             )}
                         </Panel>
 

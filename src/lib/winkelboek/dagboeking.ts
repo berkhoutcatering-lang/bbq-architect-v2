@@ -70,7 +70,13 @@ export interface Dagboeking {
 
 const euro = (cents: number) => formatEur(Math.abs(cents) / 100);
 
-export function maakDagboeking(datum: string, bonnen: BonMin[], dagstaten: DagstaatKort[]): Dagboeking {
+/**
+ * @param eigenTijdens_cents Som van wat je die dag zelf uit (−) of in (+) de la
+ *   deed terwijl de kassa open was. Verklaart dat het kasverschil precies, dan
+ *   zegt het punt dat; goedkeuren moet nog steeds (zelfde regel als de
+ *   maandstaat en Verkoop → Toonbank → Dagstaten).
+ */
+export function maakDagboeking(datum: string, bonnen: BonMin[], dagstaten: DagstaatKort[], eigenTijdens_cents = 0): Dagboeking {
     const afgerond = bonnen.filter((b) => b.status === 'afgerond');
 
     const binnen = { pin: 0, contant: 0, cadeaubon: 0, totaal: 0 };
@@ -118,7 +124,11 @@ export function maakDagboeking(datum: string, bonnen: BonMin[], dagstaten: Dagst
         if (dagstaten.some((s) => s.status === 'voorlopig')) punten.push('De dagstaat is voorlopig: de tablet had nog bonnen te versturen.');
         const kas = dagstaten.filter((s) => s.contant_verschil_cents !== 0 && !s.goedgekeurd_at).reduce((n, s) => n + s.contant_verschil_cents, 0);
         const heeftKas = dagstaten.some((s) => s.contant_verschil_cents !== 0 && !s.goedgekeurd_at);
-        if (heeftKas) punten.push(`Kasverschil van ${euro(kas)} is nog niet goedgekeurd.`);
+        if (heeftKas) {
+            punten.push(kas !== 0 && kas === eigenTijdens_cents
+                ? `Kasverschil van ${euro(kas)} is verklaard door je eigen kasregel, maar nog niet goedgekeurd.`
+                : `Kasverschil van ${euro(kas)} is nog niet goedgekeurd.`);
+        }
         const pin = dagstaten.filter((s) => s.pin_verschil_cents !== 0 && !s.goedgekeurd_at).reduce((n, s) => n + s.pin_verschil_cents, 0);
         const heeftPin = dagstaten.some((s) => s.pin_verschil_cents !== 0 && !s.goedgekeurd_at);
         if (heeftPin) punten.push(`Pinverschil van ${euro(pin)} is nog niet goedgekeurd.`);

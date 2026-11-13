@@ -13,7 +13,7 @@ import { datumNL } from '@/lib/winkel/afdelingen';
 import { WINKEL_RUIMTE } from '@/lib/winkel/plekken';
 import type { BonMin, DagstaatKort } from './dagboeking';
 import type { InkoopBon, Ontvangst } from './inkoop';
-import type { KasMutatie } from './kasboek';
+import type { KasBegin, KasMutatie } from './kasboek';
 import { cijfersPerProduct, LOPER_VENSTER_DAGEN, type LoperDagen, type LoperInvoer } from './lopers';
 import { inkoopVanRegel, type Onderdeel, type ProductPrijs, type RegelMutatie, type VerkoopRegel } from './verkoop';
 
@@ -116,6 +116,32 @@ export async function laadKasMutaties(
             omschrijving: String(m.omschrijving), moment: m.moment === 'voor_openen' ? 'voor_openen' : 'tijdens',
         })),
         beschikbaar: true,
+    };
+}
+
+/**
+ * Waar het kasboek van een periode begint: wat er na de laatste afsluiting vóór
+ * `start` in de la lag, plus de eigen kasregels daarna tot `start`. Null als er
+ * nog nooit eerder is afgesloten (dan is de eerste telling het begin).
+ */
+export async function laadKasBegin(sb: SupabaseClient, orgId: string, start: string): Promise<KasBegin | null> {
+    type Rij = { bedrijfsdag: string; gesloten_at: string; contant_geteld_cents: number; afgeroomd_cents: number };
+    const { data, error } = await (sb.from('toonbank_dagstaten').select('bedrijfsdag, gesloten_at, contant_geteld_cents, afgeroomd_cents')
+        .eq('organization_id', orgId).lt('bedrijfsdag', start)
+        .order('bedrijfsdag', { ascending: false }).order('gesloten_at', { ascending: false }).limit(15) as unknown as Antwoord<Rij>);
+    if (error || !data || data.length === 0) return null;
+
+    /* Proefdagen overslaan: de laatste echte afsluiting telt. */
+    const oudste = String(data[data.length - 1].bedrijfsdag);
+    const uitgesloten = await laadUitsluitingen(sb, orgId, oudste, start);
+    const vorige = data.find((s) => !uitgesloten.has(String(s.bedrijfsdag)));
+    if (!vorige) return null;
+
+    const vorigeDag = String(vorige.bedrijfsdag);
+    const tussen = await laadKasMutaties(sb, orgId, dagErbij(vorigeDag, 1), dagErbij(start, -1));
+    return {
+        datum: start,
+        saldo_cents: Number(vorige.contant_geteld_cents) - Number(vorige.afgeroomd_cents) + tussen.mutaties.reduce((s, m) => s + m.bedrag_cents, 0),
     };
 }
 

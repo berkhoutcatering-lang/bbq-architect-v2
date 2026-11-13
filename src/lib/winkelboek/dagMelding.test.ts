@@ -15,6 +15,9 @@ describe('dagMeldingTekst', () => {
         expect(dagMeldingTekst(dag({ stand: 'te_controleren', punten: ['a'] }))).toEqual({ title: 'Dag afgesloten · za 28 nov', body: '1 punt om naar te kijken.' });
         expect(dagMeldingTekst(dag({ stand: 'te_controleren', punten: ['a', 'b'] }))?.body).toBe('2 punten om naar te kijken.');
     });
+    it('geen melding als de bonnen of dagstaten niet te laden waren: liever niets dan een onterecht vinkje', () => {
+        expect(dagMeldingTekst(dag({}), 'Kassabonnen niet te lezen: timeout')).toBeNull();
+    });
     it('geen melding voor een open dag of een dag zonder verkoop', () => {
         expect(dagMeldingTekst(dag({ stand: 'open' }))).toBeNull();
         expect(dagMeldingTekst(dag({ stand: 'geen_verkoop' }))).toBeNull();

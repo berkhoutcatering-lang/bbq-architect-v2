@@ -20,8 +20,10 @@ export function verzamelPunten(dagen: readonly Dagboeking[], kasboek: Kasboek, z
     const uit: Punt[] = [];
 
     for (const d of dagen) {
+        /* Alleen overslaan als het kasboek ditzelfde verschil voor deze dag al meldt. */
+        const kasboekMeldtDeDag = kasboek.punten.some((p) => p.startsWith('Kasverschil') && p.includes(` op ${korteDag(d.datum)} `));
         for (const p of d.punten) {
-            if (p.startsWith('Kasverschil')) continue;
+            if (p.startsWith('Kasverschil') && kasboekMeldtDeDag) continue;
             uit.push({
                 tekst: `${korteDag(d.datum)}: ${p}`,
                 href: d.stand === 'open' ? `/winkelboek/dag/${d.datum}` : '/verkoop/toonbank/dagstaten',

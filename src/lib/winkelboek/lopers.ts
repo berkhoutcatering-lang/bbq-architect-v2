@@ -105,6 +105,23 @@ export function deelLopersIn(producten: readonly LoperInvoer[], dagen: LoperDage
     };
 }
 
+export type LoperKeuze = 'hard' | 'traag' | 'stil';
+
+/**
+ * Wat er onder een keuze op het scherm staat. Een krap artikel uit de
+ * middenmoot staat bij de hardlopers: het moet bijbesteld (ontwerp R5), en de
+ * middenmoot heeft geen eigen lijst.
+ */
+export function lopersVoorKeuze(lopers: Lopers, keuze: LoperKeuze): Loper[] {
+    if (keuze !== 'hard') return lopers.lijst.filter((l) => l.groep === keuze);
+    return lopers.lijst.filter((l) => l.groep === 'hard' || (l.groep === 'midden' && l.krap));
+}
+
+/** Het aantal middenmoters dat gewoon doorloopt en dus nergens in een lijst staat. */
+export function middenLooptDoor(lopers: Lopers): number {
+    return lopers.lijst.filter((l) => l.groep === 'midden' && !l.krap).length;
+}
+
 /** Telt per product verkocht, omzet (incl. btw) en marge uit regels met precies één product. */
 export function cijfersPerProduct(regels: readonly VerkoopRegel[]): Map<string, { verkocht: number; omzet_cents: number; marge_cents: number | null }> {
     interface Som { verkocht: number; omzet: number; incl: Map<number, number>; inkoop: number | null }

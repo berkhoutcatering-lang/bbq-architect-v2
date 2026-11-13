@@ -61,6 +61,13 @@ describe('maakDagboeking', () => {
         const klaar = maakDagboeking('2026-11-28', [dag], [staat({ contant_verschil_cents: -200, goedgekeurd_at: '2026-11-29T08:00:00Z' })]);
         expect(klaar.stand).toBe('geboekt');
     });
+    it('een kasverschil dat je eigen kasregel verklaart blijft te controleren, met de reden erbij', () => {
+        const d = maakDagboeking('2026-11-28', [dag], [staat({ contant_verschil_cents: -900 })], -900);
+        expect(d.stand).toBe('te_controleren');
+        expect(d.punten).toHaveLength(1);
+        expect(d.punten[0]).toContain('verklaard door je eigen kasregel');
+        expect(d.punten[0]).toContain('9,00');
+    });
     it('een voorlopige dagstaat of een narekenverschil is te controleren', () => {
         expect(maakDagboeking('2026-11-28', [dag], [staat({ status: 'voorlopig' })]).stand).toBe('te_controleren');
         expect(maakDagboeking('2026-11-28', [dag], [staat({ verschillen: [{ veld: 'pin', tablet_cents: 1, ba_cents: 2 }] })]).stand).toBe('te_controleren');

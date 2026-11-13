@@ -27,6 +27,17 @@ describe('verzamelPunten', () => {
             kas(['Kasverschil van € 2,00 op za 28 nov is nog niet goedgekeurd.']), 0);
         expect(uit).toEqual([{ tekst: 'Kasverschil van € 2,00 op za 28 nov is nog niet goedgekeurd.', href: '/verkoop/toonbank/dagstaten' }]);
     });
+    it('een verklaard kasverschil dat nog goedgekeurd moet worden blijft zichtbaar', () => {
+        const uit = verzamelPunten([dag({ stand: 'te_controleren', punten: ['Kasverschil van € 9,00 is verklaard door je eigen kasregel, maar nog niet goedgekeurd.'] })], kas([]), 0);
+        expect(uit).toHaveLength(1);
+        expect(uit[0].href).toBe('/verkoop/toonbank/dagstaten');
+    });
+    it('een kasverschil van een andere dag in het kasboek verbergt het punt van deze dag niet', () => {
+        const uit = verzamelPunten(
+            [dag({ stand: 'te_controleren', punten: ['Kasverschil van € 9,00 is nog niet goedgekeurd.'] })],
+            kas(['Kasverschil van € 2,00 op do 26 nov is nog niet goedgekeurd.']), 0);
+        expect(uit).toHaveLength(2);
+    });
     it('een verschil tussen de dagen wijst naar het kasboek', () => {
         expect(verzamelPunten([], kas(['Tussen di 24 nov en wo 25 nov veranderde de la € 1,50 zonder regel.']), 0)[0].href).toBe('/winkelboek/kasboek');
     });

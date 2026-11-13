@@ -62,15 +62,27 @@ const euro = (cents: number) => formatEur(Math.abs(cents) / 100);
 const korteDag = (datum: string) =>
     new Date(`${datum}T12:00:00Z`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], uitgesloten: ReadonlySet<string> = new Set()): Kasboek {
+/**
+ * Waar het boek begint: wat er na de laatste afsluiting vóór de periode in de la
+ * lag (plus de eigen regels sindsdien). Zonder zo'n afsluiting bestaat er geen
+ * beginstand; dan is de eerste telling van de periode het begin.
+ */
+export interface KasBegin {
+    /** De eerste dag van de periode. */
+    datum: string;
+    saldo_cents: number;
+}
+
+export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], uitgesloten: ReadonlySet<string> = new Set(), begin?: KasBegin | null): Kasboek {
     const staten = dagstaten
         .filter((s) => !uitgesloten.has(s.bedrijfsdag))
         .sort((a, b) => a.bedrijfsdag.localeCompare(b.bedrijfsdag) || a.gesloten_at.localeCompare(b.gesloten_at));
-    if (staten.length === 0) return { regels: [], in_de_la_cents: null, kasverschil_cents: 0, afgeroomd_cents: 0, punten: [] };
+    const open = [...mutaties].sort((a, b) => a.datum.localeCompare(b.datum));
+    if (staten.length === 0 && open.length === 0 && !begin) return { regels: [], in_de_la_cents: null, kasverschil_cents: 0, afgeroomd_cents: 0, punten: [] };
 
     const regels: KasRegel[] = [];
     const punten: string[] = [];
-    let saldo = staten[0].contant_begin_cents;
+    let saldo = begin ? begin.saldo_cents : 0;
     let kasverschil = 0;
     let afgeroomd = 0;
 
@@ -80,11 +92,8 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
     };
     const eigenRegel = (m: KasMutatie) => regel(m.datum, 'eigen', m.omschrijving, m.bedrag_cents, { bron: 'zelf', mutatie_id: m.id });
 
-    /* Wat vóór de eerste afsluiting gebeurde, zit al in de beginstand. */
-    const eersteDag = staten[0].bedrijfsdag;
-    const open = [...mutaties]
-        .filter((m) => !(m.datum < eersteDag || (m.datum === eersteDag && m.moment === 'voor_openen')))
-        .sort((a, b) => a.datum.localeCompare(b.datum));
+    /* Elke eigen regel komt in het boek, ook een van vóór de eerste afsluiting:
+       anders is hij bewaard maar nergens te zien of weg te halen. */
     const geplaatst = new Set<string>();
     const plaats = (kies: (m: KasMutatie) => boolean): number => {
         let som = 0;
@@ -97,7 +106,7 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
         return som;
     };
 
-    regel(eersteDag, 'beginstand', 'Beginstand', 0);
+    if (begin) regel(begin.datum, 'beginstand', 'Beginstand', 0);
 
     staten.forEach((s, i) => {
         const dag = s.bedrijfsdag;
@@ -106,10 +115,16 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
 
         plaats((m) => m.datum < dag || (eersteVanDag && m.datum === dag && m.moment === 'voor_openen'));
 
-        if (i > 0 && s.contant_begin_cents !== saldo) {
+        if (i === 0 && !begin) {
+            /* Geen eerdere afsluiting bekend: de eerste telling is het begin. */
+            saldo = s.contant_begin_cents;
+            regel(dag, 'beginstand', 'Beginstand', 0);
+        } else if (s.contant_begin_cents !== saldo) {
             const verschil = s.contant_begin_cents - saldo;
             regel(dag, 'tussen_dagen', 'Tussen de dagen', verschil);
-            punten.push(`Tussen ${korteDag(staten[i - 1].bedrijfsdag)} en ${korteDag(dag)} veranderde de la ${euro(verschil)} zonder regel.`);
+            punten.push(i === 0
+                ? `Vóór ${korteDag(dag)} veranderde de la ${euro(verschil)} zonder regel.`
+                : `Tussen ${korteDag(staten[i - 1].bedrijfsdag)} en ${korteDag(dag)} veranderde de la ${euro(verschil)} zonder regel.`);
         }
 
         regel(dag, 'verkoop', 'Contante verkoop', s.contant_verwacht_cents - s.contant_begin_cents);
@@ -137,5 +152,7 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
         punten.push('Er zijn dagafsluitingen van meer dan één kassa. Het kasboek rekent met één la.');
     }
 
-    return { regels, in_de_la_cents: saldo, kasverschil_cents: kasverschil, afgeroomd_cents: afgeroomd, punten };
+    /* Zonder afsluiting en zonder beginstand weten we niet wat er in de la ligt. */
+    const bekend = staten.length > 0 || !!begin;
+    return { regels, in_de_la_cents: bekend ? saldo : null, kasverschil_cents: kasverschil, afgeroomd_cents: afgeroomd, punten };
 }

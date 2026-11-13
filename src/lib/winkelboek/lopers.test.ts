@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cijfersPerProduct, deelLopersIn, type LoperInvoer } from './lopers';
+import { cijfersPerProduct, deelLopersIn, lopersVoorKeuze, middenLooptDoor, type LoperInvoer } from './lopers';
 import type { VerkoopRegel } from './verkoop';
 
 const p = (id: string, omzet: number, x: Partial<LoperInvoer> = {}): LoperInvoer => ({
@@ -44,6 +44,22 @@ describe('deelLopersIn', () => {
     });
     it('zonder producten: alles nul', () => {
         expect(deelLopersIn([], { verkoopdagen: 0, dagen_open: 0 })).toEqual({ voorlopig: true, verkoopdagen: 0, dagen_open: 0, lijst: [], aantallen: { hard: 0, midden: 0, traag: 0, stil: 0 }, stil_waarde_cents: 0 });
+    });
+});
+
+describe('lopersVoorKeuze', () => {
+    it('een krap artikel uit de middenmoot staat bij de hardlopers, want het moet bijbesteld', () => {
+        const l = deelLopersIn([...tien.slice(0, 3), p('p3', 5000, { verkocht: 60, voorraad: 5 }), ...tien.slice(4)], kort);
+        const hard = lopersVoorKeuze(l, 'hard');
+        expect(hard.map((x) => x.product_id)).toEqual(['p0', 'p1', 'p2', 'p3']);
+        expect(hard[3]).toMatchObject({ groep: 'midden', krap: true, actie: 'bijbestellen' });
+        expect(lopersVoorKeuze(l, 'traag').every((x) => x.groep === 'traag')).toBe(true);
+        expect(middenLooptDoor(l)).toBe(0);
+    });
+    it('een middenmoter met genoeg voorraad loopt gewoon door en staat nergens', () => {
+        const l = deelLopersIn(tien, lang);
+        expect(lopersVoorKeuze(l, 'hard').map((x) => x.product_id)).toEqual(['p0', 'p1', 'p2']);
+        expect(middenLooptDoor(l)).toBe(1);
     });
 });
 
