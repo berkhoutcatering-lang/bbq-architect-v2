@@ -181,6 +181,13 @@ export function verkoopPerArtikel(regels: readonly VerkoopRegel[], afdelingVanPr
         .sort((a, b) => b.omzet_excl_cents - a.omzet_excl_cents || a.naam.localeCompare(b.naam));
 }
 
+/** Zoeken op een stuk van de naam en filteren op afdeling ('Alles' of leeg = geen filter). */
+export function filterArtikelen(artikelen: readonly ArtikelCijfers[], zoek: string | undefined, afdeling: string | undefined): ArtikelCijfers[] {
+    const q = (zoek ?? '').trim().toLowerCase();
+    const a = afdeling && afdeling !== 'Alles' ? afdeling : null;
+    return artikelen.filter((x) => (!a || x.afdeling === a) && (!q || x.naam.toLowerCase().includes(q)));
+}
+
 /** De marge van een periode: alleen over artikelen die een marge hebben, met de dekking erbij. */
 export function periodeMarge(artikelen: readonly ArtikelCijfers[]): PeriodeMarge {
     let omzet = 0;

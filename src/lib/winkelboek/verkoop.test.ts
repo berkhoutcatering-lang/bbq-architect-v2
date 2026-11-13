@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exclUitIncl, inkoopVanRegel, periodeMarge, verkoopPerArtikel, type VerkoopRegel } from './verkoop';
+import { exclUitIncl, filterArtikelen, inkoopVanRegel, periodeMarge, verkoopPerArtikel, type ArtikelCijfers, type VerkoopRegel } from './verkoop';
 
 const regel = (r: Partial<VerkoopRegel>): VerkoopRegel => ({
     regel_id: 1, bedrijfsdag: '2026-11-28', op: '2026-11-28T12:00:00Z', artikel_id: 'a-worst', naam: 'Droge worst naturel',
@@ -101,5 +101,20 @@ describe('periodeMarge', () => {
     });
     it('zonder omzet: geen percentage', () => {
         expect(periodeMarge([])).toMatchObject({ omzet_cents: 0, marge_pct: null, dekking_pct: null });
+    });
+});
+
+describe('filterArtikelen', () => {
+    const a = (naam: string, afdeling: string): ArtikelCijfers => ({ sleutel: naam, naam, afdeling, aantal: 1, omzet_excl_cents: 100, inkoop_cents: null, marge_cents: null, marge_pct: null, geschat: false });
+    const lijst = [a('Droge worst naturel', 'Worst'), a('Fuet met truffel', 'Worst'), a('Naober Blond', 'Bier')];
+    it('filtert op afdeling en op een stuk van de naam, zonder op hoofdletters te letten', () => {
+        expect(filterArtikelen(lijst, undefined, 'Worst').map((x) => x.naam)).toEqual(['Droge worst naturel', 'Fuet met truffel']);
+        expect(filterArtikelen(lijst, 'WORST', undefined).map((x) => x.naam)).toEqual(['Droge worst naturel']);
+        expect(filterArtikelen(lijst, ' blond ', 'Bier')).toHaveLength(1);
+        expect(filterArtikelen(lijst, 'blond', 'Worst')).toEqual([]);
+    });
+    it('zonder zoekwoord en zonder afdeling, of met "Alles": de hele lijst', () => {
+        expect(filterArtikelen(lijst, undefined, undefined)).toHaveLength(3);
+        expect(filterArtikelen(lijst, '', 'Alles')).toHaveLength(3);
     });
 });

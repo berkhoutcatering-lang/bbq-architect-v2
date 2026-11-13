@@ -16,9 +16,11 @@ import '@/styles/winkel.css';
 import DagScherm from '@/app/winkelboek/_components/DagScherm';
 import KasboekScherm from '@/app/winkelboek/_components/KasboekScherm';
 import OverzichtScherm from '@/app/winkelboek/_components/OverzichtScherm';
+import VerkoopScherm from '@/app/winkelboek/_components/VerkoopScherm';
 import { maakDagboeking } from '@/lib/winkelboek/dagboeking';
 import { maakKasboek } from '@/lib/winkelboek/kasboek';
 import { periodeVan } from '@/lib/winkelboek/periode';
+import { verkoopPerArtikel } from '@/lib/winkelboek/verkoop';
 import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, VERKOOP_REGELS } from './voorbeeld';
 
 export const dynamic = 'force-dynamic';
@@ -38,9 +40,9 @@ function dag(datum: string) {
 }
 
 /** Welk scherm: ?scherm=overzicht|leeg|dag|dag-punten|dag-open|kasboek|kasboek-leeg */
-export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string }> }) {
+export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string; q?: string; afdeling?: string; groep?: string }> }) {
     if (process.env.NEXT_PUBLIC_E2E !== '1') notFound();
-    const { scherm = 'overzicht', p } = await searchParams;
+    const { scherm = 'overzicht', p, q, afdeling } = await searchParams;
     const periode = periodeVan(p ?? '2026-W48', '2026-11-28');
 
     let inhoud: React.ReactNode;
@@ -54,6 +56,9 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
             break;
         case 'kasboek-leeg':
             inhoud = <KasboekScherm periode={periode} kasboek={maakKasboek([], [])} beschikbaar={false} vandaag="2026-11-28" basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'verkoop':
+            inhoud = <VerkoopScherm periode={periode} artikelen={verkoopPerArtikel(VERKOOP_REGELS, AFDELINGEN)} zoek={q} afdeling={afdeling} fout={null} basis={BASIS} extra={{ scherm }} />;
             break;
         case 'dag':
             inhoud = dag('2026-11-28');
