@@ -11,6 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { nlDatum } from '@/lib/btwAangifteBronnen';
 import { WINKEL_RUIMTE } from '@/lib/winkel/plekken';
 import type { BonMin, DagstaatKort } from './dagboeking';
+import type { InkoopBon, Ontvangst } from './inkoop';
 import type { KasMutatie } from './kasboek';
 import { inkoopVanRegel, type Onderdeel, type ProductPrijs, type RegelMutatie, type VerkoopRegel } from './verkoop';
 
@@ -218,6 +219,68 @@ export async function laadAfdelingVanProduct(sb: SupabaseClient): Promise<Map<st
     for (const p of plaatsingen.data ?? []) {
         const naam = afdeling.get(p.locatie_id);
         if (naam && !uit.has(p.product_id)) uit.set(p.product_id, naam);
+    }
+    return uit;
+}
+
+/** De ontvangsten van de winkel in de periode (ontwerp R4), op de dag van inboeken in Nederlandse tijd. */
+export async function laadOntvangsten(sb: SupabaseClient, orgId: string, start: string, eind: string): Promise<{ ontvangsten: Ontvangst[]; fout: string | null }> {
+    type Product = { naam: string | null; btw_pct: number | null; leverancier_id: number | null; leveranciers: { naam: string | null } | { naam: string | null }[] | null };
+    type Rij = { winkel_product_id: string; waarde_cents: number | null; gebeurd_at: string | null; created_at: string; winkel_producten: Product | Product[] | null };
+    const res = await alles<Rij>((van, tot) =>
+        sb.from('winkel_voorraad_mutaties')
+            .select('winkel_product_id, waarde_cents, gebeurd_at, created_at, winkel_producten(naam, btw_pct, leverancier_id, leveranciers(naam))')
+            .eq('organization_id', orgId).eq('type', 'ontvangst')
+            .gte('created_at', `${dagErbij(start, -1)}T00:00:00Z`).lte('created_at', `${dagErbij(eind, 2)}T00:00:00Z`)
+            .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Rij>);
+    if (res.error) {
+        return { ontvangsten: [], fout: isNogNiet(res.error) ? null : `Ontvangsten niet te lezen: ${res.error.message}` };
+    }
+    const uit: Ontvangst[] = [];
+    for (const r of res.data) {
+        const datum = nlDatum(r.gebeurd_at ?? r.created_at);
+        if (datum < start || datum > eind) continue;
+        const product = Array.isArray(r.winkel_producten) ? r.winkel_producten[0] : r.winkel_producten;
+        const leverancier = Array.isArray(product?.leveranciers) ? product?.leveranciers[0] : product?.leveranciers;
+        uit.push({
+            datum,
+            product_id: String(r.winkel_product_id),
+            product_naam: product?.naam ?? 'Onbekend product',
+            btw_pct: Number(product?.btw_pct ?? 0),
+            waarde_cents: r.waarde_cents === null ? null : Number(r.waarde_cents),
+            leverancier_id: product?.leverancier_id == null ? null : Number(product.leverancier_id),
+            leverancier: leverancier?.naam ?? null,
+        });
+    }
+    return { ontvangsten: uit, fout: null };
+}
+
+/** Inkoopbonnen rond de periode: van één dag ervoor tot zeven dagen erna, zodat een late bon nog gevonden wordt. */
+export async function laadInkoopBonnen(sb: SupabaseClient, orgId: string, start: string, eind: string): Promise<InkoopBon[]> {
+    type Rij = { id: number; datum: string; leverancier_id: number | null; netto_bedrag: number | string | null };
+    const res = await alles<Rij>((van, tot) =>
+        sb.from('bonnen').select('id, datum, leverancier_id, netto_bedrag').eq('organization_id', orgId)
+            .gte('datum', dagErbij(start, -1)).lte('datum', dagErbij(eind, 7))
+            .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Rij>);
+    return res.data.map((b) => ({
+        id: Number(b.id),
+        datum: String(b.datum).slice(0, 10),
+        leverancier_id: b.leverancier_id == null ? null : Number(b.leverancier_id),
+        netto_cents: b.netto_bedrag === null || b.netto_bedrag === undefined ? null : Math.round(Number(b.netto_bedrag) * 100),
+    }));
+}
+
+/** Wat er nu ligt tegen inkoopprijs. `zonder` telt actieve producten zonder telling of zonder inkoopprijs. */
+export async function laadVoorraadwaarde(sb: SupabaseClient, orgId: string): Promise<{ cents: number; producten: number; zonder: number }> {
+    type Rij = { voorraad: number | string | null; inkoop_excl_cents: number | null; prijs_per: number | string | null };
+    const res = await alles<Rij>((van, tot) =>
+        sb.from('winkel_producten').select('voorraad, inkoop_excl_cents, prijs_per').eq('organization_id', orgId).eq('actief', true)
+            .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Rij>);
+    const uit = { cents: 0, producten: 0, zonder: 0 };
+    for (const p of res.data) {
+        if (p.voorraad === null || p.voorraad === undefined || p.inkoop_excl_cents === null || p.inkoop_excl_cents === undefined) { uit.zonder += 1; continue; }
+        uit.producten += 1;
+        uit.cents += Math.round((Number(p.voorraad) * Number(p.inkoop_excl_cents)) / (Number(p.prijs_per ?? 1) || 1));
     }
     return uit;
 }

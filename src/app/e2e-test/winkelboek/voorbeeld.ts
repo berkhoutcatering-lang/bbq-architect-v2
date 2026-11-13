@@ -7,6 +7,7 @@
 import type { KassaDag } from '@/lib/btwAangifteBronnen';
 import type { KassaRegel } from '@/lib/financeAnalytics';
 import type { BonMin, DagstaatKort } from '@/lib/winkelboek/dagboeking';
+import type { InkoopBon, Ontvangst } from '@/lib/winkelboek/inkoop';
 import type { KasMutatie } from '@/lib/winkelboek/kasboek';
 import type { VerkoopRegel } from '@/lib/winkelboek/verkoop';
 
@@ -97,3 +98,28 @@ export const VERKOOP_REGELS: VerkoopRegel[] = [
 ];
 
 export const DERVING = { cents: 1840, aantal: 2, zonder_waarde: 0 };
+
+const ontvangst = (datum: string, leverancier_id: number | null, leverancier: string | null, product_id: string, product_naam: string, waarde_cents: number | null, btw_pct = 9): Ontvangst =>
+    ({ datum, leverancier_id, leverancier, product_id, product_naam, waarde_cents, btw_pct });
+
+export const ONTVANGSTEN: Ontvangst[] = [
+    ontvangst('2026-11-27', 1, 'Brouwerij', 'p-blond', 'Naober Blond 33 cl', 23200, 21),
+    ontvangst('2026-11-27', 1, 'Brouwerij', 'p-tripel', 'Tripel 75 cl', 10800, 21),
+    ontvangst('2026-11-27', 1, 'Brouwerij', 'p-barley', 'Barleywine 33 cl', 7280, 21),
+    ontvangst('2026-11-26', 2, 'Slagerij', 'p-worst', 'Droge worst naturel', 20000),
+    ontvangst('2026-11-26', 2, 'Slagerij', 'p-fuet', 'Fuet met truffel', 11850),
+    ontvangst('2026-11-25', 3, 'Kaasmakerij', 'p-kaas', 'Boerenkaas belegen', 37600),
+    ontvangst('2026-11-24', 4, 'Groothandel', 'p-amandel', 'Gerookte amandelen 150 g', 13340),
+    ontvangst('2026-11-24', 4, 'Groothandel', 'p-cracker', 'Crackers zeezout', 9600),
+    ontvangst('2026-11-24', 4, 'Groothandel', 'p-saus', 'Mosterd-dillesaus', null),
+    ontvangst('2026-11-24', null, null, 'p-doos', 'Cadeauverpakking', 2800, 21),
+];
+
+export const INKOOP_BONNEN: InkoopBon[] = [
+    { id: 11, datum: '2026-11-27', leverancier_id: 1, netto_cents: 41280 },
+    { id: 12, datum: '2026-11-28', leverancier_id: 2, netto_cents: 31850 },
+    { id: 13, datum: '2026-11-24', leverancier_id: 4, netto_cents: 28940 },
+    { id: 14, datum: '2026-11-26', leverancier_id: 4, netto_cents: 6120 },
+];
+
+export const VOORRAADWAARDE = { cents: 684000, producten: 61, zonder: 12 };

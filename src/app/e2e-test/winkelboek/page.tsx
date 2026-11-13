@@ -14,14 +14,16 @@ import { notFound } from 'next/navigation';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import DagScherm from '@/app/winkelboek/_components/DagScherm';
+import InkoopScherm from '@/app/winkelboek/_components/InkoopScherm';
 import KasboekScherm from '@/app/winkelboek/_components/KasboekScherm';
 import OverzichtScherm from '@/app/winkelboek/_components/OverzichtScherm';
 import VerkoopScherm from '@/app/winkelboek/_components/VerkoopScherm';
 import { maakDagboeking } from '@/lib/winkelboek/dagboeking';
+import { maakLeveringen } from '@/lib/winkelboek/inkoop';
 import { maakKasboek } from '@/lib/winkelboek/kasboek';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import { verkoopPerArtikel } from '@/lib/winkelboek/verkoop';
-import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, VERKOOP_REGELS } from './voorbeeld';
+import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, INKOOP_BONNEN, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, ONTVANGSTEN, VERKOOP_REGELS, VOORRAADWAARDE } from './voorbeeld';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +61,9 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
             break;
         case 'verkoop':
             inhoud = <VerkoopScherm periode={periode} artikelen={verkoopPerArtikel(VERKOOP_REGELS, AFDELINGEN)} zoek={q} afdeling={afdeling} fout={null} basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'inkoop':
+            inhoud = <InkoopScherm periode={periode} leveringen={maakLeveringen(ONTVANGSTEN, INKOOP_BONNEN)} voorraadwaarde={VOORRAADWAARDE} omzetCents={363700} fout={null} basis={BASIS} extra={{ scherm }} />;
             break;
         case 'dag':
             inhoud = dag('2026-11-28');
