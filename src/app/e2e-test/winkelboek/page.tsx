@@ -31,14 +31,16 @@ export const dynamic = 'force-dynamic';
 
 const BASIS = '/e2e-test/winkelboek';
 
-function dag(datum: string) {
+function dag(datum: string, fout: string | null = null) {
     const staten = DAGSTATEN.filter((s) => s.bedrijfsdag === datum);
+    const eigenTijdens = KAS_MUTATIES.filter((m) => m.datum === datum && m.moment === 'tijdens').reduce((s, m) => s + m.bedrag_cents, 0);
     return (
         <DagScherm
-            dag={maakDagboeking(datum, BONNEN.filter((b) => b.bedrijfsdag === datum), staten)}
+            dag={maakDagboeking(datum, BONNEN.filter((b) => b.bedrijfsdag === datum), staten, eigenTijdens)}
             dagstaten={staten}
-            eigenTijdens={KAS_MUTATIES.filter((m) => m.datum === datum && m.moment === 'tijdens').reduce((s, m) => s + m.bedrag_cents, 0)}
+            eigenTijdens={eigenTijdens}
             proefdag={false}
+            fout={fout}
         />
     );
 }
@@ -75,6 +77,18 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
             break;
         case 'dag-punten':
             inhoud = dag('2026-11-26');
+            break;
+        case 'dag-verklaard':
+            inhoud = dag('2026-11-27');
+            break;
+        case 'dag-fout':
+            inhoud = dag('2026-11-28', 'Kassabonnen niet te lezen: de verbinding viel weg');
+            break;
+        case 'kasboek-fout':
+            inhoud = <KasboekScherm periode={periode} kasboek={maakKasboek([], [])} beschikbaar vandaag="2026-11-28" fout="Dagstaten niet te lezen: de verbinding viel weg" basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'kasboek-begin':
+            inhoud = <KasboekScherm periode={periode} kasboek={maakKasboek(DAGSTATEN, KAS_MUTATIES, undefined, { datum: periode.start, saldo_cents: 14945 })} beschikbaar vandaag="2026-11-28" basis={BASIS} extra={{ scherm }} />;
             break;
         case 'dag-open':
             inhoud = <DagScherm dag={maakDagboeking('2026-11-28', BONNEN.filter((b) => b.bedrijfsdag === '2026-11-28'), [])} dagstaten={[]} eigenTijdens={0} proefdag={false} />;

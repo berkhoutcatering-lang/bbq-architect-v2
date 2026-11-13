@@ -36,12 +36,16 @@ export default async function DagPagina({ params }: { params: Promise<{ datum: s
         laadKasMutaties(supabase, orgId, datum, datum),
     ]);
 
+    const eigenTijdens = kas.mutaties.filter((m) => m.moment === 'tijdens').reduce((s, m) => s + m.bedrag_cents, 0);
+
     return (
         <DagScherm
-            dag={maakDagboeking(datum, bonnen.bonnen, staten.dagstaten)}
+            dag={maakDagboeking(datum, bonnen.bonnen, staten.dagstaten, eigenTijdens)}
             dagstaten={staten.dagstaten}
-            eigenTijdens={kas.mutaties.filter((m) => m.moment === 'tijdens').reduce((s, m) => s + m.bedrag_cents, 0)}
+            eigenTijdens={eigenTijdens}
             proefdag={uitgesloten.has(datum)}
+            /* Zonder bonnen of dagstaten is de dag niet nagekeken: dan geen vinkje. */
+            fout={bonnen.fout ?? staten.fout}
         />
     );
 }

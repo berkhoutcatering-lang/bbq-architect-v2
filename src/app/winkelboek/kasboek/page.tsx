@@ -1,6 +1,6 @@
 import { datumNL } from '@/lib/winkel/afdelingen';
 import { maakKasboek } from '@/lib/winkelboek/kasboek';
-import { laadDagstaten, laadKasMutaties, laadUitsluitingen } from '@/lib/winkelboek/laden';
+import { laadDagstaten, laadKasBegin, laadKasMutaties, laadUitsluitingen } from '@/lib/winkelboek/laden';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import KasboekScherm from '../_components/KasboekScherm';
 import { winkelboekLid } from '../_lib/lid';
@@ -21,18 +21,20 @@ export default async function KasboekPagina({ searchParams }: { searchParams: Pr
     const vandaag = datumNL(new Date());
     const periode = periodeVan(p ?? vandaag.slice(0, 7), vandaag);
 
-    const [uitgesloten, staten, kas] = await Promise.all([
+    const [uitgesloten, staten, kas, begin] = await Promise.all([
         laadUitsluitingen(supabase, orgId, periode.start, periode.eind),
         laadDagstaten(supabase, orgId, periode.start, periode.eind),
         laadKasMutaties(supabase, orgId, periode.start, periode.eind),
+        laadKasBegin(supabase, orgId, periode.start),
     ]);
 
     return (
         <KasboekScherm
             periode={periode}
-            kasboek={maakKasboek(staten.dagstaten, kas.mutaties, uitgesloten)}
+            kasboek={maakKasboek(staten.dagstaten, kas.mutaties, uitgesloten, begin)}
             beschikbaar={kas.beschikbaar}
             vandaag={vandaag}
+            fout={staten.fout}
         />
     );
 }

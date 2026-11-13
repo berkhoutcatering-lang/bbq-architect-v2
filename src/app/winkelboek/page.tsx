@@ -1,7 +1,7 @@
 import { laadToonbank } from '@/lib/btwAangifteBronnen';
 import { datumNL } from '@/lib/winkel/afdelingen';
 import {
-    laadAfdelingVanProduct, laadDagBonnen, laadDagstaten, laadDerving, laadKasMutaties, laadUitsluitingen, laadVerkoopRegels, zonderProefdagen,
+    laadAfdelingVanProduct, laadDagBonnen, laadDagstaten, laadDerving, laadKasBegin, laadKasMutaties, laadUitsluitingen, laadVerkoopRegels, zonderProefdagen,
 } from '@/lib/winkelboek/laden';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import OverzichtScherm from './_components/OverzichtScherm';
@@ -28,10 +28,11 @@ export default async function WinkelboekPagina({ searchParams }: { searchParams:
     const { start, eind } = periode;
 
     const uitgesloten = await laadUitsluitingen(supabase, orgId, start, eind);
-    const [bonnen, staten, kas, toonbank, verkoop, afdelingen, derving] = await Promise.all([
+    const [bonnen, staten, kas, kasBegin, toonbank, verkoop, afdelingen, derving] = await Promise.all([
         laadDagBonnen(supabase, orgId, start, eind),
         laadDagstaten(supabase, orgId, start, eind),
         laadKasMutaties(supabase, orgId, start, eind),
+        laadKasBegin(supabase, orgId, start),
         laadToonbank(supabase, orgId, start, eind),
         laadVerkoopRegels(supabase, orgId, start, eind, uitgesloten),
         laadAfdelingVanProduct(supabase),
@@ -45,6 +46,7 @@ export default async function WinkelboekPagina({ searchParams }: { searchParams:
             bonnen={zonderProefdagen(bonnen.bonnen, uitgesloten)}
             dagstaten={zonderProefdagen(staten.dagstaten, uitgesloten)}
             kasMutaties={kas.mutaties}
+            kasBegin={kasBegin}
             verkoopRegels={verkoop.regels}
             afdelingen={afdelingen}
             kassaRegels={toonbank.regels}

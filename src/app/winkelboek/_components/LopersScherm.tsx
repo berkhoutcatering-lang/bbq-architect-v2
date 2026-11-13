@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import { Archive, Info, Percent, ShoppingCart } from 'lucide-react';
 import { formatNumber } from '@/lib/format';
-import type { Loper, LoperActie, LoperGroep, Lopers } from '@/lib/winkelboek/lopers';
+import { lopersVoorKeuze, middenLooptDoor, type Loper, type LoperActie, type LoperKeuze, type Lopers } from '@/lib/winkelboek/lopers';
 import { aantal, euro, korteDag } from '../_lib/tekst';
 
-type Keuze = Exclude<LoperGroep, 'midden'>;
+type Keuze = LoperKeuze;
 
 const KOLOMMEN = 'minmax(0, 1.5fr) 92px 104px 96px 132px 176px';
 const GETAL: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 13, textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' };
@@ -38,7 +38,9 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
     extra?: Record<string, string | undefined>;
 }) {
     const gekozen: Keuze = groep === 'traag' || groep === 'stil' ? groep : 'hard';
-    const zichtbaar = lopers.lijst.filter((l) => l.groep === gekozen);
+    /* Bij de hardlopers staat ook een middenmoter die bijna op is: die moet bijbesteld. */
+    const zichtbaar = lopersVoorKeuze(lopers, gekozen);
+    const looptDoor = middenLooptDoor(lopers);
     const leeg = lopers.lijst.length === 0;
 
     const keuzes: { id: Keuze; naam: string; uitleg: string }[] = [
@@ -122,6 +124,7 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                     <span className="wk-naam" style={{ display: 'block' }}>{l.naam}</span>
                                                     <span className="wk-klein" style={{ display: 'block' }}>
                                                         {l.afdeling}
+                                                        {gekozen === 'hard' && l.groep === 'midden' && ' · middenmoot, bijna op'}
                                                         {bijnaOver && l.tht && <span style={{ color: 'var(--status-warning-text)' }}> · over datum op {korteDag(l.tht)}</span>}
                                                     </span>
                                                 </span>
@@ -149,7 +152,7 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                     )}
 
                     <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '12px 4px 0' }}>
-                        {lopers.aantallen.midden > 0 && `${aantal(lopers.aantallen.midden, 'artikel zit', 'artikelen zitten')} daartussenin en ${lopers.aantallen.midden === 1 ? 'loopt' : 'lopen'} gewoon door. `}
+                        {looptDoor > 0 && `${aantal(looptDoor, 'artikel zit', 'artikelen zitten')} daartussenin en ${looptDoor === 1 ? 'loopt' : 'lopen'} gewoon door. `}
                         Pakketten tellen niet mee: daarvan is niet te zeggen welk product de omzet maakte.
                     </p>
                 </>

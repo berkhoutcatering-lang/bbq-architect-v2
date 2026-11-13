@@ -2,6 +2,7 @@ import Link from 'next/link';
 import KpiTegel, { type KpiStaat } from '@/components/chassis/KpiTegel';
 import type { Kasboek, KasRegel } from '@/lib/winkelboek/kasboek';
 import type { Periode } from '@/lib/winkelboek/periode';
+import { lijstStaat } from '@/lib/winkelboek/weergave';
 import { KasRegelKnop, VerwijderKasRegel } from './KasRegelLade';
 import PeriodeKiezer from './PeriodeKiezer';
 import { aantal, euro, korteDag } from '../_lib/tekst';
@@ -11,7 +12,7 @@ const GETAL: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 1
 
 function toelichting(r: KasRegel): string {
     switch (r.soort) {
-        case 'beginstand': return 'Wat er bij de eerste telling in de la lag';
+        case 'beginstand': return 'Waar deze periode mee begint';
         case 'tussen_dagen': return 'De la veranderde zonder regel';
         case 'eigen': return r.bedrag_cents < 0 ? 'Zelf uit de la gehaald' : 'Zelf in de la gedaan';
         case 'kasverschil': return r.goedgekeurd ? 'Goedgekeurd' : 'Minder of meer geteld dan verwacht';
@@ -25,18 +26,23 @@ function toelichting(r: KasRegel): string {
  * regel bovenaan. Alles komt uit de dagafsluiting van de kassa; alleen geld dat
  * je zelf uit of in de la doet voer je hier in.
  */
-export default function KasboekScherm({ periode, kasboek, beschikbaar, vandaag, basis = '/winkelboek/kasboek', extra }: {
+export default function KasboekScherm({ periode, kasboek, beschikbaar, vandaag, fout = null, basis = '/winkelboek/kasboek', extra }: {
     periode: Periode;
     kasboek: Kasboek;
     /** False zolang de tabel voor eigen kasregels er nog niet is. */
     beschikbaar: boolean;
     vandaag: string;
+    /** De dagstaten konden niet geladen worden: dan is "geen kassadagen" niet te zeggen. */
+    fout?: string | null;
     basis?: string;
     extra?: Record<string, string | undefined>;
 }) {
     const regels = [...kasboek.regels].reverse();
-    const heeft = kasboek.in_de_la_cents !== null;
-    const leeg: KpiStaat = { soort: 'leeg', wanneer: 'Verschijnt zodra de kassa een dag afsluit.' };
+    const staat = lijstStaat(regels.length, fout);
+    const heeft = staat !== 'fout' && kasboek.in_de_la_cents !== null;
+    const leeg: KpiStaat = staat === 'fout'
+        ? { soort: 'onbepaald', reden: 'De dagafsluitingen konden niet geladen worden.' }
+        : { soort: 'leeg', wanneer: 'Verschijnt zodra de kassa een dag afsluit.' };
     const verschillen = kasboek.regels.filter((r) => r.soort === 'kasverschil').length;
 
     return (
@@ -59,7 +65,12 @@ export default function KasboekScherm({ periode, kasboek, beschikbaar, vandaag, 
                     : leeg} />
             </div>
 
-            {regels.length === 0 ? (
+            {staat === 'fout' ? (
+                <div className="kf-empty" role="alert">
+                    <p style={{ color: 'var(--status-danger-text)' }}>Het kasboek kon niet geladen worden. Probeer het zo nog eens.</p>
+                    <p style={{ fontSize: 12 }}>{fout}</p>
+                </div>
+            ) : staat === 'leeg' ? (
                 <div className="kf-empty"><p>Geen kassadagen in deze periode. Zodra je de kassa afsluit, staat de dag hier.</p></div>
             ) : (
                 <div className="wk-lijst">
