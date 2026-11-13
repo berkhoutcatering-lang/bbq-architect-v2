@@ -9,6 +9,7 @@ import type { KassaRegel } from '@/lib/financeAnalytics';
 import type { BonMin, DagstaatKort } from '@/lib/winkelboek/dagboeking';
 import type { InkoopBon, Ontvangst } from '@/lib/winkelboek/inkoop';
 import type { KasMutatie } from '@/lib/winkelboek/kasboek';
+import type { LoperInvoer } from '@/lib/winkelboek/lopers';
 import type { VerkoopRegel } from '@/lib/winkelboek/verkoop';
 
 type Bon = BonMin & { bedrijfsdag: string };
@@ -123,3 +124,25 @@ export const INKOOP_BONNEN: InkoopBon[] = [
 ];
 
 export const VOORRAADWAARDE = { cents: 684000, producten: 61, zonder: 12 };
+
+const loper = (product_id: string, naam: string, afdeling: string, verkocht: number, omzet_cents: number, marge_cents: number | null, voorraad: number | null, x: Partial<LoperInvoer> = {}): LoperInvoer => ({
+    product_id, naam, afdeling, eenheid: 'stuk', voorraad, voorraad_waarde_cents: voorraad === null ? null : voorraad * 300, tht: null,
+    verkocht, omzet_cents, marge_cents, ...x,
+});
+
+export const LOPER_INVOER: LoperInvoer[] = [
+    loper('p-worst', 'Droge worst naturel', 'Worst', 74, 44400, 17794, 30),
+    loper('p-kaas', 'Boerenkaas belegen', 'Kaas', 31, 43175, 14810, 7100, { eenheid: 'gram' }),
+    loper('p-blond', 'Naober Blond 33 cl', 'Bier', 132, 39600, 13587, 96),
+    loper('p-amandel', 'Gerookte amandelen 150 g', 'Noten', 58, 28900, 13174, 40),
+    loper('p-fuet', 'Fuet met truffel', 'Worst', 31, 21680, 8110, 22),
+    loper('p-saus', 'Mosterd-dillesaus', 'Broodbeleg', 29, 13050, null, null),
+    loper('p-cracker', 'Crackers zeezout', 'Broodbeleg', 44, 11000, 4812, 60),
+    loper('p-tripel', 'Tripel 75 cl', 'Bier', 12, 10800, 3526, 48),
+    loper('p-zuurkool', 'Zuurkoolworst', 'Worst', 4, 2400, 910, 16, { tht: '2026-12-06' }),
+    loper('p-chutney', 'Chutney vijg', 'Broodbeleg', 3, 1485, 690, 24),
+    loper('p-glas', 'Bierglas met logo', 'Zonder afdeling', 2, 1190, 520, 30),
+    loper('p-plank', 'Houten serveerplank', 'Zonder afdeling', 0, 0, null, 6, { voorraad_waarde_cents: 8100 }),
+    loper('p-barley', 'Barleywine 33 cl', 'Bier', 0, 0, null, 24, { voorraad_waarde_cents: 6240 }),
+    loper('p-kruiden', 'Kruidenmix BBQ', 'Broodbeleg', 0, 0, null, 18, { voorraad_waarde_cents: 3780 }),
+];

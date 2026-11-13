@@ -16,14 +16,16 @@ import '@/styles/winkel.css';
 import DagScherm from '@/app/winkelboek/_components/DagScherm';
 import InkoopScherm from '@/app/winkelboek/_components/InkoopScherm';
 import KasboekScherm from '@/app/winkelboek/_components/KasboekScherm';
+import LopersScherm from '@/app/winkelboek/_components/LopersScherm';
 import OverzichtScherm from '@/app/winkelboek/_components/OverzichtScherm';
 import VerkoopScherm from '@/app/winkelboek/_components/VerkoopScherm';
 import { maakDagboeking } from '@/lib/winkelboek/dagboeking';
 import { maakLeveringen } from '@/lib/winkelboek/inkoop';
 import { maakKasboek } from '@/lib/winkelboek/kasboek';
+import { deelLopersIn } from '@/lib/winkelboek/lopers';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import { verkoopPerArtikel } from '@/lib/winkelboek/verkoop';
-import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, INKOOP_BONNEN, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, ONTVANGSTEN, VERKOOP_REGELS, VOORRAADWAARDE } from './voorbeeld';
+import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, INKOOP_BONNEN, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, LOPER_INVOER, ONTVANGSTEN, VERKOOP_REGELS, VOORRAADWAARDE } from './voorbeeld';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,7 +46,7 @@ function dag(datum: string) {
 /** Welk scherm: ?scherm=overzicht|leeg|dag|dag-punten|dag-open|kasboek|kasboek-leeg */
 export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string; q?: string; afdeling?: string; groep?: string }> }) {
     if (process.env.NEXT_PUBLIC_E2E !== '1') notFound();
-    const { scherm = 'overzicht', p, q, afdeling } = await searchParams;
+    const { scherm = 'overzicht', p, q, afdeling, groep } = await searchParams;
     const periode = periodeVan(p ?? '2026-W48', '2026-11-28');
 
     let inhoud: React.ReactNode;
@@ -64,6 +66,9 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
             break;
         case 'inkoop':
             inhoud = <InkoopScherm periode={periode} leveringen={maakLeveringen(ONTVANGSTEN, INKOOP_BONNEN)} voorraadwaarde={VOORRAADWAARDE} omzetCents={363700} fout={null} basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'lopers':
+            inhoud = <LopersScherm lopers={deelLopersIn(LOPER_INVOER, { verkoopdagen: 5, dagen_open: 8 })} groep={groep} vandaag="2026-11-28" fout={null} basis={BASIS} extra={{ scherm }} />;
             break;
         case 'dag':
             inhoud = dag('2026-11-28');

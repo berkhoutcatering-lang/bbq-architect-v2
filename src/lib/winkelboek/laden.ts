@@ -9,10 +9,12 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { nlDatum } from '@/lib/btwAangifteBronnen';
+import { datumNL } from '@/lib/winkel/afdelingen';
 import { WINKEL_RUIMTE } from '@/lib/winkel/plekken';
 import type { BonMin, DagstaatKort } from './dagboeking';
 import type { InkoopBon, Ontvangst } from './inkoop';
 import type { KasMutatie } from './kasboek';
+import { cijfersPerProduct, LOPER_VENSTER_DAGEN, type LoperDagen, type LoperInvoer } from './lopers';
 import { inkoopVanRegel, type Onderdeel, type ProductPrijs, type RegelMutatie, type VerkoopRegel } from './verkoop';
 
 type Fout = { message: string; code?: string } | null;
@@ -283,6 +285,78 @@ export async function laadVoorraadwaarde(sb: SupabaseClient, orgId: string): Pro
         uit.cents += Math.round((Number(p.voorraad) * Number(p.inkoop_excl_cents)) / (Number(p.prijs_per ?? 1) || 1));
     }
     return uit;
+}
+
+/**
+ * De invoer voor hardlopers en trage lopers (ontwerp R5): actieve producten die
+ * los te koop zijn, met wat er in de laatste 28 dagen verkocht is.
+ */
+export async function laadLoperInvoer(sb: SupabaseClient, orgId: string, nu: Date): Promise<{ producten: LoperInvoer[]; dagen: LoperDagen; fout: string | null }> {
+    const vandaag = datumNL(nu);
+    const start = dagErbij(vandaag, -(LOPER_VENSTER_DAGEN - 1));
+    const uitgesloten = await laadUitsluitingen(sb, orgId, '2000-01-01', vandaag);
+
+    type Product = { id: string; naam: string; eenheid: string; voorraad: number | string | null; tht: string | null; inkoop_excl_cents: number | null; prijs_per: number | string | null };
+    let eersteVraag = sb.from('toonbank_bonnen').select('bedrijfsdag').eq('organization_id', orgId).eq('status', 'afgerond');
+    if (uitgesloten.size > 0) eersteVraag = eersteVraag.not('bedrijfsdag', 'in', `(${[...uitgesloten].join(',')})`);
+
+    const [verkoop, producten, artikelen, slots, afdelingen, eerste] = await Promise.all([
+        laadVerkoopRegels(sb, orgId, start, vandaag, uitgesloten),
+        alles<Product>((van, tot) =>
+            sb.from('winkel_producten').select('id, naam, eenheid, voorraad, tht, inkoop_excl_cents, prijs_per').eq('organization_id', orgId).eq('actief', true)
+                .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Product>),
+        alles<{ id: string }>((van, tot) =>
+            sb.from('winkel_artikelen').select('id').eq('organization_id', orgId).eq('actief', true)
+                .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<{ id: string }>),
+        alles<{ artikel_id: string; standaard_product_id: string | null }>((van, tot) =>
+            sb.from('winkel_artikel_slots').select('artikel_id, standaard_product_id').eq('organization_id', orgId)
+                .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<{ artikel_id: string; standaard_product_id: string | null }>),
+        laadAfdelingVanProduct(sb),
+        eersteVraag.order('bedrijfsdag', { ascending: true }).limit(1) as unknown as Antwoord<{ bedrijfsdag: string }>,
+    ]);
+    if (producten.error) {
+        return { producten: [], dagen: { verkoopdagen: 0, dagen_open: 0 }, fout: isNogNiet(producten.error) ? null : `Producten niet te lezen: ${producten.error.message}` };
+    }
+
+    /* Los te koop: een actief artikel dat uit precies dit ene product bestaat. */
+    const actief = new Set(artikelen.data.map((a) => String(a.id)));
+    const perArtikel = new Map<string, (string | null)[]>();
+    for (const s of slots.data) {
+        const lijst = perArtikel.get(String(s.artikel_id));
+        if (lijst) lijst.push(s.standaard_product_id); else perArtikel.set(String(s.artikel_id), [s.standaard_product_id]);
+    }
+    const losTeKoop = new Set<string>();
+    for (const [artikelId, lijst] of perArtikel) {
+        if (actief.has(artikelId) && lijst.length === 1 && lijst[0]) losTeKoop.add(String(lijst[0]));
+    }
+
+    const cijfers = cijfersPerProduct(verkoop.regels);
+    const eersteDag = eerste.data?.[0]?.bedrijfsdag ? String(eerste.data[0].bedrijfsdag) : null;
+
+    return {
+        producten: producten.data.filter((p) => losTeKoop.has(String(p.id))).map((p): LoperInvoer => {
+            const c = cijfers.get(String(p.id));
+            const voorraad = p.voorraad === null || p.voorraad === undefined ? null : Number(p.voorraad);
+            const inkoop = p.inkoop_excl_cents === null || p.inkoop_excl_cents === undefined ? null : Number(p.inkoop_excl_cents);
+            return {
+                product_id: String(p.id),
+                naam: String(p.naam),
+                afdeling: afdelingen.get(String(p.id)) ?? 'Zonder afdeling',
+                eenheid: p.eenheid === 'gram' ? 'gram' : 'stuk',
+                voorraad,
+                voorraad_waarde_cents: voorraad === null || inkoop === null ? null : Math.round((voorraad * inkoop) / (Number(p.prijs_per ?? 1) || 1)),
+                tht: p.tht ? String(p.tht).slice(0, 10) : null,
+                verkocht: c?.verkocht ?? 0,
+                omzet_cents: c?.omzet_cents ?? 0,
+                marge_cents: c?.marge_cents ?? null,
+            };
+        }),
+        dagen: {
+            verkoopdagen: new Set(verkoop.regels.map((r) => r.bedrijfsdag)).size,
+            dagen_open: eersteDag ? Math.round((Date.parse(`${vandaag}T12:00:00Z`) - Date.parse(`${eersteDag}T12:00:00Z`)) / DAG) + 1 : 0,
+        },
+        fout: verkoop.fout,
+    };
 }
 
 /** Derving (breuk en over datum) in de periode, tegen inkoopwaarde. */
