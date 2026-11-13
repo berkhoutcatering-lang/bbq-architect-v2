@@ -14,8 +14,10 @@ import { notFound } from 'next/navigation';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import DagScherm from '@/app/winkelboek/_components/DagScherm';
+import KasboekScherm from '@/app/winkelboek/_components/KasboekScherm';
 import OverzichtScherm from '@/app/winkelboek/_components/OverzichtScherm';
 import { maakDagboeking } from '@/lib/winkelboek/dagboeking';
+import { maakKasboek } from '@/lib/winkelboek/kasboek';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, VERKOOP_REGELS } from './voorbeeld';
 
@@ -35,7 +37,7 @@ function dag(datum: string) {
     );
 }
 
-/** Welk scherm: ?scherm=overzicht|leeg|dag|dag-punten|dag-open */
+/** Welk scherm: ?scherm=overzicht|leeg|dag|dag-punten|dag-open|kasboek|kasboek-leeg */
 export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string }> }) {
     if (process.env.NEXT_PUBLIC_E2E !== '1') notFound();
     const { scherm = 'overzicht', p } = await searchParams;
@@ -46,6 +48,12 @@ export default async function WinkelboekTestPagina({ searchParams }: { searchPar
         case 'leeg':
             inhoud = <OverzichtScherm periode={periode} fout={null} bonnen={[]} dagstaten={[]} kasMutaties={[]} verkoopRegels={[]} afdelingen={new Map()}
                 kassaRegels={[]} kassaDagen={[]} derving={{ cents: 0, aantal: 0, zonder_waarde: 0 }} basis={BASIS} />;
+            break;
+        case 'kasboek':
+            inhoud = <KasboekScherm periode={periode} kasboek={maakKasboek(DAGSTATEN, KAS_MUTATIES)} beschikbaar vandaag="2026-11-28" basis={BASIS} extra={{ scherm }} />;
+            break;
+        case 'kasboek-leeg':
+            inhoud = <KasboekScherm periode={periode} kasboek={maakKasboek([], [])} beschikbaar={false} vandaag="2026-11-28" basis={BASIS} extra={{ scherm }} />;
             break;
         case 'dag':
             inhoud = dag('2026-11-28');
