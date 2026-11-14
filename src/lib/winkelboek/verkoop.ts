@@ -84,8 +84,10 @@ export interface PeriodeMarge {
     marge_pct: number | null;
     /** Omzet met marge ÷ alle omzet, heel getal. */
     dekking_pct: number | null;
-    /** Aantal artikelen. */
+    /** Aantal artikelen waar een inkoopprijs ontbreekt die je kunt invullen. */
     zonder_inkoopprijs: number;
+    /** Aantal groepen verkoop met een open prijs: die hebben geen inkoopprijs en krijgen er ook geen. */
+    open_prijs: number;
     /** Aantal artikelen. */
     geschat: number;
 }
@@ -181,6 +183,11 @@ export function verkoopPerArtikel(regels: readonly VerkoopRegel[], afdelingVanPr
         .sort((a, b) => b.omzet_excl_cents - a.omzet_excl_cents || a.naam.localeCompare(b.naam));
 }
 
+/** Verkoop met een open prijs (geen artikel): daar hoort geen inkoopprijs bij. */
+export function isOpenPrijs(artikel: Pick<ArtikelCijfers, 'sleutel'>): boolean {
+    return artikel.sleutel.startsWith('open:');
+}
+
 /** Zoeken op een stuk van de naam en filteren op afdeling ('Alles' of leeg = geen filter). */
 export function filterArtikelen(artikelen: readonly ArtikelCijfers[], zoek: string | undefined, afdeling: string | undefined): ArtikelCijfers[] {
     const q = (zoek ?? '').trim().toLowerCase();
@@ -195,10 +202,14 @@ export function periodeMarge(artikelen: readonly ArtikelCijfers[]): PeriodeMarge
     let inkoop = 0;
     let marge = 0;
     let zonder = 0;
+    let open = 0;
     let geschat = 0;
     for (const a of artikelen) {
         omzet += a.omzet_excl_cents;
-        if (a.marge_cents === null || a.inkoop_cents === null) { zonder += 1; continue; }
+        if (a.marge_cents === null || a.inkoop_cents === null) {
+            if (isOpenPrijs(a)) open += 1; else zonder += 1;
+            continue;
+        }
         omzetBekend += a.omzet_excl_cents;
         inkoop += a.inkoop_cents;
         marge += a.marge_cents;
@@ -211,6 +222,7 @@ export function periodeMarge(artikelen: readonly ArtikelCijfers[]): PeriodeMarge
         marge_pct: omzetBekend > 0 ? eenDecimaal((marge / omzetBekend) * 100) : null,
         dekking_pct: omzet > 0 ? Math.round((omzetBekend / omzet) * 100) : null,
         zonder_inkoopprijs: zonder,
+        open_prijs: open,
         geschat,
     };
 }

@@ -82,6 +82,19 @@ describe('een laadfout wordt gemeld, niet ingeslikt', () => {
     });
 });
 
+describe('laadVoorraadwaarde', () => {
+    it('een voorraad onder nul is niets waard: niet meegeteld, wel gemeld', async () => {
+        const { sb } = nepSupabase(() => ({
+            data: [
+                { voorraad: 10, inkoop_excl_cents: 100, prijs_per: 1 },
+                { voorraad: -16, inkoop_excl_cents: 230, prijs_per: 1 },
+                { voorraad: null, inkoop_excl_cents: 260, prijs_per: 1 },
+            ], error: null,
+        }));
+        expect(await laadVoorraadwaarde(sb, ORG)).toEqual({ cents: 1000, producten: 1, zonder: 1, onder_nul: 1, fout: null });
+    });
+});
+
 describe('laadAfdelingVanProduct', () => {
     const plekken = [
         { id: 'r', code: 'WINKEL', naam: 'Winkel', parent_id: null },
@@ -116,7 +129,7 @@ describe('laadKasBegin', () => {
             if (a.tabel === 'winkel_kas_mutaties') return { data: [{ id: 'm9', datum: '2026-11-30', bedrag_cents: 2000, reden: 'wisselgeld', omschrijving: 'Wisselgeld erbij', moment: 'tijdens', created_at: 'x' }], error: null };
             return leeg;
         });
-        expect(await laadKasBegin(sb, ORG, '2026-12-01')).toEqual({ begin: { datum: '2026-12-01', saldo_cents: 16945 }, fout: null });
+        expect(await laadKasBegin(sb, ORG, '2026-12-01')).toEqual({ begin: { datum: '2026-12-01', saldo_cents: 16945, sinds: '2026-11-28' }, fout: null });
     });
     it('nog nooit afgesloten: geen beginstand en geen fout', async () => {
         const { sb } = nepSupabase(() => leeg);

@@ -4,7 +4,7 @@ import KpiTegel, { type KpiStaat } from '@/components/chassis/KpiTegel';
 import { formatPercent } from '@/lib/format';
 import type { Levering } from '@/lib/winkelboek/inkoop';
 import type { Periode } from '@/lib/winkelboek/periode';
-import { inkoopVerhouding } from '@/lib/winkelboek/weergave';
+import { inkoopVerhouding, voorraadOnderschrift } from '@/lib/winkelboek/weergave';
 import PeriodeKiezer from './PeriodeKiezer';
 import { aantal, euro, korteDag } from '../_lib/tekst';
 
@@ -21,7 +21,7 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
     periode: Periode;
     /** Nieuwste eerst. */
     leveringen: Levering[];
-    voorraadwaarde: { cents: number; producten: number; zonder: number; fout?: string | null };
+    voorraadwaarde: { cents: number; producten: number; zonder: number; onder_nul?: number; fout?: string | null };
     /** Omzet excl. btw van de winkelkassa in dezelfde periode; null als die niet te laden was. */
     omzetCents: number | null;
     fout: string | null;
@@ -42,7 +42,7 @@ export default function InkoopScherm({ periode, leveringen, voorraadwaarde, omze
         : { soort: 'waarde', waarde: String(zonderBon), onder: zonderBon === 0 ? 'Bij elke levering is een bon gevonden' : 'Scan de bon, dan klopt je voorbelasting', alarm: zonderBon > 0 };
     const waardeStaat: KpiStaat = voorraadwaarde.fout ? { soort: 'onbepaald', reden: 'De voorraad kon niet geladen worden.' }
         : voorraadwaarde.producten === 0 ? { soort: 'onbepaald', reden: 'Nog geen product met een telling én een inkoopprijs.' }
-        : { soort: 'waarde', waarde: euro(voorraadwaarde.cents), onder: voorraadwaarde.zonder > 0 ? `${aantal(voorraadwaarde.zonder, 'product', 'producten')} zonder inkoopprijs of telling niet meegeteld` : 'Inkoopprijs × wat er ligt' };
+        : { soort: 'waarde', waarde: euro(voorraadwaarde.cents), onder: voorraadOnderschrift({ zonder: voorraadwaarde.zonder, onder_nul: voorraadwaarde.onder_nul ?? 0 }), alarm: (voorraadwaarde.onder_nul ?? 0) > 0 };
     const verhouding = inkoopVerhouding({ ingekocht_cents: ingekocht, omzet_cents: omzetCents, leveringen: leveringen.length, zonder_bedrag: zonderBedrag });
     const verhoudingStaat: KpiStaat = verhouding.soort === 'onbekend' ? { soort: 'onbepaald', reden: verhouding.reden }
         : { soort: 'waarde', waarde: `${verhouding.minstens ? 'Minstens ' : ''}${formatPercent(verhouding.pct)}`, onder: verhouding.onder };

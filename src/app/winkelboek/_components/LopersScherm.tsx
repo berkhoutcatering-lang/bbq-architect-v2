@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Archive, Info, Percent, ShoppingCart } from 'lucide-react';
+import { Archive, ClipboardList, Info, Percent, ShoppingCart } from 'lucide-react';
 import { formatNumber } from '@/lib/format';
 import { lopersVoorKeuze, middenLooptDoor, type Loper, type LoperActie, type LoperKeuze, type Lopers } from '@/lib/winkelboek/lopers';
 import { aantal, euro, korteDag } from '../_lib/tekst';
@@ -13,6 +13,7 @@ const ACTIE: Record<LoperActie, { tekst: string; Icoon: typeof Archive; href: (i
     bijbestellen: { tekst: 'Bijbestellen', Icoon: ShoppingCart, href: () => '/winkel/bestellijst' },
     afprijzen: { tekst: 'Afprijzen', Icoon: Percent, href: (id) => `/voorraad/winkel?product=${id}` },
     uit_assortiment: { tekst: 'Uit assortiment', Icoon: Archive, href: (id) => `/voorraad/winkel?product=${id}` },
+    tellen: { tekst: 'Voorraad tellen', Icoon: ClipboardList, href: (id) => `/voorraad/winkel?product=${id}` },
 };
 
 /** Dagen tot de THT, van vandaag af; negatief = al over. */
@@ -125,7 +126,7 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                     <span className="wk-naam" style={{ display: 'block' }}>{l.naam}</span>
                                                     <span className="wk-klein" style={{ display: 'block' }}>
                                                         {l.afdeling}
-                                                        {gekozen === 'hard' && l.groep === 'midden' && ' · middenmoot, bijna op'}
+                                                        {gekozen === 'hard' && l.groep === 'midden' && (l.onder_nul ? ' · middenmoot' : ' · middenmoot, bijna op')}
                                                         {bijnaOver && l.tht && <span style={{ color: 'var(--status-warning-text)' }}> · over datum op {korteDag(l.tht)}</span>}
                                                     </span>
                                                 </span>
@@ -134,9 +135,14 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                     {l.marge_cents === null ? '–' : euro(l.marge_cents)}
                                                     {l.marge_cents !== null && l.marge_geschat && <span style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: 400, color: 'var(--muted)' }}>geschat</span>}
                                                 </span>
-                                                <span style={GETAL}>{l.voorraad === null ? <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--muted)' }}>Niet geteld</span> : hoeveel(l, l.voorraad)}</span>
+                                                <span style={GETAL}>
+                                                    {l.voorraad === null ? <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--muted)' }}>Niet geteld</span>
+                                                        : l.onder_nul ? <span style={{ fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--status-warning-text)' }}>Onder nul</span>
+                                                        : hoeveel(l, l.voorraad)}
+                                                </span>
                                                 <span style={{ fontSize: 13, color: l.krap ? 'var(--status-warning-text)' : l.dagen_voorraad === null ? 'var(--muted)' : undefined }}>
                                                     {l.groep === 'stil' ? 'Nog niets verkocht'
+                                                        : l.onder_nul ? 'Meer verkocht dan ingeboekt'
                                                         : l.dagen_voorraad === null ? (l.eenheid === 'gram' ? 'Op gewicht' : '–')
                                                         : aantal(l.dagen_voorraad, 'dag', 'dagen')}
                                                 </span>

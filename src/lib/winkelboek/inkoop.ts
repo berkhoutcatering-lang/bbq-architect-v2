@@ -11,7 +11,12 @@
  *  - De btw is een schatting (waarde × het btw-tarief van het product). De
  *    echte voorbelasting staat op de bon en in de btw-aangifte.
  *  - De bon: bonnen van dezelfde leverancier van één dag vóór tot zeven dagen
- *    na de levering. Er wordt niets opgeslagen; het is een aanwijzing.
+ *    na de levering komen in aanmerking. Een bon hoort bij één levering: eerst
+ *    de bon met precies hetzelfde bedrag, anders de dichtstbijzijnde in dagen.
+ *    Zo vindt een leverancier die elke week levert bij elke levering zijn eigen
+ *    bon. Alleen als er twee even ver weg liggen en geen van beide het bedrag
+ *    heeft, staat er dat er meer zijn. Er wordt niets opgeslagen; het is een
+ *    aanwijzing.
  */
 
 export interface Ontvangst {
@@ -56,6 +61,17 @@ const BON_VOOR = 1;
 const BON_NA = 7;
 
 const dagenTussen = (van: string, tot: string) => Math.round((Date.parse(`${tot}T12:00:00Z`) - Date.parse(`${van}T12:00:00Z`)) / DAG);
+const dagErbij = (datum: string, dagen: number) => new Date(Date.parse(`${datum}T12:00:00Z`) + dagen * DAG).toISOString().slice(0, 10);
+
+/**
+ * Hoe ruim er rond een periode geladen moet worden om de bonnen eerlijk te
+ * verdelen: ook de leveringen van net ervoor en erna, want die hebben recht op
+ * hun eigen bon. Geef dit venster aan de laders en de periode zelf aan
+ * `maakLeveringen`.
+ */
+export function bonVenster(periode: { start: string; eind: string }): { start: string; eind: string } {
+    return { start: dagErbij(periode.start, -(BON_VOOR + BON_NA)), eind: dagErbij(periode.eind, BON_VOOR + BON_NA) };
+}
 
 function samenvatting(namen: string[]): string {
     if (namen.length <= 1) return namen[0] ?? '';
@@ -63,8 +79,12 @@ function samenvatting(namen: string[]): string {
     return `${namen[0]}, ${namen[1]} en ${namen.length - 2} andere`;
 }
 
-/** De leveringen van een periode, nieuwste eerst. */
-export function maakLeveringen(ontvangsten: readonly Ontvangst[], bonnen: readonly InkoopBon[]): Levering[] {
+/**
+ * De leveringen, nieuwste eerst. Met een `periode` doen ook de ontvangsten
+ * erbuiten mee met het verdelen van de bonnen, maar komen alleen de leveringen
+ * erbinnen in de lijst.
+ */
+export function maakLeveringen(ontvangsten: readonly Ontvangst[], bonnen: readonly InkoopBon[], periode?: { start: string; eind: string }): Levering[] {
     interface Groep { datum: string; leverancier_id: number | null; leverancier: string; namen: Map<string, string>; bedrag: number | null; btw: number | null }
     const groepen = new Map<string, Groep>();
 
@@ -85,16 +105,39 @@ export function maakLeveringen(ontvangsten: readonly Ontvangst[], bonnen: readon
         }
     }
 
+    /* Elke combinatie van een levering en een bon die in aanmerking komt. */
+    interface Paar { g: Groep; b: InkoopBon; verschil: number; afstand: number; zelfde: boolean }
+    const paren: Paar[] = [];
+    for (const g of groepen.values()) {
+        if (g.leverancier_id === null) continue;
+        for (const b of bonnen) {
+            if (b.leverancier_id !== g.leverancier_id) continue;
+            const verschil = dagenTussen(g.datum, b.datum);
+            if (verschil < -BON_VOOR || verschil > BON_NA) continue;
+            paren.push({ g, b, verschil, afstand: Math.abs(verschil), zelfde: g.bedrag !== null && b.netto_cents === g.bedrag });
+        }
+    }
+    /* Eerst hetzelfde bedrag, dan de kortste afstand; bij gelijke afstand de bon ná de levering. */
+    paren.sort((x, y) => Number(y.zelfde) - Number(x.zelfde) || x.afstand - y.afstand || y.verschil - x.verschil
+        || x.g.datum.localeCompare(y.g.datum) || x.b.datum.localeCompare(y.b.datum) || x.b.id - y.b.id);
+
+    const bonVan = new Map<Groep, Paar>();
+    const vergeven = new Set<number>();
+    for (const p of paren) {
+        if (bonVan.has(p.g) || vergeven.has(p.b.id)) continue;
+        bonVan.set(p.g, p);
+        vergeven.add(p.b.id);
+    }
+
     return [...groepen.values()]
+        .filter((g) => !periode || (g.datum >= periode.start && g.datum <= periode.eind))
         .map((g): Levering => {
-            const kandidaten = g.leverancier_id === null ? [] : bonnen.filter((b) => {
-                if (b.leverancier_id !== g.leverancier_id) return false;
-                const verschil = dagenTussen(g.datum, b.datum);
-                return verschil >= -BON_VOOR && verschil <= BON_NA;
-            });
-            const bon: BonStand = kandidaten.length === 1 ? { soort: 'gevonden', id: kandidaten[0].id, netto_cents: kandidaten[0].netto_cents }
-                : kandidaten.length > 1 ? { soort: 'meerdere', aantal: kandidaten.length }
-                : { soort: 'ontbreekt' };
+            const eigen = bonVan.get(g);
+            /* Twijfel: een andere vrije bon ligt even ver weg, en het bedrag gaf de doorslag niet. */
+            const evenVer = eigen && !eigen.zelfde ? paren.filter((p) => p.g === g && p.b.id !== eigen.b.id && !vergeven.has(p.b.id) && p.afstand === eigen.afstand).length : 0;
+            const bon: BonStand = !eigen ? { soort: 'ontbreekt' }
+                : evenVer > 0 ? { soort: 'meerdere', aantal: evenVer + 1 }
+                : { soort: 'gevonden', id: eigen.b.id, netto_cents: eigen.b.netto_cents };
             return {
                 datum: g.datum, leverancier_id: g.leverancier_id, leverancier: g.leverancier,
                 producten: g.namen.size, wat: samenvatting([...g.namen.values()]),

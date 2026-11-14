@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Dagboeking } from './dagboeking';
 import type { PeriodeMarge } from './verkoop';
-import { dagKop, dervingTegel, inkoopOnderschrift, inkoopVerhouding, kasVakje, kassaCijfers, lijstStaat, pinVakje, systeemStappen } from './weergave';
+import { dagKop, dervingTegel, inkoopOnderschrift, inkoopVerhouding, kasVakje, kassaCijfers, lijstStaat, pinVakje, systeemStappen, voorraadOnderschrift } from './weergave';
 
 const dag = (x: Partial<Dagboeking>): Dagboeking => ({
     datum: '2026-11-28', binnen: { pin: 0, contant: 0, cadeaubon: 0, totaal: 0 }, hokjes: [], totaal_hokjes: 0,
     sluit: true, stand: 'geboekt', aantal_bonnen: 64, gesloten_at: '2026-11-28T17:07:00Z', punten: [], ...x,
 });
-const marge: PeriodeMarge = { omzet_cents: 10000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, dekking_pct: 100, zonder_inkoopprijs: 0, geschat: 0 };
+const marge: PeriodeMarge = { omzet_cents: 10000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, dekking_pct: 100, zonder_inkoopprijs: 0, open_prijs: 0, geschat: 0 };
 
 describe('kassaCijfers', () => {
     it('zet de dagen op datum, laat proefdagen weg en rekent om naar centen', () => {
@@ -122,6 +122,15 @@ describe('inkoopVerhouding', () => {
         expect(inkoopVerhouding({ ...basis, omzet_cents: 0 }).soort).toBe('onbekend');
         expect(inkoopVerhouding({ ...basis, leveringen: 0 }).soort).toBe('onbekend');
         expect(inkoopVerhouding({ ...basis, zonder_bedrag: 4 })).toMatchObject({ soort: 'onbekend', reden: 'Geen enkele levering heeft een bedrag.' });
+    });
+});
+
+describe('voorraadOnderschrift', () => {
+    it('zegt wat niet meetelt en waarom', () => {
+        expect(voorraadOnderschrift({ zonder: 0, onder_nul: 0 })).toBe('Inkoopprijs × wat er ligt');
+        expect(voorraadOnderschrift({ zonder: 2, onder_nul: 0 })).toBe('2 producten zonder inkoopprijs of telling niet meegeteld');
+        expect(voorraadOnderschrift({ zonder: 0, onder_nul: 1 })).toBe('1 product staat onder nul en telt niet mee: tel de voorraad');
+        expect(voorraadOnderschrift({ zonder: 2, onder_nul: 3 })).toBe('2 producten zonder inkoopprijs of telling niet meegeteld · 3 producten staan onder nul en tellen niet mee: tel de voorraad');
     });
 });
 

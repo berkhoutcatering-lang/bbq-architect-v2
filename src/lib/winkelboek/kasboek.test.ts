@@ -83,6 +83,13 @@ describe('maakKasboek', () => {
         expect(k.regels.map((r) => r.saldo_cents)).toEqual([14945, 15000, 20000, 15000]);
         expect(k.punten.join(' ')).toContain('0,55');
     });
+    it('met een beginstand: het punt noemt de vorige afsluiting als die bekend is', () => {
+        const dag = [staat('2026-12-01', 15000, 20000, 20000, 5000)];
+        const met = maakKasboek(dag, [], undefined, { datum: '2026-12-01', saldo_cents: 16000, sinds: '2026-11-28' });
+        expect(met.punten[0]).toMatch(/^Tussen za 28 nov en di 1 dec ging er .*10,00 uit de la zonder regel\.$/);
+        const zonder = maakKasboek(dag, [], undefined, { datum: '2026-12-01', saldo_cents: 16000 });
+        expect(zonder.punten[0]).toMatch(/^Vóór di 1 dec ging er/);
+    });
     it('met een beginstand: een eigen regel vóór de eerste afsluiting van de periode blijft zichtbaar', () => {
         const k = maakKasboek([staat('2026-12-02', 16945, 20000, 20000, 0)],
             [{ id: 'm9', datum: '2026-12-01', bedrag_cents: 2000, reden: 'wisselgeld', omschrijving: 'Wisselgeld erbij', moment: 'tijdens' }], undefined, { datum: '2026-12-01', saldo_cents: 14945 });

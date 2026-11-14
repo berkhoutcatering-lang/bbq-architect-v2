@@ -144,3 +144,11 @@ export function systeemStappen(v: {
     if (v.met_voorraad > 0) uit.push(`Voorraad afgeboekt bij ${aantal(v.met_voorraad, 'verkoopregel', 'verkoopregels')}`);
     return uit;
 }
+
+/** De regel onder de tegel Voorraadwaarde: wat er niet in meetelt, en wat je eraan doet. */
+export function voorraadOnderschrift(v: { zonder: number; onder_nul: number }): string {
+    const delen: string[] = [];
+    if (v.zonder > 0) delen.push(`${aantal(v.zonder, 'product', 'producten')} zonder inkoopprijs of telling niet meegeteld`);
+    if (v.onder_nul > 0) delen.push(`${aantal(v.onder_nul, 'product staat', 'producten staan')} onder nul en ${v.onder_nul === 1 ? 'telt' : 'tellen'} niet mee: tel de voorraad`);
+    return delen.length > 0 ? delen.join(' · ') : 'Inkoopprijs × wat er ligt';
+}

@@ -3,10 +3,10 @@
  * database in het geheugen, de echte rekenregels, en de uitkomst naast wat de
  * simulatie zelf heeft bijgehouden.
  *
- * Een test die met `it.fails` begint legt een BEVINDING vast: zo zou het
- * moeten zijn, en zo is het nu nog niet. De suite blijft groen; wordt de
- * bevinding opgelost, dan slaat die test om en moet `it.fails` weer `it`
- * worden.
+ * Vijf dingen kwamen bij de eerste proef aan het licht (bon zoeken bij een
+ * wekelijkse leverancier, voorraad onder nul, de tekst aan het begin van een
+ * periode, "afprijzen" bij een trage loper die bijna op is, en open prijs als
+ * eeuwig aandachtspunt). Ze zijn opgelost en staan hier als gewone tests.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -14,7 +14,7 @@ import { laadToonbank } from '@/lib/btwAangifteBronnen';
 import { verzamelPunten } from '../aandacht';
 import { maakDagboeking, type DagStand } from '../dagboeking';
 import { DAG_GEBOEKT_TYPE, meldDagGeboekt } from '../dagMelding';
-import { maakLeveringen } from '../inkoop';
+import { bonVenster, maakLeveringen } from '../inkoop';
 import { maakKasboek } from '../kasboek';
 import {
     laadAfdelingVanProduct, laadDagBonnen, laadDagstaten, laadDerving, laadInkoopBonnen, laadKasBegin, laadKasMutaties, laadLoperInvoer,
@@ -160,8 +160,8 @@ describe('het overzicht per periode', () => {
             expect.stringMatching(/^vr 4 dec: .*voorlopig/),
             expect.stringMatching(/^vr 4 dec: .*in geen dagafsluiting/),
             expect.stringMatching(/^za 5 dec: Pinverschil: myPOS toont .*3,50 minder/),
-            expect.stringMatching(/di 1 dec ging er .*10,00 uit de la zonder regel/),
-            expect.stringContaining('zonder inkoopprijs'),
+            expect.stringMatching(/^Tussen za 28 nov en di 1 dec ging er .*10,00 uit de la zonder regel/),
+            expect.stringContaining('1 artikel zonder inkoopprijs'),
         ]);
     });
 });
@@ -215,22 +215,21 @@ describe('het kasboek', () => {
 
     it('december: begint waar november eindigde, meldt de € 10,00 die verdween en het goedgekeurde verschil', async () => {
         const { boek, begin } = await kasboek('2026-12');
-        expect(begin).toEqual({ datum: '2026-12-01', saldo_cents: inDeLa['2026-11'] });
+        expect(begin).toEqual({ datum: '2026-12-01', saldo_cents: inDeLa['2026-11'], sinds: '2026-11-28' });
         expect(boek.regels.filter((r) => r.soort === 'tussen_dagen').map((r) => [r.datum, r.bedrag_cents])).toEqual([['2026-12-01', -1000]]);
         expect(boek.regels.filter((r) => r.soort === 'kasverschil').map((r) => [r.datum, r.bedrag_cents, r.goedgekeurd])).toEqual([['2026-12-02', 100, true]]);
         expect(boek.regels.filter((r) => r.soort === 'eigen').map((r) => [r.datum, r.bedrag_cents])).toEqual([['2026-12-03', -2000]]);
-        expect(boek.punten).toEqual([expect.stringMatching(/di 1 dec ging er .*10,00 uit de la zonder regel/)]);
+        expect(boek.punten).toEqual([expect.stringMatching(/^Tussen za 28 nov en di 1 dec ging er .*10,00 uit de la zonder regel/)]);
     });
 
-    it.fails('BEVINDING 3: aan het begin van een periode zegt het kasboek niet sinds wanneer er geld weg is', async () => {
-        /* Nu: "Vóór di 1 dec ging er € 10,00 uit de la". De vorige afsluiting (za 28 nov) is bekend en hoort erbij. */
+    it('aan het begin van een periode zegt het kasboek sinds wanneer er geld weg is', async () => {
         const { boek } = await kasboek('2026-12');
         expect(boek.punten[0]).toMatch(/^Tussen za 28 nov en di 1 dec ging er/);
     });
 
     it('week 49: het wisselgeld van maandag staat erin en verklaart de hogere beginstand', async () => {
         const { boek, begin } = await kasboek('2026-W49');
-        expect(begin).toEqual({ datum: '2026-11-30', saldo_cents: laNa('2026-11-28') });
+        expect(begin).toEqual({ datum: '2026-11-30', saldo_cents: laNa('2026-11-28'), sinds: '2026-11-28' });
         expect(boek.regels.slice(0, 3).map((r) => [r.soort, r.datum, r.bedrag_cents])).toEqual([
             ['beginstand', '2026-11-30', 0], ['eigen', '2026-11-30', 5000], ['tussen_dagen', '2026-12-01', -1000],
         ]);
@@ -290,24 +289,27 @@ describe('verkoop per artikel', () => {
         const o = await overzicht('2026-12');
         const bekend = o.artikelen.filter((a) => a.marge_cents !== null);
         expect(o.marge.marge_cents).toBe(som(bekend.map((a) => a.marge_cents ?? 0)));
-        expect(o.marge.zonder_inkoopprijs).toBe(o.artikelen.length - bekend.length);
+        expect(o.marge.zonder_inkoopprijs + o.marge.open_prijs).toBe(o.artikelen.length - bekend.length);
         expect(o.artikelen.filter((a) => a.marge_cents === null).map((a) => a.sleutel).sort()).toEqual(['a-p-saus', 'open:diversen']);
         expect(o.artikelen.filter((a) => a.geschat).map((a) => a.sleutel)).toEqual(['a-p-glas']);
     });
 
-    it.fails('BEVINDING 5: verkoop met een open prijs telt als "artikel zonder inkoopprijs" en is nooit weg te werken', async () => {
-        /* Alleen de saus mist een inkoopprijs die je kunt invullen. Een open prijs heeft er geen, en blijft zo voor altijd in "Om naar te kijken" staan. */
+    it('verkoop met een open prijs is geen "artikel zonder inkoopprijs": alleen de saus is in te vullen', async () => {
         const o = await overzicht('2026-12');
         expect(o.marge.zonder_inkoopprijs).toBe(1);
+        expect(o.marge.open_prijs).toBe(1);
     });
 });
 
 describe('inkoop', () => {
     /** Zoals src/app/winkelboek/inkoop/page.tsx. */
     async function inkoop(sleutel: string) {
-        const { start, eind } = periodeVan(sleutel, '2026-12-05');
-        const [ontvangsten, bonnen, voorraad] = await Promise.all([laadOntvangsten(sb, SIM_ORG, start, eind), laadInkoopBonnen(sb, SIM_ORG, start, eind), laadVoorraadwaarde(sb, SIM_ORG)]);
-        return { fout: ontvangsten.fout ?? bonnen.fout ?? voorraad.fout, leveringen: maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen), voorraad };
+        const periode = periodeVan(sleutel, '2026-12-05');
+        const venster = bonVenster(periode);
+        const [ontvangsten, bonnen, voorraad] = await Promise.all([
+            laadOntvangsten(sb, SIM_ORG, venster.start, venster.eind), laadInkoopBonnen(sb, SIM_ORG, venster.start, venster.eind), laadVoorraadwaarde(sb, SIM_ORG),
+        ]);
+        return { fout: ontvangsten.fout ?? bonnen.fout ?? voorraad.fout, leveringen: maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen, periode), voorraad };
     }
 
     it('week 48: drie leveringen, elk met het bedrag van wat er binnenkwam', async () => {
@@ -331,9 +333,9 @@ describe('inkoop', () => {
         ]);
     });
 
-    it.fails('BEVINDING 1: bij een leverancier die elke week levert is de bon van de eerste levering niet meer te vinden', async () => {
-        /* Elke levering in week 48 heeft precies één bon, op de dag zelf of twee dagen later, met hetzelfde bedrag.
-           Nu: de bon van de vólgende levering valt ook binnen zeven dagen, dus staat er "2 of 3 bonnen gevonden". */
+    it('week 48: bij een leverancier die elke week levert vindt elke levering zijn eigen bon', async () => {
+        /* Elke levering heeft precies één bon, op de dag zelf of twee dagen later. De bon van de vólgende levering valt ook
+           binnen zeven dagen, maar hoort daar niet bij. */
         const { leveringen } = await inkoop('2026-W48');
         expect(leveringen.map((l) => [l.datum, l.leverancier, l.bon.soort])).toEqual([
             ['2026-11-27', 'Slagerij', 'gevonden'],
@@ -342,13 +344,13 @@ describe('inkoop', () => {
         ]);
     });
 
-    it('de voorraadwaarde telt elk product met een telling en een inkoopprijs', async () => {
+    it('de voorraadwaarde telt elk product met een telling en een inkoopprijs, en meldt wat onder nul staat', async () => {
         const { voorraad } = await inkoop('2026-W49');
         const telt = SIM_PRODUCTEN.filter((p) => (w.voorraad.get(p.id) ?? null) !== null && p.inkoop !== null);
-        expect(voorraad).toMatchObject({ producten: telt.length, zonder: SIM_PRODUCTEN.length - telt.length });
+        expect(voorraad).toMatchObject({ producten: telt.length - 1, onder_nul: 1, zonder: SIM_PRODUCTEN.length - telt.length });
     });
 
-    it.fails('BEVINDING 2a: een voorraad onder nul telt als negatieve waarde mee in "Voorraadwaarde nu"', async () => {
+    it('een voorraad onder nul telt niet als negatieve waarde mee in "Voorraadwaarde nu"', async () => {
         /* De chutney staat op −16 omdat een levering niet is ingeboekt. Wat er niet ligt is niets waard, niet min iets. */
         const { voorraad } = await inkoop('2026-W49');
         expect(w.voorraad.get('p-chutney')).toBeLessThan(0);
@@ -422,19 +424,19 @@ describe('hardlopers en trage lopers', () => {
         expect(lopers.lijst.filter((x) => x.actie === 'bijbestellen').map((x) => x.product_id)).toContain('p-blond');
     });
 
-    it.fails('BEVINDING 2b: een voorraad onder nul geeft "genoeg voor −5 dagen"', async () => {
+    it('een voorraad onder nul geeft geen "genoeg voor −5 dagen" maar het advies om te tellen', async () => {
         const invoer = await laadLoperInvoer(sb, SIM_ORG, SIM_NU);
         const chutney = deelLopersIn(invoer.producten, invoer.dagen).lijst.find((x) => x.product_id === 'p-chutney')!;
         expect(chutney.voorraad).toBeLessThan(0);
-        expect(chutney.dagen_voorraad === null || chutney.dagen_voorraad >= 0).toBe(true);
+        expect(chutney).toMatchObject({ dagen_voorraad: null, onder_nul: true, actie: 'tellen' });
     });
 
-    it.fails('BEVINDING 4: een trage loper die bijna op is krijgt het advies "afprijzen"', async () => {
+    it('een trage loper die bijna op is krijgt niet het advies "afprijzen"', async () => {
         /* De zuurkoolworst is traag (weinig omzet) en er liggen er nog zes: er valt niets af te prijzen. */
         const invoer = await laadLoperInvoer(sb, SIM_ORG, SIM_NU);
         const worst = deelLopersIn(invoer.producten, invoer.dagen).lijst.find((x) => x.product_id === 'p-zuurkool')!;
         expect(worst).toMatchObject({ groep: 'traag', krap: true });
-        expect(worst.actie).not.toBe('afprijzen');
+        expect(worst.actie).toBeNull();
     });
 });
 

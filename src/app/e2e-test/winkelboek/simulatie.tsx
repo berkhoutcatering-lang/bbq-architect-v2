@@ -12,7 +12,7 @@ import LopersScherm from '@/app/winkelboek/_components/LopersScherm';
 import OverzichtScherm from '@/app/winkelboek/_components/OverzichtScherm';
 import VerkoopScherm from '@/app/winkelboek/_components/VerkoopScherm';
 import { maakDagboeking } from '@/lib/winkelboek/dagboeking';
-import { maakLeveringen } from '@/lib/winkelboek/inkoop';
+import { bonVenster, maakLeveringen } from '@/lib/winkelboek/inkoop';
 import { maakKasboek } from '@/lib/winkelboek/kasboek';
 import {
     laadAfdelingVanProduct, laadDagBonnen, laadDagstaten, laadDerving, laadInkoopBonnen, laadKasBegin, laadKasMutaties, laadLoperInvoer,
@@ -67,11 +67,13 @@ export async function simulatieScherm({ scherm, p, q, afdeling, groep, dag }: {
     const { start, eind } = periode;
 
     if (scherm === 'inkoop') {
+        const venster = bonVenster(periode);
         const [ontvangsten, bonnen, voorraadwaarde, toonbank] = await Promise.all([
-            laadOntvangsten(sb, SIM_ORG, start, eind), laadInkoopBonnen(sb, SIM_ORG, start, eind), laadVoorraadwaarde(sb, SIM_ORG), laadToonbank(sb, SIM_ORG, start, eind),
+            laadOntvangsten(sb, SIM_ORG, venster.start, venster.eind), laadInkoopBonnen(sb, SIM_ORG, venster.start, venster.eind),
+            laadVoorraadwaarde(sb, SIM_ORG), laadToonbank(sb, SIM_ORG, start, eind),
         ]);
         return (
-            <InkoopScherm periode={periode} leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen)} voorraadwaarde={voorraadwaarde}
+            <InkoopScherm periode={periode} leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen, periode)} voorraadwaarde={voorraadwaarde}
                 omzetCents={toonbank.fout ? null : Math.round(toonbank.regels.reduce((s, r) => s + r.omzet, 0) * 100)}
                 fout={ontvangsten.fout} bonFout={bonnen.fout} basis={BASIS} extra={extra} />
         );

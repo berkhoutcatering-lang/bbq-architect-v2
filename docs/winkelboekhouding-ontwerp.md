@@ -148,6 +148,8 @@ telt negatief mee.
 - Afdeling: het product van het artikel via `winkel_plaatsingen`; meer dan één product = "Pakketten";
   open prijs = "Open prijs"; geen plek = "Zonder afdeling".
 - Periodecijfers: marge alleen over artikelen met een marge; dekking = hun omzet ÷ alle omzet.
+- Verkoop met een open prijs heeft geen inkoopprijs en krijgt er ook geen. Die telt daarom niet mee als "artikel
+  zonder inkoopprijs" (het aandachtspunt dat je kunt wegwerken), maar staat apart vermeld.
 - De officiële omzet en btw van de periode komen uit `laadToonbank` (zelfde bron als de btw-aangifte). De som
   van de artikelen kan daar enkele centen van afwijken door afronding per bon; het scherm zegt dat.
 
@@ -161,9 +163,15 @@ Invoer: voorraadmutaties van type `ontvangst` in de periode. Groeperen op dag (N
 - Bedrag = som `waarde_cents`; is er één leeg, dan is het bedrag van de levering onbekend.
 - Btw is een schatting: som per regel `round(waarde × btw_pct / 100)`, en heet op het scherm "Btw, geschat".
   De echte voorbelasting komt van de bonnen en staat in de btw-aangifte; de tegel toont die niet als eigen getal.
-- Bon: bonnen van dezelfde leverancier met een datum van één dag vóór tot zeven dagen na de levering.
-  Eén = "Bon gevonden" met het bedrag van de bon ernaast; meer = "Meerdere bonnen"; geen = "Bon ontbreekt".
-  Er wordt niets opgeslagen.
+- Bon: bonnen van dezelfde leverancier met een datum van één dag vóór tot zeven dagen na de levering komen in
+  aanmerking. Een bon hoort bij één levering: eerst de bon met precies hetzelfde bedrag, anders de
+  dichtstbijzijnde in dagen. Zo vindt een leverancier die elke week levert bij elke levering zijn eigen bon.
+  Gevonden = "Bon gevonden" met het bedrag van de bon ernaast; liggen er twee even ver weg en heeft geen van
+  beide het bedrag = "Meerdere bonnen"; geen = "Bon ontbreekt". Er wordt niets opgeslagen.
+- Om de bonnen eerlijk te verdelen worden ook de leveringen van acht dagen vóór en na de periode geladen; in de
+  lijst staan alleen de leveringen van de periode zelf.
+- Voorraadwaarde: een product waarvan de voorraad onder nul staat telt niet mee (wat er niet ligt is niets
+  waard); het scherm zegt hoeveel dat er zijn en dat de voorraad geteld moet worden.
 
 ### R5. Hardlopers en trage lopers
 
@@ -177,7 +185,11 @@ verkocht per product alleen uit regels met precies één product (regel uit `src
 - De rest, aflopend op omzet: zolang het opgetelde aandeel vóór het product onder 80% ligt = hardloper;
   onder 95% = middenmoot; daarna = trage loper.
 - Genoeg voor = voorraad ÷ (verkocht ÷ verkoopdagen), alleen bij producten per stuk. Krap = minder dan 3 dagen.
-- Vervolgstap: hardloper of middenmoot en krap → Bijbestellen; trage loper → Afprijzen; ligt stil → Uit assortiment.
+- Staat de voorraad onder nul (meer verkocht dan ingeboekt), dan is er geen "genoeg voor" en is het product niet
+  krap; de vervolgstap is dan Voorraad tellen.
+- Vervolgstap: voorraad onder nul → Voorraad tellen; hardloper of middenmoot en krap → Bijbestellen; trage loper
+  → Afprijzen, behalve als hij krap is (dan valt er niets af te prijzen en staat er geen stap); ligt stil → Uit
+  assortiment.
 
 ### R6. Melding "Dag geboekt"
 
@@ -207,7 +219,17 @@ dan wordt een kasregel niet toegevoegd en niet weggehaald.
 
 Een kasverschil zegt of er te weinig of te veel in de la zat (de kassa rekent geteld min verwacht). Een
 pinverschil zegt of myPOS meer of minder toont dan de kassa (de kassa rekent myPOS min kassa). Een verschil
-tussen twee dagen zegt of er geld uit de la ging of bij kwam.
+tussen twee dagen zegt of er geld uit de la ging of bij kwam, en tussen welke twee afsluitingen: ook als de
+vorige afsluiting in een eerdere week of maand ligt.
+
+## Proef met twee nagemaakte winkelweken
+
+`src/lib/winkelboek/simulatie/` speelt tien kassadagen na zoals de kassa ze wegschrijft en houdt zelf bij wat de
+uitkomst moet zijn. De echte laders draaien tegen een database in het geheugen; de test legt de uitkomst ernaast.
+De testpagina toont dezelfde weken met `?bron=sim`. Deze proef bracht vijf dingen aan het licht (bon zoeken bij
+een wekelijkse leverancier, voorraad onder nul, de tekst aan het begin van een periode, "afprijzen" bij een trage
+loper die bijna op is, open prijs als eeuwig aandachtspunt); alle vijf zijn opgelost en staan er als test in.
+Wat de proef niet kan: zien of een kolom in de echte database bestaat.
 
 ## Randvoorwaarden
 

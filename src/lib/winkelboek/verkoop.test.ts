@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { exclUitIncl, filterArtikelen, inkoopVanRegel, periodeMarge, verkoopPerArtikel, type ArtikelCijfers, type VerkoopRegel } from './verkoop';
+import { exclUitIncl, filterArtikelen, inkoopVanRegel, isOpenPrijs, periodeMarge, verkoopPerArtikel, type ArtikelCijfers, type VerkoopRegel } from './verkoop';
 
 const regel = (r: Partial<VerkoopRegel>): VerkoopRegel => ({
     regel_id: 1, bedrijfsdag: '2026-11-28', op: '2026-11-28T12:00:00Z', artikel_id: 'a-worst', naam: 'Droge worst naturel',
@@ -97,7 +97,17 @@ describe('periodeMarge', () => {
             { sleutel: 'a', naam: 'A', afdeling: 'x', aantal: 1, omzet_excl_cents: 9000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, geschat: false },
             { sleutel: 'b', naam: 'B', afdeling: 'x', aantal: 1, omzet_excl_cents: 1000, inkoop_cents: null, marge_cents: null, marge_pct: null, geschat: false },
         ]);
-        expect(m).toEqual({ omzet_cents: 10000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, dekking_pct: 90, zonder_inkoopprijs: 1, geschat: 0 });
+        expect(m).toEqual({ omzet_cents: 10000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, dekking_pct: 90, zonder_inkoopprijs: 1, open_prijs: 0, geschat: 0 });
+    });
+    it('verkoop met een open prijs telt niet als "artikel zonder inkoopprijs": daar valt niets in te vullen', () => {
+        const m = periodeMarge([
+            { sleutel: 'a', naam: 'A', afdeling: 'x', aantal: 1, omzet_excl_cents: 9000, inkoop_cents: 5220, marge_cents: 3780, marge_pct: 42, geschat: false },
+            { sleutel: 'b', naam: 'B', afdeling: 'x', aantal: 1, omzet_excl_cents: 600, inkoop_cents: null, marge_cents: null, marge_pct: null, geschat: false },
+            { sleutel: 'open:diversen', naam: 'Open prijs · diversen', afdeling: 'Open prijs', aantal: 2, omzet_excl_cents: 400, inkoop_cents: null, marge_cents: null, marge_pct: null, geschat: false },
+        ]);
+        expect(m).toMatchObject({ zonder_inkoopprijs: 1, open_prijs: 1, dekking_pct: 90 });
+        expect(isOpenPrijs({ sleutel: 'open:diversen' })).toBe(true);
+        expect(isOpenPrijs({ sleutel: 'a-worst' })).toBe(false);
     });
     it('zonder omzet: geen percentage', () => {
         expect(periodeMarge([])).toMatchObject({ omzet_cents: 0, marge_pct: null, dekking_pct: null });

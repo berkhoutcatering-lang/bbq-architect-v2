@@ -71,6 +71,8 @@ export interface KasBegin {
     /** De eerste dag van de periode. */
     datum: string;
     saldo_cents: number;
+    /** De bedrijfsdag van de afsluiting waar dit saldo uit komt, als die bekend is. */
+    sinds?: string | null;
 }
 
 export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], uitgesloten: ReadonlySet<string> = new Set(), begin?: KasBegin | null): Kasboek {
@@ -124,9 +126,11 @@ export function maakKasboek(dagstaten: DagstaatKort[], mutaties: KasMutatie[], u
             regel(dag, 'tussen_dagen', 'Tussen de dagen', verschil);
             /* Onder nul: er lag bij het openen minder in de la dan er bij het sluiten in zat. */
             const wat = verschil < 0 ? `ging er ${euro(verschil)} uit de la` : `kwam er ${euro(verschil)} bij in de la`;
-            punten.push(i === 0
-                ? `Vóór ${korteDag(dag)} ${wat} zonder regel.`
-                : `Tussen ${korteDag(staten[i - 1].bedrijfsdag)} en ${korteDag(dag)} ${wat} zonder regel.`);
+            /* De vorige afsluiting: die van gisteren in deze periode, of die waar de beginstand uit komt. */
+            const vorige = i > 0 ? staten[i - 1].bedrijfsdag : begin?.sinds ?? null;
+            punten.push(vorige
+                ? `Tussen ${korteDag(vorige)} en ${korteDag(dag)} ${wat} zonder regel.`
+                : `Vóór ${korteDag(dag)} ${wat} zonder regel.`);
         }
 
         regel(dag, 'verkoop', 'Contante verkoop', s.contant_verwacht_cents - s.contant_begin_cents);

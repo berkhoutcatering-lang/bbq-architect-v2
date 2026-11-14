@@ -164,6 +164,7 @@ export async function laadKasBegin(sb: SupabaseClient, orgId: string, start: str
     return {
         begin: {
             datum: start,
+            sinds: vorigeDag,
             saldo_cents: Number(vorige.contant_geteld_cents) - Number(vorige.afgeroomd_cents) + tussen.mutaties.reduce((s, m) => s + m.bedrag_cents, 0),
         },
         fout: null,
@@ -343,16 +344,21 @@ export async function laadInkoopBonnen(sb: SupabaseClient, orgId: string, start:
     };
 }
 
-/** Wat er nu ligt tegen inkoopprijs. `zonder` telt actieve producten zonder telling of zonder inkoopprijs. */
-export async function laadVoorraadwaarde(sb: SupabaseClient, orgId: string): Promise<{ cents: number; producten: number; zonder: number; fout: string | null }> {
+/**
+ * Wat er nu ligt tegen inkoopprijs. `zonder` telt actieve producten zonder
+ * telling of zonder inkoopprijs. `onder_nul` telt producten waarvan de voorraad
+ * onder nul staat: wat er niet ligt is niets waard, dus die tellen niet mee.
+ */
+export async function laadVoorraadwaarde(sb: SupabaseClient, orgId: string): Promise<{ cents: number; producten: number; zonder: number; onder_nul: number; fout: string | null }> {
     type Rij = { voorraad: number | string | null; inkoop_excl_cents: number | null; prijs_per: number | string | null };
     const res = await alles<Rij>((van, tot) =>
         sb.from('winkel_producten').select('voorraad, inkoop_excl_cents, prijs_per').eq('organization_id', orgId).eq('actief', true)
             .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Rij>);
-    const uit = { cents: 0, producten: 0, zonder: 0, fout: foutTekst('Voorraad', res.error) };
+    const uit = { cents: 0, producten: 0, zonder: 0, onder_nul: 0, fout: foutTekst('Voorraad', res.error) };
     if (res.error) return uit;
     for (const p of res.data) {
         if (p.voorraad === null || p.voorraad === undefined || p.inkoop_excl_cents === null || p.inkoop_excl_cents === undefined) { uit.zonder += 1; continue; }
+        if (Number(p.voorraad) < 0) { uit.onder_nul += 1; continue; }
         uit.producten += 1;
         uit.cents += Math.round((Number(p.voorraad) * Number(p.inkoop_excl_cents)) / (Number(p.prijs_per ?? 1) || 1));
     }

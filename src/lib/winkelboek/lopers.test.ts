@@ -39,6 +39,16 @@ describe('deelLopersIn', () => {
     it('een trage loper krijgt "afprijzen"', () => {
         expect(deelLopersIn(tien, lang).lijst.find((x) => x.product_id === 'p9')).toMatchObject({ groep: 'traag', actie: 'afprijzen' });
     });
+    it('een trage loper die bijna op is krijgt geen advies: er valt niets af te prijzen', () => {
+        const l = deelLopersIn([...tien.slice(0, 9), p('p9', 100, { voorraad: 1, verkocht: 24 })], lang);
+        expect(l.lijst.find((x) => x.product_id === 'p9')).toMatchObject({ groep: 'traag', krap: true, actie: null });
+    });
+    it('voorraad onder nul: geen dagen en geen "bijna op", wel het advies om te tellen', () => {
+        const l = deelLopersIn([p('hard', 90000, { voorraad: -16 }), p('traag', 100, { voorraad: -2 })], lang);
+        expect(l.lijst.find((x) => x.product_id === 'hard')).toMatchObject({ onder_nul: true, dagen_voorraad: null, krap: false, actie: 'tellen' });
+        expect(l.lijst.find((x) => x.product_id === 'traag')).toMatchObject({ onder_nul: true, dagen_voorraad: null, actie: 'tellen' });
+        expect(deelLopersIn(tien, lang).lijst.every((x) => x.onder_nul === false)).toBe(true);
+    });
     it('één stilliggend product zonder waarde maakt het totaal onbekend', () => {
         expect(deelLopersIn([p('a', 0, { voorraad: 3, voorraad_waarde_cents: null }), p('b', 0, { voorraad: 2 })], lang).stil_waarde_cents).toBeNull();
     });

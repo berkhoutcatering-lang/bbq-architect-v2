@@ -42,3 +42,38 @@ describe('maakLeveringen', () => {
         expect(l).toMatchObject({ producten: 1, wat: 'Worst', bedrag_cents: 3000, btw_geschat_cents: 270 });
     });
 });
+
+describe('welke bon bij welke levering hoort', () => {
+    const bonVan = (uit: ReturnType<typeof maakLeveringen>) => Object.fromEntries(uit.map((l) => [l.datum, l.bon.soort === 'gevonden' ? l.bon.id : l.bon.soort]));
+
+    it('een leverancier die elke week levert: elke levering vindt zijn eigen bon', () => {
+        const uit = maakLeveringen(
+            [o({ datum: '2026-11-24' }), o({ datum: '2026-11-27' }), o({ datum: '2026-12-01' })],
+            [bon({ id: 1, datum: '2026-11-24' }), bon({ id: 2, datum: '2026-11-27' }), bon({ id: 3, datum: '2026-12-01' })]);
+        expect(bonVan(uit)).toEqual({ '2026-11-24': 1, '2026-11-27': 2, '2026-12-01': 3 });
+    });
+    it('de bon komt een paar dagen later: de dichtstbijzijnde bon die nog vrij is', () => {
+        const uit = maakLeveringen([o({ datum: '2026-11-25' }), o({ datum: '2026-12-02' })], [bon({ id: 1, datum: '2026-11-27' }), bon({ id: 2, datum: '2026-12-02' })]);
+        expect(bonVan(uit)).toEqual({ '2026-11-25': 1, '2026-12-02': 2 });
+    });
+    it('een bon hoort bij één levering: de andere levering blijft zonder', () => {
+        const uit = maakLeveringen([o({ datum: '2026-11-24' }), o({ datum: '2026-11-26' })], [bon({ id: 1, datum: '2026-11-26' })]);
+        expect(bonVan(uit)).toEqual({ '2026-11-24': 'ontbreekt', '2026-11-26': 1 });
+    });
+    it('hetzelfde bedrag wint van de dichtstbijzijnde datum', () => {
+        const uit = maakLeveringen([o({ datum: '2026-11-24', waarde_cents: 20000 })], [bon({ id: 1, datum: '2026-11-24', netto_cents: 9999 }), bon({ id: 2, datum: '2026-11-26', netto_cents: 20000 })]);
+        expect(bonVan(uit)).toEqual({ '2026-11-24': 2 });
+    });
+    it('twee bonnen even ver weg, geen met hetzelfde bedrag: dan staat er dat er meer zijn', () => {
+        const uit = maakLeveringen([o({ datum: '2026-11-25' })], [bon({ id: 1, datum: '2026-11-24' }), bon({ id: 2, datum: '2026-11-26' })]);
+        expect(uit[0].bon).toEqual({ soort: 'meerdere', aantal: 2 });
+    });
+    it('met een periode: een levering erbuiten houdt zijn eigen bon, maar staat niet in de lijst', () => {
+        const ontvangsten = [o({ datum: '2026-11-27' }), o({ datum: '2026-12-01' })];
+        const bonnen = [bon({ id: 3, datum: '2026-12-01' })];
+        const week48 = maakLeveringen(ontvangsten, bonnen, { start: '2026-11-23', eind: '2026-11-29' });
+        expect(week48.map((l) => [l.datum, l.bon.soort])).toEqual([['2026-11-27', 'ontbreekt']]);
+        /* Zonder de buurman zou de bon van 1 december ten onrechte bij 27 november komen. */
+        expect(maakLeveringen([ontvangsten[0]], bonnen)[0].bon.soort).toBe('gevonden');
+    });
+});

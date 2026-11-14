@@ -12,6 +12,11 @@
  *  - Genoeg voor = voorraad ÷ (verkocht ÷ verkoopdagen), alleen per stuk: bij
  *    een product op gewicht is "verkocht" het aantal bakjes en de voorraad in
  *    gram, en die twee zijn niet te vergelijken.
+ *  - Staat de voorraad onder nul (er is meer verkocht dan er is ingeboekt), dan
+ *    is niet te zeggen hoe lang het nog reikt: geen dagen, wel het advies om
+ *    te tellen.
+ *  - Een trage loper die bijna op is krijgt geen advies: er valt niets af te
+ *    prijzen.
  *  - Voorlopig zolang de winkel nog geen 28 dagen verkoopt, geteld vanaf de
  *    eerste verkoopdag (dus ook met sluitingsdagen na vier weken definitief).
  */
@@ -39,12 +44,14 @@ export interface LoperInvoer {
 }
 
 export type LoperGroep = 'hard' | 'midden' | 'traag' | 'stil';
-export type LoperActie = 'bijbestellen' | 'afprijzen' | 'uit_assortiment';
+export type LoperActie = 'bijbestellen' | 'afprijzen' | 'uit_assortiment' | 'tellen';
 
 export interface Loper extends LoperInvoer {
     groep: LoperGroep;
     dagen_voorraad: number | null;
     krap: boolean;
+    /** Er is meer verkocht dan er is ingeboekt: de voorraad in het systeem klopt niet. */
+    onder_nul: boolean;
     actie: LoperActie | null;
 }
 
@@ -85,12 +92,15 @@ export function deelLopersIn(producten: readonly LoperInvoer[], dagen: LoperDage
         ervoor += Math.max(p.omzet_cents, 0);
 
         const perDag = dagen.verkoopdagen > 0 ? p.verkocht / dagen.verkoopdagen : 0;
-        const dagen_voorraad = p.eenheid === 'stuk' && p.voorraad !== null && perDag > 0 ? Math.floor(p.voorraad / perDag) : null;
+        const onder_nul = p.voorraad !== null && p.voorraad < 0;
+        const dagen_voorraad = !onder_nul && p.eenheid === 'stuk' && p.voorraad !== null && perDag > 0 ? Math.floor(p.voorraad / perDag) : null;
         const krap = dagen_voorraad !== null && dagen_voorraad < KRAP_DAGEN;
-        const actie: LoperActie | null = groep === 'traag' ? 'afprijzen' : krap ? 'bijbestellen' : null;
-        lijst.push({ ...p, groep, dagen_voorraad, krap, actie });
+        const actie: LoperActie | null = onder_nul ? 'tellen'
+            : groep === 'traag' ? (krap ? null : 'afprijzen')
+            : krap ? 'bijbestellen' : null;
+        lijst.push({ ...p, groep, dagen_voorraad, krap, onder_nul, actie });
     }
-    for (const p of stil) lijst.push({ ...p, groep: 'stil', dagen_voorraad: null, krap: false, actie: 'uit_assortiment' });
+    for (const p of stil) lijst.push({ ...p, groep: 'stil', dagen_voorraad: null, krap: false, onder_nul: false, actie: 'uit_assortiment' });
 
     lijst.sort((a, b) => VOLGORDE[a.groep] - VOLGORDE[b.groep]);
 
@@ -110,18 +120,18 @@ export function deelLopersIn(producten: readonly LoperInvoer[], dagen: LoperDage
 export type LoperKeuze = 'hard' | 'traag' | 'stil';
 
 /**
- * Wat er onder een keuze op het scherm staat. Een krap artikel uit de
- * middenmoot staat bij de hardlopers: het moet bijbesteld (ontwerp R5), en de
- * middenmoot heeft geen eigen lijst.
+ * Wat er onder een keuze op het scherm staat. Een artikel uit de middenmoot
+ * waar iets mee moet (bijna op, of de voorraad staat onder nul) staat bij de
+ * hardlopers: de middenmoot heeft geen eigen lijst (ontwerp R5).
  */
 export function lopersVoorKeuze(lopers: Lopers, keuze: LoperKeuze): Loper[] {
     if (keuze !== 'hard') return lopers.lijst.filter((l) => l.groep === keuze);
-    return lopers.lijst.filter((l) => l.groep === 'hard' || (l.groep === 'midden' && l.krap));
+    return lopers.lijst.filter((l) => l.groep === 'hard' || (l.groep === 'midden' && l.actie !== null));
 }
 
 /** Het aantal middenmoters dat gewoon doorloopt en dus nergens in een lijst staat. */
 export function middenLooptDoor(lopers: Lopers): number {
-    return lopers.lijst.filter((l) => l.groep === 'midden' && !l.krap).length;
+    return lopers.lijst.filter((l) => l.groep === 'midden' && l.actie === null).length;
 }
 
 /** Telt per product verkocht, omzet (incl. btw) en marge uit regels met precies één product. */

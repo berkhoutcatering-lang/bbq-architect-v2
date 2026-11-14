@@ -1,6 +1,6 @@
 import { laadToonbank } from '@/lib/btwAangifteBronnen';
 import { datumNL } from '@/lib/winkel/afdelingen';
-import { maakLeveringen } from '@/lib/winkelboek/inkoop';
+import { bonVenster, maakLeveringen } from '@/lib/winkelboek/inkoop';
 import { laadInkoopBonnen, laadOntvangsten, laadVoorraadwaarde } from '@/lib/winkelboek/laden';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import InkoopScherm from '../_components/InkoopScherm';
@@ -21,9 +21,11 @@ export default async function InkoopPagina({ searchParams }: { searchParams: Pro
     const periode = periodeVan(p, datumNL(new Date()));
     const { start, eind } = periode;
 
+    /* Ruimer laden dan de periode: de leveringen van net ervoor en erna houden zo hun eigen bon. */
+    const venster = bonVenster(periode);
     const [ontvangsten, bonnen, voorraadwaarde, toonbank] = await Promise.all([
-        laadOntvangsten(supabase, orgId, start, eind),
-        laadInkoopBonnen(supabase, orgId, start, eind),
+        laadOntvangsten(supabase, orgId, venster.start, venster.eind),
+        laadInkoopBonnen(supabase, orgId, venster.start, venster.eind),
         laadVoorraadwaarde(supabase, orgId),
         laadToonbank(supabase, orgId, start, eind),
     ]);
@@ -31,7 +33,7 @@ export default async function InkoopPagina({ searchParams }: { searchParams: Pro
     return (
         <InkoopScherm
             periode={periode}
-            leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen)}
+            leveringen={maakLeveringen(ontvangsten.ontvangsten, bonnen.bonnen, periode)}
             voorraadwaarde={voorraadwaarde}
             /* laadToonbank geeft euro's als kommagetal. */
             omzetCents={toonbank.fout ? null : Math.round(toonbank.regels.reduce((s, r) => s + r.omzet, 0) * 100)}

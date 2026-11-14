@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Search } from 'lucide-react';
 import { formatNumber, formatPercent } from '@/lib/format';
 import type { Periode } from '@/lib/winkelboek/periode';
-import { filterArtikelen, periodeMarge, type ArtikelCijfers } from '@/lib/winkelboek/verkoop';
+import { filterArtikelen, isOpenPrijs, periodeMarge, type ArtikelCijfers } from '@/lib/winkelboek/verkoop';
 import PeriodeKiezer from './PeriodeKiezer';
 import { aantal, euro } from '../_lib/tekst';
 
@@ -105,7 +105,9 @@ export default function VerkoopScherm({ periode, artikelen, zoek, afdeling, fout
                                             </span>
                                             <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                                                 {a.marge_cents === null ? (
-                                                    <span style={{ fontSize: 12, color: 'var(--status-warning-text)' }}>Nog geen inkoopprijs</span>
+                                                    isOpenPrijs(a)
+                                                        ? <span style={{ fontSize: 12, color: 'var(--muted)' }}>Open prijs, geen inkoopprijs</span>
+                                                        : <span style={{ fontSize: 12, color: 'var(--status-warning-text)' }}>Nog geen inkoopprijs</span>
                                                 ) : a.marge_pct === null ? (
                                                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>Geen omzet</span>
                                                 ) : (
@@ -127,6 +129,7 @@ export default function VerkoopScherm({ periode, artikelen, zoek, afdeling, fout
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--muted)', padding: '12px 4px 0' }}>
                         <span>{aantal(artikelen.length, 'artikel', 'artikelen')} verkocht · {euro(marge.omzet_cents)} omzet excl. btw</span>
                         {marge.zonder_inkoopprijs > 0 && <span>{aantal(marge.zonder_inkoopprijs, 'artikel', 'artikelen')} zonder inkoopprijs: vul die in bij Assortiment, dan telt de marge mee.</span>}
+                        {marge.open_prijs > 0 && <span>Verkoop met een open prijs heeft geen inkoopprijs en telt niet mee in de marge.</span>}
                         {marge.geschat > 0 && <span>{aantal(marge.geschat, 'artikel', 'artikelen')} gerekend met de inkoopprijs van nu, omdat de voorraad nog niet geteld was.</span>}
                         <span>Het totaal kan enkele centen afwijken van de btw-aangifte door afronding per bon.</span>
                     </div>
