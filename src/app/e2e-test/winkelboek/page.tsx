@@ -5,7 +5,8 @@
  * kleuren ook uitzien zoals bedoeld, en of een lange artikelnaam binnen de
  * kolom blijft. De rekenregels zelf zijn in src/lib/winkelboek getest.
  *
- * Geen auth, geen fetch, geen database: alleen de vaste week uit ./voorbeeld.
+ * Geen auth, geen fetch, geen database: de vaste week uit ./voorbeeld, of met
+ * ?bron=sim twee nagemaakte winkelweken door de echte laders (./simulatie).
  *
  * Gated achter NEXT_PUBLIC_E2E=1: zonder die env een 404, dus nooit in
  * productie blootgesteld. Zelfde patroon als /e2e-test/keukenscherm.
@@ -25,6 +26,7 @@ import { maakKasboek } from '@/lib/winkelboek/kasboek';
 import { deelLopersIn } from '@/lib/winkelboek/lopers';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import { verkoopPerArtikel } from '@/lib/winkelboek/verkoop';
+import { simulatieScherm } from './simulatie';
 import { AFDELINGEN, BONNEN, DAGSTATEN, DERVING, INKOOP_BONNEN, KASSA_DAGEN, KASSA_REGELS, KAS_MUTATIES, LOPER_INVOER, ONTVANGSTEN, VERKOOP_REGELS, VOORRAADWAARDE } from './voorbeeld';
 
 export const dynamic = 'force-dynamic';
@@ -46,9 +48,14 @@ function dag(datum: string, fout: string | null = null) {
 }
 
 /** Welk scherm: ?scherm=overzicht|overzicht-derving|leeg|dag|dag-punten|dag-verklaard|dag-fout|dag-open|kasboek|kasboek-leeg|kasboek-fout|kasboek-begin|verkoop|inkoop|inkoop-bonfout|lopers|lopers-fout */
-export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string; q?: string; afdeling?: string; groep?: string }> }) {
+export default async function WinkelboekTestPagina({ searchParams }: { searchParams: Promise<{ scherm?: string; p?: string; q?: string; afdeling?: string; groep?: string; bron?: string; dag?: string }> }) {
     if (process.env.NEXT_PUBLIC_E2E !== '1') notFound();
-    const { scherm = 'overzicht', p, q, afdeling, groep } = await searchParams;
+    const { scherm = 'overzicht', p, q, afdeling, groep, bron, dag: simDag } = await searchParams;
+
+    /* ?bron=sim: twee nagemaakte winkelweken door de echte laders (zie ./simulatie). */
+    if (bron === 'sim') {
+        return <div className="wk-pagina mobile-safe-bottom">{await simulatieScherm({ scherm, p, q, afdeling, groep, dag: simDag })}</div>;
+    }
     const periode = periodeVan(p ?? '2026-W48', '2026-11-28');
 
     let inhoud: React.ReactNode;
