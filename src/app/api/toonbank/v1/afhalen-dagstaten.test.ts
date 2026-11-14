@@ -14,9 +14,12 @@ import { maakToonbankGeheugenStore, type ToonbankGeheugenStore } from '@/lib/too
 import { genereerSessieToken, genereerSleutel } from '@/lib/toonbank/sleutel';
 import type { OphaalVraag } from '@/lib/toonbank/store';
 
-const houder = vi.hoisted(() => ({ store: null as unknown, na: [] as { orgId: string; productIds: string[] }[] }));
+const houder = vi.hoisted(() => ({ store: null as unknown, na: [] as { orgId: string; productIds: string[] }[], dag: [] as { orgId: string; dagstaatId: string }[] }));
 vi.mock('@/lib/toonbank/supabaseStore', () => ({ maakToonbankSupabaseStore: () => houder.store }));
-vi.mock('@/lib/toonbank/naAfloop', () => ({ naToonbankBoekingen: (orgId: string, productIds: string[]) => { houder.na.push({ orgId, productIds }); } }));
+vi.mock('@/lib/toonbank/naAfloop', () => ({
+    naToonbankBoekingen: (orgId: string, productIds: string[]) => { houder.na.push({ orgId, productIds }); },
+    naDagstaat: (orgId: string, dagstaatId: string) => { houder.dag.push({ orgId, dagstaatId }); },
+}));
 
 import { POST as orderPOST } from './orders/[order_id]/ophalen/route';
 import { POST as doosPOST } from './dozen/[code]/ophalen/route';
@@ -51,6 +54,7 @@ function ophaalResultaat(v: OphaalVraag): Record<string, unknown> {
 
 beforeEach(() => {
     houder.na = [];
+    houder.dag = [];
     store = maakToonbankGeheugenStore({
         apparaten: [{
             id: T1, organization_id: ORG, naam: 'Toonbank winkel', code: 'T1', locatie: 'winkel', ingetrokken_at: null,
@@ -166,6 +170,8 @@ describe('POST dagstaten', () => {
         expect(DagstatenAntwoord.parse(await res.json())).toEqual({ dagstaat_id: body.dagstaat_id, journaal: 'nieuw', status: 'definitief', verschillen: [] });
         expect(store.g.meldingen[0]).toMatchObject({ soort: 'dagstaat', verwerk_status: 'verwerkt', payload: body });
         expect(store.g.apparaten[0]!.bevestigd_tot_volgnummer).toBe(1215);
+        /* Na een verwerkte dagstaat: de melding "Dag geboekt" van Boekhouding winkel. */
+        expect(houder.dag).toEqual([{ orgId: ORG, dagstaatId: body.dagstaat_id }]);
 
         store.g.dagstaten[String(body.dagstaat_id)] = { status: 'aangevuld', verschillen: [{ veld: 'aantal_bonnen', tablet_cents: 4, ba_cents: 5 }] };
         const b = DagstatenAntwoord.parse(await (await dagstatenPOST(verzoek('dagstaten', { body }), geen)).json());
