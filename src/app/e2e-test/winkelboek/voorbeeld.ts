@@ -131,11 +131,11 @@ const loper = (product_id: string, naam: string, afdeling: string, verkocht: num
 });
 
 export const LOPER_INVOER: LoperInvoer[] = [
-    loper('p-worst', 'Droge worst naturel', 'Worst', 74, 44400, 17794, 30),
+    loper('p-worst', 'Droge worst naturel', 'Worst', 74, 44400, 17794, 30, { op_bestellijst: true, minimum: 40, levertijd_dagen: 2 }),
     loper('p-kaas', 'Boerenkaas belegen', 'Kaas', 31, 43175, 14810, 7100, { eenheid: 'gram' }),
-    loper('p-blond', 'Naober Blond 33 cl', 'Bier', 132, 39600, 13587, 96),
-    loper('p-amandel', 'Gerookte amandelen 150 g', 'Noten', 58, 28900, 13174, 40, { marge_geschat: true }),
-    loper('p-fuet', 'Fuet met truffel', 'Worst', 31, 21680, 8110, 22),
+    loper('p-blond', 'Naober Blond 33 cl', 'Bier', 132, 39600, 13587, 96, { op_bestellijst: false, minimum: 48, levertijd_dagen: 3, onderweg: 240 }),
+    loper('p-amandel', 'Gerookte amandelen 150 g', 'Noten', 58, 28900, 13174, 40, { marge_geschat: true, op_bestellijst: false, minimum: 10, levertijd_dagen: 3 }),
+    loper('p-fuet', 'Fuet met truffel', 'Worst', 31, 21680, 8110, 22, { op_bestellijst: false, minimum: 20, levertijd_dagen: null }),
     loper('p-saus', 'Mosterd-dillesaus', 'Broodbeleg', 29, 13050, null, null),
     loper('p-cracker', 'Crackers zeezout', 'Broodbeleg', 44, 11000, 4812, 60),
     loper('p-tripel', 'Tripel 75 cl', 'Bier', 12, 10800, 3526, 48),

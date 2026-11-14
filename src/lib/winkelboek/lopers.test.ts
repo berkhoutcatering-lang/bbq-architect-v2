@@ -30,7 +30,7 @@ describe('deelLopersIn', () => {
     });
     it('rekent hoeveel dagen de voorraad nog reikt en wat krap is', () => {
         const l = deelLopersIn([p('worst', 40000, { verkocht: 74, voorraad: 30 }), p('kaas', 39000, { verkocht: 60, voorraad: 300 })], kort);
-        expect(l.lijst[0]).toMatchObject({ product_id: 'worst', dagen_voorraad: 2, krap: true, actie: 'bijbestellen' });
+        expect(l.lijst[0]).toMatchObject({ product_id: 'worst', dagen_voorraad: 2, krap: true });
         expect(l.lijst[1]).toMatchObject({ product_id: 'kaas', dagen_voorraad: 25, krap: false, actie: null });
     });
     it('een product op gewicht krijgt geen dagen: stuks en grammen zijn niet te vergelijken', () => {
@@ -57,9 +57,68 @@ describe('deelLopersIn', () => {
     });
 });
 
+describe('bijbestellen volgt de Bestellijst', () => {
+    const snel = { verkocht: 74, voorraad: 30 };
+    it('"Bijbestellen" alleen als het product op de Bestellijst staat, niet omdat het bijna op is', () => {
+        const l = deelLopersIn([p('wel', 40000, { ...snel, op_bestellijst: true }), p('niet', 39000, { ...snel, op_bestellijst: false })], kort);
+        expect(l.lijst.find((x) => x.product_id === 'wel')).toMatchObject({ krap: true, actie: 'bijbestellen' });
+        expect(l.lijst.find((x) => x.product_id === 'niet')).toMatchObject({ krap: true, actie: null });
+    });
+    it('al besteld en nog onderweg: niet op de Bestellijst, dus geen "Bijbestellen", en het aantal onderweg staat erbij', () => {
+        const [x] = deelLopersIn([p('blond', 40000, { ...snel, op_bestellijst: false, onderweg: 480 })], kort).lijst;
+        expect(x).toMatchObject({ actie: null, onderweg: 480 });
+    });
+    it('op de Bestellijst met ruim voorraad (hoog minimum): toch "Bijbestellen"', () => {
+        const [x] = deelLopersIn([p('ruim', 40000, { verkocht: 10, voorraad: 500, op_bestellijst: true })], kort).lijst;
+        expect(x).toMatchObject({ krap: false, actie: 'bijbestellen' });
+    });
+    it('een trage loper op de Bestellijst krijgt geen "Bijbestellen"', () => {
+        const l = deelLopersIn([...tien.slice(0, 9), p('p9', 100, { op_bestellijst: true })], lang);
+        expect(l.lijst.find((x) => x.product_id === 'p9')).toMatchObject({ groep: 'traag', actie: 'afprijzen' });
+    });
+});
+
+describe('het minimum naast de verkoopsnelheid', () => {
+    /* 60 verkocht in 5 verkoopdagen = 12 per dag. */
+    const basis = { verkocht: 60, voorraad: 200, op_bestellijst: false };
+    it('minimum lager dan wat er tijdens de levertijd verkocht wordt: voorstel = verkoop per dag × levertijd, naar boven afgerond', () => {
+        const [x] = deelLopersIn([p('a', 40000, { ...basis, minimum: 20, levertijd_dagen: 3 })], kort).lijst;
+        expect(x).toMatchObject({ minimum_voorstel: 36, levertijd_ontbreekt: false, actie: 'minimum' });
+        expect(deelLopersIn([p('a', 40000, { ...basis, verkocht: 61, minimum: 20, levertijd_dagen: 3 })], kort).lijst[0].minimum_voorstel).toBe(37);
+    });
+    it('minimum hoog genoeg: geen voorstel en geen stap', () => {
+        const [x] = deelLopersIn([p('a', 40000, { ...basis, minimum: 36, levertijd_dagen: 3 })], kort).lijst;
+        expect(x).toMatchObject({ minimum_voorstel: null, actie: null });
+    });
+    it('geen minimum ingesteld telt als te laag', () => {
+        const [x] = deelLopersIn([p('a', 40000, { ...basis, minimum: null, levertijd_dagen: 2 })], kort).lijst;
+        expect(x).toMatchObject({ minimum_voorstel: 24, actie: 'minimum' });
+    });
+    it('levertijd niet ingevuld: dat staat er, en er komt geen voorstel', () => {
+        const [x] = deelLopersIn([p('a', 40000, { ...basis, minimum: 5, levertijd_dagen: null })], kort).lijst;
+        expect(x).toMatchObject({ minimum_voorstel: null, levertijd_ontbreekt: true, actie: null });
+    });
+    it('staat het al op de Bestellijst, dan is "Bijbestellen" de stap; het voorstel voor het minimum blijft erbij staan', () => {
+        const [x] = deelLopersIn([p('a', 40000, { ...basis, op_bestellijst: true, minimum: 20, levertijd_dagen: 3 })], kort).lijst;
+        expect(x).toMatchObject({ actie: 'bijbestellen', minimum_voorstel: 36 });
+    });
+    it('niet voor trage lopers, niet voor producten op gewicht, niet onder nul', () => {
+        const traag = deelLopersIn([...tien.slice(0, 9), p('p9', 100, { minimum: 0, levertijd_dagen: 5, op_bestellijst: false })], lang).lijst.find((x) => x.product_id === 'p9');
+        expect(traag).toMatchObject({ minimum_voorstel: null, levertijd_ontbreekt: false });
+        const [gram] = deelLopersIn([p('kaas', 40000, { ...basis, eenheid: 'gram', minimum: 0, levertijd_dagen: 3 })], kort).lijst;
+        expect(gram).toMatchObject({ minimum_voorstel: null, levertijd_ontbreekt: false, actie: null });
+        const [nul] = deelLopersIn([p('a', 40000, { ...basis, voorraad: -4, minimum: 0, levertijd_dagen: 3 })], kort).lijst;
+        expect(nul).toMatchObject({ minimum_voorstel: null, actie: 'tellen' });
+    });
+    it('zonder gegevens van de Bestellijst (niet geladen): geen stap en geen melding over de levertijd', () => {
+        const [x] = deelLopersIn([p('a', 40000, { verkocht: 74, voorraad: 30 })], kort).lijst;
+        expect(x).toMatchObject({ actie: null, minimum_voorstel: null, levertijd_ontbreekt: false });
+    });
+});
+
 describe('lopersVoorKeuze', () => {
-    it('een krap artikel uit de middenmoot staat bij de hardlopers, want het moet bijbesteld', () => {
-        const l = deelLopersIn([...tien.slice(0, 3), p('p3', 5000, { verkocht: 60, voorraad: 5 }), ...tien.slice(4)], kort);
+    it('een artikel uit de middenmoot dat op de Bestellijst staat, staat bij de hardlopers', () => {
+        const l = deelLopersIn([...tien.slice(0, 3), p('p3', 5000, { verkocht: 60, voorraad: 5, op_bestellijst: true }), ...tien.slice(4)], kort);
         const hard = lopersVoorKeuze(l, 'hard');
         expect(hard.map((x) => x.product_id)).toEqual(['p0', 'p1', 'p2', 'p3']);
         expect(hard[3]).toMatchObject({ groep: 'midden', krap: true, actie: 'bijbestellen' });

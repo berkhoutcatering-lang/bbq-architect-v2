@@ -9,6 +9,14 @@
  *  - De rest, aflopend op omzet: zolang het opgetelde aandeel vóór het product
  *    onder 80% ligt is het een hardloper, onder 95% middenmoot, daarna traag.
  *    Het product dat de 80% overschrijdt is zelf dus nog hardloper.
+ *  - Bijbestellen volgt de Bestellijst: de stap staat er alleen als het product
+ *    daar nu op staat (onder zijn minimum en niet al onderweg, of er zelf op
+ *    gezet). "Genoeg voor" is informatie, geen reden om te bestellen.
+ *  - Het minimum naast de verkoopsnelheid: wordt er tijdens de levertijd van
+ *    de leverancier meer verkocht dan het minimum, dan is het minimum te laag
+ *    en staat er een voorstel (verkoop per dag × levertijd, naar boven
+ *    afgerond). Alleen per stuk, alleen voor hardlopers en middenmoot. Is de
+ *    levertijd niet ingevuld, dan staat dat er en komt er geen voorstel.
  *  - Genoeg voor = voorraad ÷ (verkocht ÷ verkoopdagen), alleen per stuk: bij
  *    een product op gewicht is "verkocht" het aantal bakjes en de voorraad in
  *    gram, en die twee zijn niet te vergelijken.
@@ -41,10 +49,18 @@ export interface LoperInvoer {
     marge_cents: number | null;
     /** De marge is (deels) gerekend met de inkoopprijs van nu, omdat de voorraad niet was afgeboekt. */
     marge_geschat?: boolean;
+    /** Staat het product nu op de Bestellijst? Weggelaten = de Bestellijst is niet geladen. */
+    op_bestellijst?: boolean;
+    /** Het minimum dat geldt: het eigen getal, anders het voorstel van vijf stuks; null = geen. */
+    minimum?: number | null;
+    /** Levertijd van de leverancier in dagen; null = niet ingevuld, of geen leverancier. */
+    levertijd_dagen?: number | null;
+    /** Besteld bij de leverancier en nog niet binnen. */
+    onderweg?: number;
 }
 
 export type LoperGroep = 'hard' | 'midden' | 'traag' | 'stil';
-export type LoperActie = 'bijbestellen' | 'afprijzen' | 'uit_assortiment' | 'tellen';
+export type LoperActie = 'bijbestellen' | 'afprijzen' | 'uit_assortiment' | 'tellen' | 'minimum';
 
 export interface Loper extends LoperInvoer {
     groep: LoperGroep;
@@ -52,6 +68,10 @@ export interface Loper extends LoperInvoer {
     krap: boolean;
     /** Er is meer verkocht dan er is ingeboekt: de voorraad in het systeem klopt niet. */
     onder_nul: boolean;
+    /** Het minimum is te laag voor hoe hard dit loopt: zoveel wordt er tijdens de levertijd verkocht. */
+    minimum_voorstel: number | null;
+    /** Er is geen levertijd bekend, dus over het minimum valt niets te zeggen. */
+    levertijd_ontbreekt: boolean;
     actie: LoperActie | null;
 }
 
@@ -95,12 +115,22 @@ export function deelLopersIn(producten: readonly LoperInvoer[], dagen: LoperDage
         const onder_nul = p.voorraad !== null && p.voorraad < 0;
         const dagen_voorraad = !onder_nul && p.eenheid === 'stuk' && p.voorraad !== null && perDag > 0 ? Math.floor(p.voorraad / perDag) : null;
         const krap = dagen_voorraad !== null && dagen_voorraad < KRAP_DAGEN;
+
+        /* Het minimum naast de snelheid. In hele getallen gerekend: verkocht × levertijd ÷ verkoopdagen. */
+        const metMinimum = p.op_bestellijst !== undefined && groep !== 'traag' && p.eenheid === 'stuk' && perDag > 0 && !onder_nul;
+        const levertijd = p.levertijd_dagen ?? null;
+        const levertijd_ontbreekt = metMinimum && levertijd === null;
+        const nodig = metMinimum && levertijd !== null ? Math.ceil((p.verkocht * levertijd) / dagen.verkoopdagen) : null;
+        const minimum_voorstel = nodig !== null && nodig > 0 && (p.minimum == null || p.minimum < nodig) ? nodig : null;
+
         const actie: LoperActie | null = onder_nul ? 'tellen'
             : groep === 'traag' ? (krap ? null : 'afprijzen')
-            : krap ? 'bijbestellen' : null;
-        lijst.push({ ...p, groep, dagen_voorraad, krap, onder_nul, actie });
+            : p.op_bestellijst === true ? 'bijbestellen'
+            : minimum_voorstel !== null ? 'minimum'
+            : null;
+        lijst.push({ ...p, groep, dagen_voorraad, krap, onder_nul, minimum_voorstel, levertijd_ontbreekt, actie });
     }
-    for (const p of stil) lijst.push({ ...p, groep: 'stil', dagen_voorraad: null, krap: false, onder_nul: false, actie: 'uit_assortiment' });
+    for (const p of stil) lijst.push({ ...p, groep: 'stil', dagen_voorraad: null, krap: false, onder_nul: false, minimum_voorstel: null, levertijd_ontbreekt: false, actie: 'uit_assortiment' });
 
     lijst.sort((a, b) => VOLGORDE[a.groep] - VOLGORDE[b.groep]);
 
@@ -121,8 +151,9 @@ export type LoperKeuze = 'hard' | 'traag' | 'stil';
 
 /**
  * Wat er onder een keuze op het scherm staat. Een artikel uit de middenmoot
- * waar iets mee moet (bijna op, of de voorraad staat onder nul) staat bij de
- * hardlopers: de middenmoot heeft geen eigen lijst (ontwerp R5).
+ * waar iets mee moet (bijbestellen, minimum te laag, of de voorraad staat
+ * onder nul) staat bij de hardlopers: de middenmoot heeft geen eigen lijst
+ * (ontwerp R5).
  */
 export function lopersVoorKeuze(lopers: Lopers, keuze: LoperKeuze): Loper[] {
     if (keuze !== 'hard') return lopers.lijst.filter((l) => l.groep === keuze);

@@ -21,7 +21,7 @@ import {
 import { deelLopersIn } from '@/lib/winkelboek/lopers';
 import { periodeVan } from '@/lib/winkelboek/periode';
 import { geheugenDb } from '@/lib/winkelboek/simulatie/geheugenDb';
-import { maakTweeWeken, SIM_NU, SIM_ORG } from '@/lib/winkelboek/simulatie/tweeWeken';
+import { maakTweeWeken, SIM_NU, SIM_ORG, SIM_RPC } from '@/lib/winkelboek/simulatie/tweeWeken';
 import { verkoopPerArtikel } from '@/lib/winkelboek/verkoop';
 
 const VANDAAG = '2026-12-05';
@@ -30,7 +30,7 @@ const BASIS = '/e2e-test/winkelboek';
 export async function simulatieScherm({ scherm, p, q, afdeling, groep, dag }: {
     scherm: string; p?: string; q?: string; afdeling?: string; groep?: string; dag?: string;
 }): Promise<React.ReactNode> {
-    const { sb } = geheugenDb(maakTweeWeken().tabellen);
+    const { sb } = geheugenDb(maakTweeWeken().tabellen, { rpc: SIM_RPC });
     const extra = { bron: 'sim', scherm };
 
     if (scherm === 'dag') {

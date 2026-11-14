@@ -187,9 +187,17 @@ verkocht per product alleen uit regels met precies één product (regel uit `src
 - Genoeg voor = voorraad ÷ (verkocht ÷ verkoopdagen), alleen bij producten per stuk. Krap = minder dan 3 dagen.
 - Staat de voorraad onder nul (meer verkocht dan ingeboekt), dan is er geen "genoeg voor" en is het product niet
   krap; de vervolgstap is dan Voorraad tellen.
-- Vervolgstap: voorraad onder nul → Voorraad tellen; hardloper of middenmoot en krap → Bijbestellen; trage loper
-  → Afprijzen, behalve als hij krap is (dan valt er niets af te prijzen en staat er geen stap); ligt stil → Uit
-  assortiment.
+- Bijbestellen volgt de Bestellijst (keuze van Mathijs, 14 november 2026). De stap staat er alleen als het
+  product nu op de Bestellijst staat: beschikbaar plus onderweg op of onder het minimum, of er zelf op gezet.
+  Daarvoor wordt dezelfde lader gebruikt als de Bestellijst zelf (`laadWinkelBestelStand`). "Genoeg voor" en
+  krap blijven informatie; wat al besteld is en onderweg, krijgt geen stap en toont het aantal onderweg.
+- Minimum naast de snelheid: wordt er tijdens de levertijd van de leverancier (`leveranciers.lead_time_days`)
+  meer verkocht dan het minimum, dan staat er "Minimum naar N", met N = verkocht × levertijd ÷ verkoopdagen,
+  naar boven afgerond. Alleen per stuk, alleen voor hardlopers en middenmoot. Is de levertijd niet ingevuld
+  (of heeft het product geen leverancier), dan staat er "levertijd niet ingevuld" en komt er geen voorstel.
+- Vervolgstap, hooguit één: voorraad onder nul → Voorraad tellen; hardloper of middenmoot op de Bestellijst →
+  Bijbestellen; anders minimum te laag → Minimum naar N; trage loper → Afprijzen, behalve als hij krap is (dan
+  valt er niets af te prijzen en staat er geen stap); ligt stil → Uit assortiment.
 
 ### R6. Melding "Dag geboekt"
 

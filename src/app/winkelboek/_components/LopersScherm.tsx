@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Archive, ClipboardList, Info, Percent, ShoppingCart } from 'lucide-react';
+import { Archive, ClipboardList, Info, Percent, ShoppingCart, TrendingUp } from 'lucide-react';
 import { formatNumber } from '@/lib/format';
 import { lopersVoorKeuze, middenLooptDoor, type Loper, type LoperActie, type LoperKeuze, type Lopers } from '@/lib/winkelboek/lopers';
 import { aantal, euro, korteDag } from '../_lib/tekst';
@@ -14,6 +14,8 @@ const ACTIE: Record<LoperActie, { tekst: string; Icoon: typeof Archive; href: (i
     afprijzen: { tekst: 'Afprijzen', Icoon: Percent, href: (id) => `/voorraad/winkel?product=${id}` },
     uit_assortiment: { tekst: 'Uit assortiment', Icoon: Archive, href: (id) => `/voorraad/winkel?product=${id}` },
     tellen: { tekst: 'Voorraad tellen', Icoon: ClipboardList, href: (id) => `/voorraad/winkel?product=${id}` },
+    /* De tekst krijgt het voorgestelde getal erbij, zie hieronder. */
+    minimum: { tekst: 'Minimum verhogen', Icoon: TrendingUp, href: (id) => `/voorraad/winkel?product=${id}` },
 };
 
 /** Dagen tot de THT, van vandaag af; negatief = al over. */
@@ -27,8 +29,9 @@ function hoeveel(l: Loper, n: number): string {
 
 /**
  * Hardlopers, trage lopers en wat stilligt, over de laatste 28 dagen. Elke
- * regel eindigt in één vervolgstap; die gaat naar het scherm waar je hem
- * uitvoert (Bestellijst of Assortiment).
+ * regel eindigt in hooguit één vervolgstap; die gaat naar het scherm waar je
+ * hem uitvoert (Bestellijst of Assortiment). "Bijbestellen" staat er alleen bij
+ * wat nu op de Bestellijst staat; "genoeg voor" is informatie.
  */
 export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/winkelboek/lopers', extra }: {
     lopers: Lopers;
@@ -126,7 +129,10 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                     <span className="wk-naam" style={{ display: 'block' }}>{l.naam}</span>
                                                     <span className="wk-klein" style={{ display: 'block' }}>
                                                         {l.afdeling}
-                                                        {gekozen === 'hard' && l.groep === 'midden' && (l.onder_nul ? ' · middenmoot' : ' · middenmoot, bijna op')}
+                                                        {gekozen === 'hard' && l.groep === 'midden' && ' · middenmoot'}
+                                                        {(l.onderweg ?? 0) > 0 && ` · ${formatNumber(l.onderweg ?? 0)} onderweg`}
+                                                        {l.actie === 'bijbestellen' && l.minimum_voorstel !== null && <span style={{ color: 'var(--status-warning-text)' }}> · minimum te laag, voorstel {formatNumber(l.minimum_voorstel)}</span>}
+                                                        {l.levertijd_ontbreekt && ' · levertijd niet ingevuld'}
                                                         {bijnaOver && l.tht && <span style={{ color: 'var(--status-warning-text)' }}> · over datum op {korteDag(l.tht)}</span>}
                                                     </span>
                                                 </span>
@@ -149,7 +155,7 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                                                 <span>
                                                     {stap && (
                                                         <Link href={stap.href(l.product_id)} className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
-                                                            <stap.Icoon size={13} aria-hidden="true" /> {stap.tekst}
+                                                            <stap.Icoon size={13} aria-hidden="true" /> {l.actie === 'minimum' && l.minimum_voorstel !== null ? `Minimum naar ${formatNumber(l.minimum_voorstel)}` : stap.tekst}
                                                         </Link>
                                                     )}
                                                 </span>
@@ -164,6 +170,10 @@ export default function LopersScherm({ lopers, groep, vandaag, fout, basis = '/w
                     <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '12px 4px 0' }}>
                         {looptDoor > 0 && `${aantal(looptDoor, 'artikel zit', 'artikelen zitten')} daartussenin en ${looptDoor === 1 ? 'loopt' : 'lopen'} gewoon door. `}
                         Pakketten tellen niet mee: daarvan is niet te zeggen welk product de omzet maakte.
+                    </p>
+                    <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '6px 4px 0' }}>
+                        “Bijbestellen” staat er bij wat nu op de Bestellijst staat: onder zijn minimum en nog niet besteld.
+                        “Minimum naar …” staat er als een artikel tijdens de levertijd meer verkoopt dan zijn minimum.
                     </p>
                 </>
             )}

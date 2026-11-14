@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { nlDatum } from '@/lib/btwAangifteBronnen';
+import { laadWinkelBestelStand, type WinkelBestelStand } from '@/lib/dal/winkelBestelling';
 import { datumNL } from '@/lib/winkel/afdelingen';
 import { WINKEL_RUIMTE } from '@/lib/winkel/plekken';
 import type { BonMin, DagstaatKort } from './dagboeking';
@@ -375,14 +376,15 @@ export async function laadLoperInvoer(sb: SupabaseClient, orgId: string, nu: Dat
     const uitsluitingen = await laadUitsluitingen(sb, orgId, '2000-01-01', vandaag);
     const uitgesloten = uitsluitingen.dagen;
 
-    type Product = { id: string; naam: string; eenheid: string; voorraad: number | string | null; tht: string | null; inkoop_excl_cents: number | null; prijs_per: number | string | null };
+    type Product = { id: string; naam: string; eenheid: string; voorraad: number | string | null; tht: string | null; inkoop_excl_cents: number | null; prijs_per: number | string | null; leverancier_id: number | null };
+    type Leverancier = { id: number; lead_time_days: number | null };
     let eersteVraag = sb.from('toonbank_bonnen').select('bedrijfsdag').eq('organization_id', orgId).eq('status', 'afgerond');
     if (uitgesloten.size > 0) eersteVraag = eersteVraag.not('bedrijfsdag', 'in', `(${[...uitgesloten].join(',')})`);
 
-    const [verkoop, producten, artikelen, slots, afdelingen, eerste] = await Promise.all([
+    const [verkoop, producten, artikelen, slots, afdelingen, eerste, leveranciers, bestel] = await Promise.all([
         laadVerkoopRegels(sb, orgId, start, vandaag, uitgesloten),
         alles<Product>((van, tot) =>
-            sb.from('winkel_producten').select('id, naam, eenheid, voorraad, tht, inkoop_excl_cents, prijs_per').eq('organization_id', orgId).eq('actief', true)
+            sb.from('winkel_producten').select('id, naam, eenheid, voorraad, tht, inkoop_excl_cents, prijs_per, leverancier_id').eq('organization_id', orgId).eq('actief', true)
                 .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Product>),
         alles<{ id: string }>((van, tot) =>
             sb.from('winkel_artikelen').select('id').eq('organization_id', orgId).eq('actief', true)
@@ -392,6 +394,14 @@ export async function laadLoperInvoer(sb: SupabaseClient, orgId: string, nu: Dat
                 .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<{ artikel_id: string; standaard_product_id: string | null }>),
         laadAfdelingVanProduct(sb, orgId),
         eersteVraag.order('bedrijfsdag', { ascending: true }).limit(1) as unknown as Antwoord<{ bedrijfsdag: string }>,
+        alles<Leverancier>((van, tot) =>
+            sb.from('leveranciers').select('id, lead_time_days').eq('organization_id', orgId)
+                .order('id', { ascending: true }).range(van, tot) as unknown as Antwoord<Leverancier>),
+        /* Dezelfde lader als de Bestellijst zelf: "Bijbestellen" volgt precies die regel. */
+        laadWinkelBestelStand(sb, orgId).then(
+            (stand): { stand: WinkelBestelStand | null; fout: string | null } => ({ stand, fout: null }),
+            (e: unknown) => ({ stand: null, fout: `Bestellijst niet te lezen: ${e instanceof Error ? e.message : String(e)}` }),
+        ),
     ]);
     /* Zonder producten, artikelen of slots is niet te zeggen wat los te koop is: dan geen indeling. */
     if (producten.error || artikelen.error || slots.error) {
@@ -414,6 +424,8 @@ export async function laadLoperInvoer(sb: SupabaseClient, orgId: string, nu: Dat
     }
 
     const cijfers = cijfersPerProduct(verkoop.regels);
+    const opLijst = bestel.stand ? new Set(bestel.stand.regels.map((r) => r.winkel_product_id)) : null;
+    const levertijd = new Map(leveranciers.data.map((l) => [Number(l.id), l.lead_time_days === null || l.lead_time_days === undefined ? null : Number(l.lead_time_days)]));
     const eersteDag = eerste.data?.[0]?.bedrijfsdag ? String(eerste.data[0].bedrijfsdag) : null;
 
     return {
@@ -433,13 +445,20 @@ export async function laadLoperInvoer(sb: SupabaseClient, orgId: string, nu: Dat
                 omzet_cents: c?.omzet_cents ?? 0,
                 marge_cents: c?.marge_cents ?? null,
                 marge_geschat: c?.geschat ?? false,
+                /* Zonder de Bestellijst (niet te laden) blijft dit weg: dan staat er geen stap. */
+                ...(opLijst && bestel.stand ? {
+                    op_bestellijst: opLijst.has(String(p.id)),
+                    minimum: bestel.stand.minimum.get(String(p.id)) ?? null,
+                    onderweg: bestel.stand.onderweg.get(String(p.id)) ?? 0,
+                    levertijd_dagen: p.leverancier_id == null ? null : (levertijd.get(Number(p.leverancier_id)) ?? null),
+                } : {}),
             };
         }),
         dagen: {
             verkoopdagen: new Set(verkoop.regels.map((r) => r.bedrijfsdag)).size,
             dagen_open: eersteDag ? Math.round((Date.parse(`${vandaag}T12:00:00Z`) - Date.parse(`${eersteDag}T12:00:00Z`)) / DAG) + 1 : 0,
         },
-        fout: verkoop.fout ?? uitsluitingen.fout ?? afdelingen.fout ?? foutTekst('Eerste verkoopdag', eerste.error),
+        fout: verkoop.fout ?? uitsluitingen.fout ?? afdelingen.fout ?? foutTekst('Eerste verkoopdag', eerste.error) ?? bestel.fout ?? foutTekst('Leveranciers', leveranciers.error),
     };
 }
 

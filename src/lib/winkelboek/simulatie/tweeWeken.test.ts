@@ -20,16 +20,17 @@ import {
     laadAfdelingVanProduct, laadDagBonnen, laadDagstaten, laadDerving, laadInkoopBonnen, laadKasBegin, laadKasMutaties, laadLoperInvoer,
     laadOntvangsten, laadUitsluitingen, laadVerkoopRegels, laadVoorraadwaarde, zonderProefdagen,
 } from '../laden';
+import { laadWinkelBestelRegels } from '@/lib/dal/winkelBestelling';
 import { deelLopersIn } from '../lopers';
 import { maandSlot } from '../maandslot';
 import { periodeVan } from '../periode';
 import { periodeMarge, verkoopPerArtikel } from '../verkoop';
 import { kassaCijfers } from '../weergave';
 import { geheugenDb } from './geheugenDb';
-import { maakTweeWeken, SIM_DAGEN, SIM_NU, SIM_ORG, SIM_PRODUCTEN, SIM_PROEFDAG, type ArtikelWaarheid } from './tweeWeken';
+import { maakTweeWeken, SIM_DAGEN, SIM_NU, SIM_ORG, SIM_PRODUCTEN, SIM_PROEFDAG, SIM_RPC, type ArtikelWaarheid } from './tweeWeken';
 
 const sim = maakTweeWeken();
-const db = geheugenDb(sim.tabellen);
+const db = geheugenDb(sim.tabellen, { rpc: SIM_RPC });
 const sb = db.sb;
 const w = sim.waarheid;
 
@@ -420,8 +421,43 @@ describe('hardlopers en trage lopers', () => {
         }
         /* Kaas gaat op gewicht: bakjes en grammen zijn niet te delen. */
         expect(lopers.lijst.find((x) => x.product_id === 'p-kaas')?.dagen_voorraad).toBeNull();
-        /* Aan het eind van een drukke zaterdag is bijna alles krap: dat hoort zo. */
-        expect(lopers.lijst.filter((x) => x.actie === 'bijbestellen').map((x) => x.product_id)).toContain('p-blond');
+    });
+
+    it('"Bijbestellen" staat er alleen bij wat op de Bestellijst staat', async () => {
+        const invoer = await laadLoperInvoer(sb, SIM_ORG, SIM_NU);
+        expect(invoer.fout).toBeNull();
+        const lopers = deelLopersIn(invoer.producten, invoer.dagen);
+        const stap = Object.fromEntries(lopers.lijst.map((x) => [x.product_id, x.actie]));
+        /* Onder het minimum en niet onderweg: worst (96 ≤ 100) en tripel (7 ≤ 12). */
+        expect(lopers.lijst.filter((x) => x.actie === 'bijbestellen').map((x) => x.product_id).sort()).toEqual(['p-tripel', 'p-worst']);
+        /* Het bier is bijna op, maar er zijn zaterdag 480 flesjes besteld: geen gezeur. */
+        expect(lopers.lijst.find((x) => x.product_id === 'p-blond')).toMatchObject({ krap: true, actie: null, onderweg: 480 });
+        /* Zelfde lijst als de Bestellijst zelf, voor alles wat hard of in het midden loopt. */
+        const lijst = new Set((await laadWinkelBestelRegels(sb, SIM_ORG)).map((r) => r.winkel_product_id));
+        for (const l of lopers.lijst.filter((x) => (x.groep === 'hard' || x.groep === 'midden') && !x.onder_nul)) {
+            expect(l.actie === 'bijbestellen', l.naam).toBe(lijst.has(l.product_id));
+        }
+        expect(stap['p-chutney']).toBe('tellen');
+        expect(stap['p-zuurkool']).toBeNull();
+    });
+
+    it('een hardloper met een te laag minimum krijgt een voorstel: verkoop per dag keer de levertijd', async () => {
+        const invoer = await laadLoperInvoer(sb, SIM_ORG, SIM_NU);
+        const lopers = deelLopersIn(invoer.producten, invoer.dagen);
+        const van = (id: string) => lopers.lijst.find((x) => x.product_id === id)!;
+        const verkocht = (id: string) => som(SIM_DAGEN.map((d) => w.producten.get(d)?.get(id)?.verkocht ?? 0));
+        /* Groothandel levert in 3 dagen, de slager in 2. */
+        expect(van('p-amandel')).toMatchObject({ minimum: 20, minimum_voorstel: Math.ceil((verkocht('p-amandel') / 10) * 3), actie: 'minimum' });
+        expect(van('p-cracker')).toMatchObject({ minimum: 24, minimum_voorstel: Math.ceil((verkocht('p-cracker') / 10) * 3), actie: 'minimum' });
+        /* Geen eigen minimum: dan geldt het voorstel van vijf stuks, en dat is voor de fuet veel te weinig. */
+        expect(van('p-fuet')).toMatchObject({ minimum: 5, minimum_voorstel: Math.ceil((verkocht('p-fuet') / 10) * 2), actie: 'minimum' });
+        /* De worst heeft een minimum van 100: genoeg voor twee dagen. */
+        expect(van('p-worst')).toMatchObject({ minimum: 100, minimum_voorstel: null, actie: 'bijbestellen' });
+        /* De brouwer heeft geen levertijd ingevuld: dat staat er, zonder voorstel. */
+        expect(van('p-blond')).toMatchObject({ levertijd_ontbreekt: true, minimum_voorstel: null });
+        expect(van('p-tripel')).toMatchObject({ levertijd_ontbreekt: true, actie: 'bijbestellen' });
+        /* Kaas gaat op gewicht: geen voorstel. */
+        expect(van('p-kaas')).toMatchObject({ minimum_voorstel: null, levertijd_ontbreekt: false, actie: null });
     });
 
     it('een voorraad onder nul geeft geen "genoeg voor −5 dagen" maar het advies om te tellen', async () => {

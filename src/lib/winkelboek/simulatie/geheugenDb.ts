@@ -33,6 +33,15 @@ const gelijk = (a: unknown, b: unknown) => (typeof a === 'boolean' || typeof b =
 function past(rij: Rij, f: unknown[]): boolean {
     const [stap, kolom, x, y] = f as [string, string, unknown, unknown];
     if (stap === 'order' || stap === 'limit') return true;
+    if (stap === 'or') {
+        /* Alleen wat de laders gebruiken: 'a.not.is.null,b.is.null'. */
+        return kolom.split(',').some((term) => {
+            const m = /^([a-z_]+)\.(not\.)?is\.null$/.exec(term.trim());
+            if (!m) throw new Error(`geheugenDb kent or(${term}) niet`);
+            const leeg = waarde(rij, m[1]) === null || waarde(rij, m[1]) === undefined;
+            return m[2] ? !leeg : leeg;
+        });
+    }
     const v = waarde(rij, kolom);
     switch (stap) {
         case 'eq': return v !== null && v !== undefined && gelijk(v, x);
@@ -51,7 +60,7 @@ function past(rij: Rij, f: unknown[]): boolean {
     }
 }
 
-export function geheugenDb(tabellen: Tabellen): { sb: SupabaseClient; aanroepen: Aanroep[]; tabellen: Tabellen } {
+export function geheugenDb(tabellen: Tabellen, opties: { rpc?: Record<string, (args: Rij) => unknown> } = {}): { sb: SupabaseClient; aanroepen: Aanroep[]; tabellen: Tabellen } {
     const antwoord = (a: Aanroep): Uitkomst => {
         const rijen = tabellen[a.tabel];
         if (!rijen) return { data: null, error: { message: `relation "${a.tabel}" does not exist`, code: 'PGRST205' } };
@@ -63,7 +72,7 @@ export function geheugenDb(tabellen: Tabellen): { sb: SupabaseClient; aanroepen:
             return { data: [nieuw], error: null };
         }
 
-        const onbekend = a.filters.find((f) => !['eq', 'neq', 'gte', 'lte', 'gt', 'lt', 'in', 'is', 'not', 'order', 'limit'].includes(String(f[0])));
+        const onbekend = a.filters.find((f) => !['eq', 'neq', 'gte', 'lte', 'gt', 'lt', 'in', 'is', 'not', 'or', 'order', 'limit'].includes(String(f[0])));
         if (onbekend) throw new Error(`geheugenDb kent de stap ${String(onbekend[0])} niet (tabel ${a.tabel})`);
 
         let uit = rijen.filter((r) => a.filters.every((f) => past(r, f)));
@@ -88,5 +97,11 @@ export function geheugenDb(tabellen: Tabellen): { sb: SupabaseClient; aanroepen:
     };
 
     const nep = nepSupabase(antwoord);
+    /* Databasefuncties: alleen wat de test opgeeft; de rest bestaat niet. */
+    const rpc = async (naam: string, args: Rij) => {
+        const functie = opties.rpc?.[naam];
+        return functie ? { data: functie(args), error: null } : { data: null, error: { message: `function ${naam} does not exist`, code: 'PGRST202' } };
+    };
+    Object.assign(nep.sb as unknown as Rij, { rpc });
     return { sb: nep.sb, aanroepen: nep.aanroepen, tabellen };
 }

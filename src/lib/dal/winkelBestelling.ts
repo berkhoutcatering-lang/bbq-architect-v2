@@ -21,7 +21,24 @@ export interface WinkelBestelRegel extends BestelRegel {
     type: string;
 }
 
+/**
+ * De stand achter de bestellijst: de regels die erop komen, en per bekeken
+ * product het minimum dat geldt en wat er al onderweg is. Boekhouding winkel
+ * (Hardlopers) gebruikt dit om precies dezelfde regel te volgen.
+ */
+export interface WinkelBestelStand {
+    regels: WinkelBestelRegel[];
+    /** Per product het geldende minimum (eigen getal of het voorstel); null = geen. */
+    minimum: Map<string, number | null>;
+    /** Per product wat er besteld is en nog niet binnen. */
+    onderweg: Map<string, number>;
+}
+
 export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: string): Promise<WinkelBestelRegel[]> {
+    return (await laadWinkelBestelStand(supabase, orgId)).regels;
+}
+
+export async function laadWinkelBestelStand(supabase: SupabaseClient, orgId: string): Promise<WinkelBestelStand> {
     const { data: producten, error } = await supabase
         .from('winkel_producten')
         .select('id, naam, type, eenheid, voorraad, drempel, par_niveau, bestel_hoeveelheid, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id, btw_pct')
@@ -29,7 +46,7 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
         .eq('actief', true)
         .or('voorraad.not.is.null,bestel_handmatig.not.is.null');
     /* Bestaan de winkeltabellen niet (andere cateraar), dan is er gewoon niets. */
-    if (error || !producten?.length) return [];
+    if (error || !producten?.length) return { regels: [], minimum: new Map(), onderweg: new Map() };
 
     const ids = producten.map((p) => p.id as string);
     const [{ data: slots }, { data: artikelen }, { data: lijnen }] = await Promise.all([
@@ -55,8 +72,10 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
     const actief = new Set((artikelen ?? []).filter((a) => a.actief).map((a) => a.id as string));
 
     const uit: WinkelBestelRegel[] = [];
+    const minima = new Map<string, number | null>();
     for (const p of producten) {
         const minimum = geldendeDrempel({ id: p.id as string, drempel: p.drempel == null ? null : Number(p.drempel) }, sl, actief).waarde;
+        minima.set(p.id as string, minimum);
         const product = {
             id: p.id as string, naam: p.naam as string, eenheid: p.eenheid as 'stuk' | 'gram',
             voorraad: p.voorraad == null ? null : Number(p.voorraad), voorraad_bezet: bezet.get(p.id as string) ?? 0,
@@ -69,5 +88,5 @@ export async function laadWinkelBestelRegels(supabase: SupabaseClient, orgId: st
         const r = p.bestel_handmatig != null ? handmatigeRegel(product, Number(p.bestel_handmatig), stand) : bestelVoorstel(product, stand);
         if (r) uit.push({ ...r, leverancier_id: (p.leverancier_id as number | null) ?? null, btw_pct: Number(p.btw_pct ?? 9), type: p.type as string });
     }
-    return uit;
+    return { regels: uit, minimum: minima, onderweg };
 }

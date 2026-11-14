@@ -62,6 +62,15 @@ const PRODUCTEN: Product[] = [
 ];
 const P = new Map(PRODUCTEN.map((p) => [p.id, p]));
 const LEVERANCIERS: Record<number, string> = { 1: 'Slagerij', 2: 'Brouwerij', 3: 'Kaasmakerij', 4: 'Groothandel' };
+/** Levertijd in dagen; de brouwer heeft hem niet ingevuld. */
+const LEVERTIJD: Record<number, number | null> = { 1: 2, 2: null, 3: 3, 4: 3 };
+/** Het eigen minimum per product. Niet genoemd = geen eigen getal: dan geldt het voorstel van vijf stuks. */
+const MINIMUM: Record<string, number> = {
+    'p-worst': 100, 'p-blond': 100, 'p-amandel': 20, 'p-kaas': 4000, 'p-tripel': 12, 'p-cracker': 24, 'p-zuurkool': 6, 'p-chutney': 6,
+};
+
+/** De databasefuncties die de laders aanroepen. Niets is besteld in de webshop, dus niets is bezet. */
+export const SIM_RPC = { winkel_bezetting_product: () => 0 };
 
 /* ── Wat de uitkomst moet zijn ─────────────────────────────── */
 
@@ -132,6 +141,7 @@ export function maakTweeWeken(): { tabellen: Tabellen; waarheid: Waarheid } {
         toonbank_bonnen: [], toonbank_bon_regels: [], toonbank_dagstaten: [], winkel_voorraad_mutaties: [],
         winkel_producten: [], winkel_artikelen: [], winkel_artikel_slots: [], opslag_locaties: [], winkel_plaatsingen: [],
         bonnen: [], btw_kassa_uitsluitingen: [], winkel_kas_mutaties: [], maand_afsluitingen: [], notifications: [],
+        leveranciers: [], inkoop_order_lines: [],
     };
     const w: Waarheid = { dagen: new Map(), artikelen: new Map(), producten: new Map(), la_op: new Map(), voorraad: new Map(PRODUCTEN.map((p) => [p.id, p.voorraad])) };
 
@@ -145,15 +155,23 @@ export function maakTweeWeken(): { tabellen: Tabellen; waarheid: Waarheid } {
     for (const naam of [...new Set(PRODUCTEN.map((p) => p.afdeling).filter(Boolean))] as string[]) {
         t.opslag_locaties.push({ id: `loc-${naam}`, organization_id: SIM_ORG, code: `WINKEL-${naam.toUpperCase()}`, naam, parent_id: 'loc-winkel' });
     }
+    const slot = (org: string, artikel_id: string, product_id: string, hoeveelheid: number, eenheid: string) =>
+        t.winkel_artikel_slots.push({
+            id: ++slotNr, organization_id: org, artikel_id, volgorde: 1, slot_type: 'product', naam: product_id, hoeveelheid, eenheid, per: 'stuk',
+            standaard_product_id: product_id, wisselbaar: false, alternatieven: [],
+        });
+    for (const [id, naam] of Object.entries(LEVERANCIERS)) {
+        t.leveranciers.push({ id: Number(id), organization_id: SIM_ORG, naam, lead_time_days: LEVERTIJD[Number(id)] });
+    }
     for (const p of PRODUCTEN) {
         t.winkel_artikelen.push({ id: `a-${p.id}`, organization_id: SIM_ORG, actief: true });
-        t.winkel_artikel_slots.push({ id: ++slotNr, organization_id: SIM_ORG, artikel_id: `a-${p.id}`, standaard_product_id: p.id });
+        slot(SIM_ORG, `a-${p.id}`, p.id, p.eenheid === 'gram' ? 250 : 1, p.eenheid);
         if (p.afdeling) t.winkel_plaatsingen.push({ id: `pl-${p.id}`, organization_id: SIM_ORG, product_id: p.id, locatie_id: `loc-${p.afdeling}`, rol: 'verkoop' });
     }
     /* Het pakket: twee slots, dus niet "los te koop". */
     t.winkel_artikelen.push({ id: 'a-borrel', organization_id: SIM_ORG, actief: true });
-    t.winkel_artikel_slots.push({ id: ++slotNr, organization_id: SIM_ORG, artikel_id: 'a-borrel', standaard_product_id: 'p-worst' });
-    t.winkel_artikel_slots.push({ id: ++slotNr, organization_id: SIM_ORG, artikel_id: 'a-borrel', standaard_product_id: 'p-blond' });
+    slot(SIM_ORG, 'a-borrel', 'p-worst', 1, 'stuk');
+    slot(SIM_ORG, 'a-borrel', 'p-blond', 2, 'stuk');
 
     /* ── Eén bon, zoals de kassa hem wegschrijft ── */
     const dagBonnen = new Map<string, Rij[]>();
@@ -429,11 +447,16 @@ export function maakTweeWeken(): { tabellen: Tabellen; waarheid: Waarheid } {
     gewoneBonnen('2026-12-05', 97);
     sluit(SIM_ORG, '2026-12-05', { pinVerschil: -350 });
 
+    /* Zaterdagmiddag is het bier besteld: 480 flesjes zijn onderweg. De worst staat nog in een concept, dat telt niet. */
+    t.inkoop_order_lines.push({ id: 1, organization_id: SIM_ORG, winkel_product_id: 'p-blond', qty_ordered: 480, qty_received: 0, concept_inkoop_orders: { status: 'sent' } });
+    t.inkoop_order_lines.push({ id: 2, organization_id: SIM_ORG, winkel_product_id: 'p-worst', qty_ordered: 200, qty_received: 0, concept_inkoop_orders: { status: 'concept' } });
+
     /* ══ De producten zoals ze er nu bij liggen ══ */
     for (const p of PRODUCTEN) {
         t.winkel_producten.push({
-            id: p.id, organization_id: SIM_ORG, naam: p.naam, eenheid: p.eenheid, actief: true, btw_pct: p.btw, leverancier_id: p.leverancier_id,
+            id: p.id, organization_id: SIM_ORG, naam: p.naam, type: 'product', eenheid: p.eenheid, actief: true, btw_pct: p.btw, leverancier_id: p.leverancier_id,
             voorraad: w.voorraad.get(p.id) ?? null, tht: p.tht ?? null, inkoop_excl_cents: p.inkoop, prijs_per: p.prijs_per,
+            drempel: MINIMUM[p.id] ?? null, par_niveau: null, bestel_hoeveelheid: null, bestel_eenheid_naam: null, bestel_prijs_cents: null, bestel_handmatig: null,
         });
     }
 
@@ -441,9 +464,14 @@ export function maakTweeWeken(): { tabellen: Tabellen; waarheid: Waarheid } {
     t.opslag_locaties.push({ id: 'x-winkel', organization_id: ANDER, code: 'WINKEL', naam: 'Winkel', parent_id: null });
     t.opslag_locaties.push({ id: 'x-afd', organization_id: ANDER, code: 'WINKEL-X', naam: 'Andere winkel', parent_id: 'x-winkel' });
     for (const p of PRODUCTEN) t.winkel_plaatsingen.push({ id: `x-pl-${p.id}`, organization_id: ANDER, product_id: p.id, locatie_id: 'x-afd', rol: 'verkoop' });
-    t.winkel_producten.push({ id: 'x-product', organization_id: ANDER, naam: 'Van een ander', eenheid: 'stuk', actief: true, btw_pct: 21, leverancier_id: null, voorraad: 100, tht: null, inkoop_excl_cents: 999, prijs_per: 1 });
+    t.winkel_producten.push({
+        id: 'x-product', organization_id: ANDER, naam: 'Van een ander', type: 'product', eenheid: 'stuk', actief: true, btw_pct: 21, leverancier_id: null, voorraad: 100, tht: null,
+        inkoop_excl_cents: 999, prijs_per: 1, drempel: 500, par_niveau: null, bestel_hoeveelheid: null, bestel_eenheid_naam: null, bestel_prijs_cents: null, bestel_handmatig: null,
+    });
     t.winkel_artikelen.push({ id: 'x-artikel', organization_id: ANDER, actief: true });
-    t.winkel_artikel_slots.push({ id: ++slotNr, organization_id: ANDER, artikel_id: 'x-artikel', standaard_product_id: 'x-product' });
+    slot(ANDER, 'x-artikel', 'x-product', 1, 'stuk');
+    t.leveranciers.push({ id: 91, organization_id: ANDER, naam: 'Van een ander', lead_time_days: 30 });
+    t.inkoop_order_lines.push({ id: 3, organization_id: ANDER, winkel_product_id: 'p-worst', qty_ordered: 999, qty_received: 0, concept_inkoop_orders: { status: 'sent' } });
     t.btw_kassa_uitsluitingen.push({ organization_id: ANDER, datum: '2026-11-25' });
     t.winkel_kas_mutaties.push({ id: 'x-km', organization_id: ANDER, datum: '2026-11-25', bedrag_cents: -7700, reden: 'prive', omschrijving: 'Van een ander', moment: 'tijdens', created_at: '2026-11-25T08:00:00Z' });
     t.bonnen.push({ id: 9001, organization_id: ANDER, datum: '2026-11-24', leverancier_id: 1, netto_bedrag: 77 });
