@@ -76,7 +76,7 @@ export default function EtiketVelden({ waarde, type, binnenPerSticker, onChange 
                     <span style={{ fontSize: 12, color: 'var(--muted)' }}>Van de leverancier of de hygiënecode. De THT op de sticker wordt de snijdag plus dit aantal dagen, en nooit later dan de THT van de hele kaas.</span>
                 </label>
             )}
-            {probleem && <div style={{ fontSize: 12.5, color: 'var(--red, #dc2626)' }}>{probleem}</div>}
+            {probleem && <div style={{ fontSize: 12.5, color: 'var(--red)' }}>{probleem}</div>}
         </>
     );
 }
