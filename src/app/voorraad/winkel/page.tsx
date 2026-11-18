@@ -50,9 +50,9 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         : { data: null };
     const orgId = (lid?.organization_id as string | undefined) ?? null;
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o, bestelRegels] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o, bestelRegels, { data: etiketten }] = await Promise.all([
         supabase.from('winkel_producten')
-            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id')
+            .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id, ingredienten, allergenen, binnen_per_sticker')
             .order('type').order('naam'),
         supabase.from('winkel_artikel_slots')
             .select('id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id, wisselbaar, alternatieven')
@@ -63,7 +63,11 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         orgId ? laadVrijOfLeeg(supabase, orgId) : Promise.resolve([] as VrijProduct[]),
         laadWinkelOverzicht(supabase, nu),
         orgId ? laadWinkelBestelRegels(supabase, orgId).catch(() => []) : Promise.resolve([]),
+        /* Het etiket van de artikelen op gewicht (tabblad Sticker). */
+        supabase.from('winkel_artikelen').select('id, etiket').eq('verkoop_per', 'kg'),
     ]);
+    const etiketVan = new Map(((etiketten ?? []) as { id: string; etiket: Record<string, unknown> | null }[]).map((e) => [e.id, e.etiket ?? {}]));
+    const lijst = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : []);
 
     const bezet = new Map<string, number>(vrij.map((v) => [v.product_id, v.gereserveerd]));
     const plekVan = afdelingVan(o.plaatsingen, new Set(o.afdelingen.map((a) => a.id)));
@@ -108,6 +112,19 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
                 afdeling_id: plekVan.get(id) ?? null,
                 cijfers: productCijfers(perProduct.get(id) ?? [], nu),
                 artikel: art ? { prijs_cents: art.prijs_cents, verkoop_per: art.verkoop_per, sticker_plu: art.sticker_plu, opToonbank: art.kanalen.includes('toonbank') && art.actief } : null,
+                sticker: art && art.verkoop_per === 'kg' ? (() => {
+                    const e = etiketVan.get(art.id) ?? {};
+                    return {
+                        kiloprijs_cents: art.kiloprijs_cents,
+                        ingredienten: lijst(p.ingredienten),
+                        allergenen: lijst(p.allergenen),
+                        rauwe_melk: e.rauwe_melk === true,
+                        beschermende_atmosfeer: e.beschermende_atmosfeer === true,
+                        bewaren: typeof e.bewaren === 'string' ? e.bewaren : null,
+                        houdbaar_dagen: e.houdbaar_dagen == null ? null : Number(e.houdbaar_dagen),
+                        binnen_per_sticker: !!p.binnen_per_sticker,
+                    };
+                })() : null,
                 stuks: o.stuks.filter((s) => s.product_id === id).map((s) => ({ ...s, urgentie: urgentie(s.tht, vandaag) })),
                 partijen: o.partijen.filter((x) => x.product_id === id),
             };

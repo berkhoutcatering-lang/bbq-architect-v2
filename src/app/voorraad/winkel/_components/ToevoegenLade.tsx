@@ -11,6 +11,7 @@ import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import type { Afdeling } from '@/lib/winkel/afdelingen';
 import { nieuwProduct, zetProductOpAfdeling } from '@/app/winkel/actions';
+import EtiketVelden, { LEEG_ETIKET, etiketNaarActie, etiketProbleem, type EtiketInvoer } from './EtiketVelden';
 
 interface NieuwInvoer {
     naam: string;
@@ -24,6 +25,9 @@ interface NieuwInvoer {
     bewaren: string | null;
     beschermende_atmosfeer: boolean;
     houdbaar_dagen: number | null;
+    ingredienten: string[];
+    allergenen: string[];
+    rauwe_melk: boolean;
 }
 
 /** "12,95" of "12.95" → 1295; leeg of onzin → null. */
@@ -86,22 +90,25 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
     const [v, setV] = useState({
         naam: '', type: vlees ? 'vleeswaar' : kaas ? 'kaas' : 'overig', verkoop_per: (vlees || kaas ? 'kg' : 'stuk') as 'stuk' | 'kg',
         prijs: '', btw_pct: 9 as 0 | 9 | 21, ean: '', leverancier_id: '' as string, binnen_per_sticker: vlees,
-        bewaren: vlees || kaas ? 'Gekoeld bewaren (max. 7 °C)' : '', beschermende_atmosfeer: vlees, houdbaar_dagen: kaas ? '14' : '',
     });
+    /* Het etiket begint leeg: wat er op de sticker komt, vult de eigenaar zelf in. */
+    const [etiket, setEtiket] = useState<EtiketInvoer>(LEEG_ETIKET);
     const z = zoek.trim().toLowerCase();
     const lijst = elders.filter((p) => !z || p.naam.toLowerCase().includes(z) || p.type.includes(z))
         .sort((a, b) => Number(b.actief) - Number(a.actief) || a.naam.localeCompare(b.naam, 'nl')).slice(0, 60);
     const prijs = centen(v.prijs);
     const kg = v.verkoop_per === 'kg';
-    const klaar = v.naam.trim().length > 0 && prijs != null && (kg || !v.ean || /^\d{8,14}$/.test(v.ean.trim()));
+    const klaar = v.naam.trim().length > 0 && prijs != null && (kg || !v.ean || /^\d{8,14}$/.test(v.ean.trim()))
+        && (!kg || etiketProbleem(etiket, v.type, v.binnen_per_sticker) == null);
 
     const bewaar = () => {
         if (!klaar || prijs == null) return;
         onNieuw({
             naam: v.naam.trim(), type: v.type, verkoop_per: v.verkoop_per, prijs_cents: prijs, btw_pct: v.btw_pct,
             ean: !kg && v.ean.trim() ? v.ean.trim() : null, leverancier_id: v.leverancier_id ? Number(v.leverancier_id) : null,
-            binnen_per_sticker: kg && v.binnen_per_sticker, bewaren: kg && v.bewaren.trim() ? v.bewaren.trim() : null,
-            beschermende_atmosfeer: kg && v.beschermende_atmosfeer, houdbaar_dagen: kg && v.houdbaar_dagen ? Number(v.houdbaar_dagen) : null,
+            binnen_per_sticker: kg && v.binnen_per_sticker,
+            ...(kg ? etiketNaarActie(etiket, v.binnen_per_sticker)
+                : { bewaren: null, beschermende_atmosfeer: false, houdbaar_dagen: null, ingredienten: [], allergenen: [], rauwe_melk: false }),
         });
     };
 
@@ -171,20 +178,7 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
                                 <input type="checkbox" checked={v.binnen_per_sticker} onChange={(e) => setV({ ...v, binnen_per_sticker: e.target.checked })} style={{ marginTop: 3 }} />
                                 <span>Komt voorverpakt binnen (bakjes van de slager): elke sticker is een bakje erbij, de THT komt van de levering.</span>
                             </label>
-                            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5 }}>
-                                <input type="checkbox" checked={v.beschermende_atmosfeer} onChange={(e) => setV({ ...v, beschermende_atmosfeer: e.target.checked })} style={{ marginTop: 3 }} />
-                                <span>"Verpakt onder beschermende atmosfeer" op de sticker</span>
-                            </label>
-                            <label style={{ display: 'grid', gap: 6 }}>
-                                <span className="kf-eyebrow">Bewaren (op de sticker)</span>
-                                <input className="kf-input" value={v.bewaren} maxLength={80} onChange={(e) => setV({ ...v, bewaren: e.target.value })} />
-                            </label>
-                            {!v.binnen_per_sticker && (
-                                <label style={{ display: 'grid', gap: 6 }}>
-                                    <span className="kf-eyebrow">Houdbaar na snijden (dagen)</span>
-                                    <input className="kf-input" inputMode="numeric" value={v.houdbaar_dagen} onChange={(e) => setV({ ...v, houdbaar_dagen: e.target.value.replace(/\D/g, '') })} />
-                                </label>
-                            )}
+                            <EtiketVelden waarde={etiket} type={v.type} binnenPerSticker={v.binnen_per_sticker} onChange={setEtiket} />
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>Het krijgt automatisch een stickernummer. Wegen en stickeren doe je op de Toonbank.</div>
                         </>
                     )}

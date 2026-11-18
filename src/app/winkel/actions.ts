@@ -19,6 +19,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { EanSchema, eanFoutMelding } from '@/lib/winkel/toonbankVelden';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
+import { controleerEtiket } from '@/lib/winkel/opGewicht';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -99,7 +100,17 @@ const NieuwProduct = z.object({
     bewaren: z.string().trim().max(80).nullable().default(null),
     beschermende_atmosfeer: z.boolean().default(false),
     houdbaar_dagen: z.number().int().min(0).max(365).nullable().default(null),
+    /* Het etiket: wat de eigenaar invult, nooit aangevuld. */
+    ingredienten: z.array(z.string().trim().min(1).max(200)).max(40).default([]),
+    allergenen: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+    rauwe_melk: z.boolean().default(false),
 });
+
+/** Wat er bij verkopen op gewicht verplicht is voordat er een sticker van kan komen. */
+function opGewichtFout(v: { type: string; binnen_per_sticker: boolean; houdbaar_dagen?: number | null; ingredienten: string[]; allergenen: string[] }): string | null {
+    if (!v.binnen_per_sticker && v.houdbaar_dagen == null) return 'Vul in hoeveel dagen het houdbaar is na het snijden.';
+    return controleerEtiket(v);
+}
 
 export async function nieuwProduct(input: unknown): Promise<ActionResult<{ productId: string; artikelId: string; plu: number | null }>> {
     const parsed = NieuwProduct.safeParse(input);
@@ -111,6 +122,10 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
     const { data: afd } = await s.supabase.from('opslag_locaties').select('id, naam').eq('id', v.afdelingId).eq('organization_id', s.orgId).maybeSingle();
     if (!afd) return { error: 'Deze afdeling bestaat niet (meer).' };
     const kg = v.verkoop_per === 'kg';
+    if (kg) {
+        const fout = opGewichtFout(v);
+        if (fout) return { error: fout };
+    }
 
     /* Op gewicht: het eerstvolgende vrije stickernummer. */
     let plu: number | null = null;
@@ -132,6 +147,7 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
         ean: kg ? null : v.ean,
         leverancier_id: v.leverancier_id,
         binnen_per_sticker: kg && v.binnen_per_sticker,
+        ...(kg ? { ingredienten: v.ingredienten, allergenen: v.allergenen } : {}),
         actief: true,
     }).select('id').single();
     if (pFout || !product) {
@@ -160,7 +176,7 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
             bewaren: v.bewaren,
             beschermende_atmosfeer: v.beschermende_atmosfeer,
             houdbaar_dagen: v.houdbaar_dagen ?? 0,
-            rauwe_melk: false,
+            rauwe_melk: v.rauwe_melk,
         } : null,
     }).select('id').single();
     if (aFout || !artikel) {
@@ -183,6 +199,78 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
     if (fout) return { error: fout };
     ververs();
     return { data: { productId, artikelId, plu } };
+}
+
+/* ── Op gewicht: kiloprijs en etiket wijzigen ─────────────────────────────── */
+
+const Stickergegevens = z.object({
+    productId: uuid,
+    /* De prijs per kilo, incl. btw, in centen. */
+    kiloprijs_cents: z.number().int().min(1, 'Vul een prijs per kilo in').max(99_999, 'Hooguit € 999,99 per kilo'),
+    ingredienten: z.array(z.string().trim().min(1).max(200)).max(40),
+    allergenen: z.array(z.string().trim().min(1).max(40)).max(20),
+    rauwe_melk: z.boolean(),
+    bewaren: z.string().trim().max(80).nullable(),
+    houdbaar_dagen: z.number().int().min(0).max(365).nullable(),
+    beschermende_atmosfeer: z.boolean(),
+});
+
+/**
+ * De kiloprijs en het etiket van een product op gewicht. De prijs staat op
+ * drie plekken die gelijk moeten blijven: de kiloprijs van het artikel, de
+ * prijs van het artikel (daarop gaat de catalogusversie van de Toonbank
+ * omhoog) en de winkelprijs van het product. Een sticker die al geprint is,
+ * houdt zijn eigen prijs.
+ */
+export async function zetStickergegevens(input: unknown): Promise<ActionResult<{ ok: true }>> {
+    const parsed = Stickergegevens.safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const v = parsed.data;
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+
+    const { data: product } = await s.supabase.from('winkel_producten').select('id, type, binnen_per_sticker')
+        .eq('id', v.productId).eq('organization_id', s.orgId).maybeSingle();
+    if (!product) return { error: 'Dit product bestaat niet (meer).' };
+    const fout = opGewichtFout({ ...v, type: String(product.type), binnen_per_sticker: !!product.binnen_per_sticker });
+    if (fout) return { error: fout };
+
+    /* Het artikel op gewicht van dit product: één vak, en dat vak is dit product. */
+    const { data: slots } = await s.supabase.from('winkel_artikel_slots').select('artikel_id, standaard_product_id').eq('organization_id', s.orgId);
+    const per = new Map<string, (string | null)[]>();
+    for (const r of (slots ?? []) as { artikel_id: string; standaard_product_id: string | null }[]) {
+        per.set(r.artikel_id, [...(per.get(r.artikel_id) ?? []), r.standaard_product_id]);
+    }
+    const eigen = [...per].filter(([, l]) => l.length === 1 && l[0] === v.productId).map(([a]) => a);
+    const { data: artikelen } = eigen.length
+        ? await s.supabase.from('winkel_artikelen').select('id, etiket').in('id', eigen).eq('organization_id', s.orgId).eq('verkoop_per', 'kg')
+        : { data: [] };
+    const artikel = (artikelen ?? [])[0] as { id: string; etiket: Record<string, unknown> | null } | undefined;
+    if (!artikel || (artikelen ?? []).length > 1) return { error: 'Dit product heeft geen eigen artikel op gewicht.' };
+
+    /* Eerst het product (ingrediënten en allergenen), dan het artikel: zo ziet de Toonbank nooit een nieuwe prijs met een oud etiket. */
+    const { error: pFout } = await s.supabase.from('winkel_producten').update({
+        ingredienten: v.ingredienten,
+        allergenen: v.allergenen,
+        winkelprijs_incl_cents: v.kiloprijs_cents,
+    }).eq('id', v.productId).eq('organization_id', s.orgId);
+    if (pFout) return { error: 'De ingrediënten en allergenen konden niet bewaard worden.' };
+
+    const { error: aFout } = await s.supabase.from('winkel_artikelen').update({
+        kiloprijs_cents: v.kiloprijs_cents,
+        prijs_cents: v.kiloprijs_cents,
+        etiket: {
+            ...(artikel.etiket ?? {}),
+            bewaren: v.bewaren || null,
+            houdbaar_dagen: v.houdbaar_dagen ?? 0,
+            rauwe_melk: v.rauwe_melk,
+            beschermende_atmosfeer: v.beschermende_atmosfeer,
+        },
+    }).eq('id', artikel.id).eq('organization_id', s.orgId);
+    if (aFout) return { error: 'De kiloprijs en het etiket konden niet bewaard worden.' };
+
+    ververs();
+    return { data: { ok: true } };
 }
 
 /* ── Uit het assortiment en terug ────────────────────────────────────────── */
