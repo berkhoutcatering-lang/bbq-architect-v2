@@ -449,7 +449,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
             if (!st) return;
             const k = leesGetal(kiloprijs);
             if (k == null || Number.isNaN(k) || k <= 0) { toast('Vul de prijs per kilo in.', 'error'); return; }
-            const probleem = etiketProbleem(etiket, p.type, st.binnen_per_sticker);
+            const probleem = etiketProbleem(etiket, st.binnen_per_sticker);
             if (probleem) { toast(probleem, 'error'); return; }
             await doe(() => zetStickergegevens({ productId: p.id, kiloprijs_cents: Math.round(k * 100), ...etiketNaarActie(etiket, st.binnen_per_sticker) }),
                 'Sticker bijgewerkt. De Toonbank haalt het op bij de volgende verbinding.');
@@ -606,7 +606,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             <input className="kf-input" inputMode="decimal" value={kiloprijs} onChange={(e) => setKiloprijs(e.target.value)} />
                             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Een sticker die al geprint is, houdt zijn eigen prijs.{p.artikel?.sticker_plu != null ? ` Stickernummer ${p.artikel.sticker_plu}.` : ''}</span>
                         </label>
-                        <EtiketVelden waarde={etiket} type={p.type} binnenPerSticker={p.sticker.binnen_per_sticker} onChange={setEtiket} />
+                        <EtiketVelden waarde={etiket} binnenPerSticker={p.sticker.binnen_per_sticker} onChange={setEtiket} />
                     </div>
                 )}
 
