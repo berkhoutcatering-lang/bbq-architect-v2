@@ -57,7 +57,8 @@ export interface StukRij {
     code: string;
     tht: string;
     status: string;
-    gewicht_g: number;
+    /** Leeg bij een pakje met een prijscode (Veerbeek): dat heeft geen gewicht. */
+    gewicht_g: number | null;
     prijs_cents: number;
     partij_id: string | null;
 }

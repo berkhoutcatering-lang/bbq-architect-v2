@@ -7,20 +7,24 @@
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Truck } from 'lucide-react';
+import { ScanLine, Truck } from 'lucide-react';
+import Button from '@/components/Button';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import { useToast } from '@/components/Toast';
 import type { PartijRij } from '@/lib/winkel/winkelOverzicht';
 import { sluitPartij } from '../actions';
 import BinnenLade, { type BinnenProduct } from './BinnenClient';
+import PakjesLade, { type PakjeProduct } from './PakjesLade';
 import DatumLijst, { type Groep } from './DatumsClient';
 
 const datumKort = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Europe/Amsterdam' });
 
-export default function LeveringenClient({ openBinnen, producten, leveranciers, partijen, groepen, ontbreekt }: {
+export default function LeveringenClient({ openBinnen, producten, pakjeProducten, leveranciers, partijen, groepen, ontbreekt }: {
     openBinnen: boolean;
     producten: BinnenProduct[];
+    /** Alle actieve producten: om een nieuw artikelnummer van de slager aan te koppelen. */
+    pakjeProducten: PakjeProduct[];
     leveranciers: { id: number; naam: string }[];
     partijen: (PartijRij & { product: string; gestickerd: number })[];
     groepen: Groep[];
@@ -30,6 +34,7 @@ export default function LeveringenClient({ openBinnen, producten, leveranciers, 
     const toast = useToast();
     const [bezig, start] = useTransition();
     const [binnen, setBinnen] = useState(openBinnen && producten.length > 0);
+    const [pakjes, setPakjes] = useState(false);
     const leeg = producten.length === 0 && groepen.length === 0 && partijen.length === 0;
 
     return (
@@ -37,17 +42,20 @@ export default function LeveringenClient({ openBinnen, producten, leveranciers, 
             <div className="wk-kop">
                 <div>
                     <h1 className="chassis-titel" style={{ margin: 0 }}>Leveringen</h1>
-                    <div className="wk-onder">Wat je weegt en stickert: wat er binnenkwam en wat er ligt.</div>
+                    <div className="wk-onder">Wat er binnenkwam en wat er ligt: pakjes van de slager en wat je zelf stickert.</div>
                 </div>
-                {producten.length > 0 && !ontbreekt && (
-                    <button type="button" className="btn btn-brand btn-touch" onClick={() => setBinnen(true)}><Truck size={16} /> Levering binnenmelden</button>
+                {!ontbreekt && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <Button size="touch" icon={<ScanLine size={16} />} onClick={() => setPakjes(true)}>Pakjes scannen</Button>
+                        {producten.length > 0 && <Button size="touch" variant="ghost" icon={<Truck size={16} />} onClick={() => setBinnen(true)}>Levering binnenmelden</Button>}
+                    </div>
                 )}
             </div>
 
             {ontbreekt ? (
                 <div className="kf-empty"><p>Leveringen en datums komen er zodra de update voor stickers draait (migratie 20261103120000).</p></div>
             ) : leeg ? (
-                <div className="kf-empty"><p>Er staat nog niets op gewicht. Voeg bij <Link href="/voorraad/winkel" style={{ color: 'var(--brand-gold, #c4a35a)' }}>Assortiment</Link> een product toe met "Op gewicht", dan meld je hier de leveringen.</p></div>
+                <div className="kf-empty"><p>Er ligt nog niets. Scan de pakjes van de slager met "Pakjes scannen", of voeg bij <Link href="/voorraad/winkel" style={{ color: 'var(--brand-gold, #c4a35a)' }}>Assortiment</Link> een product toe met "Op gewicht" om zelf te wegen en te stickeren.</p></div>
             ) : (
                 <>
                     <DatumLijst groepen={groepen} />
@@ -77,6 +85,7 @@ export default function LeveringenClient({ openBinnen, producten, leveranciers, 
             )}
 
             {binnen && <BinnenLade producten={producten} leveranciers={leveranciers} onClose={() => setBinnen(false)} />}
+            {pakjes && <PakjesLade producten={pakjeProducten} onClose={() => setPakjes(false)} />}
         </div>
     );
 }

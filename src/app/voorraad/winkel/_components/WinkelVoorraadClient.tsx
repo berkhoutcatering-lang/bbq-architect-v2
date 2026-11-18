@@ -303,6 +303,8 @@ function Balk({ deel, kleur, stil }: { deel: number; kleur: string; stil: boolea
 
 function ligtErTekst(p: WinkelProductRij, b: number | null): string {
     if (p.artikel?.verkoop_per === 'kg' && p.stuks.length) return `${p.stuks.length} ${p.stuks.length === 1 ? 'bakje' : 'bakjes'}`;
+    /* Pakjes met een prijscode (Veerbeek): geteld per pakje, niet in gram. */
+    if (p.stuks.length && p.stuks.every((s) => s.gewicht_g == null)) return `${p.stuks.length} ${p.stuks.length === 1 ? 'pakje' : 'pakjes'}`;
     return p.voorraad == null ? 'niet geteld' : hoeveelheidKort(b ?? 0, p.eenheid);
 }
 
@@ -515,10 +517,10 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
 
                 {p.stuks.length > 0 && (
                     <div>
-                        <div className="kf-eyebrow" style={{ marginBottom: 8 }}>Gestickerd in de winkel</div>
+                        <div className="kf-eyebrow" style={{ marginBottom: 8 }}>In de winkel (per stuk of pakje)</div>
                         {p.stuks.map((s) => (
                             <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-                                <span>{s.gewicht_g.toLocaleString('nl-NL')} g · {eur(s.prijs_cents)}</span>
+                                <span>{s.gewicht_g == null ? 'pakje' : `${s.gewicht_g.toLocaleString('nl-NL')} g`} · {eur(s.prijs_cents)}</span>
                                 <span style={{ color: s.urgentie === 'later' ? 'var(--muted)' : s.urgentie === 'over' || s.urgentie === 'vandaag' ? 'var(--red, #dc2626)' : '#D9A520' }}>THT {thtTekst(s.tht.slice(0, 10))}</span>
                             </div>
                         ))}

@@ -336,6 +336,11 @@ export const Artikel = z.object({
     verkoop_per: z.enum(['stuk', 'kg']).optional(),
     /** Contract 1.4: de prijs per kilo, inclusief btw. Alleen bij verkoop_per "kg". */
     kiloprijs_cents: PositieveCents.nullable().optional(),
+    /**
+     * [voorstel] Het artikelnummer van de leverancier in de prijscode 21 AAAAA PPPPP C (5 cijfers).
+     * Alleen bij een artikel dat per pakje met de prijs in de code verkocht wordt.
+     */
+    prijscode_nr: z.string().regex(/^\d{5}$/).optional(),
     /** Contract 1.4: wat er op de sticker komt. Alleen bij verkoop_per "kg"; zonder etiket geen sticker. */
     etiket: Etiket.nullable().optional(),
 });
@@ -544,8 +549,12 @@ const VerkoopRegel = z.object({
     alcohol: z.boolean(),
     onderdelen: z.array(Onderdeel),
     scan_code: z.string().min(1).optional(),
-    /** Contract 1.4: "sticker" = een gescande sticker; de prijs is gewicht × kiloprijs van de sticker. */
-    prijs_bron: z.enum(['catalogus', 'open_prijs', 'sticker']),
+    /**
+     * Contract 1.4: "sticker" = een gescande sticker; de prijs is gewicht × kiloprijs van de sticker.
+     * [voorstel] "prijscode" = een pakje van de leverancier met de prijs in de code (21 AAAAA PPPPP C):
+     * scan_code is die code, stuk_cents de prijs uit de code, onderdelen leeg.
+     */
+    prijs_bron: z.enum(['catalogus', 'open_prijs', 'sticker', 'prijscode']),
     verwijst_naar_regelnr: z.int().positive().optional(),
     /**
      * Op een tegenbon: kwam de waar terug (true: retour op de voorraad) of niet (false). De

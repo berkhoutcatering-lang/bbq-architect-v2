@@ -44,7 +44,10 @@ export default function DatumLijst({ groepen }: { groepen: Groep[] }) {
     const blok = (g: Groep, i: number) => {
         const sleutel = `${g.product_id}|${g.tht}`;
         const ids = g.stuks.map((s) => s.id);
-        const gewicht = g.stuks.reduce((s, x) => s + x.gewicht_g, 0);
+        /* Een pakje met een prijscode (Veerbeek) heeft geen gewicht: dan tellen we pakjes. */
+        const gewogen = g.stuks.filter((x) => x.gewicht_g != null);
+        const gewicht = gewogen.reduce((s, x) => s + (x.gewicht_g ?? 0), 0);
+        const hoeveel = gewogen.length ? `${formatNumber(gewicht)} g` : `${g.stuks.length} ${g.stuks.length === 1 ? 'pakje' : 'pakjes'}`;
         const waarde = g.stuks.reduce((s, x) => s + x.prijs_cents, 0);
         return (
             <motion.div key={sleutel} layout={!stil} initial={stil ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: 40 }} transition={{ delay: Math.min(i * 0.03, 0.3) }}
@@ -54,7 +57,7 @@ export default function DatumLijst({ groepen }: { groepen: Groep[] }) {
                         <div style={{ fontWeight: 600, fontSize: 14.5 }}>{g.stuks.length} × {g.naam}</div>
                         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
                             <span style={{ color: KLEUR[g.urgentie], fontWeight: 600 }}>THT {datumKort(g.tht)}</span>
-                            {' · '}{formatNumber(gewicht)} g · {euro(waarde)}{g.afdeling ? ` · ${g.afdeling}` : ''}
+                            {' · '}{hoeveel} · {euro(waarde)}{g.afdeling ? ` · ${g.afdeling}` : ''}
                         </div>
                     </button>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -66,7 +69,7 @@ export default function DatumLijst({ groepen }: { groepen: Groep[] }) {
                     <div style={{ display: 'grid', gap: 4, marginTop: 10 }}>
                         {g.stuks.map((s) => (
                             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--muted)' }}>
-                                <span style={{ flex: 1 }}>{formatNumber(s.gewicht_g)} g · {euro(s.prijs_cents)}</span>
+                                <span style={{ flex: 1 }}>{s.gewicht_g == null ? 'pakje' : `${formatNumber(s.gewicht_g)} g`} · {euro(s.prijs_cents)}</span>
                                 <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px' }} disabled={bezig} onClick={() => afboeken([s.id], 'naar_keuken', g.naam)}>keuken</button>
                                 <button type="button" className="btn btn-ghost" style={{ padding: '2px 8px', color: 'var(--red, #dc2626)' }} disabled={bezig} onClick={() => afboeken([s.id], 'afgeschreven', g.naam)}>weg</button>
                             </div>
