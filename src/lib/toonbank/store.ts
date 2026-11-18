@@ -127,6 +127,8 @@ export interface CatalogusArtikelRuw {
     kanalen: string[];
     /** Contract 1.4 (migratie 20261103120000); ontbreekt zonder die migratie. */
     verkoop_per?: string | null;
+    /** 20261118130000_winkel_prijscode: het artikelnummer in de prijscode. */
+    prijscode_nr?: string | null;
     kiloprijs_cents?: number | null;
     etiket?: Record<string, unknown> | null;
 }

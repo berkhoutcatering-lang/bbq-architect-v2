@@ -273,6 +273,52 @@ export async function zetStickergegevens(input: unknown): Promise<ActionResult<{
     return { data: { ok: true } };
 }
 
+/* ── Pakjes met een prijscode (Veerbeek) scannen bij binnenkomst ─────────── */
+
+export type PakjeBinnen =
+    | { uitkomst: 'binnen'; stuk_id: string; product_id: string; naam: string; nr: string; prijs_cents: number; tht: string }
+    | { uitkomst: 'onbekend'; nr: string; prijs_cents: number }
+    | { uitkomst: 'controlecijfer' }
+    | { uitkomst: 'geen_prijscode' };
+
+/**
+ * Eén gescand pakje binnenmelden. Kent BBQ Architect het artikelnummer nog
+ * niet, dan komt 'onbekend' terug en kiest de gebruiker het product; met
+ * productId krijgt dat product het nummer en is het pakje binnen.
+ */
+export async function meldPakjeBinnen(input: unknown): Promise<ActionResult<PakjeBinnen>> {
+    const parsed = z.object({
+        code: z.string().trim().min(1, 'Scan een pakje').max(40),
+        tht: datum,
+        productId: uuid.nullable().default(null),
+    }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+    const { data, error } = await s.supabase.rpc('winkel_stuk_binnen_prijscode', {
+        p_org: s.orgId, p_code: parsed.data.code, p_tht: parsed.data.tht, p_product: parsed.data.productId,
+    });
+    if (error) {
+        if (error.code === '23505') return { error: error.message };
+        if (error.code === 'PGRST202' || error.code === '42883') return { error: 'De database kent pakjes scannen nog niet (migratie 20261118130000).' };
+        return { error: error.message || 'Het pakje kon niet binnengemeld worden.' };
+    }
+    if ((data as PakjeBinnen).uitkomst === 'binnen') ververs();
+    return { data: data as PakjeBinnen };
+}
+
+/** Een verkeerd gescand pakje weghalen, zolang het nog op voorraad ligt. */
+export async function haalPakjeWeg(input: unknown): Promise<ActionResult<{ weg: boolean }>> {
+    const parsed = z.object({ stukId: uuid }).safeParse(input);
+    if (!parsed.success) return { error: eersteFout(parsed.error) };
+    const s = await ingelogdMetOrg();
+    if (!s) return NIET_INGELOGD;
+    const { data, error } = await s.supabase.rpc('winkel_stuk_weg', { p_org: s.orgId, p_stuk_id: parsed.data.stukId });
+    if (error) return { error: error.message || 'Het pakje kon niet weggehaald worden.' };
+    ververs();
+    return { data: data as { weg: boolean } };
+}
+
 /* ── Uit het assortiment en terug ────────────────────────────────────────── */
 
 /**

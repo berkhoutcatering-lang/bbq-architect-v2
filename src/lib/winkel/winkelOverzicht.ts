@@ -138,7 +138,7 @@ export async function laadWinkelOverzicht(supabase: SupabaseClient, nu: Date = n
         }),
         stuks: ((stuks.error ? [] : stuks.data) ?? []).map((s) => ({
             id: String(s.id), product_id: String(s.winkel_product_id), code: String(s.code), tht: String(s.tht), status: String(s.status),
-            gewicht_g: Number(s.gewicht_g), prijs_cents: Number(s.prijs_cents), partij_id: (s.partij_id as string | null) ?? null,
+            gewicht_g: s.gewicht_g == null ? null : Number(s.gewicht_g), prijs_cents: Number(s.prijs_cents), partij_id: (s.partij_id as string | null) ?? null,
         })),
         partijen: ((partijen.error ? [] : partijen.data) ?? []).map((p) => {
             const lev = (Array.isArray(p.leveranciers) ? p.leveranciers[0] : p.leveranciers) as { naam?: string } | null;

@@ -142,6 +142,40 @@ describe('contract 1.4: stickers', () => {
         expect(uit.artikelen[1]).not.toHaveProperty('verkoop_per');
         expect(uit.artikelen[1]).not.toHaveProperty('etiket');
     });
+    it('catalogus: prijscode_nr alleen als het er is en 5 cijfers heeft', () => {
+        const basis = {
+            artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Haasbiefstuk', prijs_cents: 899, btw_pct: 9, btw_verdeling: null, alcohol: false,
+            groep: 'Vers vlees', volgorde: 0, favoriet: false, foto: null, foto_url_ruw: null,
+            onderdelen: [{ product_id: '0da446be-613f-4a74-9791-704b065a1f74', hoeveelheid: 100, eenheid: 'gram' }], actief: true, kanalen: ['toonbank'],
+        };
+        const uit = catalogusAntwoord({
+            versie: 4, volledig: true, producten: [], codes: [], groepen: [],
+            artikelen: [
+                { ...basis, verkoop_per: 'stuk', prijscode_nr: '01015' },
+                { ...basis, artikel_id: '6c2d3e4f-5061-4b72-8c83-9d8e7f6a5b52', naam: 'Pindas', verkoop_per: 'stuk', prijscode_nr: null },
+                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Raar', verkoop_per: 'stuk', prijscode_nr: '1015' },
+            ],
+        }, null);
+        expect(SCHEMAS.CatalogusAntwoord.safeParse(uit).success).toBe(true);
+        expect(uit.artikelen[0]).toMatchObject({ prijscode_nr: '01015' });
+        expect(uit.artikelen[1]).not.toHaveProperty('prijscode_nr');
+        expect(uit.artikelen[2]).not.toHaveProperty('prijscode_nr');
+    });
+    it('een bonregel met prijs_bron prijscode (pakje van de slager)', () => {
+        const regel = {
+            regelnr: 1, soort: 'verkoop', artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Haasbiefstuk', aantal: 1,
+            stuk_cents: 2823, korting_cents: 0, bedrag_cents: 2823, btw: [{ pct: 9, incl_cents: 2823 }], alcohol: false,
+            onderdelen: [], scan_code: '2101015028237', prijs_bron: 'prijscode',
+        };
+        const bon = SCHEMAS.BonMelding.safeParse({
+            soort: 'bon', gebeurtenis_id: '9b2f6c1e-4d7a-4e3b-8f21-6a0c5d9e7b14', volgnummer: 7, moment: '2026-11-21T10:02:10+01:00',
+            medewerker_id: 'fe71fc3c-aaa1-436a-ae15-684b8b3e4de7', bon_id: '9b2f6c1e-4d7a-4e3b-8f21-6a0c5d9e7b14', bonnummer: 'T1-000007',
+            bon_volgnummer: 7, status: 'afgerond', kanaal: 'winkel', catalogus_versie: 616, voorraad_versie: 1, leeftijd: null,
+            regels: [regel, { regelnr: 2, soort: 'betaling', betaalmethode: 'pin', betaal_bevestiging: 'handmatig', bedrag_cents: 2823 }],
+            totaal_cents: 2823, afronding_cents: 0,
+        });
+        expect(bon.success, JSON.stringify(bon.error?.issues)).toBe(true);
+    });
     it('partijen: datums als JJJJ-MM-DD', () => {
         const uit = partijenAntwoord([{
             partij_id: '0da446be-613f-4a74-9791-704b065a1f74', product_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', artikel_ids: ['6c2d3e4f-5061-4b72-8c83-9d8e7f6a5b52'],

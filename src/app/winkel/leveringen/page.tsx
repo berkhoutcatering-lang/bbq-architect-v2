@@ -31,6 +31,7 @@ export default async function LeveringenPage({ searchParams }: { searchParams: P
             producten={o.producten
                 .filter((p) => p.actief && opGewicht.has(p.id))
                 .map((p) => ({ id: p.id, naam: p.naam, leverancier_id: p.leverancier_id, voorverpakt: p.binnen_per_sticker, afdeling: afdelingVanProduct(p.id) }))}
+            pakjeProducten={o.producten.filter((p) => p.actief).map((p) => ({ id: p.id, naam: p.naam, afdeling: afdelingVanProduct(p.id) })).sort((a, b) => a.naam.localeCompare(b.naam, 'nl'))}
             leveranciers={o.leveranciers}
             partijen={o.partijen.map((x) => ({ ...x, product: o.producten.find((p) => p.id === x.product_id)?.naam ?? '—', gestickerd: o.stuks.filter((s) => s.partij_id === x.id).length }))}
             groepen={datumGroepen(o.stuks, nu).map((g) => ({ ...g, naam: o.producten.find((x) => x.id === g.product_id)?.naam ?? '—', afdeling: afdelingVanProduct(g.product_id) }))}
