@@ -99,7 +99,7 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
     const prijs = centen(v.prijs);
     const kg = v.verkoop_per === 'kg';
     const klaar = v.naam.trim().length > 0 && prijs != null && (kg || !v.ean || /^\d{8,14}$/.test(v.ean.trim()))
-        && (!kg || etiketProbleem(etiket, v.type, v.binnen_per_sticker) == null);
+        && (!kg || etiketProbleem(etiket, v.binnen_per_sticker) == null);
 
     const bewaar = () => {
         if (!klaar || prijs == null) return;
@@ -178,7 +178,7 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
                                 <input type="checkbox" checked={v.binnen_per_sticker} onChange={(e) => setV({ ...v, binnen_per_sticker: e.target.checked })} style={{ marginTop: 3 }} />
                                 <span>Komt voorverpakt binnen (bakjes van de slager): elke sticker is een bakje erbij, de THT komt van de levering.</span>
                             </label>
-                            <EtiketVelden waarde={etiket} type={v.type} binnenPerSticker={v.binnen_per_sticker} onChange={setEtiket} />
+                            <EtiketVelden waarde={etiket} binnenPerSticker={v.binnen_per_sticker} onChange={setEtiket} />
                             <div style={{ fontSize: 12, color: 'var(--muted)' }}>Het krijgt automatisch een stickernummer. Wegen en stickeren doe je op de Toonbank.</div>
                         </>
                     )}

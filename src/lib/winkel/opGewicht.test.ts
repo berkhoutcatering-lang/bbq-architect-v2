@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { controleerEtiket, leesAllergenen, leesIngredienten, prijsUitGewicht } from './opGewicht';
+import { HOUDBAAR_KEUZES, controleerEtiket, leesAllergenen, leesIngredienten, prijsUitGewicht } from './opGewicht';
 
 describe('prijsUitGewicht (zelfde regel als de Toonbank: hele centen, halve cent omhoog)', () => {
     it('het voorbeeld uit het contract: 412 g × € 24,95 = € 10,28', () => {
@@ -46,26 +46,29 @@ describe('leesAllergenen', () => {
 });
 
 describe('controleerEtiket', () => {
-    it('een kaas zonder allergenen kan niet', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: [], allergenen: [] })).toMatch(/allergenen/);
+    it('een kaas zonder ingrediënten en allergenen mag (de sticker zegt dan alleen naam, gewicht, prijs en THT)', () => {
+        expect(controleerEtiket({ ingredienten: [], allergenen: [] })).toBeNull();
     });
-    it('een kaas met alleen allergenen mag (de sticker zegt dan "Bevat:")', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: [], allergenen: ['melk'] })).toBeNull();
-    });
-    it('vlees zonder allergenen mag', () => {
-        expect(controleerEtiket({ type: 'vleeswaar', ingredienten: [], allergenen: [] })).toBeNull();
+    it('alleen allergenen mag (de sticker zegt dan "Bevat:")', () => {
+        expect(controleerEtiket({ ingredienten: [], allergenen: ['melk'] })).toBeNull();
     });
     it('elk allergeen staat tussen sterretjes in de ingrediënten', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: ['melk', 'zout'], allergenen: ['melk'] })).toMatch(/\*melk\*/);
-        expect(controleerEtiket({ type: 'kaas', ingredienten: ['*Koemelk*', 'zout'], allergenen: ['melk'] })).toBeNull();
+        expect(controleerEtiket({ ingredienten: ['melk', 'zout'], allergenen: ['melk'] })).toMatch(/\*melk\*/);
+        expect(controleerEtiket({ ingredienten: ['*Koemelk*', 'zout'], allergenen: ['melk'] })).toBeNull();
     });
     it('iets tussen sterretjes moet ook bij de allergenen staan', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: ['*melk*', '*mosterd*'], allergenen: ['melk'] })).toMatch(/mosterd/);
+        expect(controleerEtiket({ ingredienten: ['*melk*', '*mosterd*'], allergenen: ['melk'] })).toMatch(/mosterd/);
     });
     it('een sterretje zonder partner kan niet', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: ['*melk', 'zout'], allergenen: ['melk'] })).toMatch(/sterretje/);
+        expect(controleerEtiket({ ingredienten: ['*melk', 'zout'], allergenen: ['melk'] })).toMatch(/sterretje/);
     });
     it('te lang voor de sticker kan niet', () => {
-        expect(controleerEtiket({ type: 'kaas', ingredienten: ['*melk*', 'x'.repeat(400)], allergenen: ['melk'] })).toMatch(/te lang/);
+        expect(controleerEtiket({ ingredienten: ['*melk*', 'x'.repeat(400)], allergenen: ['melk'] })).toMatch(/te lang/);
+    });
+});
+
+describe('HOUDBAAR_KEUZES', () => {
+    it('harde kaas 14 dagen, zachte kaas 7 (vuistregel eigenaar)', () => {
+        expect(HOUDBAAR_KEUZES.map((k) => [k.label, k.dagen])).toEqual([['Harde kaas', 14], ['Zachte kaas', 7]]);
     });
 });

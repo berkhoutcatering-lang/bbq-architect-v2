@@ -45,19 +45,26 @@ export function leesAllergenen(tekst: string): string[] {
     return uit;
 }
 
+/**
+ * Houdbaar na het snijden: de vuistregel van de eigenaar (18 november 2026).
+ * Een ander aantal dagen kan altijd; dit zijn alleen de twee knoppen.
+ */
+export const HOUDBAAR_KEUZES = [
+    { label: 'Harde kaas', dagen: 14 },
+    { label: 'Zachte kaas', dagen: 7 },
+] as const;
+
 /** Zoveel tekens passen hooguit op de sticker van 60 × 40 mm (de Toonbank meldt het als het niet past). */
 export const MAX_INGREDIENTEN_TEKENS = 300;
 
 /**
  * Hangt het etiket samen? null = goed, anders wat er mis is, in gewone taal.
- *  - een kaas heeft allergenen (anders staat er niets over melk op de sticker);
- *  - met een ingrediëntenlijst staat elk allergeen erin tussen sterretjes, en
- *    alles tussen sterretjes staat ook bij de allergenen.
+ * Ingrediënten en allergenen mogen leeg (besluit eigenaar, 18 november 2026:
+ * de sticker zegt naam, gewicht, prijs, kiloprijs en THT). Vult hij ze wel in,
+ * dan staat elk allergeen in de ingrediënten tussen sterretjes, en alles
+ * tussen sterretjes staat ook bij de allergenen.
  */
-export function controleerEtiket(e: { type: string; ingredienten: string[]; allergenen: string[] }): string | null {
-    if (e.type === 'kaas' && e.allergenen.length === 0) {
-        return 'Vul de allergenen in. Zonder allergenen staat er op de sticker niets over melk.';
-    }
+export function controleerEtiket(e: { ingredienten: string[]; allergenen: string[] }): string | null {
     if (e.ingredienten.length === 0) return null;
 
     const tekst = e.ingredienten.join(', ');
