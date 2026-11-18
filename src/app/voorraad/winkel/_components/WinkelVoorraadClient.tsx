@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, ShoppingCart, Soup, TriangleAlert, Wine } from 'lucide-react';
+import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, ShoppingCart, Soup, Tag, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import Button from '@/components/Button';
@@ -33,7 +33,8 @@ import {
 import { ALLES, assortimentKeuzes, assortimentLijst } from '@/lib/winkel/assortiment';
 import { urgentie, type Afdeling, type ProductCijfers, type StukRij, type Urgentie } from '@/lib/winkel/afdelingen';
 import type { PartijRij } from '@/lib/winkel/winkelOverzicht';
-import { zetHandmatigeBestelling, zetInAssortiment, zetProductOpAfdeling, zetTht } from '@/app/winkel/actions';
+import { zetHandmatigeBestelling, zetInAssortiment, zetProductOpAfdeling, zetStickergegevens, zetTht } from '@/app/winkel/actions';
+import EtiketVelden, { etiketNaarActie, etiketProbleem, type EtiketInvoer } from './EtiketVelden';
 import ToevoegenLade from './ToevoegenLade';
 import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetBestelgegevens, type LogboekRegel } from '../actions';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
@@ -57,6 +58,17 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     afdeling_id: string | null;
     cijfers: ProductCijfers;
     artikel: { prijs_cents: number | null; verkoop_per: 'stuk' | 'kg'; sticker_plu: number | null; opToonbank: boolean } | null;
+    /** Alleen bij een product op gewicht: de kiloprijs en het etiket (tabblad Sticker). */
+    sticker: {
+        kiloprijs_cents: number | null;
+        ingredienten: string[];
+        allergenen: string[];
+        rauwe_melk: boolean;
+        beschermende_atmosfeer: boolean;
+        bewaren: string | null;
+        houdbaar_dagen: number | null;
+        binnen_per_sticker: boolean;
+    } | null;
     stuks: (StukRij & { urgentie: Urgentie })[];
     partijen: PartijRij[];
 }
@@ -332,7 +344,7 @@ function ProductRegel({ p, b, status, afdeling, vandaag, onClick }: { p: WinkelP
 
 /* ── De lade per product ───────────────────────────────────────────────────── */
 
-type Actie = 'ontvangst' | 'overboeken' | 'tellen' | 'afwijking' | 'instellen';
+type Actie = 'ontvangst' | 'overboeken' | 'tellen' | 'afwijking' | 'instellen' | 'sticker';
 
 function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data: WinkelData; actief: Set<string>; onClose: () => void }) {
     const router = useRouter();
@@ -382,6 +394,16 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     const afdeling = data.afdelingen.find((a) => a.id === p.afdeling_id) ?? null;
     const kg = p.artikel?.verkoop_per === 'kg';
     const [thtDatum, setThtDatum] = useState(p.tht ?? '');
+    /* Tabblad Sticker (alleen op gewicht): de kiloprijs en het etiket zoals ze nu zijn. */
+    const [kiloprijs, setKiloprijs] = useState(p.sticker?.kiloprijs_cents == null ? '' : (p.sticker.kiloprijs_cents / 100).toFixed(2).replace('.', ','));
+    const [etiket, setEtiket] = useState<EtiketInvoer>(() => ({
+        ingredienten: (p.sticker?.ingredienten ?? []).join(', '),
+        allergenen: (p.sticker?.allergenen ?? []).join(', '),
+        rauwe_melk: p.sticker?.rauwe_melk ?? false,
+        beschermende_atmosfeer: p.sticker?.beschermende_atmosfeer ?? false,
+        bewaren: p.sticker?.bewaren ?? '',
+        houdbaar_dagen: p.sticker?.houdbaar_dagen == null ? '' : String(p.sticker.houdbaar_dagen),
+    }));
     const [bestelAantal, setBestelAantal] = useState(() => {
         if (p.bestel_handmatig != null) return String(p.bestel_handmatig).replace('.', ',');
         const tekort = p.par_niveau != null ? p.par_niveau - (p.voorraad ?? 0) : null;
@@ -422,6 +444,16 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
             const n = geldigAantal(); if (n == null) return;
             if (!reden) { toast('Kies een reden.', 'error'); return; }
             await doe(() => legAfwijkingVast({ bron: 'winkel', id: p.id, hoeveelheid: n, reden, notitie: notitie || null, sleutel: key }), `Vastgelegd: ${hoeveelheidKort(n, p.eenheid)} ${REDEN_LABEL[reden]}`);
+        } else if (actie === 'sticker') {
+            const st = p.sticker;
+            if (!st) return;
+            const k = leesGetal(kiloprijs);
+            if (k == null || Number.isNaN(k) || k <= 0) { toast('Vul de prijs per kilo in.', 'error'); return; }
+            const probleem = etiketProbleem(etiket, p.type, st.binnen_per_sticker);
+            if (probleem) { toast(probleem, 'error'); return; }
+            await doe(() => zetStickergegevens({ productId: p.id, kiloprijs_cents: Math.round(k * 100), ...etiketNaarActie(etiket, st.binnen_per_sticker) }),
+                'Sticker bijgewerkt. De Toonbank haalt het op bij de volgende verbinding.');
+            return;
         } else {
             const dr = leesGetal(drempel); const be = leesGetal(bestel); const pa = leesGetal(par); const pr = leesGetal(bestelPrijs);
             if ([dr, be, pa, pr].some((x) => Number.isNaN(x))) { toast('Dat is geen geldig getal.', 'error'); return; }
@@ -439,11 +471,12 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
         { k: 'tellen', label: 'Tellen', icon: ClipboardList, kan: true },
         { k: 'afwijking', label: 'Afwijking', icon: TriangleAlert, kan: p.voorraad != null },
         { k: 'instellen', label: 'Bestelgegevens', icon: Settings2, kan: true },
+        { k: 'sticker', label: 'Sticker', icon: Tag, kan: p.sticker != null },
     ];
 
     return (
         <Drawer eyebrow={`${afdeling?.naam ?? p.type}${p.alcohol ? ' · 18+' : ''}`} title={p.naam} subtitle={p.voorraad == null ? 'Nog niet bijgehouden: tel het eerst' : `Laatste verkoop of verbruik: ${p.laatste_beweging_at ? new Date(p.laatste_beweging_at).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' }) : 'nog niet'}`} onClose={onClose} width={580}
-            footer={<><Button icon={<PackageCheck size={14} />} loading={bezig} onClick={verstuur}>{actie === 'instellen' ? 'Opslaan' : 'Vastleggen'}</Button><Button variant="ghost" onClick={onClose}>Sluiten</Button></>}>
+            footer={<><Button icon={<PackageCheck size={14} />} loading={bezig} onClick={verstuur}>{actie === 'instellen' || actie === 'sticker' ? 'Opslaan' : 'Vastleggen'}</Button><Button variant="ghost" onClick={onClose}>Sluiten</Button></>}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                     <Mini label="Aanwezig" waarde={p.voorraad == null ? '—' : hoeveelheidKort(p.voorraad, p.eenheid)} />
@@ -510,7 +543,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     ))}
                 </div>
 
-                {actie !== 'instellen' && (
+                {actie !== 'instellen' && actie !== 'sticker' && (
                     <div className="kf-field">
                         <label className="kf-label" htmlFor="winkel-aantal">
                             {actie === 'tellen' ? `Geteld (${eenheid})` : actie === 'ontvangst' ? `Binnengekomen (${eenheid})` : actie === 'overboeken' ? `Hoeveel (${eenheid})` : `Hoeveel weg (${eenheid})`}
@@ -563,6 +596,17 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             ))}
                         </div>
                         <div className="kf-help">Manko kies je niet: dat blijft over na een telling.</div>
+                    </div>
+                )}
+
+                {actie === 'sticker' && p.sticker && (
+                    <div style={{ display: 'grid', gap: 14 }}>
+                        <label style={{ display: 'grid', gap: 6 }}>
+                            <span className="kf-eyebrow">Prijs per kilo (incl. btw)</span>
+                            <input className="kf-input" inputMode="decimal" value={kiloprijs} onChange={(e) => setKiloprijs(e.target.value)} />
+                            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Een sticker die al geprint is, houdt zijn eigen prijs.{p.artikel?.sticker_plu != null ? ` Stickernummer ${p.artikel.sticker_plu}.` : ''}</span>
+                        </label>
+                        <EtiketVelden waarde={etiket} type={p.type} binnenPerSticker={p.sticker.binnen_per_sticker} onChange={setEtiket} />
                     </div>
                 )}
 
@@ -626,7 +670,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     );
                 })()}
 
-                {actie !== 'instellen' && (
+                {actie !== 'instellen' && actie !== 'sticker' && (
                     <div className="kf-field">
                         <label className="kf-label">Notitie</label>
                         <input className="kf-input" value={notitie} onChange={(e) => setNotitie(e.target.value)} placeholder={actie === 'afwijking' ? 'bijv. proeverij klant Jansen' : 'optioneel'} />
