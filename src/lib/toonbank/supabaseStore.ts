@@ -16,6 +16,7 @@ import {
     type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
     type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
     type CadeaubonReserveerFout, type CadeaubonReserveerRuw, type CadeaubonStand, type CadeaubonStatusRuw, type CadeaubonVrijgeefRuw,
+    type PakjeBinnenRuw,
 } from './store';
 
 /** De functie of kolom bestaat nog niet (de migratie is nog niet gedraaid). */
@@ -40,6 +41,19 @@ export function naarCadeaubonStand(r: Record<string, unknown>): CadeaubonStand {
 }
 
 /** jsonb van toonbank_cadeaubon_reserveren → CadeaubonReserveerRuw; tijden als ISO. */
+/** Het jsonb-antwoord van winkel_stuk_binnen_prijscode; nr (de PLU) heet in het contract plu. */
+export function naarPakjeBinnenRuw(r: Record<string, unknown>): PakjeBinnenRuw {
+    if (r.uitkomst === 'binnen') {
+        return {
+            uitkomst: 'binnen', stuk_id: String(r.stuk_id), product_id: String(r.product_id), naam: String(r.naam ?? ''),
+            plu: String(r.nr), prijs_cents: Number(r.prijs_cents), tht: String(r.tht).slice(0, 10),
+        };
+    }
+    if (r.uitkomst === 'onbekend') return { uitkomst: 'onbekend', plu: String(r.nr), prijs_cents: Number(r.prijs_cents) };
+    if (r.uitkomst === 'controlecijfer') return { uitkomst: 'controlecijfer' };
+    return { uitkomst: 'geen_prijscode' };
+}
+
 export function naarReserveerRuw(r: Record<string, unknown>): CadeaubonReserveerRuw {
     if (r.ok === true) {
         return {
@@ -430,6 +444,23 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return { ok: false, fout: 'cadeaubon_onbekend', beschikbaar_cents: 0 };
             if (error) throw new OpslagFout('toonbank_cadeaubon_reserveren', error);
             return naarReserveerRuw((data ?? {}) as Record<string, unknown>);
+        },
+
+        async pakjeBinnen(v) {
+            const { data, error } = await sb.rpc('winkel_stuk_binnen_prijscode', {
+                p_org: v.orgId, p_code: v.code, p_tht: v.tht, p_product: v.productId, p_stuk_id: v.stukId,
+            });
+            if (error?.code === '23505') return { uitkomst: 'nummer_bezet', melding: error.message };
+            if (error?.code === 'P0002') return { uitkomst: 'product_onbekend' };
+            if (error) throw new OpslagFout('winkel_stuk_binnen_prijscode', error);
+            return naarPakjeBinnenRuw((data ?? {}) as Record<string, unknown>);
+        },
+
+        async pakjeWeg(orgId, stukId) {
+            const { data, error } = await sb.rpc('winkel_stuk_weg', { p_org: orgId, p_stuk_id: stukId });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
+            if (error) throw new OpslagFout('winkel_stuk_weg', error);
+            return (data as { weg?: boolean } | null)?.weg === true;
         },
 
         async cadeaubonVrijgeven(v) {
