@@ -1,12 +1,14 @@
--- Test voor 20261118130000_winkel_prijscode: pakjes met de prijs in de code
--- (Veerbeek, 21 AAAAA PPPPP C) binnenmelden en verkopen.
+-- Test voor 20261118130000_winkel_prijscode en 20261119120000_winkel_prijscode_plu:
+-- pakjes met de prijs in de code (Veerbeek, 21 PPPP K CCCCC E) binnenmelden en verkopen.
 -- Draait in één transactie die aan het eind wordt teruggedraaid.
 --
 -- ALLEEN op de dev-database, nooit op live en nooit met --linked:
 --   npm --prefix tools/testdb run test -- winkel_prijscode
 -- Vereist de seed supabase/tests/seed_vier_naober.sql.
 --
--- Bewijst: controlecijfer; binnenmelden onbekend → met product = nummer gekoppeld;
+-- Bewijst: controlecijfers (EAN en prijscontrole K); binnenmelden onbekend → met
+-- product = PLU gekoppeld; een andere prijs (andere K) vindt hetzelfde product;
+-- PLU 0000 vraagt altijd en wordt nooit gekoppeld;
 -- dezelfde code twee keer = twee pakjes; nummer van een ander product geweigerd;
 -- catalogus geeft prijscode_nr; bon = oudste pakje (THT) verkocht, geen grammen;
 -- prijs anders dan de code = prijscode_prijs maar geboekt; niet binnengemeld =
@@ -15,10 +17,10 @@
 --
 -- Verwacht: "GESLAAGD: ..." als EXCEPTION.
 
--- Een geldige prijscode: 21 + nr + prijs + controlecijfer.
-create function pg_temp.pc(p_nr text, p_cents int)
+-- Een geldige prijscode: 21 + PLU (4) + prijscontrole K + prijs (5) + EAN-controlecijfer.
+create function pg_temp.pc(p_plu text, p_cents int)
 returns text language sql as $$
-    with b as (select '21' || p_nr || lpad(p_cents::text, 5, '0') as c)
+    with b as (select '21' || p_plu || private.prijscode_prijscontrole(lpad(p_cents::text, 5, '0'))::text || lpad(p_cents::text, 5, '0') as c)
     select c || ((10 - (select sum(substr(c, i, 1)::int * case when i % 2 = 0 then 3 else 1 end) from generate_series(1, 12) i) % 10) % 10)::text from b
 $$;
 
@@ -63,6 +65,8 @@ declare
     v_ander  uuid;
     v_art    uuid;
     v_c      text;
+    v_c2     text;
+    v_twaalf text;
     v_vnr    bigint := 0;
     v_bnr    int := 0;
     v_b1     uuid := gen_random_uuid();
@@ -84,43 +88,75 @@ begin
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, btw_pct, actief)
     values (v_org, 'TEST haasbiefstuk ' || v_sfx, 'vleeswaar', 'gram', 100, 899, 9, true) returning id into v_haas;
     insert into public.winkel_producten (organization_id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, btw_pct, actief, prijscode_nr)
-    values (v_org, 'TEST kogelbiefstuk ' || v_sfx, 'vleeswaar', 'gram', 100, 425, 9, true, '91027') returning id into v_ander;
+    values (v_org, 'TEST kogelbiefstuk ' || v_sfx, 'vleeswaar', 'gram', 100, 425, 9, true, '9102') returning id into v_ander;
     insert into public.winkel_artikelen (organization_id, slug, naam, eenheid, prijs_cents, btw_pct, actief, publiek, kanalen, toonbank_groep)
     values (v_org, 'test-haas-' || v_sfx, 'TEST Haasbiefstuk', 'per 100 gram', 899, 9, true, false, array['toonbank'], 'Vers vlees') returning id into v_art;
     insert into public.winkel_artikel_slots (organization_id, artikel_id, volgorde, slot_type, naam, hoeveelheid, eenheid, per, standaard_product_id)
     values (v_org, v_art, 1, 'vleeswaar', 'Haasbiefstuk', 100, 'gram', 'stuk', v_haas);
 
-    -- ── 1. Het controlecijfer (voorbeeld van een echte sticker).
-    if not private.prijscode_geldig('2101015028237') or private.prijscode_geldig('2101015028230')
+    -- ── 1. De controlecijfers (echte stickers: haasbiefstuk pakje en krat, gekruid gehakt).
+    if not private.prijscode_geldig('2101015028237') or not private.prijscode_geldig('2101012076774')
+       or not private.prijscode_geldig('2100007066967') or private.prijscode_geldig('2101015028230')
        or private.prijscode_geldig('2901015028237') or private.prijscode_geldig('210101502823') then
         v_fouten := v_fouten || 'controlecijfer; ';
     end if;
+    -- K 4 in plaats van 5, met een EAN-controlecijfer dat wel klopt: toch ongeldig.
+    v_twaalf := '210101402823';
+    if private.prijscode_geldig(v_twaalf || ((10 - (select sum(substr(v_twaalf, i, 1)::int * case when i % 2 = 0 then 3 else 1 end) from generate_series(1, 12) i) % 10) % 10)::text) then
+        v_fouten := v_fouten || 'prijscontrolecijfer niet gecontroleerd; ';
+    end if;
 
     -- ── 2. Binnenmelden.
-    v_c := pg_temp.pc('91015', 2823);
+    v_c := pg_temp.pc('9101', 2823);
     v_r := public.winkel_stuk_binnen_prijscode(v_org, v_c, current_date + 3);
-    if v_r->>'uitkomst' <> 'onbekend' or v_r->>'nr' <> '91015' then v_fouten := v_fouten || 'onbekend nummer: ' || v_r::text || '; '; end if;
+    if v_r->>'uitkomst' <> 'onbekend' or v_r->>'nr' <> '9101' or (v_r->>'gedeeld')::boolean then v_fouten := v_fouten || 'onbekend nummer: ' || v_r::text || '; '; end if;
     v_r := public.winkel_stuk_binnen_prijscode(v_org, v_c, current_date + 3, v_haas);
     if v_r->>'uitkomst' <> 'binnen' or (v_r->>'prijs_cents')::int <> 2823
-       or (select prijscode_nr from public.winkel_producten where id = v_haas) <> '91015' then
+       or (select prijscode_nr from public.winkel_producten where id = v_haas) <> '9101' then
         v_fouten := v_fouten || 'binnen met product: ' || v_r::text || '; ';
     end if;
     -- Dezelfde code nog eens (pakje met dezelfde prijs, latere THT) = een tweede pakje, nu zonder product te kiezen.
     v_r := public.winkel_stuk_binnen_prijscode(v_org, v_c, current_date + 6);
     select count(*) into v_n from public.winkel_stuks where organization_id = v_org and code = v_c and status = 'op_voorraad';
     if v_r->>'uitkomst' <> 'binnen' or v_n <> 2 then v_fouten := v_fouten || 'tweede pakje: ' || v_n || '; '; end if;
+    -- Een ander pakje van hetzelfde product met een andere prijs (dus een andere K): op de PLU gevonden.
+    v_c2 := pg_temp.pc('9101', 7677);
+    v_r := public.winkel_stuk_binnen_prijscode(v_org, v_c2, current_date + 3);
+    if v_r->>'uitkomst' <> 'binnen' or (v_r->>'product_id')::uuid <> v_haas or (v_r->>'prijs_cents')::int <> 7677 then
+        v_fouten := v_fouten || 'andere prijs niet op de PLU gevonden: ' || v_r::text || '; ';
+    end if;
     if public.winkel_stuk_binnen_prijscode(v_org, '2101015028230', current_date)->>'uitkomst' <> 'controlecijfer' then
         v_fouten := v_fouten || 'fout controlecijfer binnen; ';
     end if;
+    -- PLU 0000 deelt de slager: altijd vragen, met product binnen, maar nooit onthouden.
+    v_r := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('0000', 6696), current_date + 3);
+    if v_r->>'uitkomst' <> 'onbekend' or not (v_r->>'gedeeld')::boolean then v_fouten := v_fouten || '0000 niet gevraagd: ' || v_r::text || '; '; end if;
+    v_r := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('0000', 6696), current_date + 3, v_ander);
+    if v_r->>'uitkomst' <> 'binnen' or (select prijscode_nr from public.winkel_producten where id = v_ander) <> '9102' then
+        v_fouten := v_fouten || '0000 gekoppeld of niet binnen: ' || v_r::text || '; ';
+    end if;
+    if public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('0000', 5489), current_date + 3)->>'uitkomst' <> 'onbekend' then
+        v_fouten := v_fouten || '0000 de tweede keer niet gevraagd; ';
+    end if;
     begin
-        perform public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('91027', 500), current_date, v_haas);
+        update public.winkel_producten set prijscode_nr = '0000' where id = v_ander;
+        v_fouten := v_fouten || 'prijscode_nr 0000 toegestaan; ';
+    exception when check_violation then null;
+    end;
+    begin
+        update public.winkel_producten set prijscode_nr = '91027' where id = v_ander;
+        v_fouten := v_fouten || 'prijscode_nr van 5 cijfers toegestaan; ';
+    exception when check_violation then null;
+    end;
+    begin
+        perform public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('9102', 500), current_date, v_haas);
         v_fouten := v_fouten || 'nummer van een ander product toegestaan; ';
     exception when unique_violation then null;
     end;
 
     -- ── 3. Catalogus.
     select e into v_r from jsonb_array_elements(public.toonbank_catalogus(v_org)->'artikelen') e where e->>'artikel_id' = v_art::text;
-    if v_r->>'prijscode_nr' is distinct from '91015' then v_fouten := v_fouten || 'catalogus: ' || coalesce(v_r::text, 'leeg') || '; '; end if;
+    if v_r->>'prijscode_nr' is distinct from '9101' then v_fouten := v_fouten || 'catalogus: ' || coalesce(v_r::text, 'leeg') || '; '; end if;
 
     -- ── 4. Verkocht: het pakje met de oudste THT, geen grammen.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
@@ -144,7 +180,7 @@ begin
     -- ── 6. Niet binnengemeld: geboekt, maar Te controleren.
     v_vnr := v_vnr + 1; v_bnr := v_bnr + 1;
     v_j := pg_temp.stuur(v_org, v_app, pg_temp.bon('bon', gen_random_uuid(), v_vnr, v_code || '-' || lpad(v_bnr::text, 6, '0'),
-        jsonb_build_array(pg_temp.regel(1, v_art, 1, 1999, pg_temp.pc('91015', 1999)))));
+        jsonb_build_array(pg_temp.regel(1, v_art, 1, 1999, pg_temp.pc('9101', 1999)))));
     if v_j.verwerk_status <> 'conflict' or v_j.fout_code <> 'prijscode_niet_binnen' then
         v_fouten := v_fouten || 'niet binnen: ' || row_to_json(v_j)::text || '; ';
     end if;
@@ -166,7 +202,7 @@ begin
     end if;
 
     -- ── 9. Een verkeerde scan weghalen; afboeken raakt de productvoorraad niet.
-    v_r := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('91015', 3100), current_date + 2);
+    v_r := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('9101', 3100), current_date + 2);
     v_w := public.winkel_stuk_weg(v_org, (v_r->>'stuk_id')::uuid);
     if (v_w->>'weg')::boolean is not true or exists (select 1 from public.winkel_stuks where id = (v_r->>'stuk_id')::uuid) then
         v_fouten := v_fouten || 'weghalen: ' || v_r::text || ' / ' || v_w::text || '; ';
@@ -197,5 +233,5 @@ begin
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: controlecijfer; onbekend nummer → met product gekoppeld; zelfde code = twee pakjes; nummer van ander product geweigerd; catalogus prijscode_nr; verkoop = oudste THT, geen grammen; andere prijs = prijscode_prijs; niet binnen = prijscode_niet_binnen; vormfout = fout; tegenbon = pakje terug; verkeerde scan weg; afboeken zonder grammen; sticker zonder gewicht geweigerd; rechten — alles teruggedraaid';
+    raise exception 'GESLAAGD: controlecijfers (EAN en K); onbekend nummer → met product gekoppeld; andere prijs op de PLU gevonden; 0000 altijd gevraagd, nooit gekoppeld; alleen 4 cijfers; zelfde code = twee pakjes; nummer van ander product geweigerd; catalogus prijscode_nr; verkoop = oudste THT, geen grammen; andere prijs = prijscode_prijs; niet binnen = prijscode_niet_binnen; vormfout = fout; tegenbon = pakje terug; verkeerde scan weg; afboeken zonder grammen; sticker zonder gewicht geweigerd; rechten — alles teruggedraaid';
 end $$;

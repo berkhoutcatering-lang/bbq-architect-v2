@@ -31,7 +31,7 @@ export default function PakjesLade({ producten, onClose }: { producten: PakjePro
     const [tht, setTht] = useState('');
     const [code, setCode] = useState('');
     const [gescand, setGescand] = useState<Gescand[]>([]);
-    const [onbekend, setOnbekend] = useState<{ code: string; nr: string; prijs_cents: number } | null>(null);
+    const [onbekend, setOnbekend] = useState<{ code: string; nr: string; gedeeld: boolean; prijs_cents: number } | null>(null);
     const [zoek, setZoek] = useState('');
 
     const terugNaarScan = () => setTimeout(() => veld.current?.focus(), 0);
@@ -45,7 +45,7 @@ export default function PakjesLade({ producten, onClose }: { producten: PakjePro
             setOnbekend(null);
             setZoek('');
         } else if (u.uitkomst === 'onbekend') {
-            setOnbekend({ code: c, nr: u.nr, prijs_cents: u.prijs_cents });
+            setOnbekend({ code: c, nr: u.nr, gedeeld: !!u.gedeeld, prijs_cents: u.prijs_cents });
             return;
         } else if (u.uitkomst === 'controlecijfer') {
             toast('Deze code klopt niet. Scan het pakje opnieuw.', 'error');
@@ -108,7 +108,9 @@ export default function PakjesLade({ producten, onClose }: { producten: PakjePro
                 {onbekend && (
                     <div style={{ display: 'grid', gap: 8, padding: 12, border: '1px solid var(--border)', borderRadius: 10 }}>
                         <div style={{ fontSize: 13.5 }}>
-                            Artikelnummer <b>{onbekend.nr}</b> ({formatEur(onbekend.prijs_cents / 100)}) kent BBQ Architect nog niet. Welk product is dit? Dat onthoudt hij voor de volgende keer.
+                            {onbekend.gedeeld
+                                ? <>Nummer <b>{onbekend.nr}</b> ({formatEur(onbekend.prijs_cents / 100)}) gebruikt de slager voor meer producten. Welk product is dit pakje? Bij dit nummer vraagt BBQ Architect het elke keer.</>
+                                : <>Artikelnummer <b>{onbekend.nr}</b> ({formatEur(onbekend.prijs_cents / 100)}) kent BBQ Architect nog niet. Welk product is dit? Dat onthoudt hij voor de volgende keer.</>}
                         </div>
                         <input className="kf-input" autoFocus value={zoek} onChange={(e) => setZoek(e.target.value)} placeholder="Zoek het product" />
                         <div style={{ display: 'grid', gap: 4 }}>
