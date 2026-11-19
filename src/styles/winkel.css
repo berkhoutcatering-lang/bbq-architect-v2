@@ -72,3 +72,4 @@
     .wk-codes { grid-template-columns: minmax(0, 1fr); }
     .wk-codes > :first-child { order: 0; position: static; }
 }
+.wk-codes .wk-keuzes .btn { white-space: nowrap; }

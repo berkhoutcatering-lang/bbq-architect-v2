@@ -190,7 +190,7 @@ export default function CodesClient({ producten: begin }: { producten: CodeProdu
                                 {!gekozen.opKassa && <div style={{ marginTop: 4 }}>{NIET_OP_KASSA}</div>}
                             </div>
                         ) : (
-                            <p className="wk-klein" style={{ whiteSpace: 'normal', marginTop: -6 }}>Kies links een product. Scan je zonder product, dan zie je bij welk product de code hoort.</p>
+                            <p className="wk-klein" style={{ whiteSpace: 'normal', marginTop: -6 }}>Kies een product in de lijst. Scan je zonder product, dan zie je bij welk product de code hoort.</p>
                         )}
                         <label className="kf-label" htmlFor="scanvak">{gekozen?.ean ? 'Scan een nieuwe code om hem te vervangen' : 'Code'}</label>
                         <input
@@ -275,6 +275,7 @@ export default function CodesClient({ producten: begin }: { producten: CodeProdu
                         <div className="kf-empty">
                             <p>{producten.length === 0 ? 'Er zijn nog geen losse winkelproducten.'
                                 : weergave === 'zonder' && zonder === 0 ? 'Elk product heeft een code. Bij "Met code" kun je een code vervangen of weghalen.'
+                                : weergave === 'met' && zonder === producten.length ? 'Nog geen product met een code.'
                                 : 'Niets gevonden.'}</p>
                         </div>
                     )}
