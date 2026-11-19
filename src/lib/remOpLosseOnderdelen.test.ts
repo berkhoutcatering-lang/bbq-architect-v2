@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
    nog dalen: wordt een teller lager, zet het plafond dan hier ook lager. Een
    nieuwe losse knop of vaste kleur laat deze test falen; gebruik Button en de
    kleuren uit globals.css. */
-const PLAFOND = { losseKnoppen: 1603, vasteKleuren: 1699 };
+const PLAFOND = { losseKnoppen: 1603, vasteKleuren: 1693 };
 
 function bestanden(map: string): string[] {
     return readdirSync(map).flatMap((naam) => {

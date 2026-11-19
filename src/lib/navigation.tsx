@@ -7,6 +7,7 @@ import {
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive, MonitorPlay, LayoutDashboard,
     FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator, LayoutGrid, CalendarClock, MapPinned,
+    Wallet, Euro,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -180,6 +181,24 @@ export const navSections: NavSection[] = [
             { label: "Assortiment", icon: <ShoppingBag size={16} />, href: "/voorraad/winkel", description: "Alle producten: zoeken, tellen, bijbestellen en indelen" },
             { label: "Bestellijst", icon: <ShoppingCart size={16} />, href: "/winkel/bestellijst", description: "Wat de winkel moet bestellen, per leverancier" },
             { label: "Leveringen", icon: <PackagePlus size={16} />, href: "/winkel/leveringen", description: "Levering binnenmelden en wat bijna over de datum gaat" },
+        ],
+    },
+    {
+        /* De boekhouding van de winkelkassa: leest de bonnen en dagstaten van de
+           Toonbank. Bouwt niets na wat elders staat; verwijst ernaar. */
+        title: "Boekhouding winkel",
+        icon: <Wallet size={18} />,
+        type: "folder",
+        slug: "winkelboek",
+        description: "Kasboek, verkoop, inkoop en hardlopers van de winkel.",
+        hubHref: "/winkelboek",
+        kleur: "#8E5FA8",
+        children: [
+            { label: "Overzicht", icon: <LayoutGrid size={16} />, href: "/winkelboek", description: "De laatste dag in hokjes en of kas en pin kloppen" },
+            { label: "Kasboek", icon: <Euro size={16} />, href: "/winkelboek/kasboek", description: "Wat erbij kwam, wat eraf ging en wat er in de la ligt" },
+            { label: "Verkoop", icon: <Receipt size={16} />, href: "/winkelboek/verkoop", description: "Per artikel wat het opbracht en wat het kostte" },
+            { label: "Inkoop", icon: <Truck size={16} />, href: "/winkelboek/inkoop", description: "Elke levering met bedrag, btw en bon" },
+            { label: "Hardlopers", icon: <TrendingUp size={16} />, href: "/winkelboek/lopers", description: "Wat hard loopt, traag loopt of stilligt" },
         ],
     },
     {

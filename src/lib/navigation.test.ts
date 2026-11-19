@@ -57,6 +57,18 @@ describe('vindWerkruimte', () => {
     it('matcht geen half woord: /verkoopcijfers is geen /verkoop', () => {
         expect(vindWerkruimte('/verkoopcijfers')).toBeNull();
     });
+
+    it('Boekhouding winkel is een eigen werkruimte met vijf tabbladen', () => {
+        expect(vindWerkruimte('/winkelboek')?.section.slug).toBe('winkelboek');
+        expect(vindWerkruimte('/winkelboek')?.tab?.label).toBe('Overzicht');
+        expect(vindWerkruimte('/winkelboek/kasboek')?.tab?.label).toBe('Kasboek');
+        expect(vindWerkruimte('/winkelboek/verkoop')?.tab?.label).toBe('Verkoop');
+        expect(vindWerkruimte('/winkelboek/inkoop')?.tab?.label).toBe('Inkoop');
+        expect(vindWerkruimte('/winkelboek/lopers')?.tab?.label).toBe('Hardlopers');
+        expect(vindWerkruimte('/winkelboek/dag/2026-11-28')?.tab?.label).toBe('Overzicht');
+        expect(vindWerkruimte('/winkel')?.section.slug).toBe('winkel');
+        expect(uitzetbareSleutels().has('winkelboek')).toBe(true);
+    });
 });
 
 describe('zichtbaarheid', () => {

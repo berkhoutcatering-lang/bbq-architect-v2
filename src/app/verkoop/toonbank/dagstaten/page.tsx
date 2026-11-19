@@ -46,10 +46,10 @@ interface DagstaatRij {
 }
 
 const STATUS: Record<DagstaatRij['status'], { tekst: string; kleur: string }> = {
-    voorlopig: { tekst: 'Voorlopig (verzendbak was nog niet leeg)', kleur: 'var(--ws-warn, #d97706)' },
-    definitief: { tekst: 'Definitief', kleur: 'var(--green, #16a34a)' },
-    aangevuld: { tekst: 'Aangevuld (later nog bonnen)', kleur: 'var(--ws-warn, #d97706)' },
-    goedgekeurd: { tekst: 'Goedgekeurd', kleur: 'var(--green, #16a34a)' },
+    voorlopig: { tekst: 'Voorlopig (verzendbak was nog niet leeg)', kleur: 'var(--status-warning-text)' },
+    definitief: { tekst: 'Definitief', kleur: 'var(--status-success-text)' },
+    aangevuld: { tekst: 'Aangevuld (later nog bonnen)', kleur: 'var(--status-warning-text)' },
+    goedgekeurd: { tekst: 'Goedgekeurd', kleur: 'var(--status-success-text)' },
 };
 
 function dag(d: string): string {
@@ -89,7 +89,7 @@ export default async function DagstatenPagina() {
                 <h2 className="text-lg font-semibold text-[var(--text)]">Dagstaten</h2>
                 <p className="text-[12px] text-[var(--muted)]">Elke afgesloten dag van een tablet, nagerekend uit de bonnen. Een verschil keur je achteraf goed; het afsluiten wordt nooit tegengehouden.</p>
             </div>
-            {error && <p className="text-[13px] mb-4" style={{ color: 'var(--ws-vuur, #dc2626)' }}>De dagstaten konden niet geladen worden: {error.message}</p>}
+            {error && <p className="text-[13px] mb-4" style={{ color: 'var(--status-danger-text)' }}>De dagstaten konden niet geladen worden: {error.message}</p>}
 
             {lijst.length === 0 ? (
                 <MetallicCard className="p-5" hover={false}>
@@ -103,7 +103,7 @@ export default async function DagstatenPagina() {
                         const tarieven = [...new Set([...d.omzet.map((o) => o.pct), ...ba.map((o) => o.pct)])].sort((a, b) => b - a);
                         const verschil = (d.verschillen ?? []).length > 0 && d.status !== 'goedgekeurd';
                         return (
-                            <MetallicCard key={d.id} className="p-4" hover={false} accent={verschil ? 'var(--ws-warn, #d97706)' : undefined}>
+                            <MetallicCard key={d.id} className="p-4" hover={false} accent={verschil ? 'var(--status-warning-text)' : undefined}>
                                 <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                                     <div>
                                         <p className="text-[14px] font-medium text-[var(--text)]">
@@ -151,7 +151,7 @@ export default async function DagstatenPagina() {
 
                                 {(d.verschillen ?? []).length > 0 && (
                                     <div className="mt-3">
-                                        <p className="text-[11px] uppercase tracking-[0.08em] mb-1" style={{ color: verschil ? 'var(--ws-warn, #d97706)' : 'var(--muted)' }}>
+                                        <p className="text-[11px] uppercase tracking-[0.08em] mb-1" style={{ color: verschil ? 'var(--status-warning-text)' : 'var(--muted)' }}>
                                             Tablet en bonnen verschillen{d.status === 'goedgekeurd' ? ' (goedgekeurd)' : ''}
                                         </p>
                                         <ul className="text-[12px] text-[var(--text)] tabular-nums">

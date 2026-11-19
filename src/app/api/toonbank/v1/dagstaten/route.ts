@@ -9,7 +9,7 @@
  * Weigert nooit om een inhoudelijke reden: een verschil wordt "Te controleren".
  */
 import { ontvangDagstaat } from '@/lib/toonbank/dagstaten';
-import { naToonbankBoekingen } from '@/lib/toonbank/naAfloop';
+import { naDagstaat, naToonbankBoekingen } from '@/lib/toonbank/naAfloop';
 import { optionsRoute, toonbankRoute, vanUitkomst } from '../_lib/guard';
 
 export const runtime = 'nodejs';
@@ -21,5 +21,8 @@ export const POST = toonbankRoute({ naam: 'dagstaten', medewerker: true, maxBody
     const orgId = apparaat!.organization_id;
     const r = await ontvangDagstaat(store, { orgId, apparaatId: apparaat!.id, contract, verouderd }, body);
     naToonbankBoekingen(orgId, r.productIds);
+    /* Ook bij "bestond": na een verouderd contract komt de herzending zo binnen,
+       en de melding maakt zelf nooit meer dan één per dag. */
+    if ('body' in r.uitkomst) naDagstaat(orgId, r.uitkomst.body.dagstaat_id);
     return vanUitkomst(r.uitkomst);
 });

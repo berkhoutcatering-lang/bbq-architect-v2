@@ -7,6 +7,21 @@
 import { after } from 'next/server';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import { verversNaAfloop } from '@/lib/website/verversSignaal';
+import { meldDagGeboekt } from '@/lib/winkelboek/dagMelding';
+
+/**
+ * Na een verwerkte dagstaat: de melding "Dag geboekt" van Boekhouding winkel.
+ * Na het antwoord, net als hieronder; de tablet wacht er nooit op. Gooit nooit
+ * (meldDagGeboekt vangt zijn eigen fouten).
+ */
+export function naDagstaat(orgId: string, dagstaatId: string): void {
+    const werk = () => meldDagGeboekt(orgId, dagstaatId);
+    try {
+        after(werk);
+    } catch {
+        void werk();
+    }
+}
 
 export function naToonbankBoekingen(orgId: string, productIds: string[]): void {
     if (!productIds.length) return;
