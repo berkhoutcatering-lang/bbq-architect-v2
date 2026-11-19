@@ -1,4 +1,5 @@
--- Test voor 20261118130000_winkel_prijscode en 20261119120000_winkel_prijscode_plu:
+-- Test voor 20261118130000_winkel_prijscode, 20261119120000_winkel_prijscode_plu en
+-- 20261119130000_winkel_pakje_id (binnenmelden vanaf de Toonbank, idempotent op pakje_id):
 -- pakjes met de prijs in de code (Veerbeek, 21 PPPP K CCCCC E) binnenmelden en verkopen.
 -- Draait in één transactie die aan het eind wordt teruggedraaid.
 --
@@ -67,6 +68,8 @@ declare
     v_c      text;
     v_c2     text;
     v_twaalf text;
+    v_pakje  uuid := gen_random_uuid();
+    v_r2     jsonb;
     v_vnr    bigint := 0;
     v_bnr    int := 0;
     v_b1     uuid := gen_random_uuid();
@@ -154,6 +157,19 @@ begin
     exception when unique_violation then null;
     end;
 
+    -- Vanaf de Toonbank: met een pakje_id. Twee keer hetzelfde verzoek = één pakje, hetzelfde antwoord.
+    v_r := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('9101', 4321), current_date + 4, null, v_pakje);
+    v_r2 := public.winkel_stuk_binnen_prijscode(v_org, pg_temp.pc('9101', 4321), current_date + 4, null, v_pakje);
+    select count(*) into v_n from public.winkel_stuks where id = v_pakje;
+    if v_r->>'uitkomst' <> 'binnen' or (v_r->>'stuk_id')::uuid <> v_pakje or v_r2 <> v_r or v_n <> 1
+       or (select count(*) from public.winkel_stuks where organization_id = v_org and code = pg_temp.pc('9101', 4321)) <> 1 then
+        v_fouten := v_fouten || 'pakje_id niet idempotent: ' || v_r::text || ' / ' || coalesce(v_r2::text, 'leeg') || '; ';
+    end if;
+    -- Weg en daarna is het id vrij; een niet-bestaand id geeft weg = false.
+    if not (public.winkel_stuk_weg(v_org, v_pakje)->>'weg')::boolean or (public.winkel_stuk_weg(v_org, v_pakje)->>'weg')::boolean then
+        v_fouten := v_fouten || 'pakje_id weghalen; ';
+    end if;
+
     -- ── 3. Catalogus.
     select e into v_r from jsonb_array_elements(public.toonbank_catalogus(v_org)->'artikelen') e where e->>'artikel_id' = v_art::text;
     if v_r->>'prijscode_nr' is distinct from '9101' then v_fouten := v_fouten || 'catalogus: ' || coalesce(v_r::text, 'leeg') || '; '; end if;
@@ -225,13 +241,13 @@ begin
         v_fouten := v_fouten || 'sticker zonder gewicht toegestaan; ';
     exception when check_violation then null;
     end;
-    if has_function_privilege('anon', 'public.winkel_stuk_binnen_prijscode(uuid, text, date, uuid)', 'EXECUTE')
+    if has_function_privilege('anon', 'public.winkel_stuk_binnen_prijscode(uuid, text, date, uuid, uuid)', 'EXECUTE')
        or has_function_privilege('anon', 'public.winkel_stuk_weg(uuid, uuid)', 'EXECUTE')
-       or not has_function_privilege('authenticated', 'public.winkel_stuk_binnen_prijscode(uuid, text, date, uuid)', 'EXECUTE')
+       or not has_function_privilege('authenticated', 'public.winkel_stuk_binnen_prijscode(uuid, text, date, uuid, uuid)', 'EXECUTE')
        or has_function_privilege('authenticated', 'private.toonbank_controleer_prijscode(uuid, uuid)', 'EXECUTE') then
         v_fouten := v_fouten || 'rechten kloppen niet; ';
     end if;
 
     if v_fouten <> '' then raise exception 'FOUT: %', v_fouten; end if;
-    raise exception 'GESLAAGD: controlecijfers (EAN en K); onbekend nummer → met product gekoppeld; andere prijs op de PLU gevonden; 0000 altijd gevraagd, nooit gekoppeld; alleen 4 cijfers; zelfde code = twee pakjes; nummer van ander product geweigerd; catalogus prijscode_nr; verkoop = oudste THT, geen grammen; andere prijs = prijscode_prijs; niet binnen = prijscode_niet_binnen; vormfout = fout; tegenbon = pakje terug; verkeerde scan weg; afboeken zonder grammen; sticker zonder gewicht geweigerd; rechten — alles teruggedraaid';
+    raise exception 'GESLAAGD: pakje_id idempotent; controlecijfers (EAN en K); onbekend nummer → met product gekoppeld; andere prijs op de PLU gevonden; 0000 altijd gevraagd, nooit gekoppeld; alleen 4 cijfers; zelfde code = twee pakjes; nummer van ander product geweigerd; catalogus prijscode_nr; verkoop = oudste THT, geen grammen; andere prijs = prijscode_prijs; niet binnen = prijscode_niet_binnen; vormfout = fout; tegenbon = pakje terug; verkeerde scan weg; afboeken zonder grammen; sticker zonder gewicht geweigerd; rechten — alles teruggedraaid';
 end $$;

@@ -432,4 +432,23 @@ export interface ToonbankStore {
 
     /** De bedrijfsgegevens voor de kassabon (settings); null zonder bedrijfsnaam. */
     bonKop(orgId: string): Promise<BonKop | null>;
+
+    /* ── Contract 1.4: pakjes van de slager binnenmelden (20261119120000, 20261119130000) ── */
+    /** winkel_stuk_binnen_prijscode met het pakje_id als stuk-id: idempotent. */
+    pakjeBinnen(v: PakjeBinnenVraag): Promise<PakjeBinnenRuw>;
+    /** winkel_stuk_weg: onwaar als het stuk er niet (meer) ligt; ook onwaar zonder de migratie. */
+    pakjeWeg(orgId: string, stukId: string): Promise<boolean>;
 }
+
+export interface PakjeBinnenVraag { orgId: string; stukId: string; code: string; tht: string; productId: string | null }
+
+/** Wat winkel_stuk_binnen_prijscode teruggeeft, plus de twee fouten die hij gooit. */
+export type PakjeBinnenRuw =
+    | { uitkomst: 'binnen'; stuk_id: string; product_id: string; naam: string; plu: string; prijs_cents: number; tht: string }
+    | { uitkomst: 'onbekend'; plu: string; prijs_cents: number }
+    | { uitkomst: 'controlecijfer' }
+    | { uitkomst: 'geen_prijscode' }
+    /** 23505: de PLU hoort al bij een ander product (of het pakje_id is elders gebruikt). */
+    | { uitkomst: 'nummer_bezet'; melding: string }
+    /** P0002: het product_id bestaat niet in deze organisatie. */
+    | { uitkomst: 'product_onbekend' };
