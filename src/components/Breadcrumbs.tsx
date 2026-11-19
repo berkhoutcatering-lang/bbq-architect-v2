@@ -42,6 +42,7 @@ const SEGMENT_LABELS: Record<string, string> = {
     bewerken: 'Bewerken',
     view: 'Bekijken',
     hub: 'Overzicht',
+    codes: 'Streepjescodes',
 };
 
 /* Detail-routes hebben niet altijd een geregistreerde active-resource, en dan

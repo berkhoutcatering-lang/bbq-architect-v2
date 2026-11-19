@@ -7,7 +7,7 @@
  * zonder verkoop staat er een streepje, niet € 0 met een pijl.
  */
 import Link from 'next/link';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Beef, Beer, ChevronRight, ClipboardList, Cookie, MapPinned, Minus, Nut, Package, Salad, Sandwich, Snowflake, Sparkles, Wine } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Barcode, Beef, Beer, ChevronRight, ClipboardList, Cookie, MapPinned, Minus, Nut, Package, Salad, Sandwich, Snowflake, Sparkles, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import VoorraadBel from '@/components/voorraad/VoorraadBel';
@@ -48,12 +48,13 @@ function Taak({ href, Icoon, kleur, children }: { href: string; Icoon: typeof Be
     );
 }
 
-export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken, zonderPlek, nietGeteld, nietsGeteld, urgent, thtProducten, pakketOmzet7_cents, heeftVerkoop }: {
+export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken, zonderPlek, nietGeteld, zonderCode, nietsGeteld, urgent, thtProducten, pakketOmzet7_cents, heeftVerkoop }: {
     tegels: AfdelingTegel[];
     heeftWinkel: boolean;
     plekkenOntbreken: boolean;
     zonderPlek: number;
     nietGeteld: number;
+    zonderCode: number;
     nietsGeteld: boolean;
     urgent: { over: number; bijna: number };
     thtProducten: { over: number; bijna: number };
@@ -61,7 +62,7 @@ export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken,
     heeftVerkoop: boolean;
 }) {
     const totaal7 = tegels.reduce((s, t) => s + t.omzet7_cents, 0) + pakketOmzet7_cents;
-    const heeftTaken = urgent.over > 0 || urgent.bijna > 0 || thtProducten.over > 0 || thtProducten.bijna > 0 || nietGeteld > 0 || zonderPlek > 0;
+    const heeftTaken = urgent.over > 0 || urgent.bijna > 0 || thtProducten.over > 0 || thtProducten.bijna > 0 || nietGeteld > 0 || zonderPlek > 0 || zonderCode > 0;
 
     return (
         <div className="wk-pagina mobile-safe-bottom">
@@ -85,6 +86,7 @@ export default function OverzichtClient({ tegels, heeftWinkel, plekkenOntbreken,
                         {thtProducten.bijna > 0 && <Taak href="/voorraad/winkel?toon=datum" Icoon={AlertTriangle} kleur="#D9A520">{thtProducten.bijna} {thtProducten.bijna === 1 ? 'product gaat' : 'producten gaan'} binnen twee dagen over de datum</Taak>}
                         {nietGeteld > 0 && <Taak href="/voorraad/winkel/tellen" Icoon={ClipboardList}>{nietsGeteld ? 'De winkel tellen' : `${nietGeteld} ${nietGeteld === 1 ? 'product' : 'producten'} nog tellen`}</Taak>}
                         {zonderPlek > 0 && <Taak href="/voorraad/winkel/vloer" Icoon={MapPinned}>{zonderPlek} {zonderPlek === 1 ? 'product' : 'producten'} een plek geven</Taak>}
+                        {zonderCode > 0 && <Taak href="/voorraad/winkel/codes" Icoon={Barcode}>{zonderCode} {zonderCode === 1 ? 'product' : 'producten'} nog een streepjescode geven</Taak>}
                     </div>
                 </>
             )}

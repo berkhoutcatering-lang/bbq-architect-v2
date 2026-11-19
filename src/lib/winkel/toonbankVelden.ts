@@ -12,6 +12,7 @@
  * ze geeft.
  */
 import { z } from 'zod';
+import { controleerEan } from './ean';
 
 export const KANALEN = ['webshop', 'toonbank', 'event'] as const;
 export type Kanaal = (typeof KANALEN)[number];
@@ -50,11 +51,18 @@ export const StatiegeldSchema = z
     .min(0, 'Statiegeld is nooit negatief')
     .max(10_000, 'Statiegeld is hooguit € 100 per stuk');
 
-/** Een streepjescode: 8 tot 14 cijfers, of leeg. */
+/**
+ * Een streepjescode (EAN-8, UPC-A of EAN-13 met een kloppend controlecijfer),
+ * of leeg. De controle zelf staat in ./ean.ts; dit is de enige ingang voor
+ * elke plek die een EAN opslaat.
+ */
 export const EanSchema = z
     .string()
     .trim()
-    .regex(/^\d{8,14}$/, 'Een streepjescode is 8 tot 14 cijfers')
+    .superRefine((code, ctx) => {
+        const c = controleerEan(code);
+        if (c.ok === false) ctx.addIssue({ code: 'custom', message: c.fout });
+    })
     .nullable();
 
 /** De naam van de unieke index uit de migratie. */

@@ -11,6 +11,7 @@ import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import type { Afdeling } from '@/lib/winkel/afdelingen';
 import { nieuwProduct, zetProductOpAfdeling } from '@/app/winkel/actions';
+import { controleerEan } from '@/lib/winkel/ean';
 import EtiketVelden, { LEEG_ETIKET, etiketNaarActie, etiketProbleem, type EtiketInvoer } from './EtiketVelden';
 
 interface NieuwInvoer {
@@ -98,7 +99,7 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
         .sort((a, b) => Number(b.actief) - Number(a.actief) || a.naam.localeCompare(b.naam, 'nl')).slice(0, 60);
     const prijs = centen(v.prijs);
     const kg = v.verkoop_per === 'kg';
-    const klaar = v.naam.trim().length > 0 && prijs != null && (kg || !v.ean || /^\d{8,14}$/.test(v.ean.trim()))
+    const klaar = v.naam.trim().length > 0 && prijs != null && (kg || !v.ean.trim() || controleerEan(v.ean).ok)
         && (!kg || etiketProbleem(etiket, v.binnen_per_sticker) == null);
 
     const bewaar = () => {
@@ -170,6 +171,7 @@ function Formulier({ afdeling, afdelingen, kies, producten, leveranciers, onClos
                         <label style={{ display: 'grid', gap: 6 }}>
                             <span className="kf-eyebrow">Streepjescode (EAN), als het er een heeft</span>
                             <input className="kf-input" inputMode="numeric" value={v.ean} onChange={(e) => setV({ ...v, ean: e.target.value })} />
+                            {v.ean.trim() && (() => { const c = controleerEan(v.ean); return c.ok === false ? <span style={{ fontSize: 12, color: 'var(--red)' }}>{c.fout}</span> : null; })()}
                         </label>
                     )}
                     {kg && (

@@ -26,7 +26,7 @@ import {
     type ProductRij,
 } from '@/lib/winkel/productsoorten';
 import { controleerTekst, siteUrl, type TekstcontroleUitkomst } from '@/lib/winkel/tekstcontrole';
-import { eanFoutMelding } from '@/lib/winkel/toonbankVelden';
+import { EanSchema, eanFoutMelding } from '@/lib/winkel/toonbankVelden';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -93,7 +93,7 @@ export async function nieuwPaginaProduct(input: unknown): Promise<ActionResult<{
         naam: z.string().trim().min(1, 'Geef het product een naam').max(120),
         maker: z.string().trim().max(120).nullable().default(null),
         vleessoort: z.enum(['vers', 'droge-worst']).default('droge-worst'),
-        ean: z.string().regex(/^\d{8,14}$/, 'Een streepjescode is 8 tot 14 cijfers').nullable().default(null),
+        ean: EanSchema.default(null),
     }).safeParse(input);
     if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Controleer de velden' };
     const s = await ingelogdMetOrg();
@@ -146,7 +146,7 @@ const PaginaVelden = z.object({
     ingredienten: lijst,
     bewaren: z.string().trim().max(600).nullable(),
     lekker_bij: z.string().trim().max(200).nullable(),
-    ean: z.string().regex(/^\d{8,14}$/, 'Een streepjescode is 8 tot 14 cijfers').nullable(),
+    ean: EanSchema,
     /* null = prijs volgt; nooit 0 als gok. */
     prijs_cents: z.number().int().min(1, 'Een prijs is nooit € 0').nullable(),
     eenheid: z.string().trim().min(1).max(40),
