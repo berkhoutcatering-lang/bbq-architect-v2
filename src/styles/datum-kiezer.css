@@ -1,0 +1,28 @@
+/* DatumKiezer (src/components/DatumKiezer.tsx): een maand voor de vinger.
+   Alleen tokens uit het thema; de knoppen zijn de gewone .btn uit globals.css. */
+.dk { display: grid; gap: 6px; }
+.dk-label-klein { font-size: 11px; color: var(--muted); }
+
+.dk-veld.btn { justify-content: flex-start; width: 100%; height: 56px; padding: 10px 14px; font-size: 16px; font-weight: 600; color: var(--text); background: var(--color-bg-deep, transparent); text-align: left; }
+.dk-veld.btn:hover { color: var(--text); }
+.dk-compact .dk-veld.btn { height: 48px; font-size: 14px; padding: 8px 12px; }
+.dk-leeg { color: var(--muted); font-weight: 500; }
+
+.dk-paneel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--color-bg-elevated, var(--bg)); }
+.dk-kop { display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; gap: 8px; }
+.dk-pijl.btn { justify-content: center; width: 56px; height: 56px; padding: 0; color: var(--text); }
+.dk-maand { text-align: center; font-size: 18px; font-weight: 600; color: var(--text); text-transform: capitalize; }
+
+.dk-rooster { display: grid; grid-template-columns: repeat(7, minmax(48px, 1fr)); gap: 4px; }
+.dk-weekdag { text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+.dk-dag.btn { justify-content: center; height: 52px; padding: 0; font-size: 18px; font-weight: 600; border-radius: 10px; font-variant-numeric: tabular-nums; touch-action: manipulation; }
+.dk-dag.btn-ghost { color: var(--text); }
+.dk-dag.dk-buiten { opacity: .45; }
+.dk-dag.dk-vandaag:not(.btn-brand) { box-shadow: inset 0 0 0 2px var(--brand); }
+.dk-dag:disabled { opacity: .2; cursor: not-allowed; }
+.dk-wis.btn { justify-self: start; color: var(--text); }
+
+.dk-compact .dk-dag.btn { height: 48px; font-size: 16px; }
+/* Open in een rooster of een rij van twee: dan de hele breedte, zodat de maand niet krimpt onder 48 px per dag. */
+.dk:has(.dk-paneel) { grid-column: 1 / -1; flex-basis: 100%; }
+.dk-veld.btn > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

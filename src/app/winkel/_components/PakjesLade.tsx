@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { ScanLine, Undo2 } from 'lucide-react';
 import '@/styles/winkel.css';
 import Button from '@/components/Button';
+import DatumKiezer from '@/components/DatumKiezer';
 import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import { formatEur } from '@/lib/format';
@@ -93,10 +94,8 @@ export default function PakjesLade({ producten, onClose }: { producten: PakjePro
         <Drawer title="Pakjes scannen" subtitle="Scan elk pakje van de slager. De prijs komt uit de streepjescode." width={560} onClose={sluit}
             footer={<Button variant={binnen.length ? 'brand' : 'ghost'} onClick={sluit}>Klaar{binnen.length ? ` · ${binnen.length} ${binnen.length === 1 ? 'pakje' : 'pakjes'} binnen` : ''}</Button>}>
             <div style={{ display: 'grid', gap: 14 }}>
-                <label style={{ display: 'grid', gap: 6 }}>
-                    <span className="kf-eyebrow">THT van deze levering (van het A4)</span>
-                    <input className="kf-input" type="date" value={tht} onChange={(e) => { setTht(e.target.value); terugNaarScan(); }} />
-                </label>
+                <DatumKiezer label="THT van deze levering (van het A4)" value={tht} onChange={setTht} openAlsLeeg
+                    leegTekst="Tik om de THT te kiezen" onGekozen={terugNaarScan} />
 
                 <label style={{ display: 'grid', gap: 6 }}>
                     <span className="kf-eyebrow">Scan een pakje</span>
