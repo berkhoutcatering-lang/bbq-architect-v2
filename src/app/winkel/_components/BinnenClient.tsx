@@ -10,6 +10,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Truck } from 'lucide-react';
+import DatumKiezer from '@/components/DatumKiezer';
 import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import { datumNL } from '@/lib/winkel/afdelingen';
@@ -78,18 +79,9 @@ export default function BinnenLade({ producten, leveranciers, onClose }: {
                         {leveranciers.map((l) => <option key={l.id} value={l.id}>{l.naam}</option>)}
                     </select>
                 </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                    <span className="kf-eyebrow">Geleverd op</span>
-                    <input type="date" className="kf-input" value={geleverd} onChange={(e) => setGeleverd(e.target.value)} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                    <span className="kf-eyebrow">Productiedatum (voor alles)</span>
-                    <input type="date" className="kf-input" value={alleProd} onChange={(e) => setAlleProd(e.target.value)} />
-                </label>
-                <label style={{ display: 'grid', gap: 6 }}>
-                    <span className="kf-eyebrow">THT (voor alles)</span>
-                    <input type="date" className="kf-input" value={alleTht} min={vandaag} onChange={(e) => setAlleTht(e.target.value)} />
-                </label>
+                <DatumKiezer label="Geleverd op" value={geleverd} onChange={setGeleverd} />
+                <DatumKiezer label="Productiedatum (voor alles)" value={alleProd} onChange={setAlleProd} wisbaar />
+                <DatumKiezer label="THT (voor alles)" value={alleTht} min={vandaag} onChange={setAlleTht} wisbaar />
             </div>
 
             <div className="wk-lijst">
@@ -109,12 +101,8 @@ export default function BinnenLade({ producten, leveranciers, onClose }: {
                                 </div>
                                 {r.aan && (
                                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                        <label style={{ display: 'grid', gap: 2, fontSize: 11, color: 'var(--muted)' }}>gemaakt
-                                            <input type="date" className="kf-input" value={r.productiedatum || alleProd} onChange={(e) => zet(p.id, { productiedatum: e.target.value })} />
-                                        </label>
-                                        <label style={{ display: 'grid', gap: 2, fontSize: 11, color: thtVan(p) ? 'var(--muted)' : 'var(--red, #dc2626)' }}>THT
-                                            <input type="date" className="kf-input" value={r.tht || alleTht} min={vandaag} onChange={(e) => zet(p.id, { tht: e.target.value })} />
-                                        </label>
+                                        <DatumKiezer compact label="gemaakt" value={r.productiedatum || alleProd} onChange={(v) => zet(p.id, { productiedatum: v })} leegTekst="Kies" />
+                                        <DatumKiezer compact label={thtVan(p) ? 'THT' : 'THT ontbreekt'} value={r.tht || alleTht} min={vandaag} onChange={(v) => zet(p.id, { tht: v })} leegTekst="Kies" />
                                     </div>
                                 )}
                             </div>

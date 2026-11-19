@@ -22,6 +22,7 @@ import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import Button from '@/components/Button';
+import DatumKiezer from '@/components/DatumKiezer';
 import { useToast } from '@/components/Toast';
 import Drawer from '@/app/verkoop/webshop/_components/Drawer';
 import { formatEur } from '@/lib/format';
@@ -497,12 +498,9 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                     {p.artikel && !p.artikel.opToonbank && ' · niet op de toonbank'}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '150px minmax(0,1fr)', gap: 12 }}>
-                    <div className="kf-field">
-                        <label className="kf-label" htmlFor="winkel-tht">THT</label>
-                        <input id="winkel-tht" className="kf-input" type="date" value={thtDatum} disabled={bezig} onChange={(e) => setThtDatum(e.target.value)}
-                            onBlur={() => { if (thtDatum !== (p.tht ?? '')) void doe(() => zetTht({ productId: p.id, tht: thtDatum || null }), thtDatum ? 'THT bewaard' : 'THT gewist'); }} />
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 12 }}>
+                    <DatumKiezer compact wisbaar label="THT" value={thtDatum} disabled={bezig} leegTekst="Geen THT"
+                        onChange={(v) => { setThtDatum(v); if (v !== (p.tht ?? '')) void doe(() => zetTht({ productId: p.id, tht: v || null }), v ? 'THT bewaard' : 'THT gewist'); }} />
                     <div className="kf-field">
                         <label className="kf-label" htmlFor="winkel-bestel">Bestellen ({eenheid})</label>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -562,10 +560,7 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             <input className="kf-input" inputMode="decimal" value={prijs} onChange={(e) => setPrijs(e.target.value)} placeholder="onbekend" />
                             <div className="kf-help">Leeg = de oude prijs blijft staan.</div>
                         </div>
-                        <div className="kf-field">
-                            <label className="kf-label">THT</label>
-                            <input className="kf-input" type="date" value={tht} onChange={(e) => setTht(e.target.value)} />
-                        </div>
+                        <DatumKiezer compact wisbaar label="THT" value={tht} onChange={setTht} leegTekst="Kies de THT" />
                     </div>
                 )}
 
