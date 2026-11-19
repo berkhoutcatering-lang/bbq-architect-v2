@@ -142,7 +142,7 @@ describe('contract 1.4: stickers', () => {
         expect(uit.artikelen[1]).not.toHaveProperty('verkoop_per');
         expect(uit.artikelen[1]).not.toHaveProperty('etiket');
     });
-    it('catalogus: prijscode_nr alleen als het er is en 5 cijfers heeft', () => {
+    it('catalogus: prijscode_nr alleen als het er is en 4 (PLU) of 5 cijfers heeft', () => {
         const basis = {
             artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Haasbiefstuk', prijs_cents: 899, btw_pct: 9, btw_verdeling: null, alcohol: false,
             groep: 'Vers vlees', volgorde: 0, favoriet: false, foto: null, foto_url_ruw: null,
@@ -153,13 +153,15 @@ describe('contract 1.4: stickers', () => {
             artikelen: [
                 { ...basis, verkoop_per: 'stuk', prijscode_nr: '01015' },
                 { ...basis, artikel_id: '6c2d3e4f-5061-4b72-8c83-9d8e7f6a5b52', naam: 'Pindas', verkoop_per: 'stuk', prijscode_nr: null },
-                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Raar', verkoop_per: 'stuk', prijscode_nr: '1015' },
+                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Raar', verkoop_per: 'stuk', prijscode_nr: '101' },
+                { ...basis, artikel_id: '8e4f5061-7283-4d94-8ea5-1f0a9b8c7d74', naam: 'Kogelbiefstuk', verkoop_per: 'stuk', prijscode_nr: '0102' },
             ],
         }, null);
         expect(SCHEMAS.CatalogusAntwoord.safeParse(uit).success).toBe(true);
         expect(uit.artikelen[0]).toMatchObject({ prijscode_nr: '01015' });
         expect(uit.artikelen[1]).not.toHaveProperty('prijscode_nr');
         expect(uit.artikelen[2]).not.toHaveProperty('prijscode_nr');
+        expect(uit.artikelen[3]).toMatchObject({ prijscode_nr: '0102' });
     });
     it('een bonregel met prijs_bron prijscode (pakje van de slager)', () => {
         const regel = {

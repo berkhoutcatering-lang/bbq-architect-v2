@@ -63,7 +63,7 @@ function naarArtikel(a: CatalogusArtikelRuw, supabaseUrl: string | null | undefi
         actief: !!a.actief,
         kanalen: (a.kanalen ?? []).filter((k): k is 'toonbank' | 'webshop' | 'event' => k === 'toonbank' || k === 'webshop' || k === 'event'),
         ...opGewicht(a),
-        ...(typeof a.prijscode_nr === 'string' && /^\d{5}$/.test(a.prijscode_nr) ? { prijscode_nr: a.prijscode_nr } : {}),
+        ...(typeof a.prijscode_nr === 'string' && /^\d{4,5}$/.test(a.prijscode_nr) ? { prijscode_nr: a.prijscode_nr } : {}),
     };
 }
 

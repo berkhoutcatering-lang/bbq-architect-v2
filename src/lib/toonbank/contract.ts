@@ -337,10 +337,13 @@ export const Artikel = z.object({
     /** Contract 1.4: de prijs per kilo, inclusief btw. Alleen bij verkoop_per "kg". */
     kiloprijs_cents: PositieveCents.nullable().optional(),
     /**
-     * [voorstel] Het artikelnummer van de leverancier in de prijscode 21 AAAAA PPPPP C (5 cijfers).
+     * [voorstel] Het artikelnummer (PLU) van de leverancier in de prijscode 21 PPPP K CCCCC E.
      * Alleen bij een artikel dat per pakje met de prijs in de code verkocht wordt.
+     * Sinds 19 november 2026 4 cijfers ("0101"); daarvoor 5 (PLU plus het prijscontrolecijfer
+     * van één pakje). De kassa vergelijkt alleen de eerste 4 cijfers met de PLU uit de code,
+     * dus 5 cijfers blijft geldig.
      */
-    prijscode_nr: z.string().regex(/^\d{5}$/).optional(),
+    prijscode_nr: z.string().regex(/^\d{4,5}$/).optional(),
     /** Contract 1.4: wat er op de sticker komt. Alleen bij verkoop_per "kg"; zonder etiket geen sticker. */
     etiket: Etiket.nullable().optional(),
 });
