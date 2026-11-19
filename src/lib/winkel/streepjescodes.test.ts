@@ -9,7 +9,7 @@ describe('krijgtStreepjescode', () => {
     it('niet op gewicht, niet met een prijssticker van de slager, niet uit', () => {
         expect(krijgtStreepjescode({ ...los, eenheid: 'gram' })).toBe(false);
         expect(krijgtStreepjescode({ ...los, binnen_per_sticker: true })).toBe(false);
-        expect(krijgtStreepjescode({ ...los, prijscode_nr: 1015 })).toBe(false);
+        expect(krijgtStreepjescode({ ...los, prijscode_nr: '01015' })).toBe(false);
         expect(krijgtStreepjescode({ ...los, actief: false })).toBe(false);
     });
 });

@@ -16,7 +16,9 @@ import {
     type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalOpslagRuw, type KoppelKandidaat, type Koppeling, type Medewerker,
     type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
     type CadeaubonReserveerFout, type CadeaubonReserveerRuw, type CadeaubonStand, type CadeaubonStatusRuw, type CadeaubonVrijgeefRuw,
+    type CodeArtikelRuw,
 } from './store';
+import { supabaseEanOpslag } from '@/lib/winkel/eanKoppelen';
 
 /** De functie of kolom bestaat nog niet (de migratie is nog niet gedraaid). */
 const NOG_NIET_GEMIGREERD = new Set(['42703', '42P01', '42883', 'PGRST202', 'PGRST204', 'PGRST205']);
@@ -212,6 +214,36 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             });
             if (error) throw new OpslagFout('toonbank_status', error);
             return naarStatus(data as Record<string, unknown>);
+        },
+
+        async codeArtikel(orgId, artikelId) {
+            const { data: art, error } = await sb.from('winkel_artikelen').select('id, verkoop_per')
+                .eq('id', artikelId).eq('organization_id', orgId).maybeSingle();
+            if (error) throw new OpslagFout('winkel_artikelen', error);
+            if (!art) return null;
+            const { data: slots, error: e2 } = await sb.from('winkel_artikel_slots').select('standaard_product_id, hoeveelheid')
+                .eq('artikel_id', artikelId).eq('organization_id', orgId);
+            if (e2) throw new OpslagFout('winkel_artikel_slots', e2);
+            const onderdelen = ((slots ?? []) as { standaard_product_id: string | null; hoeveelheid: unknown }[])
+                .map((s) => ({ product_id: s.standaard_product_id, hoeveelheid: Number(s.hoeveelheid) }));
+            let product: CodeArtikelRuw['product'] = null;
+            if (onderdelen.length === 1 && onderdelen[0]!.product_id) {
+                const { data: p, error: e3 } = await sb.from('winkel_producten').select('id, naam, actief, eenheid, binnen_per_sticker, prijscode_nr')
+                    .eq('id', onderdelen[0]!.product_id).eq('organization_id', orgId).maybeSingle();
+                if (e3) throw new OpslagFout('winkel_producten', e3);
+                if (p) {
+                    const r = p as Record<string, unknown>;
+                    product = {
+                        id: String(r.id), naam: String(r.naam), actief: r.actief === true, eenheid: String(r.eenheid ?? 'stuk'),
+                        binnen_per_sticker: r.binnen_per_sticker === true, prijscode_nr: (r.prijscode_nr as string | null) ?? null,
+                    };
+                }
+            }
+            return { artikel_id: String((art as { id: string }).id), verkoop_per: ((art as { verkoop_per?: string | null }).verkoop_per) ?? null, onderdelen, product };
+        },
+
+        eanOpslag(orgId) {
+            return supabaseEanOpslag(sb, orgId);
         },
 
         async catalogusVersie(orgId) {

@@ -16,6 +16,11 @@ import {
     type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
     type CadeaubonStand, type CadeaubonStatusRuw,
 } from './store';
+import { EAN_INDEX } from '@/lib/winkel/toonbankVelden';
+
+/* ── Contract 1.4: streepjescodes koppelen, zoals winkel_artikelen, _slots en winkel_producten.ean ── */
+export interface GeheugenCodeProduct { id: string; organization_id: string; naam: string; ean: string | null; actief: boolean; eenheid: string; binnen_per_sticker: boolean; prijscode_nr: string | null }
+export interface GeheugenCodeArtikel { id: string; organization_id: string; verkoop_per: string | null; onderdelen: { product_id: string | null; hoeveelheid: number }[] }
 
 /* ── Contract 1.2: cadeaubonnen, zoals de tabellen uit 20261029120000 ── */
 
@@ -143,6 +148,9 @@ export interface ToonbankGeheugen {
     gewichtToegestaan: Record<string, boolean>;
     partijen: Record<string, PartijRuw[]>;
     bonKop: Record<string, BonKop>;
+    /* Contract 1.4: streepjescodes koppelen vanaf de kassa. */
+    codeArtikelen: GeheugenCodeArtikel[];
+    codeProducten: GeheugenCodeProduct[];
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -199,6 +207,8 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         gewichtToegestaan: start.gewichtToegestaan ?? {},
         partijen: start.partijen ?? {},
         bonKop: start.bonKop ?? {},
+        codeArtikelen: start.codeArtikelen ?? [],
+        codeProducten: start.codeProducten ?? [],
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -554,6 +564,43 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
 
         async bonKop(orgId) {
             return g.bonKop[orgId] ?? null;
+        },
+
+        async codeArtikel(orgId, artikelId) {
+            const a = g.codeArtikelen.find((x) => x.id === artikelId && x.organization_id === orgId);
+            if (!a) return null;
+            const enig = a.onderdelen.length === 1 ? a.onderdelen[0]! : null;
+            const p = enig?.product_id ? g.codeProducten.find((x) => x.id === enig.product_id && x.organization_id === orgId) : undefined;
+            return {
+                artikel_id: a.id, verkoop_per: a.verkoop_per, onderdelen: a.onderdelen,
+                product: p ? { id: p.id, naam: p.naam, actief: p.actief, eenheid: p.eenheid, binnen_per_sticker: p.binnen_per_sticker, prijscode_nr: p.prijscode_nr } : null,
+            };
+        },
+
+        /* Zoals winkel_producten met de unieke index op (organisatie, ean) en de catalogustrigger. */
+        eanOpslag(orgId) {
+            const van = (p: GeheugenCodeProduct) => ({ id: p.id, naam: p.naam, ean: p.ean });
+            return {
+                async product(id) {
+                    const p = g.codeProducten.find((x) => x.id === id && x.organization_id === orgId);
+                    return p ? van(p) : null;
+                },
+                async metCodes(codes) {
+                    return g.codeProducten.filter((x) => x.organization_id === orgId && x.ean != null && codes.includes(x.ean)).map(van);
+                },
+                async zetEan(id, ean) {
+                    if (ean && g.codeProducten.some((x) => x.organization_id === orgId && x.ean === ean && x.id !== id)) {
+                        return { code: '23505', message: `duplicate key value violates unique constraint "${EAN_INDEX}"` };
+                    }
+                    const p = g.codeProducten.find((x) => x.id === id && x.organization_id === orgId);
+                    if (p && p.ean !== ean) {
+                        p.ean = ean;
+                        const c = g.catalogus[orgId] ?? { versie: 0, volledig: true, artikelen: [], producten: [], codes: [], groepen: [] };
+                        g.catalogus[orgId] = { ...c, versie: c.versie + 1 };
+                    }
+                    return null;
+                },
+            };
         },
 
         async partijen(orgId) {

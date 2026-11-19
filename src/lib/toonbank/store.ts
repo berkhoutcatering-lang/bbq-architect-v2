@@ -11,6 +11,7 @@
  * krijgt die van de guard, nooit van de tablet.
  */
 
+import type { EanOpslag } from '@/lib/winkel/eanKoppelen';
 import type { BonKop } from './contract';
 
 export type ToonbankRol = 'medewerker' | 'eigenaar';
@@ -432,4 +433,19 @@ export interface ToonbankStore {
 
     /** De bedrijfsgegevens voor de kassabon (settings); null zonder bedrijfsnaam. */
     bonKop(orgId: string): Promise<BonKop | null>;
+
+    /* ── Contract 1.4: streepjescodes koppelen vanaf de kassa ── */
+    /** Het product achter een artikel, met wat nodig is om te zien of het een code mag krijgen; null als het artikel niet bestaat in deze organisatie. */
+    codeArtikel(orgId: string, artikelId: string): Promise<CodeArtikelRuw | null>;
+    /** De opslag van winkel_producten.ean voor deze organisatie (lib/winkel/eanKoppelen.ts). */
+    eanOpslag(orgId: string): EanOpslag;
+}
+
+export interface CodeArtikelRuw {
+    artikel_id: string;
+    verkoop_per: string | null;
+    /** De onderdelen van het artikel (winkel_artikel_slots). */
+    onderdelen: { product_id: string | null; hoeveelheid: number }[];
+    /** Het product van het enige onderdeel, als er precies één is. */
+    product: { id: string; naam: string; actief: boolean; eenheid: string; binnen_per_sticker: boolean; prijscode_nr: string | null } | null;
 }
