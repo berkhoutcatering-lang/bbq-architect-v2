@@ -54,3 +54,9 @@
 .wk-instel:hover { background: none; }
 .wk-instel .kf-input { padding: 7px 9px; font-size: 13px; }
 .wk-bulk { position: sticky; top: 8px; z-index: 10; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 12px; background: var(--color-bg-elevated); border: 1px solid var(--brand-gold, #c4a35a); border-radius: 12px; }
+
+/* Pakjes scannen (PakjesLade): wat er net binnenkwam groot, daaronder de gescande regels. */
+.pk-binnen { display: grid; gap: 4px; padding: 14px 16px; border-radius: 12px; animation: pk-op .6s ease-out; }
+@keyframes pk-op { from { box-shadow: 0 0 0 4px var(--status-success-border); } to { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .pk-binnen { animation: none; } }
+.pk-rij { display: grid; grid-template-columns: minmax(0, 1fr) auto 72px; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); }
