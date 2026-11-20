@@ -16,6 +16,11 @@ import {
     type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
     type CadeaubonStand, type CadeaubonStatusRuw,
 } from './store';
+import { GEDEELDE_PLU, leesPrijscode } from '@/lib/winkel/prijscode';
+
+/* ── Contract 1.4: pakjes van de slager, zoals winkel_producten.prijscode_nr en winkel_stuks ── */
+export interface GeheugenWinkelProduct { id: string; organization_id: string; naam: string; prijscode_nr: string | null }
+export interface GeheugenPakje { id: string; organization_id: string; product_id: string; code: string; prijs_cents: number; tht: string; status: 'op_voorraad' | 'verkocht' }
 import { EAN_INDEX } from '@/lib/winkel/toonbankVelden';
 
 /* ── Contract 1.4: streepjescodes koppelen, zoals winkel_artikelen, _slots en winkel_producten.ean ── */
@@ -148,6 +153,9 @@ export interface ToonbankGeheugen {
     gewichtToegestaan: Record<string, boolean>;
     partijen: Record<string, PartijRuw[]>;
     bonKop: Record<string, BonKop>;
+    /* Contract 1.4: pakjes van de slager binnenmelden. */
+    winkelProducten: GeheugenWinkelProduct[];
+    pakjes: GeheugenPakje[];
     /* Contract 1.4: streepjescodes koppelen vanaf de kassa. */
     codeArtikelen: GeheugenCodeArtikel[];
     codeProducten: GeheugenCodeProduct[];
@@ -207,6 +215,8 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         gewichtToegestaan: start.gewichtToegestaan ?? {},
         partijen: start.partijen ?? {},
         bonKop: start.bonKop ?? {},
+        winkelProducten: start.winkelProducten ?? [],
+        pakjes: start.pakjes ?? [],
         codeArtikelen: start.codeArtikelen ?? [],
         codeProducten: start.codeProducten ?? [],
     };
@@ -605,6 +615,44 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
 
         async partijen(orgId) {
             return g.partijen[orgId] ?? [];
+        },
+
+        /* Zoals winkel_stuk_binnen_prijscode (20261119130000): idempotent op het stuk-id, zoeken op de PLU, 0000 altijd vragen. */
+        async pakjeBinnen(v) {
+            const binnen = (p: GeheugenPakje) => {
+                const product = g.winkelProducten.find((x) => x.id === p.product_id)!;
+                return { uitkomst: 'binnen' as const, stuk_id: p.id, product_id: p.product_id, naam: product.naam, plu: p.code.slice(2, 6), prijs_cents: p.prijs_cents, tht: p.tht };
+            };
+            const al = g.pakjes.find((p) => p.id === v.stukId);
+            if (al) return al.organization_id === v.orgId ? binnen(al) : { uitkomst: 'nummer_bezet', melding: 'Dit pakje_id is al gebruikt' };
+            const c = leesPrijscode(v.code);
+            if (c.ok === false) return { uitkomst: c.reden };
+            const { plu, prijs_cents } = c.prijscode;
+            let product: GeheugenWinkelProduct | undefined;
+            if (v.productId) {
+                product = g.winkelProducten.find((x) => x.id === v.productId && x.organization_id === v.orgId);
+                if (!product) return { uitkomst: 'product_onbekend' };
+                if (plu !== GEDEELDE_PLU) {
+                    const ander = g.winkelProducten.find((x) => x.organization_id === v.orgId && x.prijscode_nr === plu && x.id !== product!.id);
+                    if (ander) return { uitkomst: 'nummer_bezet', melding: `Nummer ${plu} hoort al bij ${ander.naam}` };
+                    product.prijscode_nr = plu;
+                }
+            } else if (plu === GEDEELDE_PLU) {
+                return { uitkomst: 'onbekend', plu, prijs_cents };
+            } else {
+                product = g.winkelProducten.find((x) => x.organization_id === v.orgId && x.prijscode_nr === plu);
+                if (!product) return { uitkomst: 'onbekend', plu, prijs_cents };
+            }
+            const pakje: GeheugenPakje = { id: v.stukId, organization_id: v.orgId, product_id: product.id, code: v.code, prijs_cents, tht: v.tht, status: 'op_voorraad' };
+            g.pakjes.push(pakje);
+            return binnen(pakje);
+        },
+
+        async pakjeWeg(orgId, stukId) {
+            const i = g.pakjes.findIndex((p) => p.id === stukId && p.organization_id === orgId && p.status === 'op_voorraad');
+            if (i < 0) return false;
+            g.pakjes.splice(i, 1);
+            return true;
         },
 
         async cadeaubon(orgId, code) {

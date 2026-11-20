@@ -17,7 +17,8 @@ import { describe, expect, it } from 'vitest';
 import { kassaPil } from '@/lib/winkel/vrij';
 import { catalogusAntwoord, partijenAntwoord } from './vragen';
 import {
-    BONNEN_SOORTEN, CONTRACT_HUIDIG, CONTRACT_MINIMAAL, CodeKoppelAntwoord, CodeKoppelVerzoek, CodeWeghalenAntwoord, FOUT_STATUS, Melding, PilGevallen, SCHEMAS, StatusAntwoord, VOORBEELDEN,
+    BONNEN_SOORTEN, CONTRACT_HUIDIG, CONTRACT_MINIMAAL, CodeKoppelAntwoord, CodeKoppelVerzoek, CodeWeghalenAntwoord, FOUT_STATUS, Melding,
+    PakjeBinnenAntwoord, PakjeBinnenVerzoek, PakjeWegAntwoord, PilGevallen, SCHEMAS, StatusAntwoord, VOORBEELDEN,
     leesVersie, versieMinstens,
 } from './contract';
 
@@ -142,7 +143,7 @@ describe('contract 1.4: stickers', () => {
         expect(uit.artikelen[1]).not.toHaveProperty('verkoop_per');
         expect(uit.artikelen[1]).not.toHaveProperty('etiket');
     });
-    it('catalogus: prijscode_nr alleen als het er is en 5 cijfers heeft', () => {
+    it('catalogus: prijscode_nr alleen als het er is en 4 (PLU) of 5 cijfers heeft', () => {
         const basis = {
             artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Haasbiefstuk', prijs_cents: 899, btw_pct: 9, btw_verdeling: null, alcohol: false,
             groep: 'Vers vlees', volgorde: 0, favoriet: false, foto: null, foto_url_ruw: null,
@@ -153,13 +154,15 @@ describe('contract 1.4: stickers', () => {
             artikelen: [
                 { ...basis, verkoop_per: 'stuk', prijscode_nr: '01015' },
                 { ...basis, artikel_id: '6c2d3e4f-5061-4b72-8c83-9d8e7f6a5b52', naam: 'Pindas', verkoop_per: 'stuk', prijscode_nr: null },
-                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Raar', verkoop_per: 'stuk', prijscode_nr: '1015' },
+                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Raar', verkoop_per: 'stuk', prijscode_nr: '101' },
+                { ...basis, artikel_id: '8e4f5061-7283-4d94-8ea5-1f0a9b8c7d74', naam: 'Kogelbiefstuk', verkoop_per: 'stuk', prijscode_nr: '0102' },
             ],
         }, null);
         expect(SCHEMAS.CatalogusAntwoord.safeParse(uit).success).toBe(true);
         expect(uit.artikelen[0]).toMatchObject({ prijscode_nr: '01015' });
         expect(uit.artikelen[1]).not.toHaveProperty('prijscode_nr');
         expect(uit.artikelen[2]).not.toHaveProperty('prijscode_nr');
+        expect(uit.artikelen[3]).toMatchObject({ prijscode_nr: '0102' });
     });
     it('een bonregel met prijs_bron prijscode (pakje van de slager)', () => {
         const regel = {
@@ -206,5 +209,30 @@ describe('streepjescodes koppelen vanaf de kassa (contract 1.4, additief)', () =
         expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'kan_niet', reden: '' }).success).toBe(false);
         expect(CodeWeghalenAntwoord.safeParse({ weg: true, catalogus_versie: 622 }).success).toBe(true);
         expect(SCHEMAS.CodeKoppelAntwoord).toBe(CodeKoppelAntwoord);
+    });
+});
+
+describe('pakjes van de slager binnenmelden (contract 1.4, additief)', () => {
+    const PAKJE = '3a7c9e1b-2d4f-4a6b-8c0d-1e2f3a4b5c6d';
+    const PRODUCT = '0da446be-613f-4a74-9791-704b065a1f74';
+    it('verzoek: pakje_id, een 21-code van 13 cijfers, een THT; product_id alleen na de keuze', () => {
+        expect(PakjeBinnenVerzoek.safeParse({ pakje_id: PAKJE, code: '2101015028237', tht: '2026-11-26' }).success).toBe(true);
+        expect(PakjeBinnenVerzoek.safeParse({ pakje_id: PAKJE, code: '2100007066967', tht: '2026-11-26', product_id: PRODUCT }).success).toBe(true);
+        expect(PakjeBinnenVerzoek.safeParse({ pakje_id: PAKJE, code: '2100007066967', tht: '2026-11-26', product_id: null }).success).toBe(true);
+        expect(PakjeBinnenVerzoek.safeParse({ pakje_id: PAKJE, code: '8712345678906', tht: '2026-11-26' }).success).toBe(false);
+        expect(PakjeBinnenVerzoek.safeParse({ pakje_id: PAKJE, code: '2101015028237', tht: '26-11-2026' }).success).toBe(false);
+        expect(PakjeBinnenVerzoek.safeParse({ code: '2101015028237', tht: '2026-11-26' }).success).toBe(false);
+    });
+    it('antwoord: binnen, onbekend (PLU van vier cijfers), controlecijfer, geen_prijscode', () => {
+        expect(PakjeBinnenAntwoord.safeParse({ uitkomst: 'binnen', stuk_id: PAKJE, product_id: PRODUCT, naam: 'Haasbiefstuk', plu: '0101', prijs_cents: 7677, tht: '2026-11-26' }).success).toBe(true);
+        expect(PakjeBinnenAntwoord.safeParse({ uitkomst: 'onbekend', plu: '0000', prijs_cents: 6696 }).success).toBe(true);
+        expect(PakjeBinnenAntwoord.safeParse({ uitkomst: 'onbekend', plu: '01015', prijs_cents: 6696 }).success).toBe(false);
+        expect(PakjeBinnenAntwoord.safeParse({ uitkomst: 'controlecijfer' }).success).toBe(true);
+        expect(PakjeBinnenAntwoord.safeParse({ uitkomst: 'geen_prijscode' }).success).toBe(true);
+        expect(PakjeWegAntwoord.safeParse({ weg: false }).success).toBe(true);
+        expect(SCHEMAS.PakjeBinnenAntwoord).toBe(PakjeBinnenAntwoord);
+    });
+    it('een PLU die al bij een ander product hoort is 409 nummer_bezet', () => {
+        expect(FOUT_STATUS.nummer_bezet).toBe(409);
     });
 });
