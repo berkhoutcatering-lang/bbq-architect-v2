@@ -981,8 +981,52 @@ export type PakjeBinnenAntwoord = z.infer<typeof PakjeBinnenAntwoord>;
 export const PakjeWegAntwoord = z.object({ weg: z.boolean() });
 export type PakjeWegAntwoord = z.infer<typeof PakjeWegAntwoord>;
 
+/* ═══ Weggooien of invriezen (contract 1.4, additief) ════════════════════ */
+
+/*
+ * POST pakjes/eruit en POST pakjes/{stuk_id}/terug: een pakje van de slager (21…) of een gestickerd
+ * stuk kaas (29…) dat niet meer verkocht wordt, met één scan uit de winkelvoorraad halen (scherm
+ * "Weggooien of invriezen"), en een vergissing terugdraaien. Weggooien is derving; invriezen is
+ * eigen gebruik (de keuken) met de invriesdatum, voor de vriezerlijst (Keuken → Vriezer).
+ * Sleutel + medewerker, alleen online, geen journaalregel. De logica staat in winkel_stuk_eruit en
+ * winkel_stuk_terug (migratie 20261120130000), zie src/lib/toonbank/pakjes.ts.
+ */
+
+export const EruitWat = z.enum(['weggooien', 'invriezen']);
+export type EruitWat = z.infer<typeof EruitWat>;
+
+/** POST pakjes/eruit. Hetzelfde verzoek_id nog eens geeft hetzelfde antwoord en haalt nooit een tweede pakje eruit. */
+export const PakjeEruitVerzoek = z.object({
+    /** Maakt de tablet per scan aan. */
+    verzoek_id: Uuid,
+    /** Een prijscode van de slager (21, 13 cijfers) of een kaassticker (29, 28 cijfers). */
+    code: z.string().regex(/^(21\d{11}|29\d{26})$/, 'een prijscode (21, 13 cijfers) of een kaassticker (29, 28 cijfers)'),
+    wat: EruitWat,
+});
+export type PakjeEruitVerzoek = z.infer<typeof PakjeEruitVerzoek>;
+
+/**
+ * eruit: het stuk is uit de winkelvoorraad (bij gelijke codes het pakje met de vroegste THT).
+ * niet_op_voorraad: er ligt niets met deze code (nooit binnengemeld, al verkocht of al eruit); naam
+ * als BBQ Architect het product kent. controlecijfer: opnieuw scannen.
+ */
+export const PakjeEruitAntwoord = z.discriminatedUnion('uitkomst', [
+    z.object({
+        uitkomst: z.literal('eruit'), stuk_id: Uuid, naam: z.string().min(1), prijs_cents: PositieveCents,
+        tht: Datum.nullable(), wat: EruitWat, ingevroren_op: Datum.nullable(),
+    }),
+    z.object({ uitkomst: z.literal('niet_op_voorraad'), naam: z.string().min(1).nullable() }),
+    z.object({ uitkomst: z.literal('controlecijfer') }),
+]);
+export type PakjeEruitAntwoord = z.infer<typeof PakjeEruitAntwoord>;
+
+/** POST pakjes/{stuk_id}/terug. Onwaar: niet via pakjes/eruit eruit gegaan, al terug, of in de vriezerlijst al gebruikt. */
+export const PakjeTerugAntwoord = z.object({ terug: z.boolean() });
+export type PakjeTerugAntwoord = z.infer<typeof PakjeTerugAntwoord>;
+
 export const SCHEMAS = {
     PakjeBinnenVerzoek, PakjeBinnenAntwoord, PakjeWegAntwoord,
+    PakjeEruitVerzoek, PakjeEruitAntwoord, PakjeTerugAntwoord,
     StickerMelding, PartijenAntwoord,
     PinbetalingVerzoek, PinbetalingAntwoord,
     CadeaubonAntwoord, CadeaubonReserveerVerzoek, CadeaubonReserveerAntwoord, CadeaubonVrijgevenVerzoek, CadeaubonVrijgevenAntwoord,

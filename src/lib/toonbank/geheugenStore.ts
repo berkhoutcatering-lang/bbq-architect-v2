@@ -14,13 +14,22 @@ import {
     type Apparaat, type CatalogusRuw, type PartijRuw, type DagstaatStand, type InlogTeller, type JournaalResultaat, type KoppelKandidaat, type Koppeling, type Medewerker,
     type NieuweSessie, type OphaalVraag, type OphaalVraagRuw, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij,
     type Pinbetaling, type WegzetVraag, type WegzetVraagRuw,
-    type CadeaubonStand, type CadeaubonStatusRuw,
+    type CadeaubonStand, type CadeaubonStatusRuw, type PakjeEruitRuw,
 } from './store';
+import { stickerCodeGeldig } from '@/lib/winkel/stickercode';
 import { GEDEELDE_PLU, leesPrijscode } from '@/lib/winkel/prijscode';
 
 /* ── Contract 1.4: pakjes van de slager, zoals winkel_producten.prijscode_nr en winkel_stuks ── */
 export interface GeheugenWinkelProduct { id: string; organization_id: string; naam: string; prijscode_nr: string | null }
-export interface GeheugenPakje { id: string; organization_id: string; product_id: string; code: string; prijs_cents: number; tht: string; status: 'op_voorraad' | 'verkocht' }
+export interface GeheugenPakje {
+    id: string; organization_id: string; product_id: string; code: string; prijs_cents: number; tht: string;
+    status: 'op_voorraad' | 'verkocht' | 'afgeschreven' | 'naar_keuken';
+    /* Contract 1.4, weggooien of invriezen: de invriesdatum, en of het in de vriezerlijst gebruikt is. */
+    ingevroren_op?: string | null;
+    opgebruikt?: boolean;
+}
+/** Eén verzoek van POST pakjes/eruit, zoals winkel_stuk_eruit. */
+export interface GeheugenEruit { verzoek_id: string; organization_id: string; stuk_id: string | null; antwoord: PakjeEruitRuw; medewerker_id: string | null; teruggezet: boolean }
 
 /* ── Contract 1.2: cadeaubonnen, zoals de tabellen uit 20261029120000 ── */
 
@@ -151,6 +160,8 @@ export interface ToonbankGeheugen {
     /* Contract 1.4: pakjes van de slager binnenmelden. */
     winkelProducten: GeheugenWinkelProduct[];
     pakjes: GeheugenPakje[];
+    /* Contract 1.4: weggooien of invriezen. */
+    eruit: GeheugenEruit[];
 }
 
 export function standaardVerwerking(m: GeheugenMelding): { status: string; product_ids?: string[]; fout_code?: string } {
@@ -209,6 +220,7 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
         bonKop: start.bonKop ?? {},
         winkelProducten: start.winkelProducten ?? [],
         pakjes: start.pakjes ?? [],
+        eruit: start.eruit ?? [],
     };
     const nu = () => g.nu.getTime();
     const open = (a: GeheugenApparaat) =>
@@ -605,6 +617,45 @@ export function maakToonbankGeheugenStore(start: Partial<ToonbankGeheugen> = {})
             const i = g.pakjes.findIndex((p) => p.id === stukId && p.organization_id === orgId && p.status === 'op_voorraad');
             if (i < 0) return false;
             g.pakjes.splice(i, 1);
+            return true;
+        },
+
+        /* Zoals winkel_stuk_eruit (20261120130000): idempotent op verzoek_id, vroegste THT eerst. */
+        async pakjeEruit(v) {
+            const al = g.eruit.find((e) => e.verzoek_id === v.verzoekId);
+            if (al) return al.organization_id === v.orgId ? al.antwoord : { uitkomst: 'verzoek_bezet' };
+            const leesbaar = v.code.startsWith('21') ? leesPrijscode(v.code).ok : stickerCodeGeldig(v.code);
+            if (!leesbaar) return { uitkomst: 'controlecijfer' };
+            const naamVan = (id: string) => g.winkelProducten.find((x) => x.id === id)?.naam ?? '';
+            const stuk = g.pakjes
+                .filter((p) => p.organization_id === v.orgId && p.code === v.code && p.status === 'op_voorraad')
+                .sort((a, b) => a.tht.localeCompare(b.tht))[0];
+            let antwoord: PakjeEruitRuw;
+            if (!stuk) {
+                const eerder = [...g.pakjes].reverse().find((p) => p.organization_id === v.orgId && p.code === v.code);
+                const plu = v.code.startsWith('21') ? v.code.slice(2, 6) : null;
+                const opPlu = plu && plu !== GEDEELDE_PLU ? g.winkelProducten.find((x) => x.organization_id === v.orgId && x.prijscode_nr === plu) : undefined;
+                antwoord = { uitkomst: 'niet_op_voorraad', naam: (eerder ? naamVan(eerder.product_id) : opPlu?.naam) || null };
+            } else {
+                const ingevroren_op = v.wat === 'invriezen' ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Amsterdam' }).format(g.nu) : null;
+                stuk.status = v.wat === 'invriezen' ? 'naar_keuken' : 'afgeschreven';
+                stuk.ingevroren_op = ingevroren_op;
+                stuk.opgebruikt = false;
+                antwoord = { uitkomst: 'eruit', stuk_id: stuk.id, naam: naamVan(stuk.product_id), prijs_cents: stuk.prijs_cents, tht: stuk.tht, wat: v.wat, ingevroren_op };
+            }
+            g.eruit.push({ verzoek_id: v.verzoekId, organization_id: v.orgId, stuk_id: stuk?.id ?? null, antwoord, medewerker_id: v.medewerkerId, teruggezet: false });
+            return antwoord;
+        },
+
+        /* Zoals winkel_stuk_terug: alleen via de kassa eruit, één keer, niet na gebruikt. */
+        async pakjeTerug(orgId, stukId) {
+            const stuk = g.pakjes.find((p) => p.id === stukId && p.organization_id === orgId);
+            if (!stuk || (stuk.status !== 'afgeschreven' && stuk.status !== 'naar_keuken') || stuk.opgebruikt) return false;
+            const e = [...g.eruit].reverse().find((x) => x.stuk_id === stukId && !x.teruggezet);
+            if (!e) return false;
+            e.teruggezet = true;
+            stuk.status = 'op_voorraad';
+            stuk.ingevroren_op = null;
             return true;
         },
 

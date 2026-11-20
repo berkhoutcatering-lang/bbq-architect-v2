@@ -6,7 +6,7 @@ import {
     HelpCircle, ScanLine, Car, Store, Layers,
     Receipt, TrendingUp, Boxes, BookOpen, Flame,
     Hammer, Truck, Archive, MonitorPlay, LayoutDashboard,
-    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator, LayoutGrid, CalendarClock, MapPinned,
+    FileText, ShoppingBag, Gift, Tag, PackagePlus, Plug, Calculator, LayoutGrid, CalendarClock, MapPinned, Snowflake,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -197,6 +197,7 @@ export const navSections: NavSection[] = [
             { label: "Menukaarten", icon: <BookOpen size={16} />, href: "/gerechten/menukaarten", description: "Per gang kiezen wat erop staat; als sjabloon in één klik in een offerte" },
             { label: "Kookbord", icon: <Flame size={16} />, href: "/keuken/kookbord", description: "Prep-taken per station, dagen vooraf. Swipe-to-done op tablet." },
             { label: "Keukenscherm", icon: <MonitorPlay size={16} />, href: "/keuken/scherm", description: "Het wandscherm: wat je nu doet, wat er straks komt. Alleen kijken — bedienen doe je op de tablet." },
+            { label: "Vriezer", icon: <Snowflake size={16} />, href: "/keuken/vriezer", description: "Wat aan de kassa is ingevroren, oudste bovenaan. Afvinken als je het gebruikt" },
             { label: "Analyse", icon: <TrendingUp size={16} />, href: "/gerechten/analyse", description: "Welke gerechten verdienen hun plek — populariteit × marge" },
         ],
     },
