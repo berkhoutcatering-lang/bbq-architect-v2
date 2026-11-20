@@ -131,6 +131,8 @@ export const FOUT_STATUS = {
     cadeaubon_saldo_te_laag: 422,
     cadeaubon_verlopen: 422,
     cadeaubon_geblokkeerd: 422,
+    // Contract 1.4: pakjes van de slager binnenmelden. De PLU hoort al bij een ander product.
+    nummer_bezet: 409,
 } as const;
 export type FoutCode = keyof typeof FOUT_STATUS;
 
@@ -337,10 +339,13 @@ export const Artikel = z.object({
     /** Contract 1.4: de prijs per kilo, inclusief btw. Alleen bij verkoop_per "kg". */
     kiloprijs_cents: PositieveCents.nullable().optional(),
     /**
-     * [voorstel] Het artikelnummer van de leverancier in de prijscode 21 AAAAA PPPPP C (5 cijfers).
+     * [voorstel] Het artikelnummer (PLU) van de leverancier in de prijscode 21 PPPP K CCCCC E.
      * Alleen bij een artikel dat per pakje met de prijs in de code verkocht wordt.
+     * Sinds 19 november 2026 4 cijfers ("0101"); daarvoor 5 (PLU plus het prijscontrolecijfer
+     * van één pakje). De kassa vergelijkt alleen de eerste 4 cijfers met de PLU uit de code,
+     * dus 5 cijfers blijft geldig.
      */
-    prijscode_nr: z.string().regex(/^\d{5}$/).optional(),
+    prijscode_nr: z.string().regex(/^\d{4,5}$/).optional(),
     /** Contract 1.4: wat er op de sticker komt. Alleen bij verkoop_per "kg"; zonder etiket geen sticker. */
     etiket: Etiket.nullable().optional(),
 });
@@ -934,7 +939,50 @@ export const PartijenAntwoord = z.object({
 });
 export type PartijenAntwoord = z.infer<typeof PartijenAntwoord>;
 
+/* ═══ Pakjes van de slager binnenmelden (contract 1.4, additief) ═════════ */
+
+/*
+ * POST pakjes en POST pakjes/{stuk_id}/weg: een pakje met de prijs in de code (21 PPPP K CCCCC E)
+ * binnenmelden vanaf de Toonbank (scherm "Vlees binnen"), en een verkeerde scan weer weghalen.
+ * Sleutel + medewerker, alleen online. Geen journaalregel: binnenmelden is ontvangst van
+ * voorraad, geen verkoop. De logica staat in winkel_stuk_binnen_prijscode en winkel_stuk_weg
+ * (migraties 20261119120000 en 20261119130000), zie src/lib/toonbank/pakjes.ts.
+ */
+
+/** De vier cijfers van het artikelnummer (PLU) van de slager. */
+const Plu = z.string().regex(/^\d{4}$/, 'vier cijfers, zoals 0101');
+
+/** POST pakjes. Hetzelfde pakje_id nog eens geeft hetzelfde antwoord en nooit een tweede pakje. */
+export const PakjeBinnenVerzoek = z.object({
+    /** Maakt de tablet per scan aan; wordt het id van het stuk op voorraad. */
+    pakje_id: Uuid,
+    code: z.string().regex(/^21\d{11}$/, 'een prijscode: 13 cijfers die met 21 beginnen'),
+    tht: Datum,
+    /** Alleen na "welk product is dit?" (een product met een prijscode uit GET catalogus). */
+    product_id: Uuid.nullable().optional(),
+});
+export type PakjeBinnenVerzoek = z.infer<typeof PakjeBinnenVerzoek>;
+
+/**
+ * binnen: het pakje ligt op voorraad. onbekend: de PLU is nog niet gekoppeld (stuur het verzoek
+ * opnieuw met product_id); ook altijd bij PLU 0000, die de slager voor meer producten gebruikt.
+ * controlecijfer: het EAN- of het prijscontrolecijfer klopt niet. geen_prijscode: geen 21-code.
+ * De PLU hoort al bij een ander product: 409 nummer_bezet.
+ */
+export const PakjeBinnenAntwoord = z.discriminatedUnion('uitkomst', [
+    z.object({ uitkomst: z.literal('binnen'), stuk_id: Uuid, product_id: Uuid, naam: z.string().min(1), plu: Plu, prijs_cents: PositieveCents, tht: Datum }),
+    z.object({ uitkomst: z.literal('onbekend'), plu: Plu, prijs_cents: PositieveCents }),
+    z.object({ uitkomst: z.literal('controlecijfer') }),
+    z.object({ uitkomst: z.literal('geen_prijscode') }),
+]);
+export type PakjeBinnenAntwoord = z.infer<typeof PakjeBinnenAntwoord>;
+
+/** POST pakjes/{stuk_id}/weg. Onwaar als het pakje niet (meer) op voorraad ligt of niet van deze organisatie is. */
+export const PakjeWegAntwoord = z.object({ weg: z.boolean() });
+export type PakjeWegAntwoord = z.infer<typeof PakjeWegAntwoord>;
+
 export const SCHEMAS = {
+    PakjeBinnenVerzoek, PakjeBinnenAntwoord, PakjeWegAntwoord,
     StickerMelding, PartijenAntwoord,
     PinbetalingVerzoek, PinbetalingAntwoord,
     CadeaubonAntwoord, CadeaubonReserveerVerzoek, CadeaubonReserveerAntwoord, CadeaubonVrijgevenVerzoek, CadeaubonVrijgevenAntwoord,

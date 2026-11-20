@@ -283,7 +283,8 @@ export async function zetStickergegevens(input: unknown): Promise<ActionResult<{
 
 export type PakjeBinnen =
     | { uitkomst: 'binnen'; stuk_id: string; product_id: string; naam: string; nr: string; prijs_cents: number; tht: string }
-    | { uitkomst: 'onbekend'; nr: string; prijs_cents: number }
+    /** nr = de PLU (4 cijfers). gedeeld = PLU 0000: de slager gebruikt die voor meer producten, dus altijd kiezen en niets onthouden. */
+    | { uitkomst: 'onbekend'; nr: string; gedeeld?: boolean; prijs_cents: number }
     | { uitkomst: 'controlecijfer' }
     | { uitkomst: 'geen_prijscode' };
 

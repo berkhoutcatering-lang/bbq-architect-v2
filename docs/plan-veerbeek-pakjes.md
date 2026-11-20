@@ -1,6 +1,7 @@
 # Plan: pakjes van Veerbeek scannen, bij binnenkomst en aan de kassa
 
-Stand: 18 november 2026. Besluit Mathijs: vlees van Veerbeek houdt de sticker van Veerbeek en
+Stand: 18 november 2026, opbouw van de code hersteld op 19 november 2026 (zie "De streepjescode
+van Veerbeek"). Besluit Mathijs: vlees van Veerbeek houdt de sticker van Veerbeek en
 wordt verkocht tegen de prijs op die sticker. Elk pakje wordt bij binnenkomst gescand, en aan
 de kassa nog een keer.
 
@@ -8,7 +9,8 @@ de kassa nog een keer.
 
 1. **Binnen.** Bij Winkel, Binnen scan je elk pakje met de scanner. BBQ Architect leest uit de
    streepjescode welk product het is en wat het kost. Kent hij het artikelnummer nog niet, dan
-   kies je een keer het product; daarna weet hij het. Je vult de THT van het A4 een keer in
+   kies je een keer het product; daarna weet hij het. Uitzondering: nummer 0000 gebruikt de
+   slager voor meer producten, daar vraagt hij het bij elk pakje. Je vult de THT van het A4 een keer in
    voor de hele levering. Elk gescand pakje komt in de lijst "ligt in de winkel", met prijs en THT.
    Verkeerd gescand: met een tik haal je het weer weg.
 2. **Kassa.** Je scant het pakje. De kassa herkent de code van Veerbeek, zoekt het product op en
@@ -22,10 +24,31 @@ met dezelfde code, en elke verkoop haalt er een af.
 
 ## De streepjescode van Veerbeek
 
-EAN-13: `21 AAAAA PPPPP C`. `21` = winkelcode met prijs, `AAAAA` = artikelnummer van Veerbeek,
-`PPPPP` = totaalprijs in centen, `C` = controlecijfer (EAN). Gewicht en THT staan er niet in.
-Nagerekend op 38 stickers (foto's 18 november), bijvoorbeeld `2101015028237` = 01015
-haasbiefstuk, € 28,23.
+EAN-13 `21 PPPP K CCCCC E` (de GS1-opbouw voor een winkelcode met een prijs van 5 cijfers):
+
+| Deel | Wat | Haasbiefstuk, pakje | Haasbiefstuk, krat |
+|---|---|---|---|
+| `21` | winkelcode met een prijs erin | 21 | 21 |
+| `PPPP` | artikelnummer (PLU) van Veerbeek, 4 cijfers: `winkel_producten.prijscode_nr` | 0101 | 0101 |
+| `K` | prijscontrolecijfer over de vijf prijscijfers | 5 | 2 |
+| `CCCCC` | totaalprijs in centen | 02823 (€ 28,23) | 07677 (€ 76,77) |
+| `E` | controlecijfer van de EAN-13 | 7 | 4 |
+
+Gewicht en THT staan er niet in. Het prijscontrolecijfer K: per prijscijfer de gewogen tabel
+5+, 2-, 5-, 5+, 2- (2- = 0 2 4 6 8 9 1 3 5 7, 5+ = 0 5 1 6 2 7 3 8 4 9, 5- = 0 5 9 4 8 3 7 2 6 1),
+optellen, r = (10 − som mod 10) mod 10, en K is de plek van r in de tabel 5-. Code:
+`src/lib/winkel/prijscode.ts` en `private.prijscode_prijscontrole`.
+
+**Hersteld op 19 november 2026.** Tot dan lazen we `21 AAAAA PPPPP C` en bewaarden we 5 cijfers:
+de PLU plus de K van het ene pakje dat we toevallig hadden. Een pakje met een andere prijs had
+een andere K en kwam dan terug als "onbekend"; koppelen overschreef het nummer met de K van dat
+pakje. Nagerekend op 12 echte codes van 19 november, onder andere houthakkerssteak pakje
+`2102218007845` en krat `2102212056610` (allebei PLU 0221). Migratie
+`20261119120000_winkel_prijscode_plu.sql` kort de nummers in tot 4 cijfers.
+
+**PLU 0000** gebruikt Veerbeek voor meer producten: gekruid gehakt (`2100007066967`) en Honey Pops
+(`2100007054896`). Dat nummer wordt nooit aan een product gekoppeld (de database staat het niet
+toe); binnenmelden vraagt bij elk pakje met 0000 welk product het is.
 
 ## Wat er verandert
 
@@ -33,19 +56,19 @@ haasbiefstuk, € 28,23.
 
 | Stap | Wat | Test |
 |---|---|---|
-| B1 | `winkel_producten.prijscode_nr` (5 cijfers, uniek per organisatie): het artikelnummer van de leverancier in de prijscode. Gevuld voor de 38 producten van Veerbeek (tabel hieronder) | SQL-test: uniek, alleen 5 cijfers |
+| B1 | `winkel_producten.prijscode_nr` (4 cijfers, de PLU, uniek per organisatie, nooit 0000): het artikelnummer van de leverancier in de prijscode. Gevuld voor de producten van Veerbeek (tabel hieronder). Tot 19 november 5 cijfers | SQL-test: uniek, alleen 4 cijfers, geen 0000 |
 | B2 | `winkel_stuks` kent `bron` = `sticker` (zoals nu) of `prijscode`. Bij `prijscode`: geen gewicht, geen kiloprijs, geen stickernummer; wel code, prijs en THT | SQL-test |
-| B3 | `winkel_stuk_binnen_prijscode(org, code, tht, partij)`: controleert het controlecijfer, zoekt het product op het artikelnummer, legt een stuk vast (op voorraad, prijs uit de code). `winkel_stuk_weg` om een verkeerde scan terug te draaien (alleen als hij nog ligt) | SQL-test: goede code, fout controlecijfer, onbekend nummer, terugdraaien |
+| B3 | `winkel_stuk_binnen_prijscode(org, code, tht, product)`: controleert beide controlecijfers (EAN en K), zoekt het product op de PLU (`substr(code, 3, 4)`), vraagt bij 0000 altijd het product, legt een stuk vast (op voorraad, prijs uit de code). `winkel_stuk_weg` om een verkeerde scan terug te draaien (alleen als hij nog ligt) | SQL-test: goede code, fout controlecijfer, onbekend nummer, terugdraaien |
 | B4 | Scherm Winkel, Binnen: een scanveld (de scanner typt de code en drukt op Enter), de THT van de levering, de lijst gescande pakjes met "weg", en bij een onbekend nummer de vraag welk product het is | Vitest op het uit elkaar halen van de code |
-| B5 | `GET catalogus`: per artikel optioneel `prijscode_nr` (alleen bij een artikel met een vak en een product met een prijscode). Een oudere kassa slaat het veld over | Contracttest |
-| B6 | `POST bonnen`: nieuwe `prijs_bron: "prijscode"`. Controle: code met geldig controlecijfer, `stuk_cents` = prijs uit de code, anders melding in Te controleren (`prijscode_prijs`). De regel boekt geen grammen af; het stuk gaat op verkocht. Is er geen pakje binnengemeld met die code, dan wordt de bon toch geboekt en komt er een melding `prijscode_niet_binnen` | SQL-test; de bon wordt nooit geweigerd |
+| B5 | `GET catalogus`: per artikel optioneel `prijscode_nr` (alleen bij een artikel met een vak en een product met een prijscode). Sinds 19 november 4 cijfers; het contract staat 4 of 5 toe en de kassa vergelijkt alleen de eerste 4 | Contracttest |
+| B6 | `POST bonnen`: nieuwe `prijs_bron: "prijscode"`. Controle: code met geldige controlecijfers (EAN en, sinds 19 november, K), `stuk_cents` = prijs uit de code, anders melding in Te controleren (`prijscode_prijs`). De regel boekt geen grammen af; het stuk gaat op verkocht. Is er geen pakje binnengemeld met die code, dan wordt de bon toch geboekt en komt er een melding `prijscode_niet_binnen` | SQL-test; de bon wordt nooit geweigerd |
 
 ### Toonbank (andere repository)
 
 | Stap | Wat | Test |
 |---|---|---|
 | T1 | Contract: `Artikel.prijscode_nr` (optioneel) en `prijs_bron: "prijscode"`, schema en voorbeeld `bon-prijscode.json` | Contracttest |
-| T2 | `zoekOfScan`: een code van 13 cijfers die met `21` begint en een geldig controlecijfer heeft, is een prijscode. Artikel via `prijscode_nr`, prijs uit de code. Onbekend nummer: "Dit pakje kent de kassa niet" | Kern-tests |
+| T2 | `zoekOfScan`: een code van 13 cijfers die met `21` begint en een geldig controlecijfer heeft, is een prijscode. Artikel via de eerste 4 cijfers van `prijscode_nr` = de PLU uit de code (branch `fix/tb-slagerscode-vier-cijfers`), prijs uit de code. Onbekend nummer: "Dit pakje kent de kassa niet" | Kern-tests |
 | T3 | Op de bon: een eigen regel per pakje, prijs uit de code, geen plus of min (zoals bij een kaassticker); `scan_code` gaat mee | Kern-tests |
 
 Contract toonbank/v1 blijft achterwaarts compatibel: alleen nieuwe, optionele velden en een
@@ -62,12 +85,23 @@ BBQ Architect (migratie, dan code), dan de Toonbank.
 
 ## Open
 
+- **Volgorde live van het herstel (19 november):** eerst de Toonbank die 4 of 5 cijfers in
+  `prijscode_nr` accepteert, dan de migratie `20261119120000_winkel_prijscode_plu.sql`, dan de
+  code van BBQ Architect. Een Toonbank die nog precies 5 cijfers eist, keurt anders de hele
+  catalogus af.
+- Pakjes met PLU 0000 (gekruid gehakt, Honey Pops) herkent de kassa niet als één product: in de
+  catalogus staat bij geen enkel artikel 0000. Aan de kassa moet je bij zo'n pakje dus zelf het
+  artikel kiezen, of het blijft liggen. Mathijs beslist hoe.
+
 - Live zetten valt in de bevriezing (14 november t/m 3 januari) en op een donderdag: alleen met
   `[noodfix]` en de go van Mathijs. Testen kan eerst op een voorbeeldversie (Vercel bouwt die
   altijd), maar de kassa praat met de echte BBQ Architect.
 - Eén sticker op het eerste vel was gescheurd; dat product weten we niet.
 
 ## Artikelnummers van Veerbeek (van de stickers, 18 november 2026)
+
+Tot 19 november bewaard als 5 cijfers. De PLU is de eerste 4 cijfers (01015 → 0101); het vijfde
+cijfer was de K van dat ene pakje. 00007 (gekruid gehakt) is PLU 0000 en wordt leeg.
 
 | Nr | Product in BBQ Architect | | Nr | Product in BBQ Architect |
 |---|---|---|---|---|
