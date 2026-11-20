@@ -981,8 +981,45 @@ export type PakjeBinnenAntwoord = z.infer<typeof PakjeBinnenAntwoord>;
 export const PakjeWegAntwoord = z.object({ weg: z.boolean() });
 export type PakjeWegAntwoord = z.infer<typeof PakjeWegAntwoord>;
 
+/* ═══ Streepjescodes koppelen vanaf de kassa (contract 1.4, additief) ════ */
+
+/*
+ * POST codes en POST codes/{artikel_id}/weghalen: de streepjescode (EAN) van een los product
+ * vastleggen vanaf de Toonbank (scherm "Codes koppelen"). Sleutel + medewerker, alleen online.
+ * Geen journaalregel: dit is stamdata, geen verkoop. BBQ Architect zet de code op het product
+ * achter het artikel (winkel_producten.ean), met dezelfde controle en opslag als de pagina
+ * Streepjescodes koppelen (src/lib/winkel/ean.ts, eanKoppelen.ts). De catalogusversie gaat
+ * omhoog, zodat de kassa de code bij de volgende peiling ophaalt.
+ */
+
+/** POST codes. Dezelfde code die al bij dit product hoort, geeft gewoon "gekoppeld". */
+export const CodeKoppelVerzoek = z.object({
+    artikel_id: Uuid,
+    code: z.string().regex(/^(\d{8}|\d{12}|\d{13})$/, 'een streepjescode van 8, 12 of 13 cijfers'),
+});
+export type CodeKoppelVerzoek = z.infer<typeof CodeKoppelVerzoek>;
+
+/**
+ * gekoppeld: de code staat op het product. ongeldig: lengte of controlecijfer klopt niet.
+ * al_gekoppeld: de code hoort al bij een ander product van deze organisatie (naam = dat product);
+ * er is niets gekoppeld. kan_niet: het artikel is een pakket, gaat op gewicht, heeft een
+ * prijscode van de slager, of bestaat niet. De redenen zijn één zin in gewone taal.
+ */
+export const CodeKoppelAntwoord = z.discriminatedUnion('uitkomst', [
+    z.object({ uitkomst: z.literal('gekoppeld'), artikel_id: Uuid, product_id: Uuid, code: z.string().regex(/^(\d{8}|\d{12}|\d{13})$/), catalogus_versie: z.int().nonnegative() }),
+    z.object({ uitkomst: z.literal('ongeldig'), reden: z.string().min(1) }),
+    z.object({ uitkomst: z.literal('al_gekoppeld'), naam: z.string().min(1) }),
+    z.object({ uitkomst: z.literal('kan_niet'), reden: z.string().min(1) }),
+]);
+export type CodeKoppelAntwoord = z.infer<typeof CodeKoppelAntwoord>;
+
+/** POST codes/{artikel_id}/weghalen: ongedaan maken na een verkeerde scan. Onwaar als er geen code was. */
+export const CodeWeghalenAntwoord = z.object({ weg: z.boolean(), catalogus_versie: z.int().nonnegative() });
+export type CodeWeghalenAntwoord = z.infer<typeof CodeWeghalenAntwoord>;
+
 export const SCHEMAS = {
     PakjeBinnenVerzoek, PakjeBinnenAntwoord, PakjeWegAntwoord,
+    CodeKoppelVerzoek, CodeKoppelAntwoord, CodeWeghalenAntwoord,
     StickerMelding, PartijenAntwoord,
     PinbetalingVerzoek, PinbetalingAntwoord,
     CadeaubonAntwoord, CadeaubonReserveerVerzoek, CadeaubonReserveerAntwoord, CadeaubonVrijgevenVerzoek, CadeaubonVrijgevenAntwoord,

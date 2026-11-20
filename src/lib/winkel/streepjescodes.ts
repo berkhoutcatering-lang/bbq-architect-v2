@@ -12,7 +12,7 @@ export interface CodeProductRij {
     actief: boolean;
     eenheid: string;
     binnen_per_sticker: boolean;
-    prijscode_nr: number | null;
+    prijscode_nr: string | null;
 }
 
 /**
