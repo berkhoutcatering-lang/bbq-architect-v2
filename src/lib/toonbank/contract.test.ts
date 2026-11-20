@@ -142,6 +142,47 @@ describe('contract 1.4: stickers', () => {
         expect(uit.artikelen[1]).not.toHaveProperty('verkoop_per');
         expect(uit.artikelen[1]).not.toHaveProperty('etiket');
     });
+    it('catalogus: wegen bij het afrekenen en de tarra, alleen bij een artikel op gewicht', () => {
+        const basis = {
+            artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Groene olijven', prijs_cents: 2250, btw_pct: 9, btw_verdeling: null, alcohol: false,
+            groep: 'olijven', volgorde: 0, favoriet: false, foto: null, foto_url_ruw: null,
+            onderdelen: [{ product_id: '0da446be-613f-4a74-9791-704b065a1f74', hoeveelheid: 1, eenheid: 'gram' }], actief: true, kanalen: ['toonbank'],
+            verkoop_per: 'kg', kiloprijs_cents: 2250, etiket: null,
+        };
+        const uit = catalogusAntwoord({
+            versie: 5, volledig: true, producten: [], codes: [], groepen: [],
+            artikelen: [
+                { ...basis, wegen_bij_afrekenen: true, tarra_g: null },
+                { ...basis, artikel_id: '6c2d3e4f-5061-4b72-8c83-9d8e7f6a5b52', naam: 'Tapenade', wegen_bij_afrekenen: true, tarra_g: 18 },
+                { ...basis, artikel_id: '7d3e4f50-6172-4c83-9d94-0e9f8a7b6c63', naam: 'Stickerkaas', wegen_bij_afrekenen: false, tarra_g: null },
+                { ...basis, artikel_id: '8e4f5061-7283-4d94-8ea5-1f0a9b8c7d74', naam: 'Pindas', verkoop_per: 'stuk', kiloprijs_cents: null, wegen_bij_afrekenen: true, tarra_g: 5 },
+            ],
+        }, null);
+        expect(SCHEMAS.CatalogusAntwoord.safeParse(uit).success).toBe(true);
+        expect(uit.artikelen[0]).toMatchObject({ verkoop_per: 'kg', kiloprijs_cents: 2250, wegen_bij_afrekenen: true, tarra_g: null });
+        expect(uit.artikelen[1]).toMatchObject({ wegen_bij_afrekenen: true, tarra_g: 18 });
+        expect(uit.artikelen[2]).not.toHaveProperty('wegen_bij_afrekenen');
+        expect(uit.artikelen[3]).not.toHaveProperty('wegen_bij_afrekenen');
+        expect(uit.artikelen[3]).not.toHaveProperty('tarra_g');
+    });
+
+    it('bon: een gewogen bakje is prijs_bron catalogus met gewicht en kiloprijs, zonder scan_code', () => {
+        const regel = {
+            regelnr: 1, soort: 'verkoop', artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Groene olijven', aantal: 1,
+            stuk_cents: 342, korting_cents: 0, bedrag_cents: 342, btw: [{ pct: 9, incl_cents: 342 }], alcohol: false,
+            onderdelen: [{ product_id: '0da446be-613f-4a74-9791-704b065a1f74', hoeveelheid: 152, eenheid: 'gram' }],
+            prijs_bron: 'catalogus', gewicht_g: 152, kiloprijs_cents: 2250,
+        };
+        const bon = {
+            soort: 'bon', gebeurtenis_id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d', bon_id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d',
+            volgnummer: 1, moment: '2026-11-20T10:00:00+01:00', medewerker_id: null, bonnummer: 'T1-000001', bon_volgnummer: 1,
+            status: 'afgerond', kanaal: 'winkel', catalogus_versie: 5, leeftijd: null, totaal_cents: 342,
+            regels: [regel, { regelnr: 2, soort: 'betaling', betaalmethode: 'pin', betaal_bevestiging: 'handmatig', bedrag_cents: 342 }],
+        };
+        const r = SCHEMAS.BonMelding.safeParse(bon);
+        expect(r.success, JSON.stringify(r.error?.issues?.slice(0, 3))).toBe(true);
+    });
+
     it('catalogus: prijscode_nr alleen als het er is en 4 (PLU) of 5 cijfers heeft', () => {
         const basis = {
             artikel_id: '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41', naam: 'Haasbiefstuk', prijs_cents: 899, btw_pct: 9, btw_verdeling: null, alcohol: false,

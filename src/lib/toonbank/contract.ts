@@ -339,6 +339,15 @@ export const Artikel = z.object({
     /** Contract 1.4: de prijs per kilo, inclusief btw. Alleen bij verkoop_per "kg". */
     kiloprijs_cents: PositieveCents.nullable().optional(),
     /**
+     * [voorstel, 20 november 2026] Op gewicht zonder sticker: de kassa weegt het bakje bij het
+     * afrekenen (olijven, tapenades, dips). Alleen zinvol bij verkoop_per "kg". De bonregel is dan
+     * prijs_bron "catalogus" met gewicht_g en kiloprijs_cents; BBQ Architect rekent na
+     * (gewogen_prijs, gewogen_kiloprijs, gewogen_gewicht in Te controleren) en weigert nooit.
+     */
+    wegen_bij_afrekenen: z.boolean().optional(),
+    /** [voorstel] Gewicht van bakje plus deksel in gram: de vaste tarra voor de geijkte weegschaal. Leeg = nog niet bekend. */
+    tarra_g: z.int().min(0).max(9999).nullable().optional(),
+    /**
      * [voorstel] Het artikelnummer (PLU) van de leverancier in de prijscode 21 PPPP K CCCCC E.
      * Alleen bij een artikel dat per pakje met de prijs in de code verkocht wordt.
      * Sinds 19 november 2026 4 cijfers ("0101"); daarvoor 5 (PLU plus het prijscontrolecijfer
@@ -569,7 +578,11 @@ const VerkoopRegel = z.object({
      * Op een gewone verkoopregel heeft het geen betekenis.
      */
     goederen_terug: z.boolean().optional(),
-    /** Contract 1.4: op gewicht verkocht; het nettogewicht in gram, altijd samen met kiloprijs_cents. */
+    /**
+     * Contract 1.4: op gewicht verkocht; het nettogewicht in gram, altijd samen met kiloprijs_cents.
+     * Bij een sticker (prijs_bron "sticker") en bij een bakje dat bij het afrekenen gewogen is
+     * (prijs_bron "catalogus", artikel met wegen_bij_afrekenen).
+     */
     gewicht_g: z.int().positive().optional(),
     kiloprijs_cents: PositieveCents.optional(),
 });
