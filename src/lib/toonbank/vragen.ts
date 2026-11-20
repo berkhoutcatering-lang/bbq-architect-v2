@@ -71,12 +71,17 @@ function naarArtikel(a: CatalogusArtikelRuw, supabaseUrl: string | null | undefi
  * Contract 1.4: alleen een artikel op gewicht krijgt verkoop_per, kiloprijs en etiket mee; een
  * gewoon artikel blijft precies zoals in 1.3 (een oudere Toonbank merkt niets).
  */
-function opGewicht(a: CatalogusArtikelRuw): Pick<CatalogusAntwoord['artikelen'][number], 'verkoop_per' | 'kiloprijs_cents' | 'etiket'> {
+function opGewicht(a: CatalogusArtikelRuw): Pick<CatalogusAntwoord['artikelen'][number], 'verkoop_per' | 'kiloprijs_cents' | 'etiket' | 'wegen_bij_afrekenen' | 'tarra_g'> {
     if (a.verkoop_per !== 'kg' || a.kiloprijs_cents == null) return {};
     const e = a.etiket as Record<string, unknown> | null | undefined;
     return {
         verkoop_per: 'kg',
         kiloprijs_cents: Number(a.kiloprijs_cents),
+        /* Bakje zonder sticker, gewogen bij het afrekenen (20261120120000). Zonder de migratie: niets. */
+        ...(a.wegen_bij_afrekenen === true ? {
+            wegen_bij_afrekenen: true,
+            tarra_g: a.tarra_g != null && Number.isInteger(Number(a.tarra_g)) && Number(a.tarra_g) >= 0 && Number(a.tarra_g) <= 9999 ? Number(a.tarra_g) : null,
+        } : {}),
         etiket: e ? {
             plu: Number(e.plu),
             ingredienten: typeof e.ingredienten === 'string' && e.ingredienten ? e.ingredienten : null,

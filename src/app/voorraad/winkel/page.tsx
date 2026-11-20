@@ -50,7 +50,7 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         : { data: null };
     const orgId = (lid?.organization_id as string | undefined) ?? null;
 
-    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o, bestelRegels, { data: etiketten }] = await Promise.all([
+    const [{ data: producten }, { data: slots }, { data: artikelen }, { data: keuken }, { data: leveranciers }, vrij, o, bestelRegels, { data: etiketten }, { data: wegen }] = await Promise.all([
         supabase.from('winkel_producten')
             .select('id, naam, type, eenheid, prijs_per, winkelprijs_incl_cents, inkoop_excl_cents, btw_pct, alcohol, voorraad, actief, drempel, bestel_hoeveelheid, ean, tht, laatste_beweging_at, inventory_id, foto_url, par_niveau, bestel_eenheid_naam, bestel_prijs_cents, bestel_handmatig, leverancier_id, ingredienten, allergenen, binnen_per_sticker')
             .order('type').order('naam'),
@@ -65,7 +65,10 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
         orgId ? laadWinkelBestelRegels(supabase, orgId).catch(() => []) : Promise.resolve([]),
         /* Het etiket van de artikelen op gewicht (tabblad Sticker). */
         supabase.from('winkel_artikelen').select('id, etiket').eq('verkoop_per', 'kg'),
+        /* Wegen bij het afrekenen (20261120120000). Apart: zonder de migratie blijft de rest werken. */
+        supabase.from('winkel_artikelen').select('id, wegen_bij_afrekenen, tarra_g').eq('verkoop_per', 'kg'),
     ]);
+    const wegenVan = new Map(((wegen ?? []) as { id: string; wegen_bij_afrekenen: boolean | null; tarra_g: number | null }[]).map((w) => [w.id, w]));
     const etiketVan = new Map(((etiketten ?? []) as { id: string; etiket: Record<string, unknown> | null }[]).map((e) => [e.id, e.etiket ?? {}]));
     const lijst = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : []);
 
@@ -123,6 +126,9 @@ export default async function WinkelVoorraadPage({ searchParams }: { searchParam
                         bewaren: typeof e.bewaren === 'string' ? e.bewaren : null,
                         houdbaar_dagen: e.houdbaar_dagen == null ? null : Number(e.houdbaar_dagen),
                         binnen_per_sticker: !!p.binnen_per_sticker,
+                        /* null = de migratie draait nog niet: de velden blijven dan weg. */
+                        wegen_bij_afrekenen: wegenVan.has(art.id) ? wegenVan.get(art.id)!.wegen_bij_afrekenen === true : null,
+                        tarra_g: wegenVan.get(art.id)?.tarra_g ?? null,
                     };
                 })() : null,
                 stuks: o.stuks.filter((s) => s.product_id === id).map((s) => ({ ...s, urgentie: urgentie(s.tht, vandaag) })),

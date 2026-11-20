@@ -68,6 +68,9 @@ export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
         bewaren: string | null;
         houdbaar_dagen: number | null;
         binnen_per_sticker: boolean;
+        /** Bakje zonder sticker, gewogen bij het afrekenen; null = nog niet in de database. */
+        wegen_bij_afrekenen: boolean | null;
+        tarra_g: number | null;
     } | null;
     stuks: (StukRij & { urgentie: Urgentie })[];
     partijen: PartijRij[];
@@ -397,6 +400,8 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
     const kg = p.artikel?.verkoop_per === 'kg';
     const [thtDatum, setThtDatum] = useState(p.tht ?? '');
     /* Tabblad Sticker (alleen op gewicht): de kiloprijs en het etiket zoals ze nu zijn. */
+    const [wegenBijAfrekenen, setWegenBijAfrekenen] = useState(p.sticker?.wegen_bij_afrekenen === true);
+    const [tarra, setTarra] = useState(p.sticker?.tarra_g == null ? '' : String(p.sticker.tarra_g));
     const [kiloprijs, setKiloprijs] = useState(p.sticker?.kiloprijs_cents == null ? '' : (p.sticker.kiloprijs_cents / 100).toFixed(2).replace('.', ','));
     const [etiket, setEtiket] = useState<EtiketInvoer>(() => ({
         ingredienten: (p.sticker?.ingredienten ?? []).join(', '),
@@ -453,7 +458,10 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
             if (k == null || Number.isNaN(k) || k <= 0) { toast('Vul de prijs per kilo in.', 'error'); return; }
             const probleem = etiketProbleem(etiket, st.binnen_per_sticker);
             if (probleem) { toast(probleem, 'error'); return; }
-            await doe(() => zetStickergegevens({ productId: p.id, kiloprijs_cents: Math.round(k * 100), ...etiketNaarActie(etiket, st.binnen_per_sticker) }),
+            const t = tarra.trim() === '' ? null : Number(tarra.trim());
+            if (t != null && (!Number.isInteger(t) || t < 0 || t > 9999)) { toast('Het gewicht van het bakje is een heel getal in gram, 0 tot 9999.', 'error'); return; }
+            const wegen = st.wegen_bij_afrekenen == null ? {} : { wegen_bij_afrekenen: wegenBijAfrekenen, tarra_g: t };
+            await doe(() => zetStickergegevens({ productId: p.id, kiloprijs_cents: Math.round(k * 100), ...etiketNaarActie(etiket, st.binnen_per_sticker), ...wegen }),
                 'Sticker bijgewerkt. De Toonbank haalt het op bij de volgende verbinding.');
             return;
         } else {
@@ -608,6 +616,21 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                             <input className="kf-input" inputMode="decimal" value={kiloprijs} onChange={(e) => setKiloprijs(e.target.value)} />
                             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Een sticker die al geprint is, houdt zijn eigen prijs.{p.artikel?.sticker_plu != null ? ` Stickernummer ${p.artikel.sticker_plu}.` : ''}</span>
                         </label>
+                        {p.sticker.wegen_bij_afrekenen != null && (
+                            <div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--border)', borderRadius: 10 }}>
+                                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5 }}>
+                                    <input type="checkbox" checked={wegenBijAfrekenen} onChange={(e) => setWegenBijAfrekenen(e.target.checked)} style={{ marginTop: 3 }} />
+                                    <span>Wegen bij het afrekenen (bakje zonder sticker). De kassa weegt het bakje bij Verkopen en zet de prijs op de bon.</span>
+                                </label>
+                                {wegenBijAfrekenen && (
+                                    <label style={{ display: 'grid', gap: 6 }}>
+                                        <span className="kf-eyebrow">Gewicht bakje met deksel (g)</span>
+                                        <input className="kf-input" inputMode="numeric" value={tarra} onChange={(e) => setTarra(e.target.value.replace(/[^0-9]/g, ''))} placeholder="nog niet gewogen" style={{ maxWidth: 160 }} />
+                                        <span style={{ fontSize: 12, color: 'var(--muted)' }}>De weegschaal trekt dit zelf af. Weeg een leeg bakje met deksel op de kassaweegschaal.</span>
+                                    </label>
+                                )}
+                            </div>
+                        )}
                         <EtiketVelden waarde={etiket} binnenPerSticker={p.sticker.binnen_per_sticker} onChange={setEtiket} />
                     </div>
                 )}

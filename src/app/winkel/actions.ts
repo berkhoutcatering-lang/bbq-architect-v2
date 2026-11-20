@@ -213,6 +213,9 @@ const Stickergegevens = z.object({
     bewaren: z.string().trim().max(80).nullable(),
     houdbaar_dagen: z.number().int().min(0).max(365).nullable(),
     beschermende_atmosfeer: z.boolean(),
+    /* Bakje zonder sticker, gewogen bij het afrekenen (20261120120000). Weg = niet aanraken. */
+    wegen_bij_afrekenen: z.boolean().optional(),
+    tarra_g: z.number().int().min(0, 'Het gewicht van het bakje is 0 tot 9999 gram').max(9999, 'Het gewicht van het bakje is 0 tot 9999 gram').nullable().optional(),
 });
 
 /**
@@ -259,6 +262,7 @@ export async function zetStickergegevens(input: unknown): Promise<ActionResult<{
     const { error: aFout } = await s.supabase.from('winkel_artikelen').update({
         kiloprijs_cents: v.kiloprijs_cents,
         prijs_cents: v.kiloprijs_cents,
+        ...(v.wegen_bij_afrekenen === undefined ? {} : { wegen_bij_afrekenen: v.wegen_bij_afrekenen, tarra_g: v.tarra_g ?? null }),
         etiket: {
             ...(artikel.etiket ?? {}),
             bewaren: v.bewaren || null,
