@@ -17,6 +17,7 @@ import {
     type OphaalVraagRuw, type Pinbetaling, type Sessie, type StatusBron, type ToonbankStore, type VerwerktRij, type WegzetTaakRij, type WegzetVraagRuw,
     type CadeaubonReserveerFout, type CadeaubonReserveerRuw, type CadeaubonStand, type CadeaubonStatusRuw, type CadeaubonVrijgeefRuw,
     type PakjeBinnenRuw,
+    type PakjeEruitRuw,
 } from './store';
 
 /** De functie of kolom bestaat nog niet (de migratie is nog niet gedraaid). */
@@ -52,6 +53,19 @@ export function naarPakjeBinnenRuw(r: Record<string, unknown>): PakjeBinnenRuw {
     if (r.uitkomst === 'onbekend') return { uitkomst: 'onbekend', plu: String(r.nr), prijs_cents: Number(r.prijs_cents) };
     if (r.uitkomst === 'controlecijfer') return { uitkomst: 'controlecijfer' };
     return { uitkomst: 'geen_prijscode' };
+}
+
+/** Het jsonb-antwoord van winkel_stuk_eruit; datums als JJJJ-MM-DD. */
+export function naarPakjeEruitRuw(r: Record<string, unknown>): PakjeEruitRuw {
+    const dag = (x: unknown) => (x == null ? null : String(x).slice(0, 10));
+    if (r.uitkomst === 'eruit') {
+        return {
+            uitkomst: 'eruit', stuk_id: String(r.stuk_id), naam: String(r.naam ?? ''), prijs_cents: Number(r.prijs_cents),
+            tht: dag(r.tht), wat: r.wat === 'invriezen' ? 'invriezen' : 'weggooien', ingevroren_op: dag(r.ingevroren_op),
+        };
+    }
+    if (r.uitkomst === 'niet_op_voorraad') return { uitkomst: 'niet_op_voorraad', naam: typeof r.naam === 'string' && r.naam ? r.naam : null };
+    return { uitkomst: 'controlecijfer' };
 }
 
 export function naarReserveerRuw(r: Record<string, unknown>): CadeaubonReserveerRuw {
@@ -461,6 +475,24 @@ export function maakToonbankSupabaseStore(client?: SupabaseClient): ToonbankStor
             if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
             if (error) throw new OpslagFout('winkel_stuk_weg', error);
             return (data as { weg?: boolean } | null)?.weg === true;
+        },
+
+        async pakjeEruit(v) {
+            const { data, error } = await sb.rpc('winkel_stuk_eruit', {
+                p_org: v.orgId, p_verzoek_id: v.verzoekId, p_code: v.code, p_wat: v.wat,
+                p_medewerker_id: v.medewerkerId, p_apparaat_id: v.apparaatId,
+            });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return { uitkomst: 'niet_gemigreerd' };
+            if (error?.code === '23505') return { uitkomst: 'verzoek_bezet' };
+            if (error) throw new OpslagFout('winkel_stuk_eruit', error);
+            return naarPakjeEruitRuw((data ?? {}) as Record<string, unknown>);
+        },
+
+        async pakjeTerug(orgId, stukId) {
+            const { data, error } = await sb.rpc('winkel_stuk_terug', { p_org: orgId, p_stuk_id: stukId });
+            if (error && NOG_NIET_GEMIGREERD.has(String(error.code))) return false;
+            if (error) throw new OpslagFout('winkel_stuk_terug', error);
+            return (data as { terug?: boolean } | null)?.terug === true;
         },
 
         async cadeaubonVrijgeven(v) {
