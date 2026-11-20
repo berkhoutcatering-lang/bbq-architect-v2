@@ -18,6 +18,8 @@ import { createServerSupabase } from '@/lib/supabase-server';
 import { voorraadFout } from '@/lib/winkel/voorraad';
 import { evalueerKeukenMeldingen, evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import { verversNaAfloop } from '@/lib/website/verversSignaal';
+import { EanSchema, eanFoutMelding } from '@/lib/winkel/toonbankVelden';
+import { bezetMelding, eanBijAnderProduct, koppelEan, supabaseEanOpslag, type KoppelUitkomst } from '@/lib/winkel/eanKoppelen';
 
 type ActionResult<T = unknown> = { data: T } | { error: string };
 
@@ -216,7 +218,7 @@ export async function zetBestelgegevens(input: unknown): Promise<ActionResult<{ 
         bestel_eenheid_naam: z.string().trim().max(30).nullable().default(null),
         bestel_prijs_cents: z.number().int().min(0).nullable().default(null),
         leverancier_id: z.number().int().positive().nullable().default(null),
-        ean: z.string().trim().regex(/^\d{8,14}$/, 'Een EAN is 8 tot 14 cijfers').nullable().default(null),
+        ean: EanSchema.default(null),
     }).refine((d) => d.par_niveau == null || d.drempel == null || d.par_niveau > d.drempel, {
         message: '"Aanvullen tot" moet hoger zijn dan het minimum',
     }).safeParse(input);
@@ -224,13 +226,42 @@ export async function zetBestelgegevens(input: unknown): Promise<ActionResult<{ 
     const s = await ingelogdMetOrg();
     if (!s) return { error: 'unauthorized' };
     const { productId, ...velden } = parsed.data;
+    if (velden.ean) {
+        const ander = await eanBijAnderProduct(supabaseEanOpslag(s.supabase, s.orgId), velden.ean, productId);
+        if (ander) return { error: bezetMelding(ander) };
+    }
     const { error } = await s.supabase.from('winkel_producten').update({ ...velden, bestel_eenheid_naam: velden.bestel_eenheid_naam || null })
         .eq('id', productId).eq('organization_id', s.orgId);
-    if (error) return { error: error.message };
+    if (error) return { error: eanFoutMelding(error) ?? error.message };
     await evalueerWinkelMeldingen(s.orgId, [productId]);
     ververs();
     revalidatePath('/inkoop');
     return { data: { ok: true } };
+}
+
+/* ── Streepjescode koppelen (/voorraad/winkel/codes) ─────────────────────── */
+
+/**
+ * Eén streepjescode aan een product koppelen (na een scan), vervangen of
+ * weghalen (ean = null). De regels staan in lib/winkel/eanKoppelen.ts; de
+ * kassa krijgt de nieuwe code via winkel_catalogus_versie.
+ */
+export async function koppelStreepjescode(input: unknown): Promise<ActionResult<KoppelUitkomst>> {
+    const parsed = z.object({
+        productId: z.string().uuid(),
+        /* De controle zelf doet koppelEan, zodat de melding dezelfde is als in de browser. */
+        ean: z.string().max(64).nullable(),
+    }).safeParse(input);
+    if (!parsed.success) return { error: 'validation' };
+    const s = await ingelogdMetOrg();
+    if (!s) return { error: 'unauthorized' };
+    const uitkomst = await koppelEan(supabaseEanOpslag(s.supabase, s.orgId), parsed.data.productId, parsed.data.ean);
+    if (uitkomst.ok) {
+        ververs();
+        revalidatePath('/voorraad/winkel/codes');
+        revalidatePath('/winkel');
+    }
+    return { data: uitkomst };
 }
 
 /* ── Logboek van één product ──────────────────────────────────────────────── */

@@ -1,6 +1,7 @@
 import { createServerSupabase } from '@/lib/supabase-server';
 import { afdelingTegels, datumGroepen, datumNL, regelsPerProduct, urgentie } from '@/lib/winkel/afdelingen';
 import { laadWinkelOverzicht } from '@/lib/winkel/winkelOverzicht';
+import { krijgtStreepjescode } from '@/lib/winkel/streepjescodes';
 import OverzichtClient from './_components/OverzichtClient';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,7 @@ export default async function WinkelPage() {
 
     const inAssortiment = o.producten.filter((p) => p.actief);
     const nietGeteld = inAssortiment.filter((p) => p.voorraad == null).length;
+    const zonderCode = o.producten.filter((p) => krijgtStreepjescode(p) && !p.ean).length;
     const vandaag = datumNL(nu);
     const metTht = inAssortiment.filter((p) => p.tht != null).map((p) => urgentie(p.tht!, vandaag));
 
@@ -43,6 +45,7 @@ export default async function WinkelPage() {
             plekkenOntbreken={o.ontbreekt.plekken}
             zonderPlek={zonderPlek}
             nietGeteld={nietGeteld}
+            zonderCode={zonderCode}
             nietsGeteld={nietGeteld === inAssortiment.length}
             urgent={{ over: urgent.filter((g) => g.urgentie === 'over').reduce((n, g) => n + g.stuks.length, 0), bijna: urgent.filter((g) => g.urgentie !== 'over').reduce((n, g) => n + g.stuks.length, 0) }}
             thtProducten={{ over: metTht.filter((u) => u === 'over').length, bijna: metTht.filter((u) => u !== 'over' && u !== 'later').length }}

@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowLeftRight, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, ShoppingCart, Soup, Tag, TriangleAlert, Wine } from 'lucide-react';
+import { ArrowLeftRight, Barcode, Beef, Beer, Carrot, ClipboardList, Cookie, EyeOff, Gift, Ham, LayoutGrid, Minus, MoreHorizontal, Nut, Package, PackageCheck, PackagePlus, Plus, RotateCcw, Salad, Search, Settings2, ShoppingCart, Soup, Tag, TriangleAlert, Wine } from 'lucide-react';
 import '@/styles/menu-hub.css';
 import '@/styles/winkel.css';
 import Button from '@/components/Button';
@@ -38,6 +38,7 @@ import EtiketVelden, { etiketNaarActie, etiketProbleem, type EtiketInvoer } from
 import ToevoegenLade from './ToevoegenLade';
 import { boekOver, laadLogboek, legAfwijkingVast, ontvangWinkelProduct, telWinkelProduct, zetBestelgegevens, type LogboekRegel } from '../actions';
 import { bestelVoorstel } from '@/lib/winkel/bestellen';
+import { controleerEan } from '@/lib/winkel/ean';
 
 export interface WinkelProductRij extends Omit<Product, 'voorraad_bezet'> {
     voorraad_bezet?: number;
@@ -278,11 +279,12 @@ function MeerMenu() {
     }, [open]);
     return (
         <div className="wk-menu" ref={plek}>
-            <button type="button" className="btn btn-ghost" aria-haspopup="menu" aria-expanded={open} aria-label="Meer" onClick={() => setOpen((x) => !x)}><MoreHorizontal size={16} /></button>
+            <Button type="button" variant="ghost" aria-haspopup="menu" aria-expanded={open} aria-label="Meer" icon={<MoreHorizontal size={16} />} onClick={() => setOpen((x) => !x)} />
             {open && (
                 <div className="wk-menu-paneel" role="menu">
                     <Link href="/voorraad/winkel/bestellen" role="menuitem"><Settings2 size={14} /> Bestelinstellingen</Link>
                     <Link href="/voorraad/winkel/vloer" role="menuitem"><LayoutGrid size={14} /> Afdelingen indelen</Link>
+                    <Link href="/voorraad/winkel/codes" role="menuitem"><Barcode size={14} /> Streepjescodes koppelen</Link>
                     <Link href="/voorraad/ontvangst" role="menuitem"><PackagePlus size={14} /> Ontvangst</Link>
                     <Link href="/voorraad/afwijking" role="menuitem"><Minus size={14} /> Afwijking</Link>
                 </div>
@@ -657,6 +659,8 @@ function ProductDrawer({ p, data, actief, onClose }: { p: WinkelProductRij; data
                                 <div className="kf-field" style={{ gridColumn: '1 / -1' }}>
                                     <label className="kf-label">EAN (voor de kassa)</label>
                                     <input className="kf-input" inputMode="numeric" value={ean} onChange={(e) => setEan(e.target.value)} placeholder="nog leeg" />
+                                    {ean.trim() && (() => { const c = controleerEan(ean); return c.ok === false ? <span style={{ fontSize: 12, color: 'var(--red)' }}>{c.fout}</span> : null; })()}
+                                    {!ean.trim() && <span style={{ fontSize: 12, color: 'var(--muted)' }}>Een hele krat achter elkaar? <Link href="/voorraad/winkel/codes">Streepjescodes koppelen</Link> met de scanner.</span>}
                                 </div>
                             </div>
                             <div className="kf-banner">
