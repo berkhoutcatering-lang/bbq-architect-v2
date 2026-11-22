@@ -438,7 +438,28 @@ export interface ToonbankStore {
     pakjeBinnen(v: PakjeBinnenVraag): Promise<PakjeBinnenRuw>;
     /** winkel_stuk_weg: onwaar als het stuk er niet (meer) ligt; ook onwaar zonder de migratie. */
     pakjeWeg(orgId: string, stukId: string): Promise<boolean>;
+
+    /* ── Contract 1.4: weggooien of invriezen (20261120130000) ── */
+    /** winkel_stuk_eruit: idempotent op verzoek_id; niet_gemigreerd zonder de migratie (dan 404). */
+    pakjeEruit(v: PakjeEruitVraag): Promise<PakjeEruitRuw>;
+    /** winkel_stuk_terug: onwaar als het niet terug kan; ook onwaar zonder de migratie. */
+    pakjeTerug(orgId: string, stukId: string): Promise<boolean>;
 }
+
+export interface PakjeEruitVraag {
+    orgId: string; verzoekId: string; code: string; wat: 'weggooien' | 'invriezen';
+    medewerkerId: string | null; apparaatId: string | null;
+}
+
+/** Wat winkel_stuk_eruit teruggeeft, plus de twee gevallen zonder antwoord. */
+export type PakjeEruitRuw =
+    | { uitkomst: 'eruit'; stuk_id: string; naam: string; prijs_cents: number; tht: string | null; wat: 'weggooien' | 'invriezen'; ingevroren_op: string | null }
+    | { uitkomst: 'niet_op_voorraad'; naam: string | null }
+    | { uitkomst: 'controlecijfer' }
+    /** 23505: het verzoek_id is in een andere organisatie gebruikt. */
+    | { uitkomst: 'verzoek_bezet' }
+    /** De functie bestaat (nog) niet: de route doet alsof hij er niet is. */
+    | { uitkomst: 'niet_gemigreerd' };
 
 export interface PakjeBinnenVraag { orgId: string; stukId: string; code: string; tht: string; productId: string | null }
 
