@@ -131,6 +131,9 @@ export interface CatalogusArtikelRuw {
     prijscode_nr?: string | null;
     kiloprijs_cents?: number | null;
     etiket?: Record<string, unknown> | null;
+    /** 20261120120000_winkel_wegen_bij_afrekenen; ontbreken zonder die migratie. */
+    wegen_bij_afrekenen?: boolean | null;
+    tarra_g?: number | null;
 }
 
 /** Een open partij uit toonbank_partijen (contract 1.4). */
