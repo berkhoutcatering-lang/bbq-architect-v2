@@ -17,7 +17,8 @@ import { describe, expect, it } from 'vitest';
 import { kassaPil } from '@/lib/winkel/vrij';
 import { catalogusAntwoord, partijenAntwoord } from './vragen';
 import {
-    BONNEN_SOORTEN, CONTRACT_HUIDIG, CONTRACT_MINIMAAL, FOUT_STATUS, Melding, PakjeBinnenAntwoord, PakjeBinnenVerzoek, PakjeWegAntwoord, PilGevallen, SCHEMAS, StatusAntwoord, VOORBEELDEN,
+    BONNEN_SOORTEN, CONTRACT_HUIDIG, CONTRACT_MINIMAAL, CodeKoppelAntwoord, CodeKoppelVerzoek, CodeWeghalenAntwoord, FOUT_STATUS, Melding,
+    PakjeBinnenAntwoord, PakjeBinnenVerzoek, PakjeWegAntwoord, PilGevallen, SCHEMAS, StatusAntwoord, VOORBEELDEN,
     leesVersie, versieMinstens,
 } from './contract';
 
@@ -185,6 +186,29 @@ describe('contract 1.4: stickers', () => {
         }]);
         expect(SCHEMAS.PartijenAntwoord.safeParse(uit).success).toBe(true);
         expect(uit.partijen[0]).toMatchObject({ tht: '2026-11-24', productiedatum: null, gestickerd: 3 });
+    });
+});
+
+describe('streepjescodes koppelen vanaf de kassa (contract 1.4, additief)', () => {
+    const ART = '5b1c2d3e-4f50-4a61-8b72-9c8d7e6f5a41';
+    const PROD = '0da446be-613f-4a74-9791-704b065a1f74';
+    it('verzoek: artikel_id en een code van 8, 12 of 13 cijfers', () => {
+        for (const code of ['96385074', '036000291452', '8712345678906']) {
+            expect(CodeKoppelVerzoek.safeParse({ artikel_id: ART, code }).success).toBe(true);
+        }
+        for (const code of ['1234567', '12345678901', '87123456789AB', '2101015028237X']) {
+            expect(CodeKoppelVerzoek.safeParse({ artikel_id: ART, code }).success).toBe(false);
+        }
+        expect(CodeKoppelVerzoek.safeParse({ code: '96385074' }).success).toBe(false);
+    });
+    it('antwoord: gekoppeld, ongeldig, al_gekoppeld, kan_niet; weghalen', () => {
+        expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'gekoppeld', artikel_id: ART, product_id: PROD, code: '8712345678906', catalogus_versie: 621 }).success).toBe(true);
+        expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'ongeldig', reden: 'Deze code klopt niet.' }).success).toBe(true);
+        expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'al_gekoppeld', naam: 'Hertog Jan' }).success).toBe(true);
+        expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'kan_niet', reden: 'Dit gaat op gewicht.' }).success).toBe(true);
+        expect(CodeKoppelAntwoord.safeParse({ uitkomst: 'kan_niet', reden: '' }).success).toBe(false);
+        expect(CodeWeghalenAntwoord.safeParse({ weg: true, catalogus_versie: 622 }).success).toBe(true);
+        expect(SCHEMAS.CodeKoppelAntwoord).toBe(CodeKoppelAntwoord);
     });
 });
 

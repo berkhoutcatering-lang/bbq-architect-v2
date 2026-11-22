@@ -41,7 +41,7 @@ export interface WinkelOverzicht {
     ruimteId: string | null;
     afdelingen: Afdeling[];
     plaatsingen: (PlaatsingRij & { id: string })[];
-    producten: (WinkelProductRij & { binnen_per_sticker: boolean; leverancier_id: number | null; winkelprijs_incl_cents: number | null; ean: string | null; prijscode_nr: number | null })[];
+    producten: (WinkelProductRij & { binnen_per_sticker: boolean; leverancier_id: number | null; winkelprijs_incl_cents: number | null; ean: string | null; prijscode_nr: string | null })[];
     artikelen: WinkelArtikelKort[];
     regels: BonRegelRij[];
     stuks: StukRij[];
@@ -113,7 +113,7 @@ export async function laadWinkelOverzicht(supabase: SupabaseClient, nu: Date = n
             leverancier_id: p.leverancier_id == null ? null : Number(p.leverancier_id),
             winkelprijs_incl_cents: p.winkelprijs_incl_cents == null ? null : Number(p.winkelprijs_incl_cents),
             ean: (p.ean as string | null) ?? null,
-            prijscode_nr: p.prijscode_nr == null ? null : Number(p.prijscode_nr),
+            prijscode_nr: p.prijscode_nr == null ? null : String(p.prijscode_nr),
         })),
         artikelen: ((artikelen.data ?? []) as Record<string, unknown>[]).map((a) => {
             const s = slotsPer.get(String(a.id)) ?? [];
