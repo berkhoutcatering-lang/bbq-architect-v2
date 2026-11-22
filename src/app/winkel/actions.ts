@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { EanSchema, eanFoutMelding } from '@/lib/winkel/toonbankVelden';
+import { bezetMelding, eanBijAnderProduct, supabaseEanOpslag } from '@/lib/winkel/eanKoppelen';
 import { evalueerWinkelMeldingen } from '@/lib/voorraad/meldingen';
 import { controleerEtiket } from '@/lib/winkel/opGewicht';
 
@@ -125,6 +126,11 @@ export async function nieuwProduct(input: unknown): Promise<ActionResult<{ produ
     if (kg) {
         const fout = opGewichtFout(v);
         if (fout) return { error: fout };
+    }
+
+    if (!kg && v.ean) {
+        const ander = await eanBijAnderProduct(supabaseEanOpslag(s.supabase, s.orgId), v.ean, null);
+        if (ander) return { error: bezetMelding(ander) };
     }
 
     /* Op gewicht: het eerstvolgende vrije stickernummer. */

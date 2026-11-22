@@ -41,7 +41,7 @@ export interface WinkelOverzicht {
     ruimteId: string | null;
     afdelingen: Afdeling[];
     plaatsingen: (PlaatsingRij & { id: string })[];
-    producten: (WinkelProductRij & { binnen_per_sticker: boolean; leverancier_id: number | null; winkelprijs_incl_cents: number | null })[];
+    producten: (WinkelProductRij & { binnen_per_sticker: boolean; leverancier_id: number | null; winkelprijs_incl_cents: number | null; ean: string | null; prijscode_nr: number | null })[];
     artikelen: WinkelArtikelKort[];
     regels: BonRegelRij[];
     stuks: StukRij[];
@@ -59,7 +59,7 @@ export async function laadWinkelOverzicht(supabase: SupabaseClient, nu: Date = n
     const [plekken, plaatsingen, producten, artikelen, slots, regels, stuks, partijen, leveranciers] = await Promise.all([
         supabase.from('opslag_locaties').select('id, code, naam, soort, parent_id, volgorde').order('volgorde'),
         supabase.from('winkel_plaatsingen').select('id, product_id, locatie_id, rol').eq('rol', 'verkoop'),
-        supabase.from('winkel_producten').select('id, naam, type, actief, eenheid, voorraad, tht, foto, foto_url, binnen_per_sticker, leverancier_id, winkelprijs_incl_cents').order('naam'),
+        supabase.from('winkel_producten').select('id, naam, type, actief, eenheid, voorraad, tht, foto, foto_url, binnen_per_sticker, leverancier_id, winkelprijs_incl_cents, ean, prijscode_nr').order('naam'),
         supabase.from('winkel_artikelen').select('id, naam, prijs_cents, kanalen, actief, verkoop_per, kiloprijs_cents, sticker_plu').order('naam'),
         supabase.from('winkel_artikel_slots').select('artikel_id, standaard_product_id'),
         supabase.from('toonbank_bon_regels')
@@ -112,6 +112,8 @@ export async function laadWinkelOverzicht(supabase: SupabaseClient, nu: Date = n
             binnen_per_sticker: p.binnen_per_sticker === true,
             leverancier_id: p.leverancier_id == null ? null : Number(p.leverancier_id),
             winkelprijs_incl_cents: p.winkelprijs_incl_cents == null ? null : Number(p.winkelprijs_incl_cents),
+            ean: (p.ean as string | null) ?? null,
+            prijscode_nr: p.prijscode_nr == null ? null : Number(p.prijscode_nr),
         })),
         artikelen: ((artikelen.data ?? []) as Record<string, unknown>[]).map((a) => {
             const s = slotsPer.get(String(a.id)) ?? [];
