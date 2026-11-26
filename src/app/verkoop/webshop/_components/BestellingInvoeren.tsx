@@ -14,7 +14,9 @@ import { AlertTriangle, Check, Plus, Search, Trash2, Wallet } from 'lucide-react
 import Button from '@/components/Button';
 import { supabase } from '@/lib/supabase';
 import { ALLERGEEN_KEUZES, BRON_LABEL, BRONNEN, OP_MAAT_SLUG, splitsRegels, type Bron, type InvoerRegel } from '@/lib/winkel/handmatig';
+import type { Briefing } from '@/lib/ai/bestelBriefing';
 import Drawer from './Drawer';
+import SnelInvullen from './SnelInvullen';
 import { leesEuro, toonEuro } from '../_lib/vakjes';
 import { voerBestellingIn, zoekAanvragen } from '../invoeren';
 
@@ -119,6 +121,32 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
         setZoek('');
     }
 
+    /* De AI-briefing in het formulier: wat de AI vond overschrijft, wat hij niet vond blijft staan. */
+    function vulIn(b: Briefing) {
+        if (b.klant.naam) setNaam(b.klant.naam);
+        if (b.klant.email) setEmail(b.klant.email);
+        if (b.klant.telefoon) setTelefoon(b.klant.telefoon);
+        setBron(b.bron);
+        if (b.datum) setDatum(b.datum);
+        if (b.tijd) setTijd(b.tijd);
+        if (b.regels.length) {
+            const nieuw: RegelForm[] = b.regels.map((r) => {
+                const aantal = r.aantal != null ? String(r.aantal) : '';
+                const prijs = r.stukCenten != null ? toonEuro(r.stukCenten) : '';
+                return r.soort === 'artikel'
+                    ? { sleutel: nieuweSleutel(), soort: 'artikel', slug: r.slug, aantal, prijs, toelichting: r.toelichting }
+                    : { sleutel: nieuweSleutel(), soort: 'op-maat', naam: r.naam, aantal, prijs, btwPct: 9, toelichting: r.toelichting };
+            });
+            /* Lege regels (nog niets gekozen) vallen weg; wat Mathijs al invulde blijft. */
+            setRegels((rs) => [...rs.filter((r) => (r.soort === 'artikel' ? r.slug : r.naam.trim()) || r.aantal.trim()), ...nieuw]);
+        }
+        if (b.vegetarisch > 0) setVega(String(b.vegetarisch));
+        if (b.allergenen.length) setAllergenen((x) => [...new Set([...x, ...b.allergenen])]);
+        if (b.andereAllergenen.length) setAndereAllergenen((x) => [x, ...b.andereAllergenen].filter((y) => y.trim()).join(', '));
+        if (b.hardeRegels.length) setHarde((x) => [x, ...b.hardeRegels].filter((y) => y.trim()).join('\n'));
+        if (b.opmerking) setOpmerking(b.opmerking);
+    }
+
     function zetRegel(i: number, deel: Partial<RegelForm>) {
         setRegels((rs) => rs.map((r, j) => (j === i ? ({ ...r, ...deel } as RegelForm) : r)));
     }
@@ -212,6 +240,8 @@ export default function BestellingInvoeren({ onClose, onKlaar, melding, startSlu
                         <AlertTriangle size={16} style={{ color: 'var(--ws-warn)', flexShrink: 0, marginTop: 2 }} /><span>{fout}</span>
                     </div>
                 )}
+
+                <SnelInvullen onBriefing={vulIn} />
 
                 {/* ── Klant ── */}
                 <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
