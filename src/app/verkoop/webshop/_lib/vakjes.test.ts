@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { afstandLabel, bouwVakjes, capaciteitEenheid, dagenTot, datumLang, groepLabel, leesEuro, vakjeNaam, type ArtikelRij, type MomentRij, type OrderRij, type RegelRij } from './vakjes';
+import { afstandLabel, bouwVakjes, capaciteitEenheid, dagenTot, datumLang, groepLabel, leesEuro, mailNietAangekomen, vakjeNaam, type ArtikelRij, type MomentRij, type OrderRij, type RegelRij } from './vakjes';
 
 const basis: Omit<ArtikelRij, 'id' | 'slug' | 'naam'> = {
     eenheid: 'per stuk', telt: 'stuks', prijs_cents: 100, btw_pct: 9, minimum: 1, maximum: null, verzendbaar: true, gekoeld: false,
@@ -118,6 +118,23 @@ describe('bouwVakjes', () => {
     it('een losse regel voor later krijgt zijn eigen vaste bak op die dag', () => {
         const v = bouwVakjes([order(1, [regel(artikelen[3], 1, null, { klaar_op: '2026-10-02' })])], artikelen, momenten, '2026-09-25');
         expect(v.map((x) => [x.soort, x.datum, x.regels.length])).toEqual([['vaste_bak', '2026-09-25', 0], ['vaste_bak', '2026-10-02', 1]]);
+    });
+});
+
+describe('mailNietAangekomen', () => {
+    it('waarschuwt bij een betaalde websitebestelling waarvan de bevestiging niet verstuurd is', () => {
+        expect(mailNietAangekomen(order(1, [], { mail_status: 'mislukt' }))).toBe(true);
+        expect(mailNietAangekomen(order(2, [], { mail_status: 'niet_verstuurd', bron: 'website' }))).toBe(true);
+    });
+
+    it('zwijgt als de bevestiging verstuurd is of de bestelling niet betaald is', () => {
+        expect(mailNietAangekomen(order(1, [], { mail_status: 'verstuurd' }))).toBe(false);
+        expect(mailNietAangekomen(order(2, [], { status: 'wacht', mail_status: 'niet_verstuurd' }))).toBe(false);
+    });
+
+    it('zwijgt bij een zelf ingevoerde bestelling: die krijgt met opzet nooit een mail', () => {
+        expect(mailNietAangekomen(order(1, [], { mail_status: 'niet_verstuurd', bron: 'anders', contact_email: '' }))).toBe(false);
+        expect(mailNietAangekomen(order(2, [], { mail_status: 'niet_verstuurd', bron: 'telefoon' }))).toBe(false);
     });
 });
 

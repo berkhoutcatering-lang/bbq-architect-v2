@@ -20,7 +20,7 @@ import { betaaltAanBalie, restOpen as heeftOpenRest, welkeStapNodig, type Meldin
 import Drawer from './Drawer';
 import ProductiePaneel, { EtiketKnop, useEtiketPrinter } from './ProductiePaneel';
 import {
-    afstandLabel, bouwVakjes, dagenTot, datumKort, datumLang, opmerkingNietGelezen, tijdvak, vakjeNaam,
+    afstandLabel, bouwVakjes, dagenTot, datumKort, datumLang, mailNietAangekomen, opmerkingNietGelezen, tijdvak, vakjeNaam,
     type ArtikelRij, type ComponentRij, type MomentRij, type OrderRij, type Vakje, type VakjeRegel, type Wensen,
 } from '../_lib/vakjes';
 import { boekRestBetaling, plaatsOpnieuw, scanDoos, zetKlaargezet, zetOpgehaald, zetWensenHandmatig, type ScanUitkomst } from '../actions';
@@ -43,7 +43,6 @@ type Filter = 'alles' | 'nietGeplaatst' | 'nietGelezen';
 
 const eur = (c: number) => formatEur(c / 100);
 const refundOpen = (o: OrderRij) => o.refund_status === 'mislukt' || o.refund_status === 'nodig';
-const mailOpen = (o: OrderRij) => o.status === 'betaald' && o.mail_status !== 'verstuurd';
 
 export default function VakjesPaneel({ orders, artikelen, momenten, componenten, vandaag, herlaad, melding }: Props) {
     const [filter, setFilter] = useState<Filter>('alles');
@@ -59,7 +58,7 @@ export default function VakjesPaneel({ orders, artikelen, momenten, componenten,
         nietGeplaatst: vakjes.reduce((s, v) => s + v.nietGeplaatst, 0),
         nietGelezen: betaald.filter(opmerkingNietGelezen).length,
         refund: orders.filter(refundOpen).length,
-        mail: orders.filter(mailOpen).length,
+        mail: orders.filter(mailNietAangekomen).length,
     };
 
     const zichtbaar = vakjes.filter((v) => {
@@ -137,7 +136,7 @@ export default function VakjesPaneel({ orders, artikelen, momenten, componenten,
                     titel={`Terugbetaling zelf regelen · ${o.nummer} · ${o.contact_naam}`}
                     tekst={`${eur(o.totaal_cents)} betaald na het verlopen van de reservering en de plek was weg. Terugstorten via myPOS ${o.refund_status === 'mislukt' ? `is mislukt — ${o.refund_fout ?? 'onbekend'}` : 'is nog niet gedaan'}.`} />
             ))}
-            {orders.filter(mailOpen).map((o) => (
+            {orders.filter(mailNietAangekomen).map((o) => (
                 <Banner key={`m${o.id}`} soort="warn" icon={<Mail size={18} />}
                     titel={`Bevestiging niet aangekomen · ${o.nummer} · ${o.contact_naam}`}
                     tekst={`${o.mail_fout ?? 'De mail is niet verstuurd.'} Mail de klant zelf op ${o.contact_email}.`}
