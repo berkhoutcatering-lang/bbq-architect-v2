@@ -164,7 +164,11 @@ export default function WebshopPagina() {
         return () => { levend = false; };
     }, [organization, laad]);
 
+    /* /verkoop/webshop?invoeren=1 opent meteen "Bestelling invoeren": een snelkoppeling op de telefoon. */
     const [invoeren, setInvoeren] = useState(false);
+    useEffect(() => {
+        if (new URLSearchParams(window.location.search).get('invoeren') === '1') setInvoeren(true);
+    }, []);
     const actief = PANELEN.find((p) => p.key === paneel)!;
     const kassaOpen = instellingen?.kassa_open ?? false;
 
