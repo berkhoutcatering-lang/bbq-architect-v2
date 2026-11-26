@@ -11,6 +11,7 @@
  * Tellingen zijn de som van wat eronder ligt. Niets wordt apart bijgehouden.
  */
 import { verdeelDozen } from '@/lib/winkel/rekenen';
+import { isZelfIngevoerd } from '@/lib/winkel/handmatig';
 
 export interface RegelRij {
     id: number;
@@ -334,6 +335,15 @@ export interface Vakje {
 
 export function opmerkingNietGelezen(o: Pick<OrderRij, 'opmerking' | 'wensen_bron'>): boolean {
     return Boolean(o.opmerking?.trim()) && (o.wensen_bron == null || o.wensen_bron === 'mislukt');
+}
+
+/**
+ * De klant hoort een bevestiging te hebben en heeft hem niet: de melding
+ * "Bevestiging niet aangekomen". Een zelf ingevoerde bestelling krijgt met
+ * opzet nooit een mail, dus daar valt niets te melden.
+ */
+export function mailNietAangekomen(o: Pick<OrderRij, 'status' | 'mail_status' | 'bron'>): boolean {
+    return o.status === 'betaald' && o.mail_status !== 'verstuurd' && !isZelfIngevoerd(o.bron);
 }
 
 /**
