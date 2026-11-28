@@ -14,28 +14,9 @@
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabase } from '@/lib/supabase-server';
+import { KlantSchema, type KlantInput } from '@/lib/schemas/klant';
 
-const KlantSchema = z.object({
-    id: z.union([z.string().uuid(), z.coerce.number().int()]).optional(),
-    naam: z.string().min(1, 'Naam is verplicht').max(200),
-    bedrijf: z.string().max(200).optional().default(''),
-    /* Postcode + plaats blijven optioneel — kleine klanten leveren alleen
-       een naam en telefoon aan, adres pas later. */
-    adres: z.string().max(500).optional().default(''),
-    postcode: z.string().max(20).optional().default(''),
-    plaats: z.string().max(200).optional().default(''),
-    telefoon: z.string().max(50).optional().default(''),
-    /* Email is nice-to-have; offerte-mail kan niet zonder, maar klanten
-       in de eerste fase kunnen "WhatsApp-only" zijn. */
-    email: z.string().email('Ongeldig e-mailadres').or(z.literal('')).optional().default(''),
-    /* `type` is een vrij veld in DB (Particulier, Bedrijf, Stichting...).
-       Geen enum hier — schrijven van losse waarden moet kunnen, lijst-UI
-       gebruikt het voor filtering. */
-    type: z.string().max(100).optional().default(''),
-    notities: z.string().max(5000).optional().default(''),
-});
-
-export type KlantInput = z.input<typeof KlantSchema>;
+export type { KlantInput };
 
 interface ActionResult<T = unknown> {
     data?: T;
