@@ -1,0 +1,18 @@
+{
+  "id": "case-017",
+  "description": "Kinderfeest — eenvoudig, geen alcohol, kindvriendelijke porties",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Verjaardag voor kinderen 8-12 jaar, 25 kids + 15 volwassenen, BBQ-stijl maar zonder pittige sauzen, mini-portie-vriendelijk, geen alcohol",
+      "existing": [],
+      "options": { "gasten": 40, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_lte", "path": "data.adviesprijs_pp", "max": 35, "description": "kinderfeest tier, niet premium" }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "case-014",
+  "description": "100% vegan event (geen vlees en vis toegestaan)",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Volledig vegan BBQ voor 35 gasten — geen vlees, vis of zuivel. Wel groente-spiezen, smoked-vegetables, plantaardige sauzen. 3 gangen.",
+      "existing": [],
+      "options": { "gasten": 35, "gangen": 3 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 3 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 25 }
+  ]
+}

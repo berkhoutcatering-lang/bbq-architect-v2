@@ -1,0 +1,19 @@
+{
+  "id": "case-011",
+  "description": "Minimaal aantal gasten (intieme groep van 6)",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Intiem BBQ-diner voor 6 personen — premium kwaliteit, 4 gangen, ruimte voor verfijning",
+      "existing": [],
+      "options": { "gasten": 6, "gangen": 4 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 4 },
+    { "type": "has_path", "path": "data.menu_naam" },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 40, "description": "premium-tier prijs per persoon ≥40" }
+  ]
+}

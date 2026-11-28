@@ -1,0 +1,18 @@
+{
+  "id": "case-013",
+  "description": "Single-gang lunch — geen voor- en nagerecht",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Snelle BBQ-lunch voor 50 mensen op locatie, één hoofdgerecht, geen voor- of nagerecht, max 30 min serveer-tijd per gast",
+      "existing": [],
+      "options": { "gasten": 50, "gangen": 1 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 1 },
+    { "type": "has_path", "path": "data.menu_naam" }
+  ]
+}

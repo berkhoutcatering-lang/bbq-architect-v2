@@ -78,7 +78,25 @@ Maak een bestand `case-NNN.json` in de juiste endpoint-folder:
 
 ## Roadmap
 
-- **Sprint 1 (nu):** 10 cases voor recipe-generate
-- **Sprint 2:** Uitbreiden naar 30 cases + CI-integratie (GitHub Actions)
+- ~~**Sprint 1**: 10 cases voor recipe-generate~~ ✅
+- **Sprint 2** (deels af, 18/30): 18 cases voor recipe-generate + CI-integratie (GitHub Actions wekelijks via ai-eval.yml). Resterende 12 cases: thematische events (Pasen / Kerst / Halloween), regio-specifieke smaakprofielen.
 - **Sprint 3:** Parse-document cases (5 factuur-voorbeelden + 5 bon-voorbeelden)
 - **Sprint 4:** Chat-API conversatie-cases
+
+## Case-coverage matrix (18 cases)
+
+| # | Categorie | Wat dekt het |
+|---|---|---|
+| 001 | Baseline | Standaard 30-pers 3-gangs |
+| 002-004 | Variatie | Verschillende prompts |
+| 005 | Halal-vriendelijk | Geen varkensvlees |
+| 006-009 | Edge-cases | Verschillende combinaties |
+| 010 | Internationaal | NL/EN mix |
+| 011 | Premium | 6-pers premium-tier, prijs ≥40 |
+| 012 | Bulk + budget-druk | 250 pers met €18 cap |
+| 013 | Single-gang | 1 gang lunch |
+| 014 | 100% vegan | Geen vlees/vis/zuivel |
+| 015 | Recipe-modus | Eén enkel recept i.p.v. menu |
+| 016 | Variatie-instructie | `existing` array uitsluiten |
+| 017 | Kinderfeest | Geen alcohol, kindvriendelijk |
+| 018 | Minimale prompt | "BBQ 30" — sensible defaults |

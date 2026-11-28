@@ -1,0 +1,17 @@
+{
+  "id": "case-015",
+  "description": "Recipe-modus (één enkel recept ipv menu)",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "recipe",
+      "prompt": "Pulled pork sliders met bourbon-BBQ-saus en augurkjes-coleslaw, geschikt voor 80 personen, low-and-slow 16 uur smoking",
+      "existing": [],
+      "options": { "gasten": 80 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.naam", "description": "recept moet een naam hebben" },
+    { "type": "string_contains", "path": "data.naam", "substring": "pulled", "caseInsensitive": true }
+  ]
+}

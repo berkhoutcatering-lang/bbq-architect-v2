@@ -1,0 +1,22 @@
+{
+  "id": "case-016",
+  "description": "Variatie-instructie: vermijd herhaling met bestaande menu's",
+  "request": {
+    "path": "/api/recipe-generate",
+    "body": {
+      "mode": "menu",
+      "prompt": "Bruiloft 60 personen, 4 gangen, premium kwaliteit",
+      "existing": [
+        { "naam": "Tomaat-mozzarella", "categorie": "voorgerecht" },
+        { "naam": "Pulled pork sliders", "categorie": "hoofdgerecht" },
+        { "naam": "Crème brûlée", "categorie": "dessert" }
+      ],
+      "options": { "gasten": 60, "gangen": 4 }
+    }
+  },
+  "expectations": [
+    { "type": "has_path", "path": "data.gerechten" },
+    { "type": "array_min_length", "path": "data.gerechten", "min": 4 },
+    { "type": "number_gte", "path": "data.adviesprijs_pp", "min": 35, "description": "premium-bruiloft tier" }
+  ]
+}
